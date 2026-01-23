@@ -1,0 +1,246 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.DepositDTO
+
+@{
+    ViewData["Title"] = "Make Deposit";
+    var isAdmin = ViewBag.IsAdmin ?? false;
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4><i class="fas fa-money-bill-wave"></i> Make Deposit</h4>
+                </div>
+                <div class="card-body">
+                    @if (isAdmin)
+                    {
+                        <!-- Member Search for Admin/Staff -->
+                        <div class="form-group">
+                            <label for="memberSearch">Search Member *</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="memberSearch"
+                                       placeholder="Enter member number, name, or ID number...">
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button" id="searchMemberBtn">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="searchResults" class="mt-2" style="display: none;">
+                                <div class="list-group" id="memberResults"></div>
+                            </div>
+                        </div>
+                    }
+
+                    <form id="depositForm" method="post">
+                        <!-- Hidden field for MemberNo -->
+                        <input type="hidden" asp-for="MemberNo" id="MemberNo" />
+
+                        @if (!isAdmin && ViewBag.CurrentMember != null)
+                        {
+                            <!-- Display current member info for regular users -->
+                            <div class="alert alert-info">
+                                <h6>Account Information:</h6>
+                                <p><strong>Member No:</strong> @ViewBag.CurrentMember.MemberNo</p>
+                                <p><strong>Name:</strong> @ViewBag.CurrentMember.Surname @ViewBag.CurrentMember.OtherNames</p>
+                                <p><strong>Current Balance:</strong> @(ViewBag.CurrentBalance?.ToString("C") ?? "KES 0.00")</p>
+                            </div>
+                        }
+
+                        <!-- Selected Member Display -->
+                        <div class="form-group" id="selectedMemberInfo" style="display: none;">
+                            <label>Selected Member:</label>
+                            <div class="alert alert-success">
+                                <div id="memberDetails">
+                                    <!-- Member details will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label asp-for="Amount">Amount (KES) *</label>
+                            <input asp-for="Amount" class="form-control" min="100" max="1000000" step="100" required />
+                            <span asp-validation-for="Amount" class="text-danger"></span>
+                            <small class="form-text text-muted">Minimum deposit: KES 100, Maximum: KES 1,000,000</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label asp-for="PaymentMode">Payment Method *</label>
+                            <select asp-for="PaymentMode" class="form-control" required>
+                                <option value="">Select Method</option>
+                                <option value="CASH">Cash</option>
+                                <option value="MPESA">M-Pesa</option>
+                                <option value="BANK">Bank Transfer</option>
+                                <option value="CHEQUE">Cheque</option>
+                            </select>
+                            <span asp-validation-for="PaymentMode" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label asp-for="ReceiptNo">Receipt Number (Optional)</label>
+                            <input asp-for="ReceiptNo" class="form-control" placeholder="Enter receipt number if available" />
+                            <span asp-validation-for="ReceiptNo" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label asp-for="Purpose">Purpose (Optional)</label>
+                            <input asp-for="Purpose" class="form-control" placeholder="e.g., Monthly savings, Share purchase" />
+                            <span asp-validation-for="Purpose" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label asp-for="ContactInfo">Contact Info (Optional)</label>
+                            <input asp-for="ContactInfo" class="form-control" placeholder="Phone number or email" />
+                            <span asp-validation-for="ContactInfo" class="text-danger"></span>
+                        </div>
+
+                        <input type="hidden" asp-for="ProcessedBy" value="@User.Identity.Name" />
+
+                        <div class="form-group mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled="@(isAdmin ? "disabled" : null)">
+                                <i class="fas fa-paper-plane"></i> Submit Deposit
+                            </button>
+                            <a href="@Url.Action("Index")" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Success/Error Messages -->
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                    <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            }
+
+            @if (TempData["ErrorMessage"] != null)
+            {
+                <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                    <i class="fas fa-exclamation-circle"></i> @TempData["ErrorMessage"]
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            var isAdmin = @Json.Serialize(isAdmin);
+
+            if (isAdmin) {
+                // Setup member search for admin
+                $('#memberSearch').on('input', function() {
+                    var searchTerm = $(this).val();
+                    if (searchTerm.length >= 2) {
+                        searchMembers(searchTerm);
+                    } else {
+                        $('#searchResults').hide();
+                    }
+                });
+
+                $('#searchMemberBtn').click(function() {
+                    var searchTerm = $('#memberSearch').val();
+                    if (searchTerm.length >= 2) {
+                        searchMembers(searchTerm);
+                    }
+                });
+            } else {
+                // For regular users, set their member number
+                var currentMemberNo = '@(ViewBag.CurrentMember?.MemberNo ?? "")';
+                if (currentMemberNo) {
+                    $('#MemberNo').val(currentMemberNo);
+                    $('#submitBtn').prop('disabled', false);
+                }
+            }
+
+            // Form submission
+            $('#depositForm').on('submit', function(e) {
+                // Validate member is selected for admin
+                if (isAdmin && !$('#MemberNo').val()) {
+                    e.preventDefault();
+                    alert('Please select a member first.');
+                    return false;
+                }
+                return true;
+            });
+
+            // Function to search members
+            function searchMembers(searchTerm) {
+                $.ajax({
+                    url: '@Url.Action("SearchMember", "TransactionsMvc")',
+                    type: 'GET',
+                    data: { searchTerm: searchTerm },
+                    success: function(response) {
+                        if (response.success && response.data.length > 0) {
+                            $('#memberResults').empty();
+                            response.data.forEach(function(member) {
+                                var item = `
+                                    <a href="#" class="list-group-item list-group-item-action member-item"
+                                       data-memberno="${member.memberNo}">
+                                        <strong>${member.memberNo}</strong> - ${member.surname} ${member.otherNames}
+                                        <br><small>ID: ${member.idno} | Phone: ${member.phoneNo}</small>
+                                    </a>
+                                `;
+                                $('#memberResults').append(item);
+                            });
+                            $('#searchResults').show();
+                        } else {
+                            $('#searchResults').hide();
+                        }
+                    }
+                });
+            }
+
+            // Handle member selection
+            $(document).on('click', '.member-item', function(e) {
+                e.preventDefault();
+                var memberNo = $(this).data('memberno');
+
+                // Load member details
+                $.ajax({
+                    url: '@Url.Action("GetMemberDetails", "TransactionsMvc")',
+                    type: 'GET',
+                    data: { memberNo: memberNo },
+                    success: function(response) {
+                        if (response.success) {
+                            var member = response.data;
+                            $('#MemberNo').val(member.memberNo);
+                            $('#memberSearch').val(member.memberNo);
+                            $('#searchResults').hide();
+
+                            // Display member details
+                            var detailsHtml = `
+                                <p><strong>Member No:</strong> ${member.memberNo}</p>
+                                <p><strong>Name:</strong> ${member.fullName}</p>
+                                <p><strong>ID Number:</strong> ${member.idNumber}</p>
+                                <p><strong>Phone:</strong> ${member.phone}</p>
+                                <p><strong>Current Balance:</strong> KES ${member.currentBalance.toLocaleString()}</p>
+                            `;
+                            $('#memberDetails').html(detailsHtml);
+                            $('#selectedMemberInfo').show();
+                            $('#submitBtn').prop('disabled', false);
+                        }
+                    }
+                });
+            });
+
+            // Clear member selection
+            $('#clearMemberBtn').click(function() {
+                $('#MemberNo').val('');
+                $('#selectedMemberInfo').hide();
+                $('#submitBtn').prop('disabled', true);
+            });
+        });
+    </script>
+}

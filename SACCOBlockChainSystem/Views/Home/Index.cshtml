@@ -1,0 +1,925 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.DashboardVM
+@{
+    ViewData["Title"] = "SACCO Blockchain Dashboard";
+}
+
+@section QuickStats {
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Members
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.TotalMembers</div>
+                            <div class="mt-2">
+                                <span class="badge bg-success">Active: @Model.ActiveMembers</span>
+                                <span class="badge bg-warning">Pending: @Model.PendingMembers</span>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Share Capital -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Total Share Capital
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">KES @Model.TotalShareCapital.ToString("N0")</div>
+                            <div class="mt-2 text-xs text-muted">
+                                <i class="fas fa-arrow-up text-success"></i> Growing daily
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-piggy-bank fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Loans -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Total Loans Issued
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">KES @Model.TotalLoansIssued.ToString("N0")</div>
+                            <div class="mt-2">
+                                <span class="text-xs">Repaid: KES @Model.TotalLoanRepayments.ToString("N0")</span>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-hand-holding-usd fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Blockchain Transactions -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Blockchain Transactions
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.TotalBlockchainTransactions</div>
+                            <div class="mt-2">
+                                <span class="badge bg-info">Today: @Model.BlocksCreatedToday blocks</span>
+                                @if (Model.PendingBlockchainTransactions > 0)
+                                {
+                                    <span class="badge bg-warning">Pending: @Model.PendingBlockchainTransactions</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-link fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="row">
+    <!-- Transaction Statistics Chart -->
+    <div class="col-xl-8 col-lg-7">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Monthly Transaction Statistics</h6>
+                <div class="dropdown no-arrow">
+                    <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink"
+                       data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in">
+                        <a class="dropdown-item" href="#" onclick="updateChart('6m')">Last 6 Months</a>
+                        <a class="dropdown-item" href="#" onclick="updateChart('1y')">Last 1 Year</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="/Reports/Financial">View Detailed Report</a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-area">
+                    <canvas id="transactionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Member Growth Chart -->
+    <div class="col-xl-4 col-lg-5">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Member Growth</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-pie pt-4">
+                    <canvas id="memberGrowthChart"></canvas>
+                </div>
+                <div class="mt-4 text-center small">
+                    <span class="mr-2">
+                        <i class="fas fa-circle text-success"></i> New Members
+                    </span>
+                    <span class="mr-2">
+                        <i class="fas fa-circle text-primary"></i> Total Members
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Add this DEBUG SECTION at the bottom of the file -->
+    <div class="row mt-4" style="display: none;">
+        <!-- Change to style="display: block;" to see debug info -->
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0"><i class="fas fa-bug me-2"></i>DEBUG: Chart Data Analysis</h6>
+                </div>
+                <div class="card-body">
+                    <h6>Model.MonthlyTransactions Analysis:</h6>
+                    <ul>
+                        <li>Is null: @(Model.MonthlyTransactions == null)</li>
+                        <li>Count: @Model.MonthlyTransactions.Count</li>
+                        @if (Model.MonthlyTransactions != null && Model.MonthlyTransactions.Any())
+                        {
+                            <li>First item Month: @Model.MonthlyTransactions.First().Month</li>
+                            <li>First item Deposits: @Model.MonthlyTransactions.First().Deposits</li>
+                            <li>First item Withdrawals: @Model.MonthlyTransactions.First().Withdrawals</li>
+                            <li>First item LoanRepayments: @Model.MonthlyTransactions.First().LoanRepayments</li>
+                        }
+                    </ul>
+
+                    <h6 class="mt-4">Model.MemberGrowth Analysis:</h6>
+                    <ul>
+                        <li>Is null: @(Model.MemberGrowth == null)</li>
+                        <li>Count: @Model.MemberGrowth.Count</li>
+                        @if (Model.MemberGrowth != null && Model.MemberGrowth.Any())
+                        {
+                            <li>First item Period: @Model.MemberGrowth.First().Period</li>
+                            <li>First item NewMembers: @Model.MemberGrowth.First().NewMembers</li>
+                            <li>First item TotalMembers: @Model.MemberGrowth.First().TotalMembers</li>
+                        }
+                    </ul>
+
+                    <h6 class="mt-4">JSON Serialization Test:</h6>
+                    <pre>MonthlyTransactions JSON: @Json.Serialize(Model.MonthlyTransactions)</pre>
+                    <pre>MemberGrowth JSON: @Json.Serialize(Model.MemberGrowth)</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activities Section -->
+<div class="row mb-4">
+    <!-- Recent Transactions -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Recent Transactions</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Member</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Date</th>
+                                <th>Blockchain</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var tx in Model.RecentTransactions)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="font-weight-bold">@tx.MemberName</div>
+                                        <small class="text-muted">@tx.TransactionId</small>
+                                    </td>
+                                    <td>
+                                        @if (tx.Type == "DEPOSIT")
+                                        {
+                                            <span class="badge bg-success">Deposit</span>
+                                        }
+                                        else if (tx.Type == "WITHDRAWAL")
+                                        {
+                                            <span class="badge bg-warning">Withdrawal</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-info">@tx.Type</span>
+                                        }
+                                    </td>
+                                    <td class="font-weight-bold">KES @tx.Amount.ToString("N0")</td>
+                                    <td>@tx.Date.ToString("MMM dd")</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(tx.BlockchainTxId) && tx.BlockchainTxId != "Pending")
+                                        {
+                                            <span class="badge bg-success" title="@tx.BlockchainTxId">
+                                                <i class="fas fa-check"></i> Verified
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Pending</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <a href="/TransactionsMvc/History" class="btn btn-sm btn-primary btn-block mt-2">
+                    View All Transactions <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Quick Statistics</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <div class="text-center">
+                            <i class="fas fa-money-bill-wave fa-2x text-primary mb-2"></i>
+                            <h5>KES @Model.QuickStats.AverageDeposit.ToString("N0")</h5>
+                            <p class="text-muted small">Average Deposit</p>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="text-center">
+                            <i class="fas fa-hand-holding-usd fa-2x text-success mb-2"></i>
+                            <h5>KES @Model.QuickStats.AverageLoan.ToString("N0")</h5>
+                            <p class="text-muted small">Average Loan</p>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="text-center">
+                            <i class="fas fa-exchange-alt fa-2x text-info mb-2"></i>
+                            <h5>@Model.QuickStats.TransactionsToday</h5>
+                            <p class="text-muted small">Transactions Today</p>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="text-center">
+                            <i class="fas fa-user-plus fa-2x text-warning mb-2"></i>
+                            <h5>@Model.QuickStats.NewMembersToday</h5>
+                            <p class="text-muted small">New Members Today</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="progress mb-2">
+                            <div class="progress-bar bg-success" role="progressbar"
+                                 style="width: @Model.QuickStats.LoanApprovalRate%"
+                                 aria-valuenow="@Model.QuickStats.LoanApprovalRate"
+                                 aria-valuemin="0" aria-valuemax="100">
+                                @Model.QuickStats.LoanApprovalRate.ToString("F1")%
+                            </div>
+                        </div>
+                        <p class="text-center small text-muted">Loan Approval Rate</p>
+                    </div>
+                    <div class="col-12">
+                        <div class="progress">
+                            <div class="progress-bar bg-info" role="progressbar"
+                                 style="width: @Model.QuickStats.BlockchainUptime%"
+                                 aria-valuenow="@Model.QuickStats.BlockchainUptime"
+                                 aria-valuemin="0" aria-valuemax="100">
+                                @Model.QuickStats.BlockchainUptime.ToString("F1")%
+                            </div>
+                        </div>
+                        <p class="text-center small text-muted">Blockchain Uptime</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-bolt me-2"></i> Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 col-6 mb-3">
+                        <a href="/MemberMvc/Register" class="btn btn-primary btn-lg w-100 h-100 py-3">
+                            <i class="fas fa-user-plus fa-2x mb-2"></i><br>
+                            Register Member
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-6 mb-3">
+                        <a href="/TransactionsMvc/Deposit" class="btn btn-success btn-lg w-100 h-100 py-3">
+                            <i class="fas fa-money-bill-wave fa-2x mb-2"></i><br>
+                            Process Deposit
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-6 mb-3">
+                        <a href="/Loan/Apply" class="btn btn-info btn-lg w-100 h-100 py-3">
+                            <i class="fas fa-file-contract fa-2x mb-2"></i><br>
+                            Apply for Loan
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-6 mb-3">
+                        <a href="/MemberMvc/Search" class="btn btn-warning btn-lg w-100 h-100 py-3">
+                            <i class="fas fa-search fa-2x mb-2"></i><br>
+                            Search Members
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Blockchain Status Card -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-link me-2"></i> Blockchain System Status
+                </h6>
+                <span class="badge bg-success">
+                    <i class="fas fa-circle"></i> @Model.BlockchainStatus
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 text-center">
+                        <div class="p-3">
+                            <i class="fas fa-cube fa-3x text-primary mb-2"></i>
+                            <h4>@Model.BlocksCreatedToday</h4>
+                            <p class="text-muted">Blocks Today</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="p-3">
+                            <i class="fas fa-exchange-alt fa-3x text-success mb-2"></i>
+                            <h4>@Model.TotalBlockchainTransactions</h4>
+                            <p class="text-muted">Total TX on Chain</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="p-3">
+                            <i class="fas fa-shield-alt fa-3x text-warning mb-2"></i>
+                            <h4>100%</h4>
+                            <p class="text-muted">Data Integrity</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="p-3">
+                            <i class="fas fa-clock fa-3x text-info mb-2"></i>
+                            <h4><span id="uptimeCounter">@Model.QuickStats.BlockchainUptime</span>%</h4>
+                            <p class="text-muted">System Uptime</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="progress mt-3" style="height: 20px;">
+                    <div class="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                         role="progressbar" style="width: @Model.QuickStats.BlockchainUptime%"
+                         aria-valuenow="@Model.QuickStats.BlockchainUptime" aria-valuemin="0" aria-valuemax="100">
+                        Blockchain Sync: @Model.QuickStats.BlockchainUptime%
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Optional: Add visualization for loan and share distribution (if data exists) -->
+@if (Model.LoanTypeDistribution?.Any() == true && Model.ShareTypeDistribution?.Any() == true)
+{
+    <div class="row">
+        <!-- Loan Distribution Pie Chart -->
+        <div class="col-xl-6 col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Loan Type Distribution</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-pie pt-4">
+                        <canvas id="loanDistributionChart"></canvas>
+                    </div>
+                    <div class="mt-4 text-center small" id="loanDistributionLegend">
+                        <!-- Legend will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Share Distribution Pie Chart -->
+        <div class="col-xl-6 col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Share Type Distribution</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-pie pt-4">
+                        <canvas id="shareDistributionChart"></canvas>
+                    </div>
+                    <div class="mt-4 text-center small" id="shareDistributionLegend">
+                        <!-- Legend will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // Chart variables
+        let transactionChart, memberGrowthChart, loanDistributionChart, shareDistributionChart;
+
+        $(document).ready(function() {
+            // Initialize charts
+            initTransactionChart();
+            initMemberGrowthChart();
+
+            // Initialize optional charts if data exists
+            @if (Model.LoanTypeDistribution?.Any() == true && Model.ShareTypeDistribution?.Any() == true)
+            {
+                    <text>
+                    initLoanDistributionChart();
+                    initShareDistributionChart();
+                    </text>
+            }
+
+            // Start uptime counter animation
+            startUptimeCounter();
+
+            // Refresh dashboard data every 30 seconds
+            setInterval(refreshDashboardStats, 30000);
+        });
+
+                function initTransactionChart() {
+            const ctx = document.getElementById('transactionChart').getContext('2d');
+
+            // Get data from model with safe access
+            const months = @Html.Raw(Json.Serialize(Model.MonthlyTransactions?.Select(m => m.Month) ?? new List<string>()));
+            const deposits = @Html.Raw(Json.Serialize(Model.MonthlyTransactions?.Select(m => m.Deposits) ?? new List<decimal>()));
+            const withdrawals = @Html.Raw(Json.Serialize(Model.MonthlyTransactions?.Select(m => m.Withdrawals) ?? new List<decimal>()));
+            const repayments = @Html.Raw(Json.Serialize(Model.MonthlyTransactions?.Select(m => m.LoanRepayments) ?? new List<decimal>()));
+
+            console.log('Transaction Chart Data:', {
+                months: months,
+                deposits: deposits,
+                withdrawals: withdrawals,
+                repayments: repayments,
+                hasData: months && months.length > 0
+            });
+
+            // Show message if no data
+            if (!months || months.length === 0) {
+                $('#transactionChart').closest('.chart-area').html(
+                    '<div class="text-center py-5">' +
+                    '<i class="fas fa-chart-line fa-3x text-muted mb-3"></i>' +
+                    '<h5 class="text-muted">No Transaction Data Available</h5>' +
+                    '<p class="text-muted small">Start processing transactions to see statistics</p>' +
+                    '<a href="/TransactionsMvc/Deposit" class="btn btn-primary btn-sm mt-2">' +
+                    '<i class="fas fa-plus-circle me-1"></i> Create First Transaction' +
+                    '</a>' +
+                    '</div>'
+                );
+                return;
+            }
+
+            transactionChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [
+                        {
+                            label: 'Deposits',
+                            data: deposits,
+                            borderColor: '#2ecc71',
+                            backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Withdrawals',
+                            data: withdrawals,
+                            borderColor: '#e74c3c',
+                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Loan Repayments',
+                            data: repayments,
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                font: {
+                                    size: 12
+                                },
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: KES ${context.raw.toLocaleString('en-KE')}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: true,
+                                drawBorder: false
+                            },
+                            ticks: {
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                display: true,
+                                drawBorder: false
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return 'KES ' + value.toLocaleString('en-KE');
+                                },
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'nearest'
+                    },
+                    animation: {
+                        duration: 1000
+                    }
+                }
+            });
+        }
+
+        function initMemberGrowthChart() {
+            const ctx = document.getElementById('memberGrowthChart').getContext('2d');
+
+            // Get data from model with safe access
+            const periods = @Html.Raw(Json.Serialize(Model.MemberGrowth?.Select(m => m.Period) ?? new List<string>()));
+            const newMembers = @Html.Raw(Json.Serialize(Model.MemberGrowth?.Select(m => m.NewMembers) ?? new List<int>()));
+            const totalMembers = @Html.Raw(Json.Serialize(Model.MemberGrowth?.Select(m => m.TotalMembers) ?? new List<int>()));
+
+            console.log('Member Growth Chart Data:', {
+                periods: periods,
+                newMembers: newMembers,
+                totalMembers: totalMembers,
+                hasData: periods && periods.length > 0
+            });
+
+            // Show message if no data
+            if (!periods || periods.length === 0) {
+                $('#memberGrowthChart').closest('.chart-pie').html(
+                    '<div class="text-center py-5">' +
+                    '<i class="fas fa-users fa-3x text-muted mb-3"></i>' +
+                    '<h5 class="text-muted">No Member Growth Data Available</h5>' +
+                    '<p class="text-muted small">Register members to see growth statistics</p>' +
+                    '<a href="/MemberMvc/Register" class="btn btn-primary btn-sm mt-2">' +
+                    '<i class="fas fa-user-plus me-1"></i> Register First Member' +
+                    '</a>' +
+                    '</div>'
+                );
+                return;
+            }
+
+            memberGrowthChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: periods,
+                    datasets: [
+                        {
+                            label: 'New Members',
+                            data: newMembers,
+                            backgroundColor: '#2ecc71',
+                            borderColor: '#27ae60',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            barPercentage: 0.7
+                        },
+                        {
+                            label: 'Total Members',
+                            data: totalMembers,
+                            type: 'line',
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                font: {
+                                    size: 12
+                                },
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: true,
+                                drawBorder: false
+                            },
+                            ticks: {
+                                font: {
+                                    size: 11
+                                },
+                                maxRotation: 45
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                display: true,
+                                drawBorder: false
+                            },
+                            ticks: {
+                                font: {
+                                    size: 11
+                                },
+                                stepSize: Math.max(1, Math.ceil(Math.max(...totalMembers) / 10))
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    animation: {
+                        duration: 1000
+                    }
+                }
+            });
+        }
+
+        function initLoanDistributionChart() {
+            const ctx = document.getElementById('loanDistributionChart').getContext('2d');
+            const loanTypes = @Html.Raw(Json.Serialize(Model.LoanTypeDistribution?.Select(l => l.LoanType) ?? []));
+            const loanCounts = @Html.Raw(Json.Serialize(Model.LoanTypeDistribution?.Select(l => l.Count) ?? []));
+            const loanColors = @Html.Raw(Json.Serialize(Model.LoanTypeDistribution?.Select(l => l.Color) ?? []));
+
+            loanDistributionChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: loanTypes,
+                    datasets: [{
+                        data: loanCounts,
+                        backgroundColor: loanColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = Math.round((value / total) * 100);
+                                    return `${label}: ${value} loans (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Create custom legend
+            const legendHtml = @Html.Raw(Json.Serialize(Model.LoanTypeDistribution?.Select((loan, index) =>
+                            $"<div class='d-inline-block mr-3 mb-1'><i class='fas fa-circle' style='color: {loan.Color}'></i><span class='ms-1'>{loan.LoanType} ({loan.Count})</span></div>") ?? []));
+        $('#loanDistributionLegend').html(legendHtml);
+    }
+
+        function initShareDistributionChart() {
+            const ctx = document.getElementById('shareDistributionChart').getContext('2d');
+            const shareTypes = @Html.Raw(Json.Serialize(Model.ShareTypeDistribution?.Select(s => s.ShareType) ?? []));
+            const shareAmounts = @Html.Raw(Json.Serialize(Model.ShareTypeDistribution?.Select(s => s.Amount) ?? []));
+            const shareColors = @Html.Raw(Json.Serialize(Model.ShareTypeDistribution?.Select(s => s.Color) ?? []));
+
+            shareDistributionChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: shareTypes,
+                    datasets: [{
+                        data: shareAmounts,
+                        backgroundColor: shareColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    return `${label}: KES ${value.toLocaleString()}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Create custom legend
+            const legendHtml = @Html.Raw(Json.Serialize(Model.ShareTypeDistribution?.Select((share, index) =>
+                        $"<div class='d-inline-block mr-3 mb-1'><i class='fas fa-circle' style='color: {share.Color}'></i><span class='ms-1'>{share.ShareType}</span></div>") ?? []));
+        $('#shareDistributionLegend').html(legendHtml);
+    }
+
+        function updateChart(timeRange) {
+            $.ajax({
+                url: '/Home/GetChartData',
+                type: 'GET',
+                data: { range: timeRange },
+                success: function(response) {
+                    if (response.success) {
+                        // Update transaction chart
+                        if (transactionChart) {
+                            transactionChart.data.labels = response.monthlyTransactions.map(m => m.month);
+                            transactionChart.data.datasets[0].data = response.monthlyTransactions.map(m => m.deposits);
+                            transactionChart.data.datasets[1].data = response.monthlyTransactions.map(m => m.withdrawals);
+                            transactionChart.data.datasets[2].data = response.monthlyTransactions.map(m => m.loanRepayments);
+                            transactionChart.update();
+                        }
+
+                        // Update member growth chart
+                        if (memberGrowthChart) {
+                            memberGrowthChart.data.labels = response.memberGrowth.map(m => m.period);
+                            memberGrowthChart.data.datasets[0].data = response.memberGrowth.map(m => m.newMembers);
+                            memberGrowthChart.data.datasets[1].data = response.memberGrowth.map(m => m.totalMembers);
+                            memberGrowthChart.update();
+                        }
+
+                        showToast('Chart updated successfully!', 'success');
+                    }
+                }
+            });
+        }
+
+        function startUptimeCounter() {
+            let uptime = @Model.QuickStats.BlockchainUptime;
+            const counterElement = document.getElementById('uptimeCounter');
+
+            // Simulate slight uptime increase (for demo purposes)
+            setInterval(() => {
+                if (uptime < 99.99) {
+                    uptime += 0.01;
+                    counterElement.textContent = uptime.toFixed(2);
+                }
+            }, 5000);
+        }
+
+        function refreshDashboardStats() {
+            $.ajax({
+                url: '/Home/GetDashboardStats',
+                type: 'GET',
+                success: function(response) {
+                    if (response.success) {
+                        // Update blockchain transaction count
+                        const txCount = response.data.blockchainTransactions;
+                        $('.card:contains("Blockchain Transactions") .font-weight-bold').text(txCount);
+
+                        // Update quick stats
+                        const stats = response.data.quickStats;
+                        $('.card:contains("Quick Statistics") h5:contains("Average Deposit")')
+                            .text('KES ' + stats.averageDeposit.toLocaleString());
+                        $('.card:contains("Quick Statistics") h5:contains("Average Loan")')
+                            .text('KES ' + stats.averageLoan.toLocaleString());
+                        $('.card:contains("Quick Statistics") h5:contains("Transactions Today")')
+                            .text(stats.transactionsToday);
+                        $('.card:contains("Quick Statistics") h5:contains("New Members Today")')
+                            .text(stats.newMembersToday);
+
+                        // Update progress bars
+                        $('.progress-bar:contains("Loan Approval Rate")')
+                            .css('width', stats.loanApprovalRate + '%')
+                            .text(stats.loanApprovalRate.toFixed(1) + '%');
+                    }
+                }
+            });
+        }
+
+        // Helper function for toast notifications
+        function showToast(message, type = 'info') {
+            // Simple toast implementation
+            const toast = document.createElement('div');
+            toast.className = `toast align-items-center text-white bg-${type} border-0`;
+            toast.style.position = 'fixed';
+            toast.style.bottom = '20px';
+            toast.style.right = '20px';
+            toast.style.zIndex = '9999';
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
+                </div>
+            `;
+            document.body.appendChild(toast);
+
+            // Auto remove after 3 seconds
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 3000);
+        }
+    </script>
+}

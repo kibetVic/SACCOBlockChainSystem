@@ -1,0 +1,90 @@
+﻿@model SACCOBlockChainSystem.Models.Member
+
+@{
+    ViewData["Title"] = "Member Details";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4><i class="fas fa-user"></i> Member Details</h4>
+                </div>
+                <div class="card-body">
+                    @if (TempData["SuccessMessage"] != null)
+                    {
+                        <div class="alert alert-success">
+                            @TempData["SuccessMessage"]
+                        </div>
+                    }
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Member No:</dt>
+                                <dd class="col-sm-8"><strong>@Model.MemberNo</strong></dd>
+
+                                <dt class="col-sm-4">Full Name:</dt>
+                                <dd class="col-sm-8">@Model.Surname @Model.OtherNames</dd>
+
+                                <dt class="col-sm-4">ID No:</dt>
+                                <dd class="col-sm-8">@Model.Idno</dd>
+
+                                <dt class="col-sm-4">Phone:</dt>
+                                <dd class="col-sm-8">@Model.PhoneNo</dd>
+
+                                <dt class="col-sm-4">Email:</dt>
+                                <dd class="col-sm-8">@Model.Email</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Status:</dt>
+                                <dd class="col-sm-8">
+                                    @if (Model.Status == 1)
+                                    {
+                                        <span class="badge bg-success">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning">Inactive</span>
+                                    }
+                                </dd>
+
+                                <dt class="col-sm-4">Share Capital:</dt>
+                                <dd class="col-sm-8">KES @Model.ShareCap?.ToString("N2")</dd>
+
+                                <dt class="col-sm-4">Registration Date:</dt>
+                                <dd class="col-sm-8">@Model.ApplicDate?.ToString("dd/MM/yyyy")</dd>
+
+                                <dt class="col-sm-4">Blockchain TX:</dt>
+                                <dd class="col-sm-8">
+                                    @if (!string.IsNullOrEmpty(Model.BlockchainTxId))
+                                    {
+                                        <code>@Model.BlockchainTxId</code>
+                                        <a href="/Blockchain/Verify/@Model.BlockchainTxId"
+                                           class="btn btn-sm btn-link" target="_blank">Verify</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Pending</span>
+                                    }
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <a asp-action="Index" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to List
+                        </a>
+                        <a href="/api/Member/@Model.MemberNo" class="btn btn-info" target="_blank">
+                            <i class="fas fa-code"></i> View API Data
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
