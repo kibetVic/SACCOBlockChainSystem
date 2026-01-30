@@ -1,12 +1,12 @@
 ﻿// Controllers/AccountController.cs
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.ViewModels;
+using SACCOBlockChainSystem.Data;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -17,7 +17,6 @@ namespace SACCOBlockChainSystem.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<AccountController> _logger;
-        private object _userManager;
 
         public AccountController(ApplicationDbContext context, ILogger<AccountController> logger)
         {
@@ -25,13 +24,14 @@ namespace SACCOBlockChainSystem.Controllers
             _logger = logger;
         }
 
+
         // GET: /Account/Login
         [HttpGet]
         public IActionResult Login(string? returnUrl = null)
         {
             if (User.Identity.IsAuthenticated)
             {
-                return RedirectToAction("Index", "Home");
+                return RedirectToAction("Index", "Blockchain");
             }
 
             ViewData["ReturnUrl"] = returnUrl;
@@ -50,24 +50,69 @@ namespace SACCOBlockChainSystem.Controllers
 
             try
             {
+                // Hash the password for comparison
                 var hashedPassword = HashPassword(model.Password);
+
+                // Find user by Username and password
                 var user = await _context.UserAccounts1
                     .FirstOrDefaultAsync(u => u.UserName == model.Username && u.Password == hashedPassword);
 
                 if (user == null)
                 {
-                    // ... existing failed login logic ...
+                    // Update failed attempts for the username
+                    var failedUser = await _context.UserAccounts1
+                        .FirstOrDefaultAsync(u => u.UserName == model.Username);
+
+                    if (failedUser != null)
+                    {
+                        failedUser.FailedAttempts = (failedUser.FailedAttempts ?? 0) + 1;
+
+                        // Lock account after 5 failed attempts
+                        if (failedUser.FailedAttempts >= 5)
+                        {
+                            failedUser.IsLocked = true;
+                            _logger.LogWarning($"Account locked for username: {model.Username}");
+                        }
+
+                        await _context.SaveChangesAsync();
+                    }
+
                     ModelState.AddModelError(string.Empty, "Invalid username or password.");
                     return View(model);
                 }
 
-                // ... existing account status checks ...
+                // Check if account is locked
+                if (user.IsLocked == true)
+                {
+                    ModelState.AddModelError(string.Empty, "Account is locked. Please contact administrator.");
+                    return View(model);
+                }
 
-                // Reset failed attempts
+                // Check if account is active
+                if (user.Status?.ToLower() != "active" && user.Userstatus?.ToLower() != "active")
+                {
+                    ModelState.AddModelError(string.Empty, "Account is not active. Please contact administrator.");
+                    return View(model);
+                }
+
+                // Check if user has a company code
+                if (string.IsNullOrEmpty(user.CompanyCode))
+                {
+                    ModelState.AddModelError(string.Empty, "User account is not associated with any company. Please contact administrator.");
+                    return View(model);
+                }
+
+                // Get company name for the user's company code
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == user.CompanyCode);
+
+                var companyName = company?.CompanyName ?? "Unknown Company";
+
+                // Reset failed attempts on successful login
                 user.FailedAttempts = 0;
                 await _context.SaveChangesAsync();
 
-                // Create claims
+                // Create claims - INCLUDING COMPANY CODE AND COMPANY NAME
                 var claims = new List<Claim>
                 {
                     new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
@@ -75,51 +120,38 @@ namespace SACCOBlockChainSystem.Controllers
                     new Claim("FullName", user.UserName ?? string.Empty),
                     new Claim("Email", user.Email ?? string.Empty),
                     new Claim("UserId", user.UserId.ToString()),
-                    new Claim("UserGroup", user.UserGroup ?? "Member") // Add UserGroup as a separate claim
+                    new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                    new Claim("CompanyName", companyName), // ADD COMPANY NAME CLAIM
+                    new Claim("UserLoginId", user.UserLoginId ?? string.Empty)
                 };
 
-                // Add UserGroup as a Role claim
+                // Add role claim if UserGroup exists
                 if (!string.IsNullOrEmpty(user.UserGroup))
                 {
                     claims.Add(new Claim(ClaimTypes.Role, user.UserGroup));
                 }
 
-                // Add MemberNo if exists
+                // Add additional user info claims
+                if (!string.IsNullOrEmpty(user.Department))
+                {
+                    claims.Add(new Claim("Department", user.Department));
+                }
+
                 if (!string.IsNullOrEmpty(user.MemberNo))
                 {
                     claims.Add(new Claim("MemberNo", user.MemberNo));
                 }
 
-                // Add additional claims for specific user groups
-                switch (user.UserGroup?.ToLower())
+                //CompanyCode claim
+                if (!string.IsNullOrEmpty(user.CompanyCode))
                 {
-                    case "admin":
-                    case "superadmin":
-                        // Add all admin roles
-                        claims.Add(new Claim(ClaimTypes.Role, "Admin"));
-                        claims.Add(new Claim(ClaimTypes.Role, "SuperAdmin"));
-                        break;
+                    claims.Add(new Claim("CompanyCode", user.CompanyCode));
+                }
 
-                    case "teller":
-                        claims.Add(new Claim(ClaimTypes.Role, "Teller"));
-                        break;
-
-                    case "loanofficer":
-                        claims.Add(new Claim(ClaimTypes.Role, "LoanOfficer"));
-                        break;
-
-                    case "auditor":
-                        claims.Add(new Claim(ClaimTypes.Role, "Auditor"));
-                        break;
-
-                    case "boardmember":
-                        claims.Add(new Claim(ClaimTypes.Role, "BoardMember"));
-                        break;
-
-                    default:
-                        // For regular members, add Member role
-                        claims.Add(new Claim(ClaimTypes.Role, "Member"));
-                        break;
+                // Branch code Claims
+                if (!string.IsNullOrEmpty(user.Branchcode))
+                {
+                    claims.Add(new Claim("BranchCode", user.Branchcode));
                 }
 
                 var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -136,7 +168,7 @@ namespace SACCOBlockChainSystem.Controllers
                     new ClaimsPrincipal(claimsIdentity),
                     authProperties);
 
-                _logger.LogInformation($"User {user.UserName} with group {user.UserGroup} logged in successfully.");
+                _logger.LogInformation($"User {user.UserName} (Company: {companyName} - {user.CompanyCode}) logged in successfully.");
 
                 if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
                 {
@@ -153,55 +185,76 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
         // GET: /Account/Signup
-        // GET: /Account/Signup
         [HttpGet]
-        public IActionResult Signup()
+        public async Task<IActionResult> Signup()
         {
             if (User.Identity.IsAuthenticated)
             {
-                return RedirectToAction("Index", "Home");
+                return RedirectToAction("Signup", "Account");
             }
 
-            var model = new SignupVm
-            {
-                AvailableUserGroups = new List<string>
-        {
-            "Member",
-            "Teller",
-            "LoanOfficer",
-            "Auditor",
-            "BoardMember",
-            "Staff"
-        }
-            };
+            // Get list of available companies for dropdown
+            var companies = await _context.Companies
+                .Where(c => c.Project == true) // Only active companies/projects
+                .OrderBy(c => c.CompanyName)
+                .Select(c => new
+                {
+                    c.CompanyCode,
+                    DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
+                })
+                .ToListAsync();
 
-            return View(model);
+            ViewBag.Companies = companies;
+            return View();
         }
 
-        // POST: /Account/Signup
         // POST: /Account/Signup
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Signup(SignupVm model)
         {
-            // Initialize AvailableUserGroups if null
-            model.AvailableUserGroups ??= new List<string>
-            {
-                "Member",
-                "Teller",
-                "LoanOfficer",
-                "Auditor",
-                "BoardMember",
-                "Staff"
-            };
-
             if (!ModelState.IsValid)
             {
+                // Reload companies for dropdown
+                var companies = await _context.Companies
+                    .Where(c => c.Project == true)
+                    .OrderBy(c => c.CompanyName)
+                    .Select(c => new
+                    {
+                        c.CompanyCode,
+                        DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
+                    })
+                    .ToListAsync();
+
+                ViewBag.Companies = companies;
                 return View(model);
             }
 
             try
             {
+                // Validate company code exists
+                var companyExists = await _context.Companies
+                    .AnyAsync(c => c.CompanyCode == model.CompanyCode && c.Project == true);
+
+                if (!companyExists)
+                {
+                    ModelState.AddModelError("CompanyCode", "Invalid company code or company is not active.");
+
+                    // Reload companies for dropdown
+                    var companies = await _context.Companies
+                        .Where(c => c.Project == true)
+                        .OrderBy(c => c.CompanyName)
+                        .Select(c => new
+                        {
+                            c.CompanyCode,
+                            DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
+                        })
+                        .ToListAsync();
+
+                    ViewBag.Companies = companies;
+                    return View(model);
+                }
+
                 // Check if Username already exists
                 var existingUsername = await _context.UserAccounts1
                     .FirstOrDefaultAsync(u => u.UserName == model.UserName);
@@ -209,6 +262,19 @@ namespace SACCOBlockChainSystem.Controllers
                 if (existingUsername != null)
                 {
                     ModelState.AddModelError(nameof(model.UserName), "Username already exists. Please choose a different one.");
+
+                    // Reload companies for dropdown
+                    var companies = await _context.Companies
+                        .Where(c => c.Project == true)
+                        .OrderBy(c => c.CompanyName)
+                        .Select(c => new
+                        {
+                            c.CompanyCode,
+                            DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
+                        })
+                        .ToListAsync();
+
+                    ViewBag.Companies = companies;
                     return View(model);
                 }
 
@@ -221,6 +287,19 @@ namespace SACCOBlockChainSystem.Controllers
                     if (existingEmail != null)
                     {
                         ModelState.AddModelError(nameof(model.Email), "Email already registered.");
+
+                        // Reload companies for dropdown
+                        var companies = await _context.Companies
+                            .Where(c => c.Project == true)
+                            .OrderBy(c => c.CompanyName)
+                            .Select(c => new
+                            {
+                                c.CompanyCode,
+                                DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
+                            })
+                            .ToListAsync();
+
+                        ViewBag.Companies = companies;
                         return View(model);
                     }
                 }
@@ -234,6 +313,19 @@ namespace SACCOBlockChainSystem.Controllers
                     if (existingMemberNo != null)
                     {
                         ModelState.AddModelError(nameof(model.MemberNo), "Member number already registered.");
+
+                        // Reload companies for dropdown
+                        var companies = await _context.Companies
+                            .Where(c => c.Project == true)
+                            .OrderBy(c => c.CompanyName)
+                            .Select(c => new
+                            {
+                                c.CompanyCode,
+                                DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
+                            })
+                            .ToListAsync();
+
+                        ViewBag.Companies = companies;
                         return View(model);
                     }
                 }
@@ -241,47 +333,35 @@ namespace SACCOBlockChainSystem.Controllers
                 // Generate UserLoginId (combine first letter of username with timestamp)
                 var userLoginId = GenerateUserLoginId(model.UserName);
 
-                // Determine UserGroup based on input or default
-                string userGroup = "Member"; // Default
-
-                if (!string.IsNullOrEmpty(model.UserGroup))
-                {
-                    userGroup = model.UserGroup;
-                }
-                else if (!string.IsNullOrEmpty(model.MemberNo))
-                {
-                    userGroup = "Member";
-                }
-                else if (!string.IsNullOrEmpty(model.Department))
-                {
-                    userGroup = "Staff";
-                }
+                // Get company details
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == model.CompanyCode);
 
                 // Create new user
                 var user = new UserAccounts1
                 {
                     UserName = model.UserName,
-                    UserLoginId = userLoginId, // Auto-generated
+                    UserLoginId = userLoginId,
                     Password = HashPassword(model.Password),
                     Email = model.Email,
                     Phone = model.Phone,
-                    PhoneNo = model.Phone, // Set both Phone and PhoneNo
+                    PhoneNo = model.Phone,
                     MemberNo = model.MemberNo,
                     Department = model.Department,
                     SubCounty = model.SubCounty,
                     Ward = model.Ward,
                     DateCreated = DateTime.Now,
-                    Status = "Active",
-                    Userstatus = "Active",
-                    ApprovalStatus = "Active",
+                    Status = "Pending",
+                    Userstatus = "Pending",
+                    ApprovalStatus = "Pending",
                     FailedAttempts = 0,
                     IsLocked = false,
                     PasswordStatus = "Active",
                     PassExpire = "No",
-                    UserGroup = userGroup,
-                    Cigcode = "001",
-                    CompanyCode = "001",
-                    Branchcode = "001",
+                    UserGroup = "Member",
+                    Cigcode = company?.Cigcode, // Get from company
+                    CompanyCode = (string)model.CompanyCode,
+                    Branchcode = (string)(company?.Cigcode ?? model.CompanyCode), // Use CIG code or company code
                     Superuser = 0,
                     Authorize = false,
                     Count = 0
@@ -290,25 +370,81 @@ namespace SACCOBlockChainSystem.Controllers
                 _context.UserAccounts1.Add(user);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation($"New user registered: {model.UserName} with UserGroup: {userGroup}");
+                _logger.LogInformation($"New user registered: {model.UserName} with Company: {company?.CompanyName} ({model.CompanyCode})");
 
-                TempData["SuccessMessage"] = "Registration successful! Your account is pending approval. You will be notified once approved.";
+                TempData["SuccessMessage"] = $"Registration successful! Your account is pending approval for {company?.CompanyName}. You will be notified once approved.";
                 return RedirectToAction("Login");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during user registration");
                 ModelState.AddModelError(string.Empty, "An error occurred during registration. Please try again.");
+
+                // Reload companies for dropdown
+                var companies = await _context.Companies
+                    .Where(c => c.Project == true)
+                    .OrderBy(c => c.CompanyName)
+                    .Select(c => new
+                    {
+                        c.CompanyCode,
+                        DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
+                    })
+                    .ToListAsync();
+
+                ViewBag.Companies = companies;
                 return View(model);
             }
+        }
+
+        // GET: /Account/Profile
+        [HttpGet]
+        [Authorize]
+        public async Task<IActionResult> Profile()
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var user = await _context.UserAccounts1
+                .FirstOrDefaultAsync(u => u.UserId == userId);
+
+            if (user == null)
+            {
+                return NotFound();
+            }
+
+            // Get company name
+            var company = await _context.Companies
+                .FirstOrDefaultAsync(c => c.CompanyCode == user.CompanyCode);
+
+            var profile = new ProfileVm
+            {
+                UserId = user.UserId,
+                UserName = user.UserName,
+                UserLoginId = user.UserLoginId,
+                Email = user.Email,
+                Phone = user.Phone,
+                MemberNo = user.MemberNo,
+                Department = user.Department,
+                SubCounty = user.SubCounty,
+                Ward = user.Ward,
+                UserGroup = user.UserGroup,
+                Status = user.Status,
+                DateCreated = user.DateCreated
+            };
+
+            ViewBag.CompanyName = company?.CompanyName ?? "Unknown Company";
+            ViewBag.CompanyCode = user.CompanyCode;
+
+            return View(profile);
         }
 
         // GET: /Account/Logout
         [HttpGet]
         public async Task<IActionResult> Logout()
         {
+            var userName = User.Identity?.Name;
+            var companyName = User.FindFirstValue("CompanyName");
+
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            _logger.LogInformation("User logged out.");
+            _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
             return RedirectToAction("Login", "Account");
         }
 
@@ -317,6 +453,61 @@ namespace SACCOBlockChainSystem.Controllers
         public IActionResult AccessDenied()
         {
             return View();
+        }
+
+        // GET: /Account/CompanySwitch (Optional - for admins to switch companies)
+        [HttpGet]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> CompanySwitch(string companyCode)
+        {
+            var user = await _context.UserAccounts1
+                .FirstOrDefaultAsync(u => u.UserId == int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)));
+
+            if (user != null)
+            {
+                // Validate new company code
+                var newCompany = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                if (newCompany == null)
+                {
+                    TempData["ErrorMessage"] = $"Company with code {companyCode} not found.";
+                    return RedirectToAction("Index", "Blockchain");
+                }
+
+                // Update user's company code
+                user.CompanyCode = companyCode;
+                await _context.SaveChangesAsync();
+
+                // Update claims by re-authenticating
+                var claims = new List<Claim>
+                {
+                    new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+                    new Claim(ClaimTypes.Name, user.UserName),
+                    new Claim("FullName", user.UserName ?? string.Empty),
+                    new Claim("Email", user.Email ?? string.Empty),
+                    new Claim("UserId", user.UserId.ToString()),
+                    new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                    new Claim("CompanyName", newCompany.CompanyName ?? "Unknown Company"),
+                };
+
+                if (!string.IsNullOrEmpty(user.UserGroup))
+                {
+                    claims.Add(new Claim(ClaimTypes.Role, user.UserGroup));
+                }
+
+                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                await HttpContext.SignInAsync(
+                    CookieAuthenticationDefaults.AuthenticationScheme,
+                    new ClaimsPrincipal(claimsIdentity));
+
+                _logger.LogInformation($"User {user.UserName} switched to company: {newCompany.CompanyName} ({companyCode})");
+                TempData["SuccessMessage"] = $"Switched to company: {newCompany.CompanyName}";
+            }
+
+            return RedirectToAction("Index", "Blockchain");
         }
 
         // Helper method to generate UserLoginId

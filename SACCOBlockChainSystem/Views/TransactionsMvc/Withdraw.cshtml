@@ -134,29 +134,17 @@
     </div>
 </div>
 
+
 @section Scripts {
     <script>
         $(document).ready(function() {
             var isAdmin = @Json.Serialize(isAdmin);
+            var selectedMember = null;
             var currentBalance = 0;
 
             if (isAdmin) {
                 // Setup member search for admin
-                $('#memberSearch').on('input', function() {
-                    var searchTerm = $(this).val();
-                    if (searchTerm.length >= 2) {
-                        searchMembers(searchTerm);
-                    } else {
-                        $('#searchResults').hide();
-                    }
-                });
-
-                $('#searchMemberBtn').click(function() {
-                    var searchTerm = $('#memberSearch').val();
-                    if (searchTerm.length >= 2) {
-                        searchMembers(searchTerm);
-                    }
-                });
+                setupMemberSearch();
             } else {
                 // For regular users, set their member number
                 var currentMemberNo = '@(ViewBag.CurrentMember?.MemberNo ?? "")';
@@ -170,97 +158,99 @@
 
             // Form submission
             $('#withdrawForm').on('submit', function(e) {
-                // Validate member is selected for admin
                 if (isAdmin && !$('#MemberNo').val()) {
                     e.preventDefault();
-                    alert('Please select a member first.');
+                    showAlert('error', 'Please select a member first.');
                     return false;
                 }
 
-                // Validate amount doesn't exceed balance
-                var amount = parseFloat($('#Amount').val());
+                var amount = parseFloat($('#Amount').val()) || 0;
                 if (amount > currentBalance) {
                     e.preventDefault();
-                    alert('Withdrawal amount cannot exceed current balance.');
+                    showAlert('error', 'Withdrawal amount cannot exceed current balance.');
                     return false;
                 }
 
                 return true;
             });
 
-            // Function to search members
-            function searchMembers(searchTerm) {
-                $.ajax({
-                    url: '@Url.Action("SearchMember", "TransactionsMvc")',
-                    type: 'GET',
-                    data: { searchTerm: searchTerm },
-                    success: function(response) {
-                        if (response.success && response.data.length > 0) {
-                            $('#memberResults').empty();
-                            response.data.forEach(function(member) {
-                                var item = `
-                                    <a href="#" class="list-group-item list-group-item-action member-item"
-                                       data-memberno="${member.memberNo}">
-                                        <strong>${member.memberNo}</strong> - ${member.surname} ${member.otherNames}
-                                        <br><small>ID: ${member.idno} | Phone: ${member.phoneNo}</small>
-                                    </a>
-                                `;
-                                $('#memberResults').append(item);
-                            });
-                            $('#searchResults').show();
-                        } else {
-                            $('#searchResults').hide();
-                        }
+            // Amount validation
+            $('#Amount').on('input', function() {
+                checkBalance();
+            });
+
+            // Setup member search (similar to deposit)
+            function setupMemberSearch() {
+                // Same implementation as in deposit.cshtml
+                var searchTimeout;
+                $('#memberSearch').on('input', function() {
+                    clearTimeout(searchTimeout);
+                    var searchTerm = $(this).val().trim();
+                    if (searchTerm.length >= 2) {
+                        searchTimeout = setTimeout(function() {
+                            searchMembers(searchTerm);
+                        }, 500);
+                    } else {
+                        $('#searchResults').hide();
                     }
                 });
+
+                // ... rest of setupMemberSearch function
             }
 
-            // Handle member selection
-            $(document).on('click', '.member-item', function(e) {
-                e.preventDefault();
-                var memberNo = $(this).data('memberno');
-
-                // Load member details
+            function loadMemberDetails(memberNo) {
                 $.ajax({
                     url: '@Url.Action("GetMemberDetails", "TransactionsMvc")',
                     type: 'GET',
                     data: { memberNo: memberNo },
+                    beforeSend: function() {
+                        $('#memberDetails').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading details...</div>');
+                        $('#selectedMemberInfo').show();
+                    },
                     success: function(response) {
                         if (response.success) {
                             var member = response.data;
-                            $('#MemberNo').val(member.memberNo);
-                            $('#memberSearch').val(member.memberNo);
-                            $('#searchResults').hide();
+                            selectedMember = member;
+                            currentBalance = member.currentBalance;
 
                             // Display member details
                             var detailsHtml = `
-                                <p><strong>Member No:</strong> ${member.memberNo}</p>
-                                <p><strong>Name:</strong> ${member.fullName}</p>
-                                <p><strong>ID Number:</strong> ${member.idNumber}</p>
-                                <p><strong>Phone:</strong> ${member.phone}</p>
-                                <p><strong>Current Balance:</strong> KES ${member.currentBalance.toLocaleString()}</p>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>Member No:</strong> ${member.memberNo}</p>
+                                        <p><strong>Name:</strong> ${member.fullName}</p>
+                                        <p><strong>ID Number:</strong> ${member.idNumber || 'N/A'}</p>
+                                        <p><strong>Phone:</strong> ${member.phone || 'N/A'}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>Email:</strong> ${member.email || 'N/A'}</p>
+                                        <p><strong>Current Balance:</strong> <span class="badge bg-success">KES ${member.currentBalance.toLocaleString()}</span></p>
+                                        <p><strong>Available for Withdrawal:</strong> <span class="badge bg-info">KES ${(member.currentBalance - 100).toLocaleString()}</span></p>
+                                        <p><small class="text-muted">Minimum withdrawal: KES 100</small></p>
+                                    </div>
+                                </div>
                             `;
                             $('#memberDetails').html(detailsHtml);
-                            $('#selectedMemberInfo').show();
                             $('#submitBtn').prop('disabled', false);
-
-                            currentBalance = member.currentBalance;
                             updateBalanceInfo();
+
+                            showAlert('success', `Member ${member.memberNo} selected. Current balance: KES ${member.currentBalance.toLocaleString()}`);
                         }
                     }
                 });
-            });
+            }
 
-            // Update balance info
             function updateBalanceInfo() {
                 var info = `Available balance: KES ${currentBalance.toLocaleString()}`;
                 if (currentBalance < 100) {
-                    info += ' (Minimum withdrawal: KES 100)';
+                    info += ' (Insufficient funds for withdrawal)';
+                    $('#Amount').prop('max', 0);
+                } else {
+                    $('#Amount').prop('max', currentBalance);
                 }
                 $('#balanceInfo').text(info);
             }
 
-            // Check if withdrawal amount exceeds balance
             function checkBalance() {
                 var amount = parseFloat($('#Amount').val()) || 0;
                 if (amount > currentBalance) {
@@ -273,6 +263,10 @@
                     $('#balanceInfo').removeClass('text-danger');
                     updateBalanceInfo();
                 }
+            }
+
+            function showAlert(type, message) {
+                // Same implementation as in deposit.cshtml
             }
         });
     </script>

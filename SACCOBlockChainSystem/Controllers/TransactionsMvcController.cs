@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
+using SACCOBlockChainSystem.Models.ViewModels;
 using SACCOBlockChainSystem.Services;
+using System.Runtime.InteropServices;
 using System.Security.Claims;
 
 namespace SACCOBlockChainSystem.Controllers
@@ -45,12 +47,20 @@ namespace SACCOBlockChainSystem.Controllers
             return user?.UserGroup;
         }
 
-        // Helper method to check if user is admin/staff
+        // Update the Helper method to check user roles:
         private async Task<bool> IsAdminOrStaffAsync()
         {
             var userGroup = await GetUserGroupAsync();
-            return userGroup == "Admin" || userGroup == "Staff" || userGroup == "Supervisor";
+            var adminRoles = new[] { "Admin", "Staff", "Supervisor", "Teller", "LoanOfficer", "BoardMember" };
+            return !string.IsNullOrEmpty(userGroup) && adminRoles.Contains(userGroup);
         }
+
+        //// Helper method to check if user is admin/staff
+        //private async Task<bool> IsAdminOrStaffAsync()
+        //{
+        //    var userGroup = await GetUserGroupAsync();
+        //    return userGroup == "Admin" || userGroup == "Staff" || userGroup == "Supervisor";
+        //}
 
         public IActionResult Index()
         {
@@ -415,44 +425,72 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+
+        // Update the SearchMember method:
         [HttpGet]
         public async Task<IActionResult> SearchMember(string searchTerm)
         {
             try
             {
-                // Check if user has permission to search all members
                 var isAdmin = await IsAdminOrStaffAsync();
+                var currentMemberNo = User.FindFirst("MemberNo")?.Value;
+
                 if (!isAdmin)
                 {
                     // Regular members can only search their own member number
-                    var currentMemberNo = User.FindFirst("MemberNo")?.Value;
                     if (!string.IsNullOrEmpty(currentMemberNo))
                     {
                         var member = await _memberService.GetMemberByMemberNoAsync(currentMemberNo);
-                        if (member != null && currentMemberNo.Contains(searchTerm))
+                        if (member != null &&
+                            (member.MemberNo.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                             (member.Surname != null && member.Surname.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                             (member.OtherNames != null && member.OtherNames.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))))
                         {
+                            var balance = await _transactionService.GetMemberBalanceAsync(currentMemberNo);
                             return Json(new
                             {
                                 success = true,
                                 data = new List<object>
-                                {
-                                    new
-                                    {
-                                        memberNo = member.MemberNo,
-                                        surname = member.Surname,
-                                        otherNames = member.OtherNames,
-                                        idno = member.Idno,
-                                        phoneNo = member.PhoneNo
-                                    }
-                                }
+                        {
+                            new
+                            {
+                                memberNo = member.MemberNo,
+                                surname = member.Surname,
+                                otherNames = member.OtherNames,
+                                fullName = $"{member.Surname} {member.OtherNames}",
+                                idno = member.Idno,
+                                phoneNo = member.PhoneNo,
+                                email = member.Email,
+                                currentBalance = balance
+                            }
+                        }
                             });
                         }
                     }
                     return Json(new { success = true, data = new List<object>() });
                 }
 
+                // Admin users can search all members
                 var members = await _memberService.SearchMembersAsync(searchTerm);
-                return Json(new { success = true, data = members });
+                var memberResults = new List<object>();
+
+                foreach (var member in members)
+                {
+                    var balance = await _transactionService.GetMemberBalanceAsync(member.MemberNo);
+                    memberResults.Add(new
+                    {
+                        memberNo = member.MemberNo,
+                        surname = member.Surname,
+                        otherNames = member.OtherNames,
+                        fullName = member.FullName,
+                        idno = member.Idno,
+                        phoneNo = member.PhoneNo,
+                        email = member.Email,
+                        currentBalance = balance
+                    });
+                }
+
+                return Json(new { success = true, data = memberResults });
             }
             catch (Exception ex)
             {
@@ -461,12 +499,12 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+        // Update the GetMemberDetails method:
         [HttpGet]
         public async Task<IActionResult> GetMemberDetails(string memberNo)
         {
             try
             {
-                // Check if user has permission to view member details
                 var isAdmin = await IsAdminOrStaffAsync();
                 if (!isAdmin)
                 {
@@ -497,8 +535,13 @@ namespace SACCOBlockChainSystem.Controllers
                         fullName = $"{member.Surname} {member.OtherNames}",
                         idNumber = member.Idno,
                         phone = member.PhoneNo,
+                        email = member.Email,
                         currentBalance = balance,
-                        companyCode = member.CompanyCode
+                        companyCode = member.CompanyCode,
+                        employer = member.Employer,
+                        station = member.Station,
+                        dateJoined = member.EffectDate?.ToString("yyyy-MM-dd"),
+                        status = member.Status?.ToString() ?? "0"
                     }
                 });
             }
@@ -509,6 +552,102 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+        //[HttpGet]
+        //public async Task<IActionResult> SearchMember(string searchTerm)
+        //{
+        //    try
+        //    {
+        //        // Check if user has permission to search all members
+        //        var isAdmin = await IsAdminOrStaffAsync();
+        //        if (!isAdmin)
+        //        {
+        //            // Regular members can only search their own member number
+        //            var currentMemberNo = User.FindFirst("MemberNo")?.Value;
+        //            if (!string.IsNullOrEmpty(currentMemberNo))
+        //            {
+        //                var member = await _memberService.GetMemberByMemberNoAsync(currentMemberNo);
+        //                if (member != null && currentMemberNo.Contains(searchTerm))
+        //                {
+        //                    return Json(new
+        //                    {
+        //                        success = true,
+        //                        data = new List<object>
+        //                        {
+        //                            new
+        //                            {
+        //                                memberNo = member.MemberNo,
+        //                                surname = member.Surname,
+        //                                otherNames = member.OtherNames,
+        //                                idno = member.Idno,
+        //                                phoneNo = member.PhoneNo
+        //                            }
+        //                        }
+        //                    });
+        //                }
+        //            }
+        //            return Json(new { success = true, data = new List<object>() });
+        //        }
+
+        //        var members = await _memberService.SearchMembersAsync(searchTerm);
+        //        return Json(new { success = true, data = members });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error searching members");
+        //        return Json(new { success = false, message = ex.Message });
+        //    }
+        //}
+
+        //[HttpGet]
+        //public async Task<IActionResult> GetMemberDetails(string memberNo)
+        //{
+        //    try
+        //    {
+        //        // Check if user has permission to view member details
+        //        var isAdmin = await IsAdminOrStaffAsync();
+        //        if (!isAdmin)
+        //        {
+        //            // Regular members can only view their own details
+        //            var currentMemberNo = User.FindFirst("MemberNo")?.Value;
+        //            if (currentMemberNo != memberNo)
+        //            {
+        //                return Json(new { success = false, message = "Access denied" });
+        //            }
+        //        }
+
+        //        var member = await _memberService.GetMemberByMemberNoAsync(memberNo);
+        //        if (member == null)
+        //        {
+        //            return Json(new { success = false, message = "Member not found" });
+        //        }
+
+        //        var balance = await _transactionService.GetMemberBalanceAsync(memberNo);
+
+        //        return Json(new
+        //        {
+        //            success = true,
+        //            data = new
+        //            {
+        //                memberNo = member.MemberNo,
+        //                surname = member.Surname,
+        //                otherNames = member.OtherNames,
+        //                fullName = $"{member.Surname} {member.OtherNames}",
+        //                idNumber = member.Idno,
+        //                phone = member.PhoneNo,
+        //                currentBalance = balance,
+        //                companyCode = member.CompanyCode
+        //            }
+        //        });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error getting member details");
+        //        return Json(new { success = false, message = ex.Message });
+        //    }
+        //}
+
+
+        
         [HttpGet]
         public async Task<IActionResult> History(string memberNo, DateTime? startDate, DateTime? endDate)
         {
@@ -537,6 +676,7 @@ namespace SACCOBlockChainSystem.Controllers
                     .Where(t => !startDate.HasValue || t.TransDate >= startDate.Value)
                     .Where(t => !endDate.HasValue || t.TransDate <= endDate.Value)
                     .OrderByDescending(t => t.TransDate)
+                    .Take(100) // Limit results
                     .ToListAsync();
             }
             else
@@ -559,14 +699,82 @@ namespace SACCOBlockChainSystem.Controllers
             var member = !string.IsNullOrEmpty(memberNo) ?
                 await _memberService.GetMemberByMemberNoAsync(memberNo) : null;
 
-            ViewBag.IsAdmin = isAdmin;
-            ViewBag.MemberNo = memberNo;
-            ViewBag.MemberName = member != null ? $"{member.Surname} {member.OtherNames}" : "All Transactions";
-            ViewBag.StartDate = startDate?.ToString("yyyy-MM-dd");
-            ViewBag.EndDate = endDate?.ToString("yyyy-MM-dd");
+            // Create a ViewModel instead of passing Member directly
+            var viewModel = new MemberTransactionsViewModel
+            {
+                Member = member,
+                Transactions = transactions,
+                StartDate = startDate,
+                EndDate = endDate,
+                IsAdmin = isAdmin,
+                MemberNo = memberNo,
+                MemberName = member != null ? $"{member.Surname} {member.OtherNames}" : "All Transactions"
+            };
 
-            return View(transactions);
+            return View(viewModel); 
         }
+
+
+        //[HttpGet]
+        //public async Task<IActionResult> History(string memberNo, DateTime? startDate, DateTime? endDate)
+        //{
+        //    // Check user role
+        //    var isAdmin = await IsAdminOrStaffAsync();
+
+        //    if (string.IsNullOrEmpty(memberNo))
+        //    {
+        //        // Get current user's member number if not admin
+        //        if (!isAdmin)
+        //        {
+        //            memberNo = User.FindFirst("MemberNo")?.Value;
+        //        }
+        //    }
+
+        //    if (string.IsNullOrEmpty(memberNo) && !isAdmin)
+        //    {
+        //        return RedirectToAction("Index", "Home");
+        //    }
+
+        //    List<Transaction> transactions;
+        //    if (isAdmin && string.IsNullOrEmpty(memberNo))
+        //    {
+        //        // Admin can see all transactions
+        //        transactions = await _context.Transactions
+        //            .Where(t => !startDate.HasValue || t.TransDate >= startDate.Value)
+        //            .Where(t => !endDate.HasValue || t.TransDate <= endDate.Value)
+        //            .OrderByDescending(t => t.TransDate)
+        //            .ToListAsync();
+        //    }
+        //    else
+        //    {
+        //        // Check permission for non-admin users
+        //        if (!isAdmin)
+        //        {
+        //            var currentMemberNo = User.FindFirst("MemberNo")?.Value;
+        //            if (currentMemberNo != memberNo)
+        //            {
+        //                TempData["ErrorMessage"] = "Access denied. You can only view your own transaction history.";
+        //                return RedirectToAction("History", new { memberNo = currentMemberNo });
+        //            }
+        //        }
+
+        //        // Get specific member's transactions
+        //        transactions = await _transactionService.GetMemberTransactionsAsync(memberNo, startDate, endDate);
+        //    }
+
+        //    var member = !string.IsNullOrEmpty(memberNo) ?
+        //        await _memberService.GetMemberByMemberNoAsync(memberNo) : null;
+
+        //    ViewBag.IsAdmin = isAdmin;
+        //    ViewBag.MemberNo = memberNo;
+        //    ViewBag.MemberName = member != null ? $"{member.Surname} {member.OtherNames}" : "All Transactions";
+        //    ViewBag.StartDate = startDate?.ToString("yyyy-MM-dd");
+        //    ViewBag.EndDate = endDate?.ToString("yyyy-MM-dd");
+
+        //    return View(transactions);
+        //}
+
+
 
         [HttpGet]
         public async Task<IActionResult> Balance(string memberNo)

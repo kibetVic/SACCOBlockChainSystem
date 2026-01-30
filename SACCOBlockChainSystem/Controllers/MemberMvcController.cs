@@ -57,7 +57,7 @@ namespace SACCOBlockChainSystem.Controllers
         // GET: /MemberMvc/Register
         public IActionResult Register()
         {
-            return View(new MemberRegistrationDTO()); 
+            return View(new MemberRegistrationDTO());
         }
 
 
@@ -152,73 +152,73 @@ namespace SACCOBlockChainSystem.Controllers
             return View();
         }
 
-        [HttpGet]
-        public async Task<IActionResult> Transactions(string memberNo = null)
-        {
-            if (string.IsNullOrEmpty(memberNo))
-            {
-                // Show search form when no member number provided
-                return View("TransactionsSearch");
-            }
+        //[HttpGet]
+        //public async Task<IActionResult> Transactions(string memberNo = null)
+        //{
+        //    if (string.IsNullOrEmpty(memberNo))
+        //    {
+        //        // Show search form when no member number provided
+        //        return View("TransactionsSearch");
+        //    }
 
-            try
-            {
-                var member = await _memberService.GetMemberByMemberNoAsync(memberNo);
-                if (member == null)
-                {
-                    ViewBag.ErrorMessage = "Member not found";
-                    return View("TransactionsSearch");
-                }
+        //    try
+        //    {
+        //        var member = await _memberService.GetMemberByMemberNoAsync(memberNo);
+        //        if (member == null)
+        //        {
+        //            ViewBag.ErrorMessage = "Member not found";
+        //            return View("TransactionsSearch");
+        //        }
 
-                var viewModel = new MemberTransactionsViewModel
-                {
-                    Member = member,
-                    Transactions = await GetMemberTransactionsAsync(memberNo),
-                    LoanHistory = await GetMemberLoanHistoryAsync(memberNo),
-                    TotalShares = await _memberService.GetMemberShareBalanceAsync(memberNo),
-                };
+        //        var viewModel = new MemberTransactionsViewModel
+        //        {
+        //            Member = member,
+        //            Transactions = await GetMemberTransactionsAsync(memberNo),
+        //            LoanHistory = await GetMemberLoanHistoryAsync(memberNo),
+        //            TotalShares = await _memberService.GetMemberShareBalanceAsync(memberNo),
+        //        };
 
-                viewModel.LastTransactionDate = viewModel.Transactions.FirstOrDefault()?.ContributionDate;
+        //        viewModel.LastTransactionDate = viewModel.Transactions.FirstOrDefault()?.ContributionDate;
 
-                return View("Transactions", viewModel); // Specify view name explicitly
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading member transactions");
-                return View("Error");
-            }
-        }
+        //        return View("Transactions", viewModel); // Specify view name explicitly
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error loading member transactions");
+        //        return View("Error");
+        //    }
+        //}
 
-        // GET: /MemberMvc/Transactions/{memberNo} (for direct links)
-        [HttpGet("Transactions/{memberNo}")]
-        public async Task<IActionResult> TransactionsWithMemberNo(string memberNo)
-        {
-            try
-            {
-                var member = await _memberService.GetMemberByMemberNoAsync(memberNo);
-                if (member == null)
-                {
-                    return NotFound();
-                }
+        //// GET: /MemberMvc/Transactions/{memberNo} (for direct links)
+        //[HttpGet("Transactions/{memberNo}")]
+        //public async Task<IActionResult> TransactionsWithMemberNo(string memberNo)
+        //{
+        //    try
+        //    {
+        //        var member = await _memberService.GetMemberByMemberNoAsync(memberNo);
+        //        if (member == null)
+        //        {
+        //            return NotFound();
+        //        }
 
-                var viewModel = new MemberTransactionsViewModel
-                {
-                    Member = member,
-                    Transactions = await GetMemberTransactionsAsync(memberNo),
-                    LoanHistory = await GetMemberLoanHistoryAsync(memberNo),
-                    TotalShares = await _memberService.GetMemberShareBalanceAsync(memberNo),
-                };
+        //        var viewModel = new MemberTransactionsViewModel
+        //        {
+        //            Member = member,
+        //            Transactions = await GetMemberTransactionsAsync(memberNo),
+        //            LoanHistory = await GetMemberLoanHistoryAsync(memberNo),
+        //            TotalShares = await _memberService.GetMemberShareBalanceAsync(memberNo),
+        //        };
 
-                viewModel.LastTransactionDate = viewModel.Transactions.FirstOrDefault()?.ContributionDate;
+        //        viewModel.LastTransactionDate = viewModel.Transactions.FirstOrDefault()?.ContributionDate;
 
-                return View("Transactions", viewModel);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading member transactions");
-                return View("Error");
-            }
-        }
+        //        return View("Transactions", viewModel);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error loading member transactions");
+        //        return View("Error");
+        //    }
+        //}
 
         // GET: /MemberMvc/SearchMembers (for AJAX search)
         [HttpGet("SearchMembers")]
@@ -236,22 +236,22 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        // Helper methods
-        private async Task<List<Transactions2>> GetMemberTransactionsAsync(string memberNo)
-        {
-            return await _context.Transactions2
-                .Where(t => t.MemberNo == memberNo)
-                .OrderByDescending(t => t.AuditDateTime)
-                .Take(100)
-                .ToListAsync();
-        }
+        //// Helper methods
+        //private async Task<List<Transactions2>> GetMemberTransactionsAsync(string memberNo)
+        //{
+        //    return await _context.Transactions2
+        //        .Where(t => t.MemberNo == memberNo)
+        //        .OrderByDescending(t => t.AuditDateTime)
+        //        .Take(100)
+        //        .ToListAsync();
+        //}
 
-        private async Task<List<Loan>> GetMemberLoanHistoryAsync(string memberNo)
-        {
-            return await _context.Loans
-                .Where(l => l.MemberNo == memberNo)
-                .OrderByDescending(l => l.ApplicDate)
-                .ToListAsync();
-        }
+        //private async Task<List<Loan>> GetMemberLoanHistoryAsync(string memberNo)
+        //{
+        //    return await _context.Loans
+        //        .Where(l => l.MemberNo == memberNo)
+        //        .OrderByDescending(l => l.ApplicDate)
+        //        .ToListAsync();
+        //}
     }
 }

@@ -11,5 +11,6 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public int ActiveMembers { get; set; }
         public decimal TotalShareCapital { get; set; }
         public List<BlockchainTransaction> MemberTransactions { get; set; } = new List<BlockchainTransaction>();
+        public string UserCompanyCode { get; internal set; }
     }
 }

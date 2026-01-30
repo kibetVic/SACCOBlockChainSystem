@@ -399,7 +399,7 @@ namespace SACCOBlockChainSystem.Services
         }
 
         // Get all confirmed transactions for a member
-        public async Task<List<BlockchainTransaction>> GetMemberTransactions(string memberNo)
+        public async Task<List<BlockchainTransaction>> GetMemberTransactions(string memberNo, string currentCompanyCode)
         {
             try
             {
@@ -843,6 +843,8 @@ namespace SACCOBlockChainSystem.Services
             var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(content));
             return BitConverter.ToString(bytes).Replace("-", "").ToLower();
         }
+
+       
     }
 
     // Blockchain status DTO

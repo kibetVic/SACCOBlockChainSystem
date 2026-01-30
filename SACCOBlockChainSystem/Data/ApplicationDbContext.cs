@@ -41,6 +41,7 @@ namespace SACCOBlockChainSystem.Data
 
         // Optional: Audit Trail table
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public List<dynamic>? Banks { get; internal set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

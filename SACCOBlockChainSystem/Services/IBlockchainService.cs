@@ -9,7 +9,7 @@ namespace SACCOBlockChainSystem.Services
         Task<BlockchainTransaction> CreateTransaction(string type, string memberNo, string companyCode,
             decimal amount, string offChainRefId, object data);
         Task<bool> VerifyTransaction(string transactionId);
-        Task<List<BlockchainTransaction>> GetMemberTransactions(string memberNo);
+        Task<List<BlockchainTransaction>> GetMemberTransactions(string memberNo, string currentCompanyCode);
         Task<BlockchainTransaction> AddToBlockchain(BlockchainTransaction transaction);
         Task<int> ProcessPendingTransactionsAsync();
         Task<BlockchainTransaction?> GetTransactionAsync(string transactionId);

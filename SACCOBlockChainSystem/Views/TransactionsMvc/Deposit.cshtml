@@ -133,71 +133,105 @@
     </div>
 </div>
 
+
 @section Scripts {
     <script>
         $(document).ready(function() {
             var isAdmin = @Json.Serialize(isAdmin);
+            var selectedMember = null;
 
             if (isAdmin) {
                 // Setup member search for admin
-                $('#memberSearch').on('input', function() {
-                    var searchTerm = $(this).val();
-                    if (searchTerm.length >= 2) {
-                        searchMembers(searchTerm);
-                    } else {
-                        $('#searchResults').hide();
-                    }
-                });
-
-                $('#searchMemberBtn').click(function() {
-                    var searchTerm = $('#memberSearch').val();
-                    if (searchTerm.length >= 2) {
-                        searchMembers(searchTerm);
-                    }
-                });
+                setupMemberSearch();
             } else {
                 // For regular users, set their member number
                 var currentMemberNo = '@(ViewBag.CurrentMember?.MemberNo ?? "")';
                 if (currentMemberNo) {
                     $('#MemberNo').val(currentMemberNo);
                     $('#submitBtn').prop('disabled', false);
+                    loadMemberDetails(currentMemberNo);
                 }
             }
 
             // Form submission
             $('#depositForm').on('submit', function(e) {
-                // Validate member is selected for admin
                 if (isAdmin && !$('#MemberNo').val()) {
                     e.preventDefault();
-                    alert('Please select a member first.');
+                    showAlert('error', 'Please select a member first.');
                     return false;
                 }
                 return true;
             });
 
-            // Function to search members
+            function setupMemberSearch() {
+                // Debounce search to avoid too many requests
+                var searchTimeout;
+                $('#memberSearch').on('input', function() {
+                    clearTimeout(searchTimeout);
+                    var searchTerm = $(this).val().trim();
+                    if (searchTerm.length >= 2) {
+                        searchTimeout = setTimeout(function() {
+                            searchMembers(searchTerm);
+                        }, 500);
+                    } else {
+                        $('#searchResults').hide();
+                    }
+                });
+
+                $('#searchMemberBtn').click(function() {
+                    var searchTerm = $('#memberSearch').val().trim();
+                    if (searchTerm.length >= 2) {
+                        searchMembers(searchTerm);
+                    }
+                });
+
+                // Close search results when clicking outside
+                $(document).click(function(e) {
+                    if (!$(e.target).closest('#memberSearch, #searchResults').length) {
+                        $('#searchResults').hide();
+                    }
+                });
+            }
+
             function searchMembers(searchTerm) {
                 $.ajax({
                     url: '@Url.Action("SearchMember", "TransactionsMvc")',
                     type: 'GET',
                     data: { searchTerm: searchTerm },
+                    beforeSend: function() {
+                        $('#searchResults').html('<div class="text-center p-2"><i class="fas fa-spinner fa-spin"></i> Searching...</div>').show();
+                    },
                     success: function(response) {
                         if (response.success && response.data.length > 0) {
-                            $('#memberResults').empty();
+                            var html = '';
                             response.data.forEach(function(member) {
-                                var item = `
+                                html += `
                                     <a href="#" class="list-group-item list-group-item-action member-item"
                                        data-memberno="${member.memberNo}">
-                                        <strong>${member.memberNo}</strong> - ${member.surname} ${member.otherNames}
-                                        <br><small>ID: ${member.idno} | Phone: ${member.phoneNo}</small>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>${member.memberNo}</strong> - ${member.fullName}
+                                                <br><small class="text-muted">
+                                                    <i class="fas fa-id-card"></i> ${member.idno || 'N/A'} |
+                                                    <i class="fas fa-phone"></i> ${member.phoneNo || 'N/A'}
+                                                </small>
+                                            </div>
+                                            <div class="text-right">
+                                                <small class="text-success">
+                                                    <strong>KES ${member.currentBalance ? member.currentBalance.toLocaleString() : '0.00'}</strong>
+                                                </small>
+                                            </div>
+                                        </div>
                                     </a>
                                 `;
-                                $('#memberResults').append(item);
                             });
-                            $('#searchResults').show();
+                            $('#searchResults').html(html).show();
                         } else {
-                            $('#searchResults').hide();
+                            $('#searchResults').html('<div class="text-center p-2 text-muted">No members found</div>').show();
                         }
+                    },
+                    error: function() {
+                        $('#searchResults').html('<div class="text-center p-2 text-danger">Error searching members</div>').show();
                     }
                 });
             }
@@ -206,40 +240,91 @@
             $(document).on('click', '.member-item', function(e) {
                 e.preventDefault();
                 var memberNo = $(this).data('memberno');
+                $('#MemberNo').val(memberNo);
+                $('#memberSearch').val(memberNo);
+                $('#searchResults').hide();
+                loadMemberDetails(memberNo);
+            });
 
-                // Load member details
+            function loadMemberDetails(memberNo) {
                 $.ajax({
                     url: '@Url.Action("GetMemberDetails", "TransactionsMvc")',
                     type: 'GET',
                     data: { memberNo: memberNo },
+                    beforeSend: function() {
+                        $('#memberDetails').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading details...</div>');
+                        $('#selectedMemberInfo').show();
+                    },
                     success: function(response) {
                         if (response.success) {
                             var member = response.data;
-                            $('#MemberNo').val(member.memberNo);
-                            $('#memberSearch').val(member.memberNo);
-                            $('#searchResults').hide();
+                            selectedMember = member;
 
-                            // Display member details
                             var detailsHtml = `
-                                <p><strong>Member No:</strong> ${member.memberNo}</p>
-                                <p><strong>Name:</strong> ${member.fullName}</p>
-                                <p><strong>ID Number:</strong> ${member.idNumber}</p>
-                                <p><strong>Phone:</strong> ${member.phone}</p>
-                                <p><strong>Current Balance:</strong> KES ${member.currentBalance.toLocaleString()}</p>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>Member No:</strong> ${member.memberNo}</p>
+                                        <p><strong>Name:</strong> ${member.fullName}</p>
+                                        <p><strong>ID Number:</strong> ${member.idNumber || 'N/A'}</p>
+                                        <p><strong>Phone:</strong> ${member.phone || 'N/A'}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>Email:</strong> ${member.email || 'N/A'}</p>
+                                        <p><strong>Employer:</strong> ${member.employer || 'N/A'}</p>
+                                        <p><strong>Station:</strong> ${member.station || 'N/A'}</p>
+                                        <p><strong>Current Balance:</strong> <span class="badge bg-success">KES ${member.currentBalance.toLocaleString()}</span></p>
+                                    </div>
+                                </div>
                             `;
                             $('#memberDetails').html(detailsHtml);
-                            $('#selectedMemberInfo').show();
                             $('#submitBtn').prop('disabled', false);
+
+                            // Show success message
+                            showAlert('success', `Member ${member.memberNo} selected successfully. You can now proceed with the deposit.`);
+                        } else {
+                            $('#memberDetails').html('<div class="text-danger">Error loading member details</div>');
+                            $('#submitBtn').prop('disabled', true);
                         }
+                    },
+                    error: function() {
+                        $('#memberDetails').html('<div class="text-danger">Error loading member details</div>');
+                        $('#submitBtn').prop('disabled', true);
                     }
                 });
-            });
+            }
+
+            function showAlert(type, message) {
+                var alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+                var icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+
+                var alertHtml = `
+                    <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+                        <i class="fas ${icon}"></i> ${message}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                `;
+
+                // Remove existing alerts
+                $('.alert-dismissible').remove();
+
+                // Add new alert before the form
+                $('#depositForm').before(alertHtml);
+
+                // Auto remove after 5 seconds
+                setTimeout(function() {
+                    $('.alert-dismissible').alert('close');
+                }, 5000);
+            }
 
             // Clear member selection
             $('#clearMemberBtn').click(function() {
                 $('#MemberNo').val('');
+                $('#memberSearch').val('');
                 $('#selectedMemberInfo').hide();
                 $('#submitBtn').prop('disabled', true);
+                selectedMember = null;
             });
         });
     </script>

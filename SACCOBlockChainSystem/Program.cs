@@ -63,6 +63,7 @@ builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<ILoanService, LoanService>();
 builder.Services.AddScoped<IShareService, ShareService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<ICompanyContextService, CompanyContextService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Background Services

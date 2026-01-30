@@ -34,6 +34,7 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public string Department { get; set; }
         public string SubCounty { get; set; }
         public string Ward { get; set; }
+        public object CompanyCode { get; set; }
 
         [Display(Name = "User Group/Role")]
         public string? UserGroup { get; set; }

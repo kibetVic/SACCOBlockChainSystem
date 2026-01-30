@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SACCOBlockChainSystem.Models;
 public partial class Member
 {
     public int Id { get; set; }
 
-    public string MemberNo { get; set; } = null!;
+    public string MemberNo { get; set; } = null!; 
 
     public string? StaffNo { get; set; }
 
@@ -120,7 +121,7 @@ public partial class Member
 
     public bool? Mstatus { get; set; }
 
-    public string? MembershipType { get; set; }
+    public string? MembershipType { get; set; } // Individual or cooprate
 
     public int? Age { get; set; }
 
@@ -136,4 +137,7 @@ public partial class Member
 
     public DateTime? AuditDateTime { get; set; }
     public string? BlockchainTxId { get; set; }
+
+    [NotMapped]
+    public dynamic FullName { get; internal set; }
 }

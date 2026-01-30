@@ -26,4 +26,7 @@ public partial class Transaction
     public string? Channel { get; set; }
 
     public DateTime? AuditDateTime { get; set; }
+    public String? TransactionType { get; set; }
+    public String? ReceiptNo { get; set; }
+    public String? BlockchainTxId { get;set; }
 }

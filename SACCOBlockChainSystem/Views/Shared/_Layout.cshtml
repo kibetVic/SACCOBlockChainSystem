@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/blazorcss/material-base.css" />
     <link rel="stylesheet" href="/blazorcss/standard-base.css" />
     <link rel="stylesheet" href="/blazorcss/standard.css" />
+    <link href="~/css/member.css" rel="stylesheet" />
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -49,6 +50,9 @@
           href="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/css/jsvectormap.min.css"
           integrity="sha256-+uGLJmmTKOqBr+2E6KDYs/NRsHxSkONXFHUL0fy2O/4="
           crossorigin="anonymous" />
+
+    @RenderSection("Styles", required: false)
+
 </head>
 <body class="layout-fixed sidebar-expand-lg sidebar-open bg-body-tertiary">
     <div class="app-wrapper">
@@ -64,8 +68,17 @@
                             <i class="bi bi-list"></i>
                         </a>
                     </li>
-                    <li class="nav-item d-none d-md-block">
-                        <a asp-controller="Home" asp-action="Index" class="nav-link">Home</a>
+                    <li class="nav-item">
+                        @using System.Security.Claims
+                        @if (User.Identity.IsAuthenticated)
+                        {
+                            <div class="company-info">
+                                <small>
+                                    <strong>@User.FindFirstValue("CompanyName")</strong>
+                                    <strong>(@User.FindFirstValue("CompanyCode"))</strong>
+                                </small>
+                            </div>
+                        }
                     </li>
                 </ul>
                 <!--end::Start Navbar Links-->
@@ -136,7 +149,7 @@
 
                                             <li><hr class="dropdown-divider m-0"></li>
                                             <li>
-                                                <form method="post" asp-controller="Account" asp-action="Logout">
+                                                <form method="post" asp-controller="Account" asp-action="Login">
                                                     <button type="submit" class="dropdown-item">
                                                         <i class="fas fa-sign-out-alt me-2"></i>Logout
                                                     </button>
@@ -217,12 +230,6 @@
                                     <a asp-controller="MemberMvc" asp-action="Index" class="nav-link">
                                         <i class="nav-icon bi bi-people"></i>
                                         <p>Members</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberMvc" asp-action="Transactions" class="nav-link">
-                                        <i class="nav-icon bi bi-cash-stack"></i>
-                                        <p>Member Transactions</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
