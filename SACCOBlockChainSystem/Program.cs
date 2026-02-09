@@ -12,11 +12,11 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddHttpClient(); // For API calls if needed
+builder.Services.AddHttpClient();     // For API calls if needed
 builder.Services.AddSession(options =>
 {
     options.IdleTimeout = TimeSpan.FromMinutes(30);
-    options.Cookie.HttpOnly = true;
+    options.Cookie.HttpOnly = true;     
     options.Cookie.IsEssential = true;
 });
 
@@ -60,11 +60,15 @@ builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<IBlockchainService, BlockchainService>();
 builder.Services.AddScoped<IMemberService, MemberService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
+builder.Services.AddScoped<ILoanTypeService, LoanTypeService>();
+// In Program.cs
 builder.Services.AddScoped<ILoanService, LoanService>();
+builder.Services.AddScoped<ILoanTypeService, LoanTypeService>();
 builder.Services.AddScoped<IShareService, ShareService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<ICompanyContextService, CompanyContextService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IShareTypeService, ShareTypeService>();
 
 // Background Services
 builder.Services.AddHostedService<BlockchainSyncService>();

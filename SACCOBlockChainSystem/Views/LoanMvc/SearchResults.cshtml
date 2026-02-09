@@ -1,0 +1,165 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.LoanListResponseDTO>
+@using SACCOBlockChainSystem.Extensions
+
+@{
+    ViewData["Title"] = "Search Results";
+    var searchCriteria = ViewBag.SearchCriteria as SACCOBlockChainSystem.Models.DTOs.LoanSearchDTO;
+    var resultCount = ViewBag.ResultCount as int? ?? 0;
+}
+
+<div class="card">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h4 class="mb-0"><i class="bi bi-search"></i> Search Results</h4>
+        <span class="badge bg-light text-primary">@resultCount loan(s) found</span>
+    </div>
+    <div class="card-body">
+        <!-- Search Criteria Summary -->
+        @if (searchCriteria != null)
+        {
+            <div class="alert alert-info mb-4">
+                <h6><i class="bi bi-funnel"></i> Search Criteria:</h6>
+                <div class="row">
+                    @if (!string.IsNullOrEmpty(searchCriteria.MemberNo))
+                    {
+                        <div class="col-md-3">
+                            <strong>Member No:</strong> @searchCriteria.MemberNo
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(searchCriteria.LoanNo))
+                    {
+                        <div class="col-md-3">
+                            <strong>Loan No:</strong> @searchCriteria.LoanNo
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(searchCriteria.LoanCode))
+                    {
+                        <div class="col-md-3">
+                            <strong>Loan Type:</strong> @searchCriteria.LoanCode
+                        </div>
+                    }
+                    @if (searchCriteria.Status.HasValue)
+                    {
+                        <div class="col-md-3">
+                            <strong>Status:</strong> 
+                            <partial name="_LoanStatusBadge" model="@searchCriteria.Status.Value" />
+                        </div>
+                    }
+                </div>
+                @if (searchCriteria.FromDate.HasValue || searchCriteria.ToDate.HasValue)
+                {
+                    <div class="row mt-2">
+                        @if (searchCriteria.FromDate.HasValue)
+                        {
+                            <div class="col-md-6">
+                                <strong>From:</strong> @searchCriteria.FromDate.Value.ToString("dd/MM/yyyy")
+                            </div>
+                        }
+                        @if (searchCriteria.ToDate.HasValue)
+                        {
+                            <div class="col-md-6">
+                                <strong>To:</strong> @searchCriteria.ToDate.Value.ToString("dd/MM/yyyy")
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        
+        @if (!Model.Any())
+        {
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i>
+                No loans found matching your search criteria.
+                <a asp-action="Search" class="alert-link">Try a different search</a>.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Loan No</th>
+                            <th>Member</th>
+                            <th>Member No</th>
+                            <th>Loan Type</th>
+                            <th>Amount</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                            <th>Application Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var loan in Model)
+                        {
+                            <tr>
+                                <td><strong>@loan.LoanNo</strong></td>
+                                <td>@loan.MemberName.Truncate(20)</td>
+                                <td>@loan.MemberNo</td>
+                                <td>@loan.LoanType</td>
+                                <td>@loan.AppliedAmount.ToString("C")</td>
+                                <td>@(loan.LoanBalance?.ToString("C") ?? "N/A")</td>
+                        @functions {
+                            private int GetStatusCode(string status)
+                            {
+                                return status switch
+                                {
+                                    "Pending" => 1,
+                                    "Guarantors" => 2,
+                                    "Appraisal" => 3,
+                                    "Endorsement" => 4,
+                                    "Approved" => 5,
+                                    "Disbursed" => 6,
+                                    "Rejected" => 7,
+                                    "Closed" => 8,
+                                    _ => 0
+                                };
+                            }
+                        }
+
+                        <td>
+                            <partial name="_LoanStatusBadge" model="@GetStatusCode(loan.Status)" />
+                        </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Export Options -->
+            <div class="d-flex justify-content-between mt-4">
+                <a asp-action="Search" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> New Search
+                </a>
+                <div>
+                    <button class="btn btn-outline-success" id="exportExcel">
+                        <i class="bi bi-file-earmark-excel"></i> Export to Excel
+                    </button>
+                    <button class="btn btn-outline-primary ms-2" id="exportPDF">
+                        <i class="bi bi-file-earmark-pdf"></i> Export to PDF
+                    </button>
+                    <button class="btn btn-outline-dark ms-2" onclick="window.print()">
+                        <i class="bi bi-printer"></i> Print
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Export to Excel
+            $('#exportExcel').on('click', function() {
+                alert('Export to Excel feature would be implemented here.');
+            });
+            
+            // Export to PDF
+            $('#exportPDF').on('click', function() {
+                alert('Export to PDF feature would be implemented here.');
+            });
+        });
+    </script>
+}

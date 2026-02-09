@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SACCOBlockChainSystem.Models;
 
@@ -118,4 +119,7 @@ public partial class Loantype
     public string? MobileCreatedBy { get; set; }
 
     public DateTime? AuditDateTime { get; set; }
+
+    public string? Insurance { get; set; }
+    //public object Insurance { get; internal set; }
 }

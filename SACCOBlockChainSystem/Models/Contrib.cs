@@ -82,4 +82,5 @@ public partial class Contrib
     public string? BlockchainTxId { get; set; }
 
     public virtual Sharetype? SharescodeNavigation { get; set; }
+    public virtual Member? MemberNoNavigation { get; set; }
 }

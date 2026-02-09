@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SACCOBlockChainSystem.Data;
 
@@ -11,9 +12,11 @@ using SACCOBlockChainSystem.Data;
 namespace SACCOBlockChainSystem.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260202073928_NewTypes")]
+    partial class NewTypes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -832,9 +835,6 @@ namespace SACCOBlockChainSystem.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<int?>("LoanTypeId")
-                        .HasColumnType("int");
-
                     b.Property<long?>("Loancount")
                         .HasColumnType("bigint");
 
@@ -893,9 +893,6 @@ namespace SACCOBlockChainSystem.Migrations
                     b.Property<int?>("Status")
                         .HasColumnType("int");
 
-                    b.Property<string>("StatusDescription")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("SupMemberNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -923,8 +920,6 @@ namespace SACCOBlockChainSystem.Migrations
 
                     b.HasIndex("LoanNo")
                         .IsUnique();
-
-                    b.HasIndex("LoanTypeId");
 
                     b.HasIndex("MemberNo");
 
@@ -1109,9 +1104,6 @@ namespace SACCOBlockChainSystem.Migrations
                     b.Property<string>("FullNames")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("LoanId")
-                        .HasColumnType("int");
-
                     b.Property<string>("LoanNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -1129,8 +1121,6 @@ namespace SACCOBlockChainSystem.Migrations
                         .HasColumnType("bit");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("LoanId");
 
                     b.ToTable("Loanguars");
                 });
@@ -1194,9 +1184,6 @@ namespace SACCOBlockChainSystem.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Guarantor")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Insurance")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("IntAccno")
@@ -2303,18 +2290,12 @@ namespace SACCOBlockChainSystem.Migrations
 
             modelBuilder.Entity("SACCOBlockChainSystem.Models.Loan", b =>
                 {
-                    b.HasOne("SACCOBlockChainSystem.Models.Loantype", "LoanType")
-                        .WithMany()
-                        .HasForeignKey("LoanTypeId");
-
                     b.HasOne("SACCOBlockChainSystem.Models.Member", "Member")
                         .WithMany()
                         .HasForeignKey("MemberNo")
                         .HasPrincipalKey("MemberNo")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("LoanType");
 
                     b.Navigation("Member");
                 });
@@ -2327,13 +2308,6 @@ namespace SACCOBlockChainSystem.Migrations
                         .HasPrincipalKey("LoanNo")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("SACCOBlockChainSystem.Models.Loanguar", b =>
-                {
-                    b.HasOne("SACCOBlockChainSystem.Models.Loan", null)
-                        .WithMany("LoanGuarantors")
-                        .HasForeignKey("LoanId");
                 });
 
             modelBuilder.Entity("SACCOBlockChainSystem.Models.Repay", b =>
@@ -2353,8 +2327,6 @@ namespace SACCOBlockChainSystem.Migrations
 
             modelBuilder.Entity("SACCOBlockChainSystem.Models.Loan", b =>
                 {
-                    b.Navigation("LoanGuarantors");
-
                     b.Navigation("Loanbals");
 
                     b.Navigation("Repays");

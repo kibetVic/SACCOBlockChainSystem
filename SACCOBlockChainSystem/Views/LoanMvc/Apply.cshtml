@@ -1,0 +1,803 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanApplicationDTO
+@{
+    ViewData["Title"] = "Apply for Loan";
+    // FIX: Use the correct namespace for LoanTypeEligibilityDTO
+    var eligibleLoanTypes = ViewBag.EligibleLoanTypes as List<SACCOBlockChainSystem.Models.DTOs.LoanTypeEligibilityDTO>;
+    var memberInfo = ViewBag.MemberInfo as dynamic;
+    var memberNo = ViewBag.MemberNo as string;
+}
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="bi bi-plus-circle"></i> Apply for New Loan</h4>
+    </div>
+    <div class="card-body">
+        <!-- Progress Tracker -->
+        <div class="progress-tracker">
+            <div class="step active">
+                <div class="step-number">1</div>
+                <div class="step-title">Member Info</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-title">Loan Details</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-title">Guarantors</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step">
+                <div class="step-number">4</div>
+                <div class="step-title">Appraisal</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step">
+                <div class="step-number">5</div>
+                <div class="step-title">Endorsement</div>
+            </div>
+        </div>
+
+        <!-- Step 1: Member Search -->
+        <div id="step1" class="loan-step active">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-search"></i> Find Member</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="memberSearch" class="form-label">Search Member by Number, Name, or ID</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="memberSearch"
+                                           placeholder="Enter member number, name, or ID number...">
+                                    <button class="btn btn-primary" type="button" id="searchMemberBtn">
+                                        <i class="bi bi-search"></i> Search
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Or Enter Member Number</label>
+                                <input asp-for="MemberNo" class="form-control"
+                                       placeholder="Enter member number..." id="memberNoInput" />
+                                <span asp-validation-for="MemberNo" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search Results -->
+                    <div id="searchResults" class="mt-3" style="display: none;">
+                        <h6>Search Results</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Member No</th>
+                                        <th>Name</th>
+                                        <th>ID Number</th>
+                                        <th>Phone</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultsBody">
+                                    <!-- Results will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Loading Indicator -->
+                    <div id="loadingIndicator" class="text-center my-3" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Searching for members...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Member Details (shown after selection) -->
+            <div id="memberDetailsCard" class="card mb-4" style="display: none;">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-person-check"></i> Selected Member Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="memberDetails">
+                        <!-- Member details will be populated here -->
+                    </div>
+
+                    <div class="mt-3 text-end">
+                        <button type="button" class="btn btn-success" id="continueToStep2">
+                            <i class="bi bi-arrow-right"></i> Continue to Loan Details
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Loan Application Form -->
+        <div id="step2" class="loan-step" style="display: none;">
+            <form asp-action="Apply" method="post" id="loanApplicationForm">
+                @Html.AntiForgeryToken()
+
+                <!-- Member Info Summary -->
+                <div class="card mb-4" id="selectedMemberSummary">
+                    <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="bi bi-person"></i> Member Information</h6>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="backToStep1">
+                                <i class="bi bi-arrow-left"></i> Change Member
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body" id="memberSummaryContent">
+                        <!-- Member summary will be populated here -->
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label asp-for="MemberNo" class="form-label">Member Number *</label>
+                            <input asp-for="MemberNo" class="form-control" id="formMemberNo" readonly />
+                            <span asp-validation-for="MemberNo" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="LoanCode" class="form-label">Loan Type *</label>
+                            <select asp-for="LoanCode" class="form-select" id="loanTypeSelect" required>
+                                <option value="">-- Select Loan Type --</option>
+                                @if (eligibleLoanTypes != null)
+                                {
+                                    foreach (var loanType in eligibleLoanTypes.Where(lt => lt.IsEligible))
+                                    {
+                                        <option value="@loanType.LoanCode"
+                                                data-max-amount="@loanType.MaxAmount"
+                                                data-repay-period="@loanType.RepayPeriod"
+                                                data-interest="@loanType.Interest"
+                                                data-eligible-amount="@loanType.EligibleAmount">
+                                            @loanType.LoanType - Max: @(loanType.MaxAmount?.ToString("C") ?? "Unlimited")
+                                        </option>
+                                    }
+                                }
+                            </select>
+                            <small class="form-text text-muted">Only eligible loan types are shown</small>
+                            <span asp-validation-for="LoanCode" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="LoanAmount" class="form-label">Loan Amount (KES) *</label>
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input asp-for="LoanAmount" class="form-control" type="number" step="100" min="100"
+                                       id="loanAmountInput" required />
+                            </div>
+                            <small class="form-text text-muted" id="amountHelp">Minimum: KES 100</small>
+                            <span asp-validation-for="LoanAmount" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="RepayPeriod" class="form-label">Repayment Period (Months) *</label>
+                            <input asp-for="RepayPeriod" class="form-control" type="number" min="1" max="120"
+                                   id="repayPeriodInput" required />
+                            <small class="form-text text-muted" id="periodHelp">1 to 120 months</small>
+                            <span asp-validation-for="RepayPeriod" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label asp-for="Purpose" class="form-label">Purpose of Loan *</label>
+                            <textarea asp-for="Purpose" class="form-control" rows="3"
+                                      placeholder="Describe what you need the loan for..." required></textarea>
+                            <span asp-validation-for="Purpose" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="SourceOfRepayment" class="form-label">Source of Repayment</label>
+                            <input asp-for="SourceOfRepayment" class="form-control"
+                                   placeholder="e.g., Salary, Business income, etc." />
+                            <span asp-validation-for="SourceOfRepayment" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="SecurityDetails" class="form-label">Security/Collateral Details</label>
+                            <textarea asp-for="SecurityDetails" class="form-control" rows="2"
+                                      placeholder="Describe any security or collateral offered..."></textarea>
+                            <span asp-validation-for="SecurityDetails" class="text-danger"></span>
+                        </div>
+
+                        <!-- Member Financial Summary -->
+                        <div class="card bg-light mb-3" id="financialSummary">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="bi bi-graph-up"></i> Financial Summary</h6>
+                                <table class="table table-sm mb-0">
+                                    <tr>
+                                        <td>Total Shares:</td>
+                                        <td id="totalShares" class="text-end fw-bold">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Available Guarantee:</td>
+                                        <td id="availableGuarantee" class="text-end fw-bold">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Max Loan Eligibility:</td>
+                                        <td id="maxLoanEligibility" class="text-end text-success fw-bold">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Active Loans:</td>
+                                        <td id="activeLoans" class="text-end">0</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Loan Summary -->
+                        <div class="card bg-light" id="loanSummary" style="display: none;">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="bi bi-calculator"></i> Loan Summary</h6>
+                                <table class="table table-sm mb-0">
+                                    <tr>
+                                        <td>Monthly Installment:</td>
+                                        <td id="monthlyInstallment" class="text-end">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Interest Rate:</td>
+                                        <td id="interestRate" class="text-end">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Total Repayment:</td>
+                                        <td id="totalRepayment" class="text-end">-</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Eligibility Check -->
+                <div class="alert alert-warning" id="eligibilityAlert" style="display: none;">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span id="eligibilityMessage"></span>
+                </div>
+
+                <div class="d-flex justify-content-between mt-4">
+                    <button type="button" class="btn btn-outline-secondary" id="backToStep1FromForm">
+                        <i class="bi bi-arrow-left"></i> Back
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <i class="bi bi-check-circle"></i> Submit Application
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <style>
+        .progress-tracker {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .step {
+            text-align: center;
+            flex: 1;
+            position: relative;
+        }
+
+            .step.active .step-number {
+                background-color: #0d6efd;
+                color: white;
+                border-color: #0d6efd;
+            }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #dee2e6;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .step-title {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .step-line {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            right: -50%;
+            height: 2px;
+            background-color: #dee2e6;
+            z-index: -1;
+        }
+
+        .step:last-child .step-line {
+            display: none;
+        }
+
+        .loan-step {
+            display: none;
+        }
+
+            .loan-step.active {
+                display: block;
+                animation: fadeIn 0.5s ease;
+            }
+
+        @@keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .member-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .detail-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #6c757d;
+            font-size: 0.875rem;
+        }
+
+        .detail-value {
+            font-size: 1rem;
+        }
+
+        .financial-indicator {
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .indicator-good {
+            background-color: #d1e7dd;
+            border-left: 4px solid #198754;
+        }
+
+        .indicator-warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+
+        .indicator-danger {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+        }
+    </style>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        $(document).ready(function() {
+            let currentStep = 1;
+            let selectedMember = null;
+            let memberFinancialData = null;
+
+            // DOM Elements
+            const step1 = $('#step1');
+            const step2 = $('#step2');
+            const memberSearch = $('#memberSearch');
+            const memberNoInput = $('#memberNoInput');
+            const searchMemberBtn = $('#searchMemberBtn');
+            const searchResults = $('#searchResults');
+            const resultsBody = $('#resultsBody');
+            const loadingIndicator = $('#loadingIndicator');
+            const memberDetailsCard = $('#memberDetailsCard');
+            const memberDetails = $('#memberDetails');
+            const continueToStep2 = $('#continueToStep2');
+            const backToStep1 = $('#backToStep1');
+            const backToStep1FromForm = $('#backToStep1FromForm');
+            const formMemberNo = $('#formMemberNo');
+            const memberSummaryContent = $('#memberSummaryContent');
+            const selectedMemberSummary = $('#selectedMemberSummary');
+            const financialSummary = $('#financialSummary');
+            const loanTypeSelect = $('#loanTypeSelect');
+            const loanAmountInput = $('#loanAmountInput');
+            const repayPeriodInput = $('#repayPeriodInput');
+            const loanSummary = $('#loanSummary');
+            const eligibilityAlert = $('#eligibilityAlert');
+            const submitBtn = $('#submitBtn');
+
+            // Member Search Function
+            function searchMembers(query) {
+                if (!query || query.trim().length < 2) {
+                    alert('Please enter at least 2 characters to search');
+                    return;
+                }
+
+                loadingIndicator.show();
+                searchResults.hide();
+                resultsBody.empty();
+
+                $.ajax({
+                    url: '@Url.Action("SearchMembers", "MemberMvc")',
+                    type: 'GET',
+                    data: { searchTerm: query },
+                    success: function(response) {
+                        if (response && response.length > 0) {
+                            resultsBody.empty();
+                            response.forEach(function(member) {
+                                const row = `
+                                    <tr>
+                                        <td>${member.memberNo}</td>
+                                        <td>${member.surname} ${member.otherNames || ''}</td>
+                                        <td>${member.idno || '-'}</td>
+                                        <td>${member.phoneNo || '-'}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-primary select-member"
+                                                    data-member-no="${member.memberNo}">
+                                                Select
+                                            </button>
+                                        </td>
+                                    </tr>`;
+                                resultsBody.append(row);
+                            });
+                            searchResults.show();
+                        } else {
+                            resultsBody.html('<tr><td colspan="5" class="text-center">No members found</td></tr>');
+                            searchResults.show();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        alert('Error searching members: ' + error);
+                    },
+                    complete: function() {
+                        loadingIndicator.hide();
+                    }
+                });
+            }
+
+            // Get Member Details
+            function getMemberDetails(memberNo) {
+                if (!memberNo) {
+                    alert('Please enter a member number');
+                    return;
+                }
+
+                loadingIndicator.show();
+                memberDetailsCard.hide();
+
+                $.ajax({
+                    url: '@Url.Action("GetMemberDetails", "MemberMvc")',
+                    type: 'GET',
+                    data: { memberNo: memberNo },
+                    success: function(member) {
+                        if (member) {
+                            selectedMember = member;
+                            displayMemberDetails(member);
+
+                            // Get financial data
+                            getMemberFinancialData(memberNo);
+                        } else {
+                            alert('Member not found');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        alert('Error loading member details: ' + error);
+                    },
+                    complete: function() {
+                        loadingIndicator.hide();
+                    }
+                });
+            }
+
+            // Get Member Financial Data
+            function getMemberFinancialData(memberNo) {
+                $.ajax({
+                    url: '@Url.Action("GetMemberFinancialSummary", "MemberMvc")',
+                    type: 'GET',
+                    data: { memberNo: memberNo },
+                    success: function(data) {
+                        memberFinancialData = data;
+                        displayFinancialSummary(data);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error loading financial data:', error);
+                        memberFinancialData = null;
+                    }
+                });
+            }
+
+            // Display Member Details
+            function displayMemberDetails(member) {
+                const detailsHtml = `
+                    <div class="col-md-6">
+                        <div class="member-details-grid">
+                            <div class="detail-item">
+                                <div class="detail-label">Member Number</div>
+                                <div class="detail-value fw-bold">${member.memberNo}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Full Name</div>
+                                <div class="detail-value">${member.surname} ${member.otherNames || ''}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">ID Number</div>
+                                <div class="detail-value">${member.idno || '-'}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Phone Number</div>
+                                <div class="detail-value">${member.phoneNo || '-'}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="member-details-grid">
+                            <div class="detail-item">
+                                <div class="detail-label">Employer</div>
+                                <div class="detail-value">${member.employer || '-'}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Email</div>
+                                <div class="detail-value">${member.email || '-'}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Membership Date</div>
+                                <div class="detail-value">${member.applicDate ? new Date(member.applicDate).toLocaleDateString() : '-'}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Status</div>
+                                <div class="detail-value">
+                                    <span class="badge ${member.mstatus ? 'bg-success' : 'bg-danger'}">
+                                        ${member.mstatus ? 'Active' : 'Inactive'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+
+                memberDetails.html(detailsHtml);
+                memberDetailsCard.show();
+            }
+
+            // Display Financial Summary
+            function displayFinancialSummary(data) {
+                $('#totalShares').text(data.totalShares ? 'KES ' + parseFloat(data.totalShares).toFixed(2) : 'KES 0.00');
+                $('#availableGuarantee').text(data.availableGuarantee ? 'KES ' + parseFloat(data.availableGuarantee).toFixed(2) : 'KES 0.00');
+                $('#maxLoanEligibility').text(data.maxLoanEligibility ? 'KES ' + parseFloat(data.maxLoanEligibility).toFixed(2) : 'KES 0.00');
+                $('#activeLoans').text(data.activeLoans || 0);
+            }
+
+            // Step Navigation
+            function goToStep(step) {
+                if (step === 1) {
+                    step1.addClass('active').show();
+                    step2.removeClass('active').hide();
+                    currentStep = 1;
+                } else if (step === 2) {
+                    if (!selectedMember) {
+                        alert('Please select a member first');
+                        return;
+                    }
+                    step1.removeClass('active').hide();
+                    step2.addClass('active').show();
+                    currentStep = 2;
+
+                    // Populate form with member data
+                    formMemberNo.val(selectedMember.memberNo);
+
+                    // Update member summary
+                    const summaryHtml = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="detail-item">
+                                    <div class="detail-label">Member</div>
+                                    <div class="detail-value">${selectedMember.memberNo} - ${selectedMember.surname} ${selectedMember.otherNames || ''}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="detail-item">
+                                    <div class="detail-label">ID Number</div>
+                                    <div class="detail-value">${selectedMember.idno || '-'}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="detail-item">
+                                    <div class="detail-label">Status</div>
+                                    <div class="detail-value">
+                                        <span class="badge ${selectedMember.mstatus ? 'bg-success' : 'bg-danger'}">
+                                            ${selectedMember.mstatus ? 'Active' : 'Inactive'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                    memberSummaryContent.html(summaryHtml);
+
+                    // Load eligible loan types for this member
+                    loadEligibleLoanTypes(selectedMember.memberNo);
+                }
+            }
+
+            // Load Eligible Loan Types
+            function loadEligibleLoanTypes(memberNo) {
+                $.ajax({
+                    url: '@Url.Action("GetEligibleLoanTypes", "LoanMvc")',
+                    type: 'GET',
+                    data: { memberNo: memberNo },
+                    success: function(loanTypes) {
+                        loanTypeSelect.empty().append('<option value="">-- Select Loan Type --</option>');
+
+                        if (loanTypes && loanTypes.length > 0) {
+                            loanTypes.forEach(function(loanType) {
+                                if (loanType.isEligible) {
+                                    const option = new Option(
+                                        `${loanType.loanType} - Max: ${loanType.maxAmount ? 'KES ' + parseFloat(loanType.maxAmount).toFixed(2) : 'Unlimited'}`,
+                                        loanType.loanCode
+                                    );
+                                    $(option).data({
+                                        'max-amount': loanType.maxAmount,
+                                        'repay-period': loanType.repayPeriod,
+                                        'interest': loanType.interest,
+                                        'eligible-amount': loanType.eligibleAmount
+                                    });
+                                    loanTypeSelect.append(option);
+                                }
+                            });
+                        } else {
+                            loanTypeSelect.append('<option value="" disabled>No eligible loan types found</option>');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error loading loan types:', error);
+                    }
+                });
+            }
+
+            // Update Loan Summary
+            function updateLoanSummary() {
+                const loanType = loanTypeSelect.find('option:selected');
+                const maxAmount = parseFloat(loanType.data('max-amount')) || 0;
+                const eligibleAmount = parseFloat(loanType.data('eligible-amount')) || 0;
+                const interestRate = parseFloat(loanType.data('interest')) || 0;
+                const loanAmount = parseFloat(loanAmountInput.val()) || 0;
+                const repayPeriod = parseInt(repayPeriodInput.val()) || 0;
+
+                if (loanAmount > 0 && repayPeriod > 0) {
+                    // Calculate monthly installment (simple interest)
+                    const monthlyInterestRate = interestRate / 100 / 12;
+                    const totalInterest = loanAmount * monthlyInterestRate * repayPeriod;
+                    const totalRepayment = loanAmount + totalInterest;
+                    const monthlyInstallment = totalRepayment / repayPeriod;
+
+                    $('#monthlyInstallment').text('KES ' + monthlyInstallment.toFixed(2));
+                    $('#interestRate').text(interestRate.toFixed(2) + '%');
+                    $('#totalRepayment').text('KES ' + totalRepayment.toFixed(2));
+
+                    loanSummary.show();
+                } else {
+                    loanSummary.hide();
+                }
+
+                // Check eligibility
+                if (maxAmount > 0 && loanAmount > maxAmount) {
+                    eligibilityAlert.show();
+                    $('#eligibilityMessage').text('Requested amount exceeds maximum allowed for this loan type. Maximum: KES ' + maxAmount.toFixed(2));
+                    submitBtn.prop('disabled', true);
+                } else if (eligibleAmount > 0 && loanAmount > eligibleAmount) {
+                    eligibilityAlert.show();
+                    $('#eligibilityMessage').text('Requested amount exceeds your eligibility. Maximum eligible amount: KES ' + eligibleAmount.toFixed(2));
+                    submitBtn.prop('disabled', true);
+                } else if (memberFinancialData && memberFinancialData.maxLoanEligibility &&
+                           loanAmount > memberFinancialData.maxLoanEligibility) {
+                    eligibilityAlert.show();
+                    $('#eligibilityMessage').text('Requested amount exceeds your maximum loan eligibility. Maximum: KES ' + parseFloat(memberFinancialData.maxLoanEligibility).toFixed(2));
+                    submitBtn.prop('disabled', true);
+                } else {
+                    eligibilityAlert.hide();
+                    submitBtn.prop('disabled', false);
+                }
+            }
+
+            // Event Listeners
+            searchMemberBtn.on('click', function() {
+                const query = memberSearch.val().trim();
+                searchMembers(query);
+            });
+
+            memberSearch.on('keypress', function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    const query = $(this).val().trim();
+                    searchMembers(query);
+                }
+            });
+
+            memberNoInput.on('keypress', function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    const memberNo = $(this).val().trim();
+                    if (memberNo) {
+                        getMemberDetails(memberNo);
+                    }
+                }
+            });
+
+            // Handle member selection from search results
+            $(document).on('click', '.select-member', function() {
+                const memberNo = $(this).data('member-no');
+                memberNoInput.val(memberNo);
+                getMemberDetails(memberNo);
+            });
+
+            continueToStep2.on('click', function() {
+                goToStep(2);
+            });
+
+            backToStep1.on('click', function() {
+                goToStep(1);
+            });
+
+            backToStep1FromForm.on('click', function() {
+                goToStep(1);
+            });
+
+            // Loan form event listeners
+            loanTypeSelect.on('change', updateLoanSummary);
+            loanAmountInput.on('input', updateLoanSummary);
+            repayPeriodInput.on('input', updateLoanSummary);
+
+            // Form submission
+            $('#loanApplicationForm').on('submit', function(e) {
+                if (submitBtn.prop('disabled')) {
+                    e.preventDefault();
+                    alert('Please fix the eligibility issues before submitting.');
+                    return false;
+                }
+
+                // Validate member selection
+                if (!selectedMember) {
+                    e.preventDefault();
+                    alert('Please select a member first');
+                    return false;
+                }
+
+                // Show loading state
+                submitBtn.html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...');
+                submitBtn.prop('disabled', true);
+            });
+
+            // If member number is already provided in ViewBag, load details
+            @if (!string.IsNullOrEmpty(memberNo))
+            {
+                    <text>
+                        $(function() {
+                            memberNoInput.val('@memberNo');
+                            getMemberDetails('@memberNo');
+                        });
+                    </text>
+            }
+        });
+    </script>
+}

@@ -127,6 +127,137 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+        // GET: /MemberMvc/Edit/{memberNo}
+        public async Task<IActionResult> Edit(string memberNo)
+        {
+            try
+            {
+                var member = await _memberService.GetMemberByMemberNoAsync(memberNo);
+                if (member == null)
+                {
+                    return NotFound();
+                }
+
+                // Convert Member to MemberRegistrationDTO for the edit form
+                var editDto = new MemberRegistrationDTO
+                {
+                    Surname = member.Surname,
+                    OtherNames = member.OtherNames,
+                    IdNo = member.Idno,
+                    PhoneNo = member.PhoneNo,
+                    Email = member.Email,
+                    DateOfBirth = member.Dob,
+                    Gender = member.Sex,
+                    CompanyCode = member.CompanyCode,
+                    // Note: InitialShares might not be editable via this form
+                    CreatedBy = member.AuditId
+                };
+
+                ViewBag.MemberNo = memberNo;
+                ViewBag.FullName = $"{member.Surname} {member.OtherNames}";
+
+                return View(editDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading member for editing");
+                return View("Error");
+            }
+        }
+
+        // POST: /MemberMvc/Edit/{memberNo}
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(string memberNo, MemberRegistrationDTO editDto)
+        {
+            try
+            {
+                _logger.LogInformation($"Edit POST action called for member: {memberNo}");
+
+                if (!ModelState.IsValid)
+                {
+                    _logger.LogWarning("Model state is invalid for edit");
+                    foreach (var error in ModelState.Values.SelectMany(v => v.Errors))
+                    {
+                        _logger.LogWarning($"Model error: {error.ErrorMessage}");
+                    }
+
+                    ViewBag.MemberNo = memberNo;
+                    ViewBag.FullName = $"{editDto.Surname} {editDto.OtherNames}";
+                    return View(editDto);
+                }
+
+                // Get the existing member
+                var existingMember = await _memberService.GetMemberByMemberNoAsync(memberNo);
+                if (existingMember == null)
+                {
+                    return NotFound();
+                }
+
+                // Create a Member object with updated values
+                var updatedMember = new Member
+                {
+                    // Keep the original member number and immutable fields
+                    MemberNo = memberNo,
+                    Idno = existingMember.Idno, // ID number shouldn't be changed
+                    CompanyCode = existingMember.CompanyCode,
+
+                    // Update editable fields
+                    Surname = editDto.Surname,
+                    OtherNames = editDto.OtherNames,
+                    PhoneNo = editDto.PhoneNo,
+                    Email = editDto.Email,
+                    Dob = editDto.DateOfBirth,
+                    Sex = editDto.Gender,
+
+                    // Keep original values for other fields
+                    PresentAddr = existingMember.PresentAddr,
+                    Employer = existingMember.Employer,
+                    Dept = existingMember.Dept,
+                    ShareCap = existingMember.ShareCap,
+
+                    // Update audit fields
+                    AuditId = User.Identity?.Name ?? "SYSTEM",
+                    AuditTime = DateTime.Now,
+                    AuditDateTime = DateTime.Now
+                };
+
+                // Call the service to update the member
+                var success = await _memberService.UpdateMemberAsync(memberNo, updatedMember);
+
+                if (!success)
+                {
+                    ModelState.AddModelError("", "Failed to update member. Please try again.");
+                    ViewBag.MemberNo = memberNo;
+                    ViewBag.FullName = $"{editDto.Surname} {editDto.OtherNames}";
+                    return View(editDto);
+                }
+
+                TempData["SuccessMessage"] = $"Member {memberNo} updated successfully!";
+                return RedirectToAction("Details", new { memberNo });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating member {memberNo}");
+
+                if (ex.Message.Contains("already exists") ||
+                    ex.Message.Contains("Validation error") ||
+                    ex.Message.Contains("Duplicate"))
+                {
+                    ModelState.AddModelError("", ex.Message);
+                }
+                else
+                {
+                    ModelState.AddModelError("", $"An error occurred: {ex.Message}");
+                }
+
+                ViewBag.MemberNo = memberNo;
+                ViewBag.FullName = $"{editDto.Surname} {editDto.OtherNames}";
+                return View(editDto);
+            }
+        }
+
+
         // GET: /MemberMvc/Details/{memberNo}
         public async Task<IActionResult> Details(string memberNo)
         {

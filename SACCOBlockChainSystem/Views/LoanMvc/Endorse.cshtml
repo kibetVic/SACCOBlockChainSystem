@@ -1,0 +1,374 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanEndorsementDTO
+@{
+    ViewData["Title"] = "Endorse Loan";
+    var loanNo = ViewBag.LoanNo as string;
+    var loanDetails = ViewBag.LoanDetails as SACCOBlockChainSystem.Models.DTOs.LoanDetailsResponseDTO;
+}
+
+<div class="card">
+    <div class="card-header bg-success text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h4 class="mb-0"><i class="bi bi-check-all"></i> Loan Endorsement - @loanNo</h4>
+            <partial name="_LoanStatusBadge" model="@loanDetails?.StatusCode" />
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- Progress Tracker -->
+        <div class="progress-tracker mb-5">
+            <div class="step completed">
+                <div class="step-number">1</div>
+                <div class="step-title">Application</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step completed">
+                <div class="step-number">2</div>
+                <div class="step-title">Guarantors</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step completed">
+                <div class="step-number">3</div>
+                <div class="step-title">Appraisal</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step active">
+                <div class="step-number">4</div>
+                <div class="step-title">Endorsement</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step">
+                <div class="step-number">5</div>
+                <div class="step-title">Disbursement</div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Column: Loan & Appraisal Summary -->
+            <div class="col-md-5">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-file-text"></i> Loan Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <tr>
+                                <th width="50%">Member:</th>
+                                <td>@loanDetails?.MemberName</td>
+                            </tr>
+                            <tr>
+                                <th>Applied Amount:</th>
+                                <td class="text-end">@loanDetails?.AppliedAmount.ToString("C")</td>
+                            </tr>
+                            <tr>
+                                <th>Purpose:</th>
+                                <td>@loanDetails?.Purpose</td>
+                            </tr>
+                            <tr>
+                                <th>Repayment Period:</th>
+                                <td class="text-end">@loanDetails?.RepayPeriod months</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-clipboard-check"></i> Appraisal Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (loanDetails?.Transactions != null)
+                        {
+                            var appraisal = loanDetails.Transactions
+                            .FirstOrDefault(t => t.TransactionType == "APPRAISAL");
+
+                            if (appraisal != null)
+                            {
+                                <div class="alert alert-info">
+                                    <h6><i class="bi bi-person-check"></i> Appraised By: @appraisal.PerformedBy</h6>
+                                    <p class="mb-0"><strong>Date:</strong> @appraisal.TransactionDate.ToString("dd/MM/yyyy HH:mm")</p>
+                                    <p class="mb-0"><strong>Recommendation:</strong> @appraisal.Description</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    No appraisal found for this loan.
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-people"></i> Guarantors Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-light">
+                            <strong>Total Guarantors:</strong> @(loanDetails?.Guarantors.Count ?? 0)<br>
+                            <strong>Total Guarantee:</strong> @(loanDetails?.TotalGuarantee?.ToString("C") ?? "N/A")<br>
+                            <strong>Required (50%):</strong> @((loanDetails?.AppliedAmount * 0.5m)?.ToString("C") ?? "N/A")
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Endorsement Form -->
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-check-square"></i> Endorsement Decision</h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="Endorse" method="post" id="endorsementForm">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" asp-for="LoanNo" value="@loanNo" />
+                            <input type="hidden" asp-for="EndorsedBy" value="@User.Identity?.Name" />
+
+                            <div class="mb-4">
+                                <label asp-for="Decision" class="form-label">Committee Decision *</label>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" asp-for="Decision"
+                                                   value="APPROVED" id="decisionApprove" required>
+                                            <label class="form-check-label" for="decisionApprove">
+                                                <span class="badge bg-success">APPROVE</span>
+                                            </label>
+                                        </div>
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="radio" asp-for="Decision"
+                                                   value="REJECTED" id="decisionReject">
+                                            <label class="form-check-label" for="decisionReject">
+                                                <span class="badge bg-danger">REJECT</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="alert alert-light">
+                                            <i class="bi bi-info-circle"></i>
+                                            Select the committee's final decision for this loan application.
+                                        </div>
+                                    </div>
+                                </div>
+                                <span asp-validation-for="Decision" class="text-danger"></span>
+                            </div>
+
+                            <div class="mb-3" id="approvalFields">
+                                <h6><i class="bi bi-check-circle"></i> Approval Details</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label asp-for="ApprovedAmount" class="form-label">Approved Amount</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">KES</span>
+                                                <input asp-for="ApprovedAmount" class="form-control"
+                                                       type="number" step="100" min="0"
+                                                       value="@loanDetails?.AppliedAmount" />
+                                            </div>
+                                            <small class="form-text text-muted">Applied: @loanDetails?.AppliedAmount.ToString("C")</small>
+                                            <span asp-validation-for="ApprovedAmount" class="text-danger"></span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label asp-for="ApprovedPeriod" class="form-label">Approved Period (Months)</label>
+                                            <input asp-for="ApprovedPeriod" class="form-control"
+                                                   type="number" min="1" max="120"
+                                                   value="@loanDetails?.RepayPeriod" />
+                                            <span asp-validation-for="ApprovedPeriod" class="text-danger"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label asp-for="ApprovalDate" class="form-label">Approval Date</label>
+                                            <input asp-for="ApprovalDate" class="form-control"
+                                                   type="date"
+                                                   value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                                            <span asp-validation-for="ApprovalDate" class="text-danger"></span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label asp-for="DisbursementDate" class="form-label">Proposed Disbursement Date</label>
+                                            <input asp-for="DisbursementDate" class="form-control"
+                                                   type="date"
+                                                   value="@DateTime.Now.AddDays(3).ToString("yyyy-MM-dd")" />
+                                            <span asp-validation-for="DisbursementDate" class="text-danger"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="Comments" class="form-label">Committee Comments *</label>
+                                <textarea asp-for="Comments" class="form-control" rows="4" required
+                                          placeholder="Enter committee comments, conditions (if any), and justification for the decision..."></textarea>
+                                <small class="form-text text-muted">This will be recorded in the meeting minutes</small>
+                                <span asp-validation-for="Comments" class="text-danger"></span>
+                            </div>
+
+                            <!-- Meeting Details -->
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h6><i class="bi bi-calendar-event"></i> Meeting Details</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="meetingDate" class="form-label">Meeting Date</label>
+                                                <input type="date" class="form-control" id="meetingDate"
+                                                       value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="minuteNo" class="form-label">Minute Number</label>
+                                                <input type="text" class="form-control" id="minuteNo"
+                                                       placeholder="e.g., MIN/2024/001" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <strong>Final Decision:</strong> This endorsement is final and will be recorded on the blockchain.
+                                Once submitted, it cannot be reversed.
+                            </div>
+
+                            <div class="d-flex justify-content-between">
+                                <a asp-action="Details" asp-route-loanNo="@loanNo" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left"></i> Back to Details
+                                </a>
+                                <button type="submit" class="btn btn-success" id="submitBtn">
+                                    <i class="bi bi-check-circle"></i> Submit Endorsement
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Voting Record (Optional) -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-person-lines-fill"></i> Committee Voting</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Chairperson</label>
+                                    <input type="text" class="form-control" placeholder="Name" />
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="chairApprove">
+                                    <label class="form-check-label" for="chairApprove">
+                                        Approve
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="chairReject">
+                                    <label class="form-check-label" for="chairReject">
+                                        Reject
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Secretary</label>
+                                    <input type="text" class="form-control" placeholder="Name" />
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="secApprove">
+                                    <label class="form-check-label" for="secApprove">
+                                        Approve
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="secReject">
+                                    <label class="form-check-label" for="secReject">
+                                        Reject
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        $(document).ready(function() {
+            const endorsementForm = $('#endorsementForm');
+            const submitBtn = $('#submitBtn');
+            const decisionApprove = $('#decisionApprove');
+            const decisionReject = $('#decisionReject');
+            const approvalFields = $('#approvalFields');
+
+            // Show/hide approval fields based on decision
+            function toggleApprovalFields() {
+                if (decisionApprove.is(':checked')) {
+                    approvalFields.show();
+                    // Make approval fields required
+                    $('#ApprovedAmount').prop('required', true);
+                    $('#ApprovalDate').prop('required', true);
+                } else {
+                    approvalFields.hide();
+                    // Remove required from approval fields
+                    $('#ApprovedAmount').prop('required', false);
+                    $('#ApprovalDate').prop('required', false);
+                }
+            }
+
+            // Initial toggle
+            toggleApprovalFields();
+
+            // Toggle on change
+            decisionApprove.on('change', toggleApprovalFields);
+            decisionReject.on('change', toggleApprovalFields);
+
+            // Form validation
+            endorsementForm.on('submit', function(e) {
+                const decision = $('input[name="Decision"]:checked').val();
+                const comments = $('#Comments').val();
+
+                if (!decision) {
+                    e.preventDefault();
+                    alert('Please select a committee decision (APPROVE or REJECT).');
+                    return false;
+                }
+
+                if (!comments || comments.trim() === '') {
+                    e.preventDefault();
+                    alert('Please provide committee comments.');
+                    return false;
+                }
+
+                if (decision === 'APPROVED') {
+                    const approvedAmount = $('#ApprovedAmount').val();
+                    if (!approvedAmount || parseFloat(approvedAmount) <= 0) {
+                        e.preventDefault();
+                        alert('Please enter a valid approved amount.');
+                        return false;
+                    }
+                }
+
+                // Show loading
+                submitBtn.html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Submitting...');
+                submitBtn.prop('disabled', true);
+            });
+
+            // Auto-populate endorsed by
+            $('#EndorsedBy').val('@User.Identity?.Name');
+        });
+    </script>
+}

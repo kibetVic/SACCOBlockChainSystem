@@ -1,0 +1,251 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.LoanGuarantorDTO>
+@{
+    ViewData["Title"] = "Loan Guarantors";
+    var loanNo = ViewBag.LoanNo as string;
+    var loanDetails = ViewBag.LoanDetails as SACCOBlockChainSystem.Models.DTOs.LoanDetailsResponseDTO;
+}
+
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h4 class="mb-0"><i class="bi bi-people"></i> Loan Guarantors - @loanNo</h4>
+            <partial name="_LoanStatusBadge" model="@loanDetails?.StatusCode" />
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- Progress Tracker -->
+        <div class="progress-tracker mb-5">
+            <div class="step completed">
+                <div class="step-number">1</div>
+                <div class="step-title">Application</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step active">
+                <div class="step-number">2</div>
+                <div class="step-title">Guarantors</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-title">Appraisal</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step">
+                <div class="step-number">4</div>
+                <div class="step-title">Endorsement</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step">
+                <div class="step-number">5</div>
+                <div class="step-title">Disbursement</div>
+            </div>
+        </div>
+
+        <!-- Loan Summary -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="alert alert-light">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Loan Amount:</strong><br>
+                            @loanDetails?.AppliedAmount.ToString("C")
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Required Guarantee:</strong><br>
+                            @((loanDetails?.AppliedAmount * 0.5m)?.ToString("C") ?? "N/A") (50%)
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Current Guarantee:</strong><br>
+                            @(Model.Sum(g => g.Amount ?? 0).ToString("C"))
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Remaining:</strong><br>
+                            @(((loanDetails?.AppliedAmount * 0.5m) - Model.Sum(g => g.Amount ?? 0))?.ToString("C") ?? "N/A")
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Column: Add Guarantor Form -->
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-person-plus"></i> Add Guarantor</h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="AddGuarantor" method="post" id="addGuarantorForm">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="LoanNo" value="@loanNo" />
+
+                            <div class="mb-3">
+                                <label for="GuarantorMemberNo" class="form-label">Guarantor Member Number *</label>
+                                <input type="text" class="form-control" id="GuarantorMemberNo"
+                                       name="GuarantorMemberNo" required
+                                       placeholder="Enter member number" />
+                                <small class="form-text text-muted">Enter the SACCO member number of the guarantor</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="Amount" class="form-label">Guarantee Amount (Optional)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input type="number" class="form-control" id="Amount"
+                                           name="Amount" step="100" min="0"
+                                           placeholder="Leave blank for 50% of loan amount" />
+                                </div>
+                                <small class="form-text text-muted">If left blank, defaults to 50% of loan amount</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="Collateral" class="form-label">Collateral Details (Optional)</label>
+                                <input type="text" class="form-control" id="Collateral"
+                                       name="Collateral"
+                                       placeholder="e.g., Title deed, Logbook, etc." />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="Description" class="form-label">Description (Optional)</label>
+                                <textarea class="form-control" id="Description" name="Description"
+                                          rows="2" placeholder="Additional notes..."></textarea>
+                            </div>
+
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle"></i> Add Guarantor
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="alert alert-warning mt-3">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Note:</strong> Each guarantor must have sufficient share capital
+                            to cover their guarantee amount (typically 3x their shares).
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Guarantors List -->
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0"><i class="bi bi-list-check"></i> Current Guarantors</h5>
+                        <span class="badge bg-primary">@Model.Count guarantor(s)</span>
+                    </div>
+                    <div class="card-body">
+                        @if (!Model.Any())
+                        {
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                No guarantors added yet. Please add at least one guarantor to proceed.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Member No</th>
+                                            <th>Amount</th>
+                                            <th>Collateral</th>
+                                            <th>Added By</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var guarantor in Model)
+                                        {
+                                            <tr>
+                                                <td><strong>@guarantor.GuarantorMemberNo</strong></td>
+                                                <td>@(guarantor.Amount?.ToString("C") ?? "Default")</td>
+                                                <td>@(guarantor.Collateral ?? "-")</td>
+                                                <td>@(guarantor.ActionBy ?? "System")</td>
+                                                <td>
+                                                    <form asp-action="RemoveGuarantor" method="post"
+                                                          class="d-inline"
+                                                          onsubmit="return confirm('Are you sure you want to remove this guarantor?');">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="loanNo" value="@loanNo" />
+                                                        <input type="hidden" name="guarantorMemberNo" value="@guarantor.GuarantorMemberNo" />
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                            <i class="bi bi-trash"></i> Remove
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="table-light">
+                                            <th>Total:</th>
+                                            <th>@Model.Sum(g => g.Amount ?? 0).ToString("C")</th>
+                                            <th colspan="3"></th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        }
+
+                        <!-- Next Step Button -->
+                        @if (Model.Any())
+                        {
+                            <div class="text-center mt-4">
+                                <div class="alert alert-success">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <strong>Ready for next step!</strong>
+                                    @if (User.HasClaim("Role", "LoanOfficer"))
+                                    {
+                                        <a asp-action="Appraise" asp-route-loanNo="@loanNo"
+                                           class="btn btn-success ms-3">
+                                            <i class="bi bi-arrow-right"></i> Proceed to Appraisal
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="ms-2">Awaiting loan officer appraisal.</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="d-flex justify-content-between mt-4">
+            <a asp-action="Details" asp-route-loanNo="@loanNo" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Loan Details
+            </a>
+            <a asp-action="Index" class="btn btn-outline-primary">
+                <i class="bi bi-house-door"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Form validation
+            $('#addGuarantorForm').on('submit', function(e) {
+                const memberNo = $('#GuarantorMemberNo').val();
+                if (!memberNo || memberNo.trim() === '') {
+                    e.preventDefault();
+                    alert('Please enter a guarantor member number.');
+                    return false;
+                }
+
+                // Show loading
+                $(this).find('button[type="submit"]').html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Adding...');
+                $(this).find('button[type="submit"]').prop('disabled', true);
+            });
+
+            // Auto-focus on member number input
+            $('#GuarantorMemberNo').focus();
+        });
+    </script>
+}

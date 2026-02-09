@@ -120,7 +120,7 @@
                                     <th>Full Name</th>
                                     <th>ID Number</th>
                                     <th>Phone</th>
-                                    <th>Share Capital</th>
+                                    @* <th>Share Capital</th> *@
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
@@ -150,9 +150,9 @@
                                                 </a>
                                             }
                                         </td>
-                                        <td class="fw-bold text-success">
+                                        @* <td class="fw-bold text-success">
                                             KES @(member.ShareCap?.ToString("N2") ?? "0.00")
-                                        </td>
+                                        </td> *@
                                         <td>
                                             @if (member.Status == 1)
                                             {
@@ -166,12 +166,15 @@
                                         <td>
                                             <a asp-action="Details" asp-route-memberNo="@member.MemberNo"
                                                class="btn btn-sm btn-info" title="View Details">
-                                                <i class="fas fa-eye"></i>
+                                                <i class="fas fa-eye"></i>Details
                                             </a>
-                                            <a asp-action="Transactions" asp-route-memberNo="@member.MemberNo"
+                                            <a asp-action="Edit" asp-route-memberNo="@member.MemberNo" class="btn btn-warning">
+                                                <i class="fas fa-edit"></i> Edit
+                                            </a>
+                                            @* <a asp-action="Transactions" asp-route-memberNo="@member.MemberNo"
                                                class="btn btn-sm btn-warning" title="View Transactions">
                                                 <i class="fas fa-exchange-alt"></i>
-                                            </a>
+                                            </a> *@
                                         </td>
                                     </tr>
                                 }

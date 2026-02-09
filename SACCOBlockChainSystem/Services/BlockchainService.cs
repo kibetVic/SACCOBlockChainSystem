@@ -844,7 +844,10 @@ namespace SACCOBlockChainSystem.Services
             return BitConverter.ToString(bytes).Replace("-", "").ToLower();
         }
 
-       
+        public Task<List<BlockchainTransaction>> GetMemberTransactions(string memberNo)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     // Blockchain status DTO

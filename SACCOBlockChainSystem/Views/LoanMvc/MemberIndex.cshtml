@@ -1,0 +1,137 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.LoanListResponseDTO>
+@using SACCOBlockChainSystem.Extensions
+
+@{
+    ViewData["Title"] = "My Loans";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-wallet2"></i> My Loans</h2>
+    <a asp-action="Apply" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Apply for New Loan
+    </a>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> You don't have any loans yet.
+        <a asp-action="Apply" class="alert-link">Apply for your first loan</a>.
+    </div>
+}
+else
+{
+    <div class="row">
+        <!-- Summary Cards -->
+        <div class="col-md-3 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Loans</h5>
+                    <h2 class="card-text">@Model.Count</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Active Loans</h5>
+                    <h2 class="card-text">@Model.Count(l => l.Status == "Approved" || l.Status == "Disbursed")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h5 class="card-title">Pending Loans</h5>
+                    <h2 class="card-text">@Model.Count(l => l.Status == "Pending" || l.Status == "Guarantors" || l.Status == "Appraisal" || l.Status == "Endorsement")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Balance</h5>
+                    <h2 class="card-text">@Model.Sum(l => l.LoanBalance ?? 0).ToString("C")</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Loan History</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Loan No</th>
+                            <th>Loan Type</th>
+                            <th>Applied Amount</th>
+                            <th>Approved Amount</th>
+                            <th>Current Balance</th>
+                            <th>Status</th>
+                            <th>Application Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var loan in Model)
+                        {
+                            <tr>
+                                <td><strong>@loan.LoanNo</strong></td>
+                                <td>@loan.LoanType</td>
+                                <td>@loan.AppliedAmount.ToString("C")</td>
+                                <td>@(loan.ApprovedAmount?.ToString("C") ?? "N/A")</td>
+                                <td>@(loan.LoanBalance?.ToString("C") ?? "N/A")</td>
+                                <td>
+                                    @if (loan.Status == "Pending")
+                                    {
+                                        <span class="badge bg-warning">@loan.Status</span>
+                                    }
+                                    else if (loan.Status == "Approved")
+                                    {
+                                        <span class="badge bg-success">@loan.Status</span>
+                                    }
+                                    else if (loan.Status == "Disbursed")
+                                    {
+                                        <span class="badge bg-primary">@loan.Status</span>
+                                    }
+                                    else if (loan.Status == "Rejected")
+                                    {
+                                        <span class="badge bg-danger">@loan.Status</span>
+                                    }
+                                    else if (loan.Status == "Closed")
+                                    {
+                                        <span class="badge bg-secondary">@loan.Status</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-info">@loan.Status</span>
+                                    }
+                                </td>
+                                <td>@loan.ApplicationDate.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a asp-action="Details" asp-route-loanNo="@loan.LoanNo"
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                        @if (loan.Status == "Disbursed")
+                                        {
+                                            <a asp-action="Repay" asp-route-loanNo="@loan.LoanNo"
+                                               class="btn btn-sm btn-outline-success">
+                                                <i class="bi bi-cash"></i> Repay
+                                            </a>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}

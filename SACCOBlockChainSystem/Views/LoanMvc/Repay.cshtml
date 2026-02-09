@@ -1,0 +1,449 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanRepaymentDTO
+@{
+    ViewData["Title"] = "Make Loan Repayment";
+    var loanNo = ViewBag.LoanNo as string;
+    var loanDetails = ViewBag.LoanDetails as SACCOBlockChainSystem.Models.DTOs.LoanDetailsResponseDTO;
+}
+
+<div class="card">
+    <div class="card-header bg-success text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h4 class="mb-0"><i class="bi bi-cash"></i> Loan Repayment - @loanNo</h4>
+            <partial name="_LoanStatusBadge" model="@loanDetails?.StatusCode" />
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <!-- Left Column: Loan Summary -->
+            <div class="col-md-5">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-file-text"></i> Loan Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <tr>
+                                <th width="50%">Member:</th>
+                                <td>@loanDetails?.MemberName</td>
+                            </tr>
+                            <tr>
+                                <th>Member No:</th>
+                                <td>@loanDetails?.MemberNo</td>
+                            </tr>
+                            <tr>
+                                <th>Disbursed Amount:</th>
+                                <td class="text-end">@(loanDetails?.DisbursedAmount?.ToString("C") ?? loanDetails?.ApprovedAmount?.ToString("C") ?? "N/A")</td>
+                            </tr>
+                            <tr>
+                                <th>Current Balance:</th>
+                                <td class="text-end text-primary">
+                                    <strong>@(loanDetails?.LoanBalance?.ToString("C") ?? "N/A")</strong>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Interest Balance:</th>
+                                <td class="text-end">@(loanDetails?.InterestBalance?.ToString("C") ?? "N/A")</td>
+                            </tr>
+                            <tr>
+                                <th>Repayment Period:</th>
+                                <td class="text-end">@loanDetails?.RepayPeriod months</td>
+                            </tr>
+                            <tr>
+                                <th>Disbursement Date:</th>
+                                <td>
+                                    @if (loanDetails?.Transactions != null)
+                                    {
+                                        var disbursement = loanDetails.Transactions
+                                        .FirstOrDefault(t => t.TransactionType == "DISBURSEMENT");
+                                        if (disbursement != null)
+                                        {
+                                            @disbursement.TransactionDate.ToString("dd/MM/yyyy")
+                                        }
+                                    }
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-calendar-check"></i> Repayment Schedule</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <h6><i class="bi bi-info-circle"></i> Estimated Monthly Installment</h6>
+                            @if (loanDetails?.LoanBalance > 0 && loanDetails?.RepayPeriod > 0)
+                            {
+                                var monthly = (loanDetails.LoanBalance / loanDetails.RepayPeriod) ?? 0;
+                                <p class="mb-0">
+                                    <strong>Amount:</strong> @monthly.ToString("C")<br>
+                                    <strong>Due Date:</strong> Next month
+                                </p>
+                            }
+                            else
+                            {
+                                <p class="mb-0">No active repayment schedule available.</p>
+                            }
+                        </div>
+
+                        <div class="text-center">
+                            <a href="#" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-calendar-week"></i> View Full Schedule
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-clock-history"></i> Recent Repayments</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (loanDetails?.Transactions != null)
+                        {
+                            var repayments = loanDetails.Transactions
+                            .Where(t => t.TransactionType == "REPAYMENT")
+                            .Take(3)
+                            .ToList();
+
+                            if (repayments.Any())
+                            {
+                                <div class="list-group list-group-flush">
+                                    @foreach (var repayment in repayments)
+                                    {
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between">
+                                                <div>
+                                                    <small>@repayment.TransactionDate.ToString("dd/MM/yyyy")</small><br>
+                                                    <strong>@(repayment.Amount?.ToString("C") ?? "N/A")</strong>
+                                                </div>
+                                                <span class="badge bg-success">Paid</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning mb-0">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    No previous repayments found.
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Repayment Form -->
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-credit-card"></i> Make Payment</h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="Repay" method="post" id="repaymentForm">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" asp-for="LoanNo" value="@loanNo" />
+                            <input type="hidden" asp-for="MemberNo" value="@loanDetails?.MemberNo" />
+                            <input type="hidden" asp-for="ProcessedBy" value="@User.Identity?.Name" />
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label asp-for="Amount" class="form-label">Payment Amount (KES) *</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">KES</span>
+                                            <input asp-for="Amount" class="form-control"
+                                                   type="number" step="100" min="100"
+                                                   required
+                                                   id="paymentAmount" />
+                                        </div>
+                                        <small class="form-text text-muted">Minimum: KES 100</small>
+                                        <span asp-validation-for="Amount" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label asp-for="PaymentDate" class="form-label">Payment Date *</label>
+                                        <input asp-for="PaymentDate" class="form-control"
+                                               type="date"
+                                               value="@DateTime.Now.ToString("yyyy-MM-dd")"
+                                               required />
+                                        <span asp-validation-for="PaymentDate" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label asp-for="PaymentType" class="form-label">Payment Type *</label>
+                                        <select asp-for="PaymentType" class="form-select" required
+                                                id="paymentType">
+                                            <option value="PRINCIPAL" selected>Principal</option>
+                                            <option value="INTEREST">Interest</option>
+                                            <option value="PENALTY">Penalty</option>
+                                            <option value="FULL_SETTLEMENT">Full Settlement</option>
+                                        </select>
+                                        <span asp-validation-for="PaymentType" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label asp-for="ReceiptNo" class="form-label">Receipt Number</label>
+                                        <input asp-for="ReceiptNo" class="form-control"
+                                               placeholder="Auto-generated if left blank"
+                                               id="receiptNo" />
+                                        <span asp-validation-for="ReceiptNo" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="Remarks" class="form-label">Remarks / Notes</label>
+                                <textarea asp-for="Remarks" class="form-control" rows="3"
+                                          placeholder="e.g., Payment for March 2024, Early settlement, etc."></textarea>
+                                <span asp-validation-for="Remarks" class="text-danger"></span>
+                            </div>
+
+                            <!-- Payment Preview -->
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h6><i class="bi bi-receipt"></i> Payment Preview</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <table class="table table-sm">
+                                                <tr>
+                                                    <td><strong>Loan Balance:</strong></td>
+                                                    <td class="text-end" id="previewBalance">
+                                                        @(loanDetails?.LoanBalance?.ToString("C") ?? "N/A")
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>New Balance:</strong></td>
+                                                    <td class="text-end text-success" id="previewNewBalance">
+                                                        -
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <table class="table table-sm">
+                                                <tr>
+                                                    <td><strong>Payment Amount:</strong></td>
+                                                    <td class="text-end text-primary" id="previewAmount">
+                                                        -
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Payment Type:</strong></td>
+                                                    <td class="text-end" id="previewType">
+                                                        -
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Payment Method -->
+                            <div class="mb-4">
+                                <label class="form-label">Payment Method</label>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="paymentMethod"
+                                                   value="CASH" id="methodCash" checked>
+                                            <label class="form-check-label" for="methodCash">
+                                                <i class="bi bi-cash"></i> Cash
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="paymentMethod"
+                                                   value="MPESA" id="methodMpesa">
+                                            <label class="form-check-label" for="methodMpesa">
+                                                <i class="bi bi-phone"></i> M-Pesa
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="paymentMethod"
+                                                   value="BANK" id="methodBank">
+                                            <label class="form-check-label" for="methodBank">
+                                                <i class="bi bi-bank"></i> Bank
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="paymentMethod"
+                                                   value="CHEQUE" id="methodCheque">
+                                            <label class="form-check-label" for="methodCheque">
+                                                <i class="bi bi-file-text"></i> Cheque
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-warning" id="fullSettlementAlert" style="display: none;">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <strong>Full Settlement Notice:</strong> This payment will completely settle the loan.
+                                Please ensure the amount covers the entire outstanding balance.
+                            </div>
+
+                            <div class="d-flex justify-content-between">
+                                <a asp-action="Details" asp-route-loanNo="@loanNo" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left"></i> Back to Details
+                                </a>
+                                <button type="submit" class="btn btn-success" id="submitBtn">
+                                    <i class="bi bi-check-circle"></i> Process Payment
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Quick Payment Options -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-lightning"></i> Quick Payment</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            @if (loanDetails?.LoanBalance > 0 && loanDetails?.RepayPeriod > 0)
+                            {
+                                var monthly = (loanDetails.LoanBalance / loanDetails.RepayPeriod) ?? 0;
+                                var halfMonthly = monthly / 2;
+                                var quarter = monthly / 4;
+
+                                <div class="col-md-4 mb-2">
+                                    <button class="btn btn-outline-primary w-100 quick-payment" data-amount="@quarter">
+                                        25% Installment<br>
+                                        <small>@quarter.ToString("C")</small>
+                                    </button>
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <button class="btn btn-outline-primary w-100 quick-payment" data-amount="@halfMonthly">
+                                        50% Installment<br>
+                                        <small>@halfMonthly.ToString("C")</small>
+                                    </button>
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <button class="btn btn-outline-primary w-100 quick-payment" data-amount="@monthly">
+                                        Full Installment<br>
+                                        <small>@monthly.ToString("C")</small>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        $(document).ready(function() {
+            const repaymentForm = $('#repaymentForm');
+            const submitBtn = $('#submitBtn');
+            const paymentAmount = $('#paymentAmount');
+            const paymentType = $('#paymentType');
+            const receiptNo = $('#receiptNo');
+            const fullSettlementAlert = $('#fullSettlementAlert');
+            const currentBalance = @(loanDetails?.LoanBalance ?? 0);
+
+            // Update preview
+            function updatePreview() {
+                const amount = parseFloat(paymentAmount.val()) || 0;
+                const type = paymentType.val();
+                const newBalance = currentBalance - (type === 'PRINCIPAL' ? amount : 0);
+
+                $('#previewAmount').text('KES ' + amount.toFixed(2));
+                $('#previewType').text(type);
+                $('#previewNewBalance').text('KES ' + newBalance.toFixed(2));
+
+                // Show/hide full settlement alert
+                if (type === 'FULL_SETTLEMENT') {
+                    fullSettlementAlert.show();
+                    if (amount < currentBalance) {
+                        paymentAmount.addClass('is-invalid');
+                        $('#previewNewBalance').addClass('text-danger');
+                    } else {
+                        paymentAmount.removeClass('is-invalid');
+                        $('#previewNewBalance').removeClass('text-danger').addClass('text-success');
+                    }
+                } else {
+                    fullSettlementAlert.hide();
+                    paymentAmount.removeClass('is-invalid');
+                }
+            }
+
+            // Quick payment buttons
+            $('.quick-payment').on('click', function() {
+                const amount = parseFloat($(this).data('amount'));
+                paymentAmount.val(amount);
+                updatePreview();
+            });
+
+            // Auto-generate receipt number if empty
+            function generateReceiptNo() {
+                if (!receiptNo.val()) {
+                    const date = new Date();
+                    const receipt = 'RCP' +
+                        date.getFullYear().toString().slice(-2) +
+                        (date.getMonth() + 1).toString().padStart(2, '0') +
+                        date.getDate().toString().padStart(2, '0') +
+                        Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+                    receiptNo.val(receipt);
+                }
+            }
+
+            // Event listeners
+            paymentAmount.on('input', updatePreview);
+            paymentType.on('change', updatePreview);
+            paymentAmount.on('focus', generateReceiptNo);
+
+            // Form validation
+            repaymentForm.on('submit', function(e) {
+                const amount = parseFloat(paymentAmount.val()) || 0;
+                const type = paymentType.val();
+
+                if (amount < 100) {
+                    e.preventDefault();
+                    alert('Minimum payment amount is KES 100.');
+                    return false;
+                }
+
+                if (type === 'FULL_SETTLEMENT' && amount < currentBalance) {
+                    e.preventDefault();
+                    alert('Full settlement amount must cover the entire outstanding balance.');
+                    return false;
+                }
+
+                // Generate receipt number if not provided
+                generateReceiptNo();
+
+                // Show loading
+                submitBtn.html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...');
+                submitBtn.prop('disabled', true);
+            });
+
+            // Auto-populate processed by
+            $('#ProcessedBy').val('@User.Identity?.Name');
+
+            // Initial preview
+            updatePreview();
+        });
+    </script>
+}

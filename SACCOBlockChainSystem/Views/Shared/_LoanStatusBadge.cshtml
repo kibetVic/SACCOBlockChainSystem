@@ -1,0 +1,48 @@
+﻿@model int
+
+@{
+    var statusText = "";
+    var statusClass = "";
+
+    switch (Model)
+    {
+        case 1:
+            statusText = "Pending";
+            statusClass = "status-pending";
+            break;
+        case 2:
+            statusText = "Guarantors";
+            statusClass = "status-guarantors";
+            break;
+        case 3:
+            statusText = "Appraisal";
+            statusClass = "status-appraisal";
+            break;
+        case 4:
+            statusText = "Endorsement";
+            statusClass = "status-endorsement";
+            break;
+        case 5:
+            statusText = "Approved";
+            statusClass = "status-approved";
+            break;
+        case 6:
+            statusText = "Disbursed";
+            statusClass = "status-disbursed";
+            break;
+        case 7:
+            statusText = "Rejected";
+            statusClass = "status-rejected";
+            break;
+        case 8:
+            statusText = "Closed";
+            statusClass = "status-closed";
+            break;
+        default:
+            statusText = "Unknown";
+            statusClass = "bg-secondary";
+            break;
+    }
+}
+
+<span class="status-badge @statusClass">@statusText</span>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - SACCO Blockchain System</title>
+    <title>@ViewData["Title"] - EasySACCO MIS</title>
 
     <link rel="stylesheet" href="~/AdminLte/dist/css/adminlte.css" />
     <!-- Radzen CSS - Make sure these come after Bootstrap -->
@@ -192,7 +192,9 @@
                          class="brand-image opacity-75 shadow" />
                     <!--end::Brand Image-->
                     <!--begin::Brand Text-->
-                    <span class="brand-text fw-light">SACCO Blockchain</span>
+                    <span class="brand-text fw-light">
+                         EasySACCO MIS
+                        </span>
                     <!--end::Brand Text-->
                 </a>
                 <!--end::Brand Link-->
@@ -241,38 +243,49 @@
                             </ul>
                         </li>
 
-                        <!-- TRANSACTIONS -->
-                        <li class="nav-item">
+                        <!-- Add Contributions Menu Here -->
+                        @* <li class="nav-item dropdown">
                             <a href="#" class="nav-link">
-                                <i class="nav-icon bi bi-cash-coin"></i>
+                                <i class="nav-icon bi bi-people-fill"></i>
                                 <p>
-                                    Transactions
+                                    Contributions
                                     <i class="nav-arrow bi bi-chevron-right float-end"></i>
                                 </p>
                             </a>
                             <ul class="nav nav-treeview">
                                 <li class="nav-item">
-                                    <a asp-controller="TransactionsMvc" asp-action="Deposit" class="nav-link">
+                                    <a class="dropdown-item" asp-controller="ContributionMvc" asp-action="Index">
+                                        <i class="fas fa-tachometer-alt"></i> Contributions
+                                    </a>
+                                </li>
+                                 <li class="nav-item">
+                                    <a class="dropdown-item" asp-controller="ShareTypeMvc" asp-action="Index">
+                                        <i class="fas fa-tags"></i> Share Types
+                                    </a>
+                                </li>
+                            </ul>
+                        </li> *@
+
+                        <!-- TRANSACTIONS -->
+                        <li class="nav-item">
+                            <a href="#" class="nav-link">
+                                <i class="nav-icon bi bi-cash-coin"></i>
+                                <p>
+                                    Contributions
+                                    <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                </p>
+                            </a>
+                            <ul class="nav nav-treeview">
+                                <li class="nav-item">
+                                    <a asp-controller="ContributionMvc" asp-action="Index" class="nav-link">
                                         <i class="nav-icon bi bi-plus-circle"></i>
-                                        <p>Make Deposit</p>
+                                        <p>Contributions</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a asp-controller="TransactionsMvc" asp-action="Withdraw" class="nav-link">
+                                    <a asp-controller="ShareTypeMvc" asp-action="Index" class="nav-link">
                                         <i class="nav-icon bi bi-dash-circle"></i>
-                                        <p>Withdraw Funds</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="TransactionsMvc" asp-action="History" class="nav-link">
-                                        <i class="nav-icon bi bi-clock-history"></i>
-                                        <p>Transaction History</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="TransactionsMvc" asp-action="Balance" class="nav-link">
-                                        <i class="nav-icon bi bi-wallet2"></i>
-                                        <p>Account Balance</p>
+                                        <p>Share Types</p>
                                     </a>
                                 </li>
                             </ul>
@@ -289,11 +302,71 @@
                             </a>
                             <ul class="nav nav-treeview">
                                 <li class="nav-item">
-                                    <a asp-controller="Loan" asp-action="Apply" class="nav-link">
+                                    <a asp-controller="LoanMvc" asp-action="Repay" class="nav-link">
+                                        <i class="nav-icon bi bi-file-earmark-plus"></i>
+                                        <p>Repay</p>
+                                    </a>
+                                </li>
+
+                                <li class="nav-item">
+                                    <a asp-controller="LoanMvc" asp-action="LoanOfficerIndex" class="nav-link">
+                                        <i class="nav-icon bi bi-file-earmark-plus"></i>
+                                        <p>LoanOfficerIndex</p>
+                                    </a>
+                                </li>
+
+                                <li class="nav-item">
+                                    <a asp-controller="LoanMvc" asp-action="Apply" class="nav-link">
                                         <i class="nav-icon bi bi-file-earmark-plus"></i>
                                         <p>Apply Loan</p>
                                     </a>
                                 </li>
+
+                                <li class="nav-item">
+                                    <a asp-controller="LoanMvc" asp-action="MemberIndex" class="nav-link">
+                                        <i class="nav-icon bi bi-file-earmark-plus"></i>
+                                        <p>Member Loan</p>
+                                    </a>
+                                </li>
+
+                                <li class="nav-item">
+                                    <a asp-controller="LoanMvc" asp-action="Appraise" class="nav-link">
+                                        <i class="nav-icon bi bi-file-earmark-plus"></i>
+                                        <p>Appraise</p>
+                                    </a>
+                                </li>
+
+                                <li class="nav-item">
+                                    <a asp-controller="LoanMvc" asp-action="Guarantors" class="nav-link">
+                                        <i class="nav-icon bi bi-file-earmark-plus"></i>
+                                        <p>Guarantors</p>
+                                    </a>
+                                </li>
+
+                                <li class="nav-item">
+                                    <a asp-controller="LoanMvc" asp-action="Index" class="nav-link">
+                                        <i class="nav-icon bi bi-file-earmark-plus"></i>
+                                        <p>Loans </p>
+                                    </a>
+                                </li>
+
+                                @if (User.HasClaim("Role", "LoanOfficer") || User.HasClaim("Role", "Admin"))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanMvc" asp-action="Search">
+                                            <i class="bi bi-search"></i> Search Loans
+                                        </a>
+                                    </li>
+                                }
+                                @if (User.HasClaim("Role", "Admin"))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanMvc" asp-action="Portfolio">
+                                            <i class="bi bi-graph-up"></i> Portfolio
+                                        </a>
+                                    </li>
+                                }
+
                                 <li class="nav-item">
                                     <a asp-controller="Loan" asp-action="MyLoans" class="nav-link">
                                         <i class="nav-icon bi bi-files"></i>
@@ -324,15 +397,15 @@
                             <a href="#" class="nav-link">
                                 <i class="nav-icon bi bi-pie-chart-fill"></i>
                                 <p>
-                                    Shares & Contributions
+                                    Loans & LoanType
                                     <i class="nav-arrow bi bi-chevron-right float-end"></i>
                                 </p>
                             </a>
                             <ul class="nav nav-treeview">
                                 <li class="nav-item">
-                                    <a asp-controller="Share" asp-action="Purchase" class="nav-link">
+                                    <a asp-controller="LoanTypeMvc" asp-action="Index" class="nav-link">
                                         <i class="nav-icon bi bi-cart-plus"></i>
-                                        <p>Buy Shares</p>
+                                        <p>LoanTypes</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
