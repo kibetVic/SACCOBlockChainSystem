@@ -45,6 +45,10 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy("RequireAuthenticatedUser", policy =>
         policy.RequireAuthenticatedUser());
+
+    // ADD THIS POLICY - this is what your controller is using
+    options.AddPolicy("Admin", policy =>
+        policy.RequireRole("Admin", "SuperAdmin"));
 });
 
 // Database Context

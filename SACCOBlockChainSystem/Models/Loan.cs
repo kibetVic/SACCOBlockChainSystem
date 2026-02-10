@@ -59,6 +59,18 @@ namespace SACCOBlockChainSystem.Models
         public string? UserName { get; set; }
         public string? SerialNo { get; set; }
         public DateTime? AuditDateTime { get; set; }
+        // New fields for workflow tracking
+        public DateTime? GuarantorDate { get; set; }
+        public string? GuarantorBy { get; set; }
+        public DateTime? AppraisalDate { get; set; }
+        public string? AppraisalBy { get; set; }
+        public DateTime? EndorsementDate { get; set; }
+        public string? EndorsementBy { get; set; }
+        public DateTime? DisbursementDate { get; set; }
+        public string? DisbursementBy { get; set; }
+        public string? RejectionReason { get; set; }
+
+        // New field for blockchain reference
         public string? BlockchainTxId { get; set; }
 
         // Navigation Properties

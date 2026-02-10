@@ -203,6 +203,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal? MaxAmount { get; set; }
         public int? RepayPeriod { get; set; }
         public string? Interest { get; set; }
+        public string? Guarantor { get; set; }
+        public string? SelfGuarantee { get; set; }
+        public string? ProcessingFee { get; set; }
         public bool Bridging { get; set; }
         public bool MobileLoan { get; set; }
         public int Priority { get; set; }

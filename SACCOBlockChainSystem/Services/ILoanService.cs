@@ -1,4 +1,5 @@
-﻿using SACCOBlockChainSystem.Models.DTOs;
+﻿using SACCOBlockChainSystem.Models;
+using SACCOBlockChainSystem.Models.DTOs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -6,59 +7,31 @@ namespace SACCOBlockChainSystem.Services
 {
     public interface ILoanService
     {
-        // Loan Application
-        Task<LoanApplicationResponseDTO> ApplyForLoanAsync(LoanApplicationDTO application);
-        Task<LoanDetailsResponseDTO> GetLoanDetailsAsync(string loanNo);
-        Task<List<LoanListResponseDTO>> GetMemberLoansAsync(string memberNo);
+        // Loan Operations
+        Task<LoanResponseDTO> ApplyForLoanAsync(LoanApplicationDTO application);
+        Task<LoanResponseDTO> GetLoanAsync(string loanNo);
+        Task<List<LoanResponseDTO>> GetLoansByMemberAsync(string memberNo);
+        Task<List<LoanResponseDTO>> SearchLoansAsync(LoanSearchDTO search);
+        Task<LoanResponseDTO> UpdateLoanStatusAsync(string loanNo, LoanUpdateDTO update);
+        Task<bool> DeleteLoanAsync(string loanNo, string deletedBy);
 
-        // Loan Eligibility
-        Task<LoanEligibilityDTO> CheckLoanEligibilityAsync(string memberNo, string loanCode, decimal amount);
+        // Loan Workflow Operations
+        Task<LoanResponseDTO> SubmitForGuarantorsAsync(string loanNo, string submittedBy);
+        Task<LoanResponseDTO> SubmitForAppraisalAsync(string loanNo, string submittedBy);
+        Task<LoanResponseDTO> SubmitForEndorsementAsync(string loanNo, string submittedBy);
+        Task<LoanResponseDTO> ApproveLoanAsync(string loanNo, LoanUpdateDTO approval);
+        Task<LoanResponseDTO> RejectLoanAsync(string loanNo, LoanUpdateDTO rejection);
+        Task<LoanResponseDTO> DisburseLoanAsync(string loanNo, LoanDisbursementDTO disbursement);
+        Task<LoanResponseDTO> CloseLoanAsync(string loanNo, string closedBy);
 
-        // Guarantorship
-        Task<bool> AddGuarantorAsync(LoanGuarantorDTO guarantor);
+        // Guarantor Operations
+        Task<bool> AddGuarantorAsync(string loanNo, LoanGuarantorDTO guarantor);
         Task<bool> RemoveGuarantorAsync(string loanNo, string guarantorMemberNo);
-        Task<List<LoanGuarantorDTO>> GetLoanGuarantorsAsync(string loanNo);
-
-        // Appraisal
-        Task<bool> AppraiseLoanAsync(LoanAppraisalDTO appraisal);
-
-        // Endorsement
-        Task<bool> EndorseLoanAsync(LoanEndorsementDTO endorsement);
-
-        // Disbursement
-        Task<bool> DisburseLoanAsync(LoanDisbursementDTO disbursement);
-
-        // Repayment
-        Task<bool> MakeRepaymentAsync(LoanRepaymentDTO repayment);
-
-        // Loan Management
-        Task<List<LoanListResponseDTO>> SearchLoansAsync(LoanSearchDTO searchCriteria);
-        Task<bool> UpdateLoanStatusAsync(string loanNo, int status, string description, string updatedBy);
-        Task<decimal> CalculateLoanBalanceAsync(string loanNo);
+        Task<List<LoanGuarantorResponseDTO>> GetLoanGuarantorsAsync(string loanNo);
 
         // Reports
-        Task<LoanPortfolioDTO> GetLoanPortfolioReportAsync(string companyCode);
-    }
-
-    // Response DTOs
-    public class LoanApplicationResponseDTO
-    {
-        public bool Success { get; set; }
-        public string LoanNo { get; set; } = null!;
-        public string Message { get; set; } = null!;
-        public decimal EligibleAmount { get; set; }
-        public string? BlockchainTxId { get; set; }
-    }
-
-    public class LoanPortfolioDTO
-    {
-        public int TotalLoans { get; set; }
-        public int ActiveLoans { get; set; }
-        public int PendingLoans { get; set; }
-        public decimal TotalLoanAmount { get; set; }
-        public decimal TotalLoanBalance { get; set; }
-        public decimal TotalInterestAccrued { get; set; }
-        public Dictionary<string, decimal> LoanTypeDistribution { get; set; } = new();
-        public Dictionary<int, int> StatusDistribution { get; set; } = new();
+        Task<decimal> GetMemberLoanEligibilityAsync(string memberNo);
+        Task<List<LoanResponseDTO>> GetPendingLoansAsync();
+        Task<List<LoanResponseDTO>> GetLoansByStatusAsync(int status);
     }
 }

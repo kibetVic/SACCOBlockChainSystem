@@ -529,9 +529,41 @@ namespace SACCOBlockChainSystem.Services
             };
         }
 
-        public Task<dynamic> GetAllLoanTypesAsync(string companyCode)
+        public async Task<dynamic> GetAllLoanTypesAsync(string companyCode)
         {
-            throw new NotImplementedException();
+            try
+            {
+                var loanTypes = await _context.Loantypes
+                    .Where(lt => lt.CompanyCode == companyCode)
+                    .OrderBy(lt => lt.Priority)
+                    .ThenBy(lt => lt.LoanType1)
+                    .Select(lt => new
+                    {
+                        LoanCode = lt.LoanCode,
+                        LoanType = lt.LoanType1,
+                        LoanName = lt.LoanType1 ?? lt.LoanCode,
+                        MaxAmount = lt.MaxAmount,
+                        RepayPeriod = lt.RepayPeriod,
+                        Interest = lt.Interest,
+                        Bridging = lt.Bridging,
+                        MobileLoan = lt.MobileLoan,
+                        Priority = lt.Priority,
+                        Guarantor = lt.Guarantor,
+                        SelfGuarantee = lt.SelfGuarantee,
+                        ProcessingFee = lt.Processingfee,
+                        GracePeriod = lt.GracePeriod,
+                        RepayMethod = lt.Repaymethod,
+                        CompanyCode = lt.CompanyCode
+                    })
+                    .ToListAsync();
+
+                return loanTypes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting all loan types for company {companyCode}");
+                throw;
+            }
         }
     }
 }

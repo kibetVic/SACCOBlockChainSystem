@@ -1,0 +1,275 @@
+﻿@{
+    ViewData["Title"] = "Loan Application Form";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    dynamic memberData = ViewBag.MemberData;
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Loan Application Form</h3>
+                </div>
+                <div class="card-body">
+                    <!-- Member Information Card -->
+                    <div class="card card-info">
+                        <div class="card-header">
+                            <h4 class="card-title">Member Information</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <strong>Member No:</strong> @memberData.Member.MemberNo
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Name:</strong> @memberData.Member.Surname @memberData.Member.OtherNames
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>ID No:</strong> @memberData.Member.Idno
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Phone:</strong> @memberData.Member.PhoneNo
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-3">
+                                    <strong>Share Balance:</strong> @memberData.ShareBalance.ToString("N2")
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Loan Eligibility:</strong> @memberData.Eligibility.ToString("N2")
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Existing Loans:</strong> @memberData.ExistingLoans.Count
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Status:</strong> @(memberData.Member.Status == 1 ? "Active" : "Inactive")
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Loan Application Form -->
+                    <form asp-action="SubmitApplication" method="post" class="mt-4">
+                        <input type="hidden" name="MemberNo" value="@memberData.Member.MemberNo">
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="LoanCode">Loan Type *</label>
+                                    <select class="form-control" id="LoanCode" name="LoanCode" required>
+                                        <option value="">Select Loan Type</option>
+                                        <option value="LN01">Personal Loan (12%)</option>
+                                        <option value="LN02">Business Loan (15%)</option>
+                                        <option value="LN03">Emergency Loan (10%)</option>
+                                        <option value="LN04">School Fees Loan (8%)</option>
+                                        <option value="LN05">Asset Financing (18%)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="LoanAmount">Loan Amount *</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">Ksh</span>
+                                        </div>
+                                        <input type="number" class="form-control" id="LoanAmount"
+                                               name="LoanAmount" required min="1000"
+                                               max="@memberData.Eligibility" step="100">
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        Maximum eligible: @memberData.Eligibility.ToString("N2")
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="RepayPeriod">Repayment Period (Months) *</label>
+                                    <select class="form-control" id="RepayPeriod" name="RepayPeriod" required>
+                                        <option value="">Select Period</option>
+                                        <option value="6">6 Months</option>
+                                        <option value="12">12 Months</option>
+                                        <option value="24">24 Months</option>
+                                        <option value="36">36 Months</option>
+                                        <option value="48">48 Months</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="Purpose">Purpose of Loan *</label>
+                                    <textarea class="form-control" id="Purpose" name="Purpose"
+                                              rows="2" required placeholder="Describe the purpose of the loan"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="SourceOfRepayment">Source of Repayment *</label>
+                                    <input type="text" class="form-control" id="SourceOfRepayment"
+                                           name="SourceOfRepayment" required
+                                           placeholder="e.g., Salary, Business Income">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="CreatedBy">Prepared By *</label>
+                                    <input type="text" class="form-control" id="CreatedBy"
+                                           name="CreatedBy" required value="@User.Identity.Name">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Witness and Supervisor -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="WitMemberNo">Witness Member No (Optional)</label>
+                                    <input type="text" class="form-control" id="WitMemberNo"
+                                           name="WitMemberNo" placeholder="Witness member number">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="SupMemberNo">Supervisor Member No (Optional)</label>
+                                    <input type="text" class="form-control" id="SupMemberNo"
+                                           name="SupMemberNo" placeholder="Supervisor member number">
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Guarantors Section -->
+                        <h5>Guarantors (Optional at this stage)</h5>
+                        <div id="guarantors-container">
+                            <div class="guarantor-item card mb-2">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label>Guarantor Member No</label>
+                                                <input type="text" class="form-control"
+                                                       name="Guarantors[0].MemberNo"
+                                                       placeholder="Member number">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label>Full Names</label>
+                                                <input type="text" class="form-control"
+                                                       name="Guarantors[0].FullNames"
+                                                       placeholder="Full names">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label>Guaranteed Amount</label>
+                                                <input type="number" class="form-control"
+                                                       name="Guarantors[0].GuaranteedAmount"
+                                                       step="100" placeholder="Amount">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-sm btn-info mb-3" onclick="addGuarantor()">
+                            <i class="fas fa-plus"></i> Add Another Guarantor
+                        </button>
+
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-paper-plane"></i> Submit Application
+                            </button>
+                            <a href="@Url.Action("Application")" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let guarantorIndex = 1;
+
+        function addGuarantor() {
+            const container = document.getElementById('guarantors-container');
+            const template = `
+                <div class="guarantor-item card mb-2">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Guarantor Member No</label>
+                                    <input type="text" class="form-control"
+                                           name="Guarantors[${guarantorIndex}].MemberNo"
+                                           placeholder="Member number">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Full Names</label>
+                                    <input type="text" class="form-control"
+                                           name="Guarantors[${guarantorIndex}].FullNames"
+                                           placeholder="Full names">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Guaranteed Amount</label>
+                                    <input type="number" class="form-control"
+                                           name="Guarantors[${guarantorIndex}].GuaranteedAmount"
+                                           step="100" placeholder="Amount">
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeGuarantor(this)">
+                            <i class="fas fa-trash"></i> Remove
+                        </button>
+                    </div>
+                </div>`;
+
+            container.insertAdjacentHTML('beforeend', template);
+            guarantorIndex++;
+        }
+
+        function removeGuarantor(button) {
+            button.closest('.guarantor-item').remove();
+        }
+
+        // Calculate monthly installment
+        document.getElementById('LoanAmount').addEventListener('input', calculateInstallment);
+        document.getElementById('RepayPeriod').addEventListener('change', calculateInstallment);
+
+        function calculateInstallment() {
+            const amount = parseFloat(document.getElementById('LoanAmount').value) || 0;
+            const period = parseInt(document.getElementById('RepayPeriod').value) || 12;
+
+            if (amount > 0 && period > 0) {
+                const monthly = amount / period;
+                const element = document.getElementById('installment-display');
+                if (!element) {
+                    const div = document.createElement('div');
+                    div.id = 'installment-display';
+                    div.className = 'alert alert-warning mt-2';
+                    document.getElementById('LoanAmount').parentNode.appendChild(div);
+                }
+                document.getElementById('installment-display').innerHTML =
+                    `<strong>Estimated Monthly Installment: Ksh ${monthly.toFixed(2)}</strong>`;
+            }
+        }
+    </script>
+}
