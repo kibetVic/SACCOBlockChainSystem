@@ -216,6 +216,33 @@
                     </div>
                 </div>
 
+                <!-- Company Selection Section -->
+                <div class="form-section">
+                    <h5 class="section-title">
+                        <i class="fas fa-building me-2"></i>Company Selection
+                    </h5>
+
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label asp-for="CompanyCode" class="form-label">
+                                <i class="fas fa-warehouse me-1"></i> Select Company *
+                            </label>
+                            <select asp-for="CompanyCode" class="form-control" required>
+                                <option value="">-- Select a Company --</option>
+                                @if (ViewBag.Companies != null)
+                                {
+                                    foreach (var company in ViewBag.Companies)
+                                    {
+                                        <option value="@company.CompanyCode">@company.DisplayText</option>
+                                    }
+                                }
+                            </select>
+                            <span asp-validation-for="CompanyCode" class="error-message"></span>
+                            <small class="form-text text-muted">Select the company you want to register with</small>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Personal Information Section -->
                 <div class="form-section">
                     <h5 class="section-title">
@@ -273,15 +300,11 @@
                             </label>
                             <select asp-for="UserGroup" class="form-control">
                                 <option value="">-- Select User Group --</option>
-                                @if (Model.AvailableUserGroups != null)
+                                @foreach (var group in Model?.AvailableUserGroups ?? new List<string>())
                                 {
-                                    foreach (var group in Model.AvailableUserGroups)
-                                    {
-                                        <option value="@group">@group</option>
-                                    }
+                                    <option value="@group">@group</option>
                                 }
                             </select>
-                            @* <span asp-validation-for="UserGroup" class="error-message"></span>
                             <div class="user-group-info">
                                 <small>
                                     <i class="fas fa-info-circle me-1"></i>
@@ -292,7 +315,7 @@
                                     <strong>BoardMember:</strong> Reports & oversight<br>
                                     <strong>Staff:</strong> General staff access
                                 </small>
-                            </div> *@
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -401,6 +424,9 @@
                     Phone: {
                         required: true,
                         phoneUS: true
+                    },
+                    CompanyCode: {
+                        required: true
                     }
                 },
                 messages: {
@@ -409,6 +435,9 @@
                     },
                     Phone: {
                         phoneUS: "Please enter a valid phone number"
+                    },
+                    CompanyCode: {
+                        required: "Please select a company"
                     }
                 }
             });
