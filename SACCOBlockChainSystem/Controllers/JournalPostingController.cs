@@ -162,17 +162,17 @@ namespace SACCOBlockChainSystem.Controllers
                         VNO = model.VoucherNo,
                         ACCNO = d.AccountNo,
                         NAME = d.AccountName,
-                        NARATION = !string.IsNullOrEmpty(d.Narration) ? d.Narration : model.Description,
+                        NARATION = d.Narration ?? model.Description,
                         MEMBERNO = model.MemberNo ?? "SYSTEM",
-                        SHARETYPE = !string.IsNullOrEmpty(d.ShareType) ? d.ShareType : "CASH",
+                        SHARETYPE = d.ShareType ?? "CASH",
                         Loanno = model.LoanNo ?? "0",
                         AMOUNT = d.Debit > 0 ? d.Debit : d.Credit,
                         TRANSTYPE = d.Debit > 0 ? "DR" : "CR",
+                        TRANSDATE = null,
                         AUDITID = auditUser,
-                        TRANSDATE = model.VoucherDate,
                         AUDITDATE = now,
                         POSTED = false,
-                        POSTEDDATE = DateTime.MinValue,
+                        POSTEDDATE = null,   // ✅ THIS FIXES YOUR ERROR
                         Transactionno = model.TransactionNo,
                         CompanyCode = companyCode
                     });
