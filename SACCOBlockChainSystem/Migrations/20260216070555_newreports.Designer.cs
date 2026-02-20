@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SACCOBlockChainSystem.Data;
 
@@ -11,9 +12,11 @@ using SACCOBlockChainSystem.Data;
 namespace SACCOBlockChainSystem.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260216070555_newreports")]
+    partial class newreports
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -669,162 +672,6 @@ namespace SACCOBlockChainSystem.Migrations
                     b.ToTable("GeneralLedgers");
                 });
 
-            modelBuilder.Entity("SACCOBlockChainSystem.Models.GlSetup", b =>
-                {
-                    b.Property<long>("GlId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("GlId"));
-
-                    b.Property<string>("AccCategory")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("AccNo")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<decimal?>("Actuals")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("ApiKey")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<DateTime?>("AuditDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("AuditId")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("AuditOrg")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<decimal?>("Bal")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int?>("BalanceSheet")
-                        .HasColumnType("int");
-
-                    b.Property<decimal?>("Budgetted")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("CompanyCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Curr")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<decimal?>("CurrCode")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("CurrentBal")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("EoyAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("EoyDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("GlAccMainGroup")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int?>("GlOrder")
-                        .HasColumnType("int");
-
-                    b.Property<string>("GlType")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Glaccgroup")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Glaccname")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Glaccstatus")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Glacctype")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Glcode")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<bool>("IsREarning")
-                        .HasColumnType("bit");
-
-                    b.Property<bool?>("IsSubLedger")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsSuspense")
-                        .HasColumnType("bit");
-
-                    b.Property<bool?>("Main")
-                        .HasColumnType("bit");
-
-                    b.Property<decimal>("NewGlOpeningBal")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("NewGlOpeningBalDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Normalbal")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<decimal>("OpeningBal")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int?>("PrintOrder")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("Status")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("SubType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("TransDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("TrialBalance")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int?>("Used")
-                        .HasColumnType("int");
-
-                    b.Property<string>("UserName")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.HasKey("GlId");
-
-                    b.ToTable("GLSETUP");
-                });
-
             modelBuilder.Entity("SACCOBlockChainSystem.Models.Gltransaction", b =>
                 {
                     b.Property<long>("Id")
@@ -904,82 +751,6 @@ namespace SACCOBlockChainSystem.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Gltransactions");
-                });
-
-            modelBuilder.Entity("SACCOBlockChainSystem.Models.Journal", b =>
-                {
-                    b.Property<long>("JVID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("JVID"));
-
-                    b.Property<string>("ACCNO")
-                        .HasMaxLength(15)
-                        .HasColumnType("nvarchar(15)");
-
-                    b.Property<decimal?>("AMOUNT")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("AUDITDATE")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("AUDITID")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("CompanyCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Loanno")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("MEMBERNO")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("NAME")
-                        .HasMaxLength(60)
-                        .HasColumnType("nvarchar(60)");
-
-                    b.Property<string>("NARATION")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<bool>("POSTED")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime?>("POSTEDDATE")
-                        .IsRequired()
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("SHARETYPE")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime?>("TRANSDATE")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("TRANSTYPE")
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
-                    b.Property<string>("Transactionno")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("VNO")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.HasKey("JVID");
-
-                    b.ToTable("Journals");
                 });
 
             modelBuilder.Entity("SACCOBlockChainSystem.Models.Loan", b =>

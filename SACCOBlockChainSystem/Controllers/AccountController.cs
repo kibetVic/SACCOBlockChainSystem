@@ -1,5 +1,4 @@
-﻿// Controllers/AccountController.cs
-using Microsoft.AspNetCore.Authentication;
+﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,6 +9,7 @@ using SACCOBlockChainSystem.Data;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace SACCOBlockChainSystem.Controllers
 {
@@ -106,7 +106,7 @@ namespace SACCOBlockChainSystem.Controllers
                 var company = await _context.Companies
                     .FirstOrDefaultAsync(c => c.CompanyCode == user.CompanyCode);
 
-                var companyName = company?.CompanyName ?? "Unknown Company";
+                var companyName = company?.CompanyName;
 
                 // Reset failed attempts on successful login
                 user.FailedAttempts = 0;
@@ -120,8 +120,8 @@ namespace SACCOBlockChainSystem.Controllers
                     new Claim("FullName", user.UserName ?? string.Empty),
                     new Claim("Email", user.Email ?? string.Empty),
                     new Claim("UserId", user.UserId.ToString()),
-                    new Claim("CompanyCode", user.CompanyCode ?? "000"),
-                    new Claim("CompanyName", companyName), // ADD COMPANY NAME CLAIM
+                    new Claim("CompanyCode", user.CompanyCode),
+                    new Claim("CompanyName", companyName), 
                     new Claim("UserLoginId", user.UserLoginId ?? string.Empty)
                 };
 
@@ -190,166 +190,106 @@ namespace SACCOBlockChainSystem.Controllers
         {
             if (User.Identity.IsAuthenticated)
             {
-                return RedirectToAction("Signup", "Account");
+                return RedirectToAction("Index", "Blockchain");
             }
 
-            // Get list of available companies for dropdown
-            var companies = await _context.Companies
-                .Where(c => c.Project == true) // Only active companies/projects
-                .OrderBy(c => c.CompanyName)
-                .Select(c => new
-                {
-                    c.CompanyCode,
-                    DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
-                })
-                .ToListAsync();
-
-            ViewBag.Companies = companies;
+            await LoadCompanies();
             return View();
         }
 
-        // POST: /Account/Signup
+        // POST: /Account/Signup - SIMPLIFIED AND FIXED
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Signup(SignupVm model)
         {
+            // Debug: Log what's being received
+            _logger.LogInformation("=== SIGNUP ATTEMPT ===");
+            _logger.LogInformation($"Username: {model.UserName}");
+            _logger.LogInformation($"Email: {model.Email}");
+            _logger.LogInformation($"CompanyCode: {model.CompanyCode}");
+            _logger.LogInformation($"ModelState.IsValid: {ModelState.IsValid}");
+
             if (!ModelState.IsValid)
             {
-                // Reload companies for dropdown
-                var companies = await _context.Companies
-                    .Where(c => c.Project == true)
-                    .OrderBy(c => c.CompanyName)
-                    .Select(c => new
+                _logger.LogWarning("Model validation failed!");
+                foreach (var key in ModelState.Keys)
+                {
+                    var errors = ModelState[key].Errors;
+                    if (errors.Any())
                     {
-                        c.CompanyCode,
-                        DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
-                    })
-                    .ToListAsync();
+                        _logger.LogWarning($"  {key}: {string.Join(", ", errors.Select(e => e.ErrorMessage))}");
+                    }
+                }
 
-                ViewBag.Companies = companies;
+                await LoadCompanies();
                 return View(model);
             }
 
             try
             {
-                // Validate company code exists
-                var companyExists = await _context.Companies
-                    .AnyAsync(c => c.CompanyCode == model.CompanyCode && c.Project == true);
+                // Validate company exists
+                var company = await _context.Companies
+                .FirstOrDefaultAsync(c => c.CompanyCode == model.CompanyCode && c.Project == true);
 
-                if (!companyExists)
+                if (company == null)
                 {
-                    ModelState.AddModelError("CompanyCode", "Invalid company code or company is not active.");
-
-                    // Reload companies for dropdown
-                    var companies = await _context.Companies
-                        .Where(c => c.Project == true)
-                        .OrderBy(c => c.CompanyName)
-                        .Select(c => new
-                        {
-                            c.CompanyCode,
-                            DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
-                        })
-                        .ToListAsync();
-
-                    ViewBag.Companies = companies;
+                    ModelState.AddModelError("CompanyCode", "Selected company is not available.");
+                    await LoadCompanies();
                     return View(model);
                 }
 
-                // Check if Username already exists
-                var existingUsername = await _context.UserAccounts1
-                    .FirstOrDefaultAsync(u => u.UserName == model.UserName);
+                // Check for duplicate username
+                var existingUser = await _context.UserAccounts1
+                .FirstOrDefaultAsync(u => u.UserName == model.UserName);
 
-                if (existingUsername != null)
+                if (existingUser != null)
                 {
-                    ModelState.AddModelError(nameof(model.UserName), "Username already exists. Please choose a different one.");
-
-                    // Reload companies for dropdown
-                    var companies = await _context.Companies
-                        .Where(c => c.Project == true)
-                        .OrderBy(c => c.CompanyName)
-                        .Select(c => new
-                        {
-                            c.CompanyCode,
-                            DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
-                        })
-                        .ToListAsync();
-
-                    ViewBag.Companies = companies;
+                    ModelState.AddModelError("UserName", "Username already exists.");
+                    await LoadCompanies();
                     return View(model);
                 }
 
-                // Check if Email already exists
+                // Check for duplicate email
                 if (!string.IsNullOrEmpty(model.Email))
                 {
                     var existingEmail = await _context.UserAccounts1
-                        .FirstOrDefaultAsync(u => u.Email == model.Email);
+                    .FirstOrDefaultAsync(u => u.Email == model.Email);
 
                     if (existingEmail != null)
                     {
-                        ModelState.AddModelError(nameof(model.Email), "Email already registered.");
-
-                        // Reload companies for dropdown
-                        var companies = await _context.Companies
-                            .Where(c => c.Project == true)
-                            .OrderBy(c => c.CompanyName)
-                            .Select(c => new
-                            {
-                                c.CompanyCode,
-                                DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
-                            })
-                            .ToListAsync();
-
-                        ViewBag.Companies = companies;
+                        ModelState.AddModelError("Email", "Email already registered.");
+                        await LoadCompanies();
                         return View(model);
                     }
                 }
 
-                // Check if MemberNo already exists (if provided)
+                // Check for duplicate member number if provided
                 if (!string.IsNullOrEmpty(model.MemberNo))
                 {
                     var existingMemberNo = await _context.UserAccounts1
-                        .FirstOrDefaultAsync(u => u.MemberNo == model.MemberNo);
+                    .FirstOrDefaultAsync(u => u.MemberNo == model.MemberNo);
 
                     if (existingMemberNo != null)
                     {
-                        ModelState.AddModelError(nameof(model.MemberNo), "Member number already registered.");
-
-                        // Reload companies for dropdown
-                        var companies = await _context.Companies
-                            .Where(c => c.Project == true)
-                            .OrderBy(c => c.CompanyName)
-                            .Select(c => new
-                            {
-                                c.CompanyCode,
-                                DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
-                            })
-                            .ToListAsync();
-
-                        ViewBag.Companies = companies;
+                        ModelState.AddModelError("MemberNo", "Member number already registered.");
+                        await LoadCompanies();
                         return View(model);
                     }
                 }
 
-                // Generate UserLoginId (combine first letter of username with timestamp)
-                var userLoginId = GenerateUserLoginId(model.UserName);
-
-                // Get company details
-                var company = await _context.Companies
-                    .FirstOrDefaultAsync(c => c.CompanyCode == model.CompanyCode);
-
-                // Create new user
+                // Create the new user
                 var user = new UserAccounts1
                 {
-                    UserName = model.UserName,
-                    UserLoginId = userLoginId,
+                    UserName = model.UserName.Trim(),
+                    UserLoginId = GenerateUserLoginId(model.UserName),
                     Password = HashPassword(model.Password),
-                    Email = model.Email,
-                    Phone = model.Phone,
-                    PhoneNo = model.Phone,
-                    MemberNo = model.MemberNo,
-                    Department = model.Department,
-                    SubCounty = model.SubCounty,
-                    Ward = model.Ward,
+                    Email = model.Email?.Trim(),
+                    Phone = model.Phone?.Trim(),
+                    PhoneNo = model.Phone?.Trim(),
+                    MemberNo = model.MemberNo?.Trim(),
+                    Department = model.Department?.Trim(),
+                    SubCounty = model.SubCounty?.Trim(),
+                    Ward = model.Ward?.Trim(),
                     DateCreated = DateTime.Now,
                     Status = "Pending",
                     Userstatus = "Pending",
@@ -358,43 +298,70 @@ namespace SACCOBlockChainSystem.Controllers
                     IsLocked = false,
                     PasswordStatus = "Active",
                     PassExpire = "No",
-                    UserGroup = "Member",
-                    Cigcode = company?.Cigcode, // Get from company
+                    UserGroup = string.IsNullOrEmpty(model.UserGroup) ? "Member" : model.UserGroup,
+                    Cigcode = company.Cigcode,
                     CompanyCode = (string)model.CompanyCode,
-                    Branchcode = (string)(company?.Cigcode ?? model.CompanyCode), // Use CIG code or company code
+                    Branchcode = (string)(company.Cigcode ?? model.CompanyCode),
                     Superuser = 0,
                     Authorize = false,
                     Count = 0
                 };
 
+                // Save to database
                 _context.UserAccounts1.Add(user);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation($"New user registered: {model.UserName} with Company: {company?.CompanyName} ({model.CompanyCode})");
+                _logger.LogInformation($"SUCCESS: User '{user.UserName}' created with ID: {user.UserId}");
 
-                TempData["SuccessMessage"] = $"Registration successful! Your account is pending approval for {company?.CompanyName}. You will be notified once approved.";
+                TempData["SuccessMessage"] = $"Registration successful! Your account is pending approval for {company.CompanyName}. You will be notified once approved.";
                 return RedirectToAction("Login");
+            }
+            catch (DbUpdateException dbEx)
+            {
+                _logger.LogError(dbEx, "Database error during signup");
+                ModelState.AddModelError(string.Empty, "A database error occurred. Please try again.");
+
+                if (dbEx.InnerException != null)
+                {
+                    _logger.LogError($"Inner exception: {dbEx.InnerException.Message}");
+                }
+
+                await LoadCompanies();
+                return View(model);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during user registration");
-                ModelState.AddModelError(string.Empty, "An error occurred during registration. Please try again.");
-
-                // Reload companies for dropdown
-                var companies = await _context.Companies
-                    .Where(c => c.Project == true)
-                    .OrderBy(c => c.CompanyName)
-                    .Select(c => new
-                    {
-                        c.CompanyCode,
-                        DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
-                    })
-                    .ToListAsync();
-
-                ViewBag.Companies = companies;
+                _logger.LogError(ex, "Unexpected error during signup");
+                ModelState.AddModelError(string.Empty, "An unexpected error occurred. Please try again.");
+                await LoadCompanies();
                 return View(model);
             }
         }
+
+        // Helper method to load companies
+        private async Task LoadCompanies()
+        {
+            try
+            {
+                var companies = await _context.Companies
+                .Where(c => c.Project == true)
+                .OrderBy(c => c.CompanyName)
+                .Select(c => new
+                {
+                    c.CompanyCode,
+                    DisplayText = $"{c.CompanyCode} - {c.CompanyName}"
+                })
+                .ToListAsync();
+
+                ViewBag.Companies = companies;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load companies");
+                ViewBag.Companies = new List<dynamic>();
+            }
+        }
+
 
         // GET: /Account/Profile
         [HttpGet]
@@ -430,7 +397,7 @@ namespace SACCOBlockChainSystem.Controllers
                 DateCreated = user.DateCreated
             };
 
-            ViewBag.CompanyName = company?.CompanyName ?? "Unknown Company";
+            ViewBag.CompanyName = company?.CompanyName;
             ViewBag.CompanyCode = user.CompanyCode;
 
             return View(profile);
@@ -487,8 +454,8 @@ namespace SACCOBlockChainSystem.Controllers
                     new Claim("FullName", user.UserName ?? string.Empty),
                     new Claim("Email", user.Email ?? string.Empty),
                     new Claim("UserId", user.UserId.ToString()),
-                    new Claim("CompanyCode", user.CompanyCode ?? "000"),
-                    new Claim("CompanyName", newCompany.CompanyName ?? "Unknown Company"),
+                    new Claim("CompanyCode", user.CompanyCode),
+                    new Claim("CompanyName", newCompany.CompanyName),
                 };
 
                 if (!string.IsNullOrEmpty(user.UserGroup))
@@ -513,14 +480,11 @@ namespace SACCOBlockChainSystem.Controllers
         // Helper method to generate UserLoginId
         private string GenerateUserLoginId(string userName)
         {
-            // Extract first 3 letters of username (uppercase)
             var prefix = userName.Length >= 3
-                ? userName.Substring(0, 3).ToUpper()
-                : userName.ToUpper();
+            ? userName.Substring(0, 3).ToUpper()
+            : userName.ToUpper();
 
-            // Add timestamp for uniqueness
             var timestamp = DateTime.Now.ToString("yyMMddHHmmss");
-
             return $"{prefix}{timestamp}";
         }
 
@@ -533,5 +497,6 @@ namespace SACCOBlockChainSystem.Controllers
                 return Convert.ToBase64String(hashedBytes);
             }
         }
+
     }
 }

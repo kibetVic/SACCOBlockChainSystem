@@ -9,7 +9,7 @@
         <div class="col-md-12">
             <div class="d-flex justify-content-between align-items-center">
                 <h1 class="display-6">
-                    <i class="fas fa-tags"></i> Share Types Management
+                    <i class="fas fa-tags"></i> Contrib Types Management
                 </h1>
                 <a asp-action="Create" class="btn btn-success btn-lg">
                     <i class="fas fa-plus-circle"></i> New Share Type
@@ -24,7 +24,7 @@
             <div class="card">
                 <div class="card-header bg-secondary text-white">
                     <h5>
-                        <i class="fas fa-list"></i> All Share Types
+                        <i class="fas fa-list"></i> All Contrib Types
                     </h5>
                 </div>
                 <div class="card-body">
@@ -35,12 +35,12 @@
                                 <thead>
                                     <tr>
                                         <th>Code</th>
-                                        <th>Share Type</th>
+                                        <th>Contrib Type</th>
                                         <th>Account</th>
                                         <th>Min Amount</th>
                                         <th>Max Amount</th>
                                         <th>Members</th>
-                                        <th>Total Shares</th>
+                                        <th>Total</th>
                                         <th>Properties</th>
                                         <th>Priority</th>
                                         <th>Actions</th>
@@ -127,8 +127,8 @@
                     else
                     {
                         <div class="alert alert-info">
-                            <i class="fas fa-info-circle"></i> No share types found.
-                            <a asp-action="Create" class="alert-link">Create your first share type</a>.
+                            <i class="fas fa-info-circle"></i> No Contribe types found.
+                            <a asp-action="Create" class="alert-link">Create your first Contrib type</a>.
                         </div>
                     }
                 </div>

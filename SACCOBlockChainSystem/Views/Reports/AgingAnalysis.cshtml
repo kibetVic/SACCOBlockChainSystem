@@ -1,0 +1,925 @@
+﻿@using System.Security.Claims
+@using SACCOBlockChainSystem.Models.ViewModels
+@model SACCOBlockChainSystem.Models.ViewModels.AgingAnalysisIndexViewModel
+@{
+    ViewData["Title"] = "Aging Analysis Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var hasData = Model != null && Model.Loans != null && Model.Loans.Any();
+    var asAtDate = Model?.AsAtDate ?? (ViewBag.AsAtDate as DateTime? ?? DateTime.Now);
+    var companyName = Model?.CompanyName ?? ViewBag.CompanyName ?? "";
+}
+
+<style media="print">
+    .app-sidebar, .app-header, .main-footer, .sidebar-wrapper, .navbar,
+    .breadcrumb, .footer, [data-lte-toggle="sidebar"], .brand-link,
+    .sidebar-footer, .no-print {
+        display: none !important;
+    }
+
+    .app-main, .app-content, .content-wrapper, .main-content {
+        margin-left: 0 !important;
+        padding: 20px !important;
+        width: 100% !important;
+    }
+
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    .card-header {
+        background-color: #17a2b8 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 10pt;
+    }
+
+    .table th {
+        background-color: #f2f2f2 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        font-size: 9pt;
+    }
+
+    .btn, .export-buttons, #exportExcelBtn, #exportPdfBtn {
+        display: none !important;
+    }
+
+    body {
+        background: white !important;
+        font-size: 10pt;
+    }
+
+    .bg-info {
+        background-color: #17a2b8 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .performing { background-color: #d4edda; }
+    .special-mention { background-color: #fff3cd; }
+    .watchful { background-color: #ffe5b4; }
+    .substandard { background-color: #ffd0b0; }
+    .doubtful { background-color: #f7b7b7; }
+    .loss { background-color: #f5a3a3; }
+    .loss-over365 { background-color: #f58b8b; }
+</style>
+
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <h3 class="card-title">
+            <i class="fas fa-chart-line me-2"></i>Aging Analysis Report
+        </h3>
+    </div>
+
+    <div class="card-body">
+        <!-- Filter Section - Hidden when printing -->
+        <div class="row mb-4 no-print">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>As At Date</h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="AgingAnalysis" method="post" id="reportForm">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label class="form-label fw-bold">As At Date</label>
+                                        <input type="date" name="asAtDate" id="asAtDate"
+                                               class="form-control"
+                                               value="@asAtDate.ToString("yyyy-MM-dd")"
+                                               required />
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="form-group">
+                                        <label class="form-label fw-bold">&nbsp;</label>
+                                        <div>
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="fas fa-sync-alt me-1"></i>Run Analysis
+                                            </button>
+                                            <button type="button" class="btn btn-success" id="exportExcelBtn" onclick="exportAgingAnalysisToExcel(); return false;">
+                                                <i class="fas fa-file-excel me-1"></i>Excel
+                                            </button>
+                                            <button type="button" class="btn btn-danger" id="exportPdfBtn" onclick="exportAgingAnalysisToPdf(); return false;">
+                                                <i class="fas fa-file-pdf me-1"></i>PDF
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+
+                        <!-- Export Forms -->
+                        <form asp-action="ExportAgingAnalysisToExcel" method="post" id="excelForm" style="display:none;">
+                            <input type="hidden" name="asAtDate" id="excelAsAtDate" />
+                        </form>
+                        <form asp-action="ExportAgingAnalysisToPdf" method="post" id="pdfForm" style="display:none;">
+                            <input type="hidden" name="asAtDate" id="pdfAsAtDate" />
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (hasData)
+        {
+            <!-- Report Header -->
+            <div class="text-center mb-4">
+                <h2 class="display-6 fw-bold">@companyName.ToUpper()</h2>
+                <h1 class="display-5 fw-bold text-info">AGING ANALYSIS</h1>
+                <h4 class="text-muted">As At @asAtDate.ToString("dd/MM/yyyy")</h4>
+                <hr class="my-4" />
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="small-box bg-primary">
+                        <div class="inner">
+                            <h3>@Model.TotalLoans</h3>
+                            <p>Total Loans</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-file-invoice"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="small-box bg-success">
+                        <div class="inner">
+                            <h3>@Model.TotalLoanBalance.ToString("N2")</h3>
+                            <p>Total Balance</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-money-bill"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="small-box bg-warning">
+                        <div class="inner">
+                            <h3>@Model.SpecialMentionCount</h3>
+                            <p>Special Mention</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="small-box bg-danger">
+                        <div class="inner">
+                            <h3>@(Model.SubstandardCount + Model.DoubtfulCount + Model.LossCount + Model.LossOver365Count)</h3>
+                            <p>Non-Performing</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-times-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Aging Categories Summary -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Aging Categories Summary</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="p-2 performing rounded">
+                                        <strong>Performing (0 days):</strong><br>
+                                        @Model.PerformingCount loans | @Model.TotalPerforming.ToString("N2")
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-2 special-mention rounded">
+                                        <strong>Special Mention (1-30):</strong><br>
+                                        @Model.SpecialMentionCount loans | @Model.TotalSpecialMention.ToString("N2")
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-2 watchful rounded">
+                                        <strong>Watchful (31-60):</strong><br>
+                                        @Model.WatchfulCount loans | @Model.TotalWatchful.ToString("N2")
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-2 substandard rounded">
+                                        <strong>Substandard (61-90):</strong><br>
+                                        @Model.SubstandardCount loans | @Model.TotalSubstandard.ToString("N2")
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mt-2">
+                                    <div class="p-2 doubtful rounded">
+                                        <strong>Doubtful (91-180):</strong><br>
+                                        @Model.DoubtfulCount loans | @Model.TotalDoubtful.ToString("N2")
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mt-2">
+                                    <div class="p-2 loss rounded">
+                                        <strong>Loss (181-365):</strong><br>
+                                        @Model.LossCount loans | @Model.TotalLoss.ToString("N2")
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mt-2">
+                                    <div class="p-2 loss-over365 rounded">
+                                        <strong>Loss >365:</strong><br>
+                                        @Model.LossOver365Count loans | @Model.TotalLossOver365.ToString("N2")
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loans Table - Exactly as in the image -->
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped table-hover" id="loansTable">
+                    <thead class="bg-info text-white">
+                        <tr>
+                            <th>LoanNo</th>
+                            <th>MemberNo</th>
+                            <th>Name</th>
+                            <th class="text-end">Loan Balance</th>
+                            <th>Repay Period</th>
+                            <th>Date Issued</th>
+                            <th class="text-center">Days In Arrears</th>
+                            <th>Last Repay Date</th>
+                            <th>Date of Completion</th>
+                            <th class="text-end">Performing 0 Days</th>
+                            <th class="text-end">Special Mention 1-30 Days</th>
+                            <th class="text-end">Watchful 31-60 Days</th>
+                            <th class="text-end">Substandard 61-90 Days</th>
+                            <th class="text-end">Doubtful 91-180 Days</th>
+                            <th class="text-end">Loss 181-365 Days</th>
+                            <th class="text-end">Loss Over365 Days</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Loans)
+                        {
+                            string rowClass = "";
+                            if (item.ArrearsCategory == AgingCategories.PERFORMING) rowClass = "performing";
+                            else if (item.ArrearsCategory == AgingCategories.SPECIAL_MENTION) rowClass = "special-mention";
+                            else if (item.ArrearsCategory == AgingCategories.WATCHFUL) rowClass = "watchful";
+                            else if (item.ArrearsCategory == AgingCategories.SUBSTANDARD) rowClass = "substandard";
+                            else if (item.ArrearsCategory == AgingCategories.DOUBTFUL) rowClass = "doubtful";
+                            else if (item.ArrearsCategory == AgingCategories.LOSS) rowClass = "loss";
+                            else if (item.ArrearsCategory == AgingCategories.LOSS_OVER_365) rowClass = "loss-over365";
+                            
+                            <tr class="@rowClass">
+                                <td>@item.LoanNo</td>
+                                <td>@item.MemberNo</td>
+                                <td>@item.FullName</td>
+                                <td class="text-end">@item.LoanBalance.ToString("N2")</td>
+                                <td>@item.RepayPeriod?.ToString("dd/MM/yyyy")</td>
+                                <td>@item.DateIssued?.ToString("dd/MM/yyyy")</td>
+                                <td class="text-center fw-bold">@item.DaysInArrears</td>
+                                <td>@item.LastRepayDate?.ToString("dd/MM/yyyy")</td>
+                                <td>@item.DateOfCompletion?.ToString("dd/MM/yyyy")</td>
+                                <td class="text-end">@item.Performing.ToString("N2")</td>
+                                <td class="text-end">@item.SpecialMention.ToString("N2")</td>
+                                <td class="text-end">@item.Watchful.ToString("N2")</td>
+                                <td class="text-end">@item.Substandard.ToString("N2")</td>
+                                <td class="text-end">@item.Doubtful.ToString("N2")</td>
+                                <td class="text-end">@item.Loss.ToString("N2")</td>
+                                <td class="text-end">@item.LossOver365.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="bg-light fw-bold">
+                        <tr>
+                            <td colspan="3" class="text-end">TOTAL</td>
+                            <td class="text-end">@Model.TotalLoanBalance.ToString("N2")</td>
+                            <td colspan="3"></td>
+                            <td></td>
+                            <td></td>
+                            <td class="text-end">@Model.TotalPerforming.ToString("N2")</td>
+                            <td class="text-end">@Model.TotalSpecialMention.ToString("N2")</td>
+                            <td class="text-end">@Model.TotalWatchful.ToString("N2")</td>
+                            <td class="text-end">@Model.TotalSubstandard.ToString("N2")</td>
+                            <td class="text-end">@Model.TotalDoubtful.ToString("N2")</td>
+                            <td class="text-end">@Model.TotalLoss.ToString("N2")</td>
+                            <td class="text-end">@Model.TotalLossOver365.ToString("N2")</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Report Information -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="small text-muted">
+                        <i class="fas fa-info-circle"></i>
+                        Generated By: @User.Identity.Name on @DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss") |
+                        As At: @Model.AsAtDate.ToString("dd/MM/yyyy") |
+                        Company: @companyName |
+                        Total Loans: @Model.TotalLoans
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info text-center py-5">
+                <i class="fas fa-chart-line fa-3x mb-3"></i>
+                <h5>No Active Loans Found</h5>
+                <p>There are no active/disbursed loans as at @asAtDate.ToString("dd/MM/yyyy")</p>
+            </div>
+        }
+    </div>
+</div>
+ 
+@section Scripts {
+    <script>
+        (function() {
+            'use strict';
+
+            // DOM ready helper
+            function domReady(fn) {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', fn);
+                } else {
+                    fn();
+                }
+            }
+
+            domReady(function() {
+                // Get all required elements
+                const exportExcelBtn = document.getElementById('exportExcelBtn');
+                const exportPdfBtn = document.getElementById('exportPdfBtn');
+                const asAtDate = document.getElementById('asAtDate');
+                const excelAsAtDate = document.getElementById('excelAsAtDate');
+                const pdfAsAtDate = document.getElementById('pdfAsAtDate');
+                const excelForm = document.getElementById('excelForm');
+                const pdfForm = document.getElementById('pdfForm');
+                const reportForm = document.getElementById('reportForm');
+                const loansTable = document.getElementById('loansTable');
+
+                // Validate date function
+                function validateDate() {
+                    if (!asAtDate) {
+                        console.error('As At Date input not found');
+                        return false;
+                    }
+
+                    const date = asAtDate.value;
+                    if (!date) {
+                        alert('Please select an as at date');
+                        asAtDate.focus();
+                        return false;
+                    }
+
+                    const selectedDate = new Date(date);
+                    if (isNaN(selectedDate.getTime())) {
+                        alert('Please enter a valid date');
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                // Export to Excel
+                if (exportExcelBtn) {
+                    exportExcelBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        if (!validateDate()) return;
+
+                        if (!asAtDate) {
+                            alert('As At Date input not found');
+                            return;
+                        }
+
+                        const date = asAtDate.value;
+
+                        if (!excelAsAtDate) {
+                            alert('Excel form hidden input not found');
+                            return;
+                        }
+
+                        if (!excelForm) {
+                            alert('Excel form not found');
+                            return;
+                        }
+
+                        // Show loading state
+                        const originalText = exportExcelBtn.innerHTML;
+                        exportExcelBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+                        exportExcelBtn.disabled = true;
+                        exportExcelBtn.style.opacity = '0.8';
+
+                        // Set the date value and submit
+                        excelAsAtDate.value = date;
+
+                        console.log('Exporting Aging Analysis to Excel with date:', date);
+                        excelForm.submit();
+
+                        // Reset button after a short delay
+                        setTimeout(function() {
+                            exportExcelBtn.innerHTML = originalText;
+                            exportExcelBtn.disabled = false;
+                            exportExcelBtn.style.opacity = '1';
+                        }, 3000);
+                    });
+                }
+
+                // Export to PDF
+                if (exportPdfBtn) {
+                    exportPdfBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        if (!validateDate()) return;
+
+                        if (!asAtDate) {
+                            alert('As At Date input not found');
+                            return;
+                        }
+
+                        const date = asAtDate.value;
+
+                        if (!pdfAsAtDate) {
+                            alert('PDF form hidden input not found');
+                            return;
+                        }
+
+                        if (!pdfForm) {
+                            alert('PDF form not found');
+                            return;
+                        }
+
+                        // Show loading state
+                        const originalText = exportPdfBtn.innerHTML;
+                        exportPdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+                        exportPdfBtn.disabled = true;
+                        exportPdfBtn.style.opacity = '0.8';
+
+                        // Set the date value and submit
+                        pdfAsAtDate.value = date;
+
+                        console.log('Exporting Aging Analysis to PDF with date:', date);
+                        pdfForm.submit();
+
+                        // Reset button after a short delay
+                        setTimeout(function() {
+                            exportPdfBtn.innerHTML = originalText;
+                            exportPdfBtn.disabled = false;
+                            exportPdfBtn.style.opacity = '1';
+                        }, 3000);
+                    });
+                }
+
+                // Handle report form submission (Run Analysis)
+                if (reportForm) {
+                    reportForm.addEventListener('submit', function(e) {
+                        if (!validateDate()) {
+                            e.preventDefault();
+                            return false;
+                        }
+                    });
+                }
+
+                // Initialize DataTable if available and data exists
+                @if (hasData)
+                {
+                        <text>
+                        if (loansTable && typeof $.fn !== 'undefined' && $.fn.DataTable) {
+                            try {
+                                $(loansTable).DataTable({
+                                    pageLength: 25,
+                                    ordering: true,
+                                    responsive: true,
+                                    scrollX: true,
+                                    language: {
+                                        search: "Search:",
+                                        lengthMenu: "Show _MENU_ entries",
+                                        info: "Showing _START_ to _END_ of _TOTAL_ entries"
+                                    }
+                                });
+                                console.log('DataTable initialized successfully');
+                            } catch (error) {
+                                console.error('DataTable initialization error:', error);
+                            }
+                        } else {
+                            console.log('DataTable not available or no data');
+
+                            // Fallback: Add basic table functionality if DataTable fails
+                            if (loansTable) {
+                                // Add simple search functionality
+                                const searchInput = document.createElement('input');
+                                searchInput.type = 'text';
+                                searchInput.placeholder = 'Search...';
+                                searchInput.className = 'form-control mb-3';
+                                searchInput.style.maxWidth = '300px';
+
+                                searchInput.addEventListener('keyup', function() {
+                                    const searchText = this.value.toLowerCase();
+                                    const rows = loansTable.querySelectorAll('tbody tr');
+
+                                    rows.forEach(row => {
+                                        const text = row.textContent.toLowerCase();
+                                        row.style.display = text.includes(searchText) ? '' : 'none';
+                                    });
+                                });
+
+                                loansTable.parentNode.insertBefore(searchInput, loansTable);
+                            }
+                        }
+                        </text>
+                }
+
+                // Add print button enhancement
+                const printBtn = document.querySelector('button[onclick="window.print()"]');
+                if (printBtn && !printBtn.hasAttribute('data-handler-attached')) {
+                    printBtn.setAttribute('data-handler-attached', 'true');
+                    printBtn.addEventListener('click', function(e) {
+                        const originalText = this.innerHTML;
+                        this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Preparing Print...';
+                        this.disabled = true;
+
+                        setTimeout(function() {
+                            window.print();
+                            setTimeout(function() {
+                                printBtn.innerHTML = originalText;
+                                printBtn.disabled = false;
+                            }, 1000);
+                        }, 100);
+                    });
+                }
+
+                // Set default date to today if empty
+                if (asAtDate && !asAtDate.value) {
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    const month = String(today.getMonth() + 1).padStart(2, '0');
+                    const day = String(today.getDate()).padStart(2, '0');
+                    asAtDate.value = `${year}-${month}-${day}`;
+                }
+
+                // Add visual feedback for date input
+                if (asAtDate) {
+                    asAtDate.addEventListener('focus', function() {
+                        this.style.borderColor = '#80bdff';
+                        this.style.boxShadow = '0 0 0 0.2rem rgba(0,123,255,.25)';
+                    });
+
+                    asAtDate.addEventListener('blur', function() {
+                        this.style.borderColor = '';
+                        this.style.boxShadow = '';
+                    });
+                }
+
+                // Add tooltips to show aging categories
+                const categoryBoxes = document.querySelectorAll('.performing, .special-mention, .watchful, .substandard, .doubtful, .loss, .loss-over365');
+                categoryBoxes.forEach(box => {
+                    box.addEventListener('mouseenter', function() {
+                        this.style.opacity = '0.8';
+                        this.style.cursor = 'pointer';
+                    });
+
+                    box.addEventListener('mouseleave', function() {
+                        this.style.opacity = '1';
+                    });
+                });
+            });
+
+            // Global fallback functions - These work even if event listeners fail
+            window.exportAgingAnalysisToExcel = function() {
+                const asAtDate = document.getElementById('asAtDate');
+                const excelAsAtDate = document.getElementById('excelAsAtDate');
+                const excelForm = document.getElementById('excelForm');
+                const btn = document.getElementById('exportExcelBtn');
+
+                if (!asAtDate || !excelAsAtDate || !excelForm) {
+                    alert('Export form not properly configured. Please refresh the page and try again.');
+                    return false;
+                }
+
+                const date = asAtDate.value;
+                if (!date) {
+                    alert('Please select an as at date');
+                    asAtDate.focus();
+                    return false;
+                }
+
+                // Validate date
+                const selectedDate = new Date(date);
+                if (isNaN(selectedDate.getTime())) {
+                    alert('Please enter a valid date');
+                    return false;
+                }
+
+                // Show loading state
+                if (btn) {
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+                    btn.disabled = true;
+                    btn.style.opacity = '0.8';
+                    btn.setAttribute('data-original-text', originalText);
+                }
+
+                // Set the date value and submit
+                excelAsAtDate.value = date;
+
+                console.log('Exporting Aging Analysis to Excel with date:', date);
+                excelForm.submit();
+
+                // Reset button after a short delay
+                setTimeout(function() {
+                    if (btn) {
+                        const originalText = btn.getAttribute('data-original-text') || '<i class="fas fa-file-excel me-1"></i>Excel';
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                    }
+                }, 3000);
+
+                return false;
+            };
+
+            window.exportAgingAnalysisToPdf = function() {
+                const asAtDate = document.getElementById('asAtDate');
+                const pdfAsAtDate = document.getElementById('pdfAsAtDate');
+                const pdfForm = document.getElementById('pdfForm');
+                const btn = document.getElementById('exportPdfBtn');
+
+                if (!asAtDate || !pdfAsAtDate || !pdfForm) {
+                    alert('Export form not properly configured. Please refresh the page and try again.');
+                    return false;
+                }
+
+                const date = asAtDate.value;
+                if (!date) {
+                    alert('Please select an as at date');
+                    asAtDate.focus();
+                    return false;
+                }
+
+                // Validate date
+                const selectedDate = new Date(date);
+                if (isNaN(selectedDate.getTime())) {
+                    alert('Please enter a valid date');
+                    return false;
+                }
+
+                // Show loading state
+                if (btn) {
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+                    btn.disabled = true;
+                    btn.style.opacity = '0.8';
+                    btn.setAttribute('data-original-text', originalText);
+                }
+
+                // Set the date value and submit
+                pdfAsAtDate.value = date;
+
+                console.log('Exporting Aging Analysis to PDF with date:', date);
+                pdfForm.submit();
+
+                // Reset button after a short delay
+                setTimeout(function() {
+                    if (btn) {
+                        const originalText = btn.getAttribute('data-original-text') || '<i class="fas fa-file-pdf me-1"></i>PDF';
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                    }
+                }, 3000);
+
+                return false;
+            };
+
+            // Set onclick attributes as backup
+            domReady(function() {
+                const excelBtn = document.getElementById('exportExcelBtn');
+                const pdfBtn = document.getElementById('exportPdfBtn');
+
+                // Only set onclick if not already set and button exists
+                if (excelBtn && !excelBtn.hasAttribute('onclick')) {
+                    excelBtn.setAttribute('onclick', 'exportAgingAnalysisToExcel(); return false;');
+                    console.log('Excel button onclick handler set');
+                }
+
+                if (pdfBtn && !pdfBtn.hasAttribute('onclick')) {
+                    pdfBtn.setAttribute('onclick', 'exportAgingAnalysisToPdf(); return false;');
+                    console.log('PDF button onclick handler set');
+                }
+
+                // Add keyboard shortcuts (Ctrl+E for Excel, Ctrl+P for PDF)
+                document.addEventListener('keydown', function(e) {
+                    // Check if not typing in an input field
+                    const tag = e.target.tagName.toLowerCase();
+                    if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+                        return;
+                    }
+
+                    if (e.ctrlKey && e.key === 'e') {
+                        e.preventDefault();
+                        console.log('Keyboard shortcut: Ctrl+E');
+                        if (excelBtn) {
+                            excelBtn.click();
+                        }
+                    }
+                    if (e.ctrlKey && e.key === 'p') {
+                        e.preventDefault();
+                        console.log('Keyboard shortcut: Ctrl+P');
+                        if (pdfBtn) {
+                            pdfBtn.click();
+                        }
+                    }
+                });
+            });
+
+            // Add loading indicator CSS if not exists
+            if (!document.getElementById('export-loading-styles')) {
+                const style = document.createElement('style');
+                style.id = 'export-loading-styles';
+                style.textContent = `
+                    .btn-loading {
+                        position: relative;
+                        pointer-events: none;
+                        opacity: 0.8;
+                    }
+
+                    .btn-loading:after {
+                        content: "";
+                        position: absolute;
+                        width: 16px;
+                        height: 16px;
+                        top: 50%;
+                        left: 50%;
+                        margin-left: -8px;
+                        margin-top: -8px;
+                        border: 2px solid rgba(255,255,255,0.3);
+                        border-radius: 50%;
+                        border-top-color: white;
+                        animation: spin 0.6s linear infinite;
+                    }
+
+                    @@keyframes spin {
+                        to { transform: rotate(360deg); }
+                    }
+
+                    .fa-spinner, .fa-spin {
+                        animation: spin 1s linear infinite;
+                    }
+
+                    button:disabled {
+                        cursor: not-allowed;
+                        opacity: 0.7;
+                    }
+
+                    /* Tooltip styles */
+                    [data-tooltip] {
+                        position: relative;
+                        cursor: help;
+                    }
+
+                    [data-tooltip]:hover:before {
+                        content: attr(data-tooltip);
+                        position: absolute;
+                        bottom: 100%;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        padding: 5px 10px;
+                        background: #333;
+                        color: white;
+                        border-radius: 4px;
+                        font-size: 12px;
+                        white-space: nowrap;
+                        z-index: 1000;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Debug helper - log page load
+            domReady(function() {
+                console.log('=================================');
+                console.log('Aging Analysis Report Page Loaded');
+                console.log('=================================');
+                console.log('Excel button exists:', !!document.getElementById('exportExcelBtn'));
+                console.log('PDF button exists:', !!document.getElementById('exportPdfBtn'));
+                console.log('As At Date input exists:', !!document.getElementById('asAtDate'));
+                console.log('Excel form exists:', !!document.getElementById('excelForm'));
+                console.log('PDF form exists:', !!document.getElementById('pdfForm'));
+                console.log('Has data:', @Json.Serialize(hasData));
+                console.log('=================================');
+            });
+
+            // Prevent double submission
+            domReady(function() {
+                let isSubmitting = false;
+
+                const excelBtn = document.getElementById('exportExcelBtn');
+                const pdfBtn = document.getElementById('exportPdfBtn');
+
+                if (excelBtn) {
+                    excelBtn.addEventListener('click', function(e) {
+                        if (isSubmitting) {
+                            e.preventDefault();
+                            return false;
+                        }
+                        isSubmitting = true;
+                        setTimeout(function() {
+                            isSubmitting = false;
+                        }, 5000);
+                    });
+                }
+
+                if (pdfBtn) {
+                    pdfBtn.addEventListener('click', function(e) {
+                        if (isSubmitting) {
+                            e.preventDefault();
+                            return false;
+                        }
+                        isSubmitting = true;
+                        setTimeout(function() {
+                            isSubmitting = false;
+                        }, 5000);
+                    });
+                }
+            });
+        })();
+    </script>
+}
+
+<style>
+    .small-box {
+        border-radius: 0.25rem;
+        box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+        display: block;
+        margin-bottom: 20px;
+        position: relative;
+    }
+    
+    .small-box > .inner {
+        padding: 10px;
+    }
+    
+    .small-box h3 {
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin: 0 0 10px;
+        padding: 0;
+        white-space: nowrap;
+        color: white;
+    }
+    
+    .small-box p {
+        color: white;
+        font-size: 1rem;
+    }
+    
+    .small-box .icon {
+        color: rgba(0,0,0,0.15);
+        position: absolute;
+        right: 10px;
+        top: 10px;
+        transition: all .3s linear;
+        z-index: 0;
+    }
+    
+    .small-box .icon > i {
+        font-size: 70px;
+    }
+    
+    .small-box:hover .icon {
+        font-size: 75px;
+    }
+    
+    .bg-info {
+        background-color: #17a2b8 !important;
+    }
+    
+    .performing { background-color: #d4edda; }
+    .special-mention { background-color: #fff3cd; }
+    .watchful { background-color: #ffe5b4; }
+    .substandard { background-color: #ffd0b0; }
+    .doubtful { background-color: #f7b7b7; }
+    .loss { background-color: #f5a3a3; }
+    .loss-over365 { background-color: #f58b8b; }
+    
+    @@media (max-width: 767px) {
+        .small-box {
+            text-align: center;
+        }
+        .small-box .icon {
+            display: none;
+        }
+    }
+</style>

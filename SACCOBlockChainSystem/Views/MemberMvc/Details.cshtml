@@ -2,92 +2,395 @@
 
 @{
     ViewData["Title"] = "Member Details";
+    var fullName = $"{Model.Surname} {Model.OtherNames}".Trim();
 }
 
 <div class="container-fluid">
     <div class="row">
-        <div class="col-md-8 offset-md-2">
+        <div class="col-md-10 offset-md-1">
             <div class="card">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h4><i class="fas fa-user"></i> Member Details</h4>
+                    <span class="badge bg-light text-primary p-2">@Model.MemberNo</span>
                 </div>
                 <div class="card-body">
                     @if (TempData["SuccessMessage"] != null)
                     {
-                        <div class="alert alert-success">
-                            @TempData["SuccessMessage"]
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
                     }
 
+                    <!-- Main Details -->
                     <div class="row">
+                        <!-- Left Column -->
                         <div class="col-md-6">
-                            <dl class="row">
-                                <dt class="col-sm-4">Member No:</dt>
-                                <dd class="col-sm-8"><strong>@Model.MemberNo</strong></dd>
+                            <div class="card mb-3">
+                                <div class="card-header bg-info text-white">
+                                    <h5><i class="fas fa-id-card"></i> Personal Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <th style="width: 40%;">Member Number:</th>
+                                            <td><strong>@Model.MemberNo</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <th>Surname:</th>
+                                            <td>@Model.Surname</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Other Names:</th>
+                                            <td>@Model.OtherNames</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Full Name:</th>
+                                            <td>@fullName</td>
+                                        </tr>
+                                        <tr>
+                                            <th style="width: 40%;">Phone Number:</th>
+                                            <td>@Model.PhoneNo"></td>
+                                        </tr>
+                                        <tr>
+                                            <th>ID Number:</th>
+                                            <td>@Model.Idno</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Date of Birth:</th>
+                                            <td>@(Model.Dob?.ToString("dd MMMM yyyy") ?? "Not provided")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Age:</th>
+                                            <td>@(Model.Age.HasValue? Model.Age + " years" : "Not calculated")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Email:</th>
+                                            <td>@Model.Email</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Gender:</th>
+                                            <td>
+                                                @if (Model.Sex == "M")
+                                                {
+                                                    <span>Male</span>
+                                                }
+                                                else if (Model.Sex == "F")
+                                                {
+                                                    <span>Female</span>
+                                                }
+                                                else if (Model.Sex == "O")
+                                                {
+                                                    <span>Other</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Not specified</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
 
-                                <dt class="col-sm-4">Full Name:</dt>
-                                <dd class="col-sm-8">@Model.Surname @Model.OtherNames</dd>
 
-                                <dt class="col-sm-4">ID No:</dt>
-                                <dd class="col-sm-8">@Model.Idno</dd>
-
-                                <dt class="col-sm-4">Phone:</dt>
-                                <dd class="col-sm-8">@Model.PhoneNo</dd>
-
-                                <dt class="col-sm-4">Email:</dt>
-                                <dd class="col-sm-8">@Model.Email</dd>
-                            </dl>
+                            <div class="card mb-3">
+                                <div class="card-header bg-info text-white">
+                                    <h5><i class="fas fa-calendar-alt"></i> Dates & Status</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <th style="width: 40%;">Application Date:</th>
+                                            <td>@Model.ApplicDate?.ToString("dd MMMM yyyy HH:mm")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Effective Date:</th>
+                                            <td>@Model.EffectDate?.ToString("dd MMMM yyyy")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>As At Date:</th>
+                                            <td>@Model.AsAtDate?.ToString("dd MMMM yyyy")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Status:</th>
+                                            <td>
+                                                @if (Model.Status == 1)
+                                                {
+                                                    <span class="badge bg-success">Active</span>
+                                                }
+                                                else if (Model.Status == 0)
+                                                {
+                                                    <span class="badge bg-warning">Inactive</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">@Model.Status</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Mstatus:</th>
+                                            <td>
+                                                @if (Model.Mstatus == true)
+                                                {
+                                                    <span class="badge bg-success">Active</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Inactive</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Archived:</th>
+                                            <td>@(Model.Archived == true ? "Yes" : "No")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Withdrawn:</th>
+                                            <td>@(Model.Withdrawn == true ? "Yes" : "No")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Withdrawal Date:</th>
+                                            <td>@Model.Memberwitrawaldate?.ToString("dd MMMM yyyy")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Dormant:</th>
+                                            <td>@(Model.Dormant == 1 ? "Yes" : "No")</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
+
+                        <!-- Right Column -->
                         <div class="col-md-6">
-                            <dl class="row">
-                                <dt class="col-sm-4">Status:</dt>
-                                <dd class="col-sm-8">
-                                    @if (Model.Status == 1)
-                                    {
-                                        <span class="badge bg-success">Active</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-warning">Inactive</span>
-                                    }
-                                </dd>
+                            <div class="card mb-3">
+                                <div class="card-header bg-info text-white">
+                                    <h5><i class="fas fa-building"></i> Company & Employment</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <th style="width: 40%;">Company Code:</th>
+                                            <td>@Model.CompanyCode</td>
+                                        </tr>
+                                        <tr>
+                                            <th>CIG Code (Group):</th>
+                                            <td>@Model.Cigcode ?? <span class="text-muted">Not assigned</span></td>
+                                        </tr>
+                                        <tr>
+                                            <th>Employer:</th>
+                                            <td>@Model.Employer ?? <span class="text-muted">Not provided</span></td>
+                                        </tr>
+                                        <tr>
+                                            <th>Department:</th>
+                                            <td>@Model.Dept ?? <span class="text-muted">Not provided</span></td>
+                                        </tr>
+                                        <tr>
+                                            <th>Rank/Position:</th>
+                                            <td>@Model.Rank ?? <span class="text-muted">Not provided</span></td>
+                                        </tr>
+                                        <tr>
+                                            <th>Staff Number:</th>
+                                            <td>@Model.StaffNo ?? <span class="text-muted">Not provided</span></td>
+                                        </tr>
+                                        <tr>
+                                            <th>Station:</th>
+                                            <td>@Model.Station ?? <span class="text-muted">Not provided</span></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
 
-                                <dt class="col-sm-4">Share Capital:</dt>
-                                <dd class="col-sm-8">KES @Model.ShareCap?.ToString("N2")</dd>
+                            <div class="card mb-3">
+                                <div class="card-header bg-info text-white">
+                                    <h5><i class="fas fa-money-bill"></i> Financial Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <th style="width: 40%;">Initial Shares:</th>
+                                            <td>KES @(Model.InitShares?.ToString("N2") ?? "0.00")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Share Capital:</th>
+                                            <td><strong>KES @(Model.ShareCap?.ToString("N2") ?? "0.00")</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <th>Registration Fee:</th>
+                                            <td>KES @(Model.RegFee?.ToString("N2") ?? "0.00")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Monthly Contribution:</th>
+                                            <td>KES @(Model.MonthlyContr?.ToString("N2") ?? "0.00")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Loan Balance:</th>
+                                            <td class="@(Model.LoanBalance > 0 ? "text-danger fw-bold" : "")">
+                                                KES @(Model.LoanBalance?.ToString("N2") ?? "0.00")
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Interest Balance:</th>
+                                            <td>KES @(Model.InterestBalance?.ToString("N2") ?? "0.00")</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
 
-                                <dt class="col-sm-4">Registration Date:</dt>
-                                <dd class="col-sm-8">@Model.ApplicDate?.ToString("dd/MM/yyyy")</dd>
 
-                                <dt class="col-sm-4">Blockchain TX:</dt>
-                                <dd class="col-sm-8">
-                                    @if (!string.IsNullOrEmpty(Model.BlockchainTxId))
-                                    {
-                                        <code>@Model.BlockchainTxId</code>
-                                        <a href="/Blockchain/Verify/@Model.BlockchainTxId"
-                                           class="btn btn-sm btn-link" target="_blank">Verify</a>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-secondary">Pending</span>
-                                    }
-                                </dd>
-                            </dl>
+
+                            <div class="card mb-3">
+                                <div class="card-header bg-info text-white">
+                                    <h5><i class="fas fa-link"></i> Blockchain Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <th style="width: 40%;">Blockchain TX ID:</th>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(Model.BlockchainTxId))
+                                                {
+                                                    <div class="d-flex align-items-center">
+                                                        <code class="small">@Model.BlockchainTxId</code>
+                                                        <a href="/Blockchain/Verify/@Model.BlockchainTxId"
+                                                           class="btn btn-sm btn-outline-info ms-2" target="_blank">
+                                                            <i class="fas fa-shield-alt"></i> Verify
+                                                        </a>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Pending</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Transaction No:</th>
+                                            <td>@Model.TransactionNo ?? <span class="text-muted">None</span></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="mt-4">
-                        <a asp-action="Index" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left"></i> Back to List
-                        </a>
-                        <a href="/api/Member/@Model.MemberNo" class="btn btn-info" target="_blank">
-                            <i class="fas fa-code"></i> View API Data
-                        </a>
-                        <a asp-action="Edit" asp-route-memberNo="@Model.MemberNo" class="btn btn-warning">
-                            <i class="fas fa-edit"></i> Edit Member
-                        </a>
+                    <!-- Audit Information -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-secondary text-white">
+                                    <h5><i class="fas fa-history"></i> Audit Trail</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <strong>Created By:</strong> @Model.AuditId
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Created Date:</strong> @Model.AuditTime?.ToString("dd MMMM yyyy HH:mm:ss")
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Last Updated:</strong> @Model.AuditDateTime?.ToString("dd MMMM yyyy HH:mm:ss")
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="btn-group" role="group">
+                                <a asp-action="Index" class="btn btn-secondary">
+                                    <i class="fas fa-arrow-left"></i> Back to List
+                                </a>
+                                <a asp-action="Edit" asp-route-memberNo="@Model.MemberNo" class="btn btn-warning">
+                                    <i class="fas fa-edit"></i> Edit Member
+                                </a>
+                                <a href="/api/Member/@Model.MemberNo" class="btn btn-info" target="_blank">
+                                    <i class="fas fa-code"></i> API Data
+                                </a>
+                                @* <a asp-action="Transactions" asp-route-memberNo="@Model.MemberNo" class="btn btn-success">
+                                    <i class="fas fa-exchange-alt"></i> Transactions
+                                </a>
+                                @if (Model.Status == 1)
+                                {
+                                    <button type="button" class="btn btn-danger" onclick="confirmDeactivate('@Model.MemberNo')">
+                                        <i class="fas fa-ban"></i> Deactivate
+                                    </button>
+                                } *@
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Deactivate Confirmation Modal -->
+<div class="modal fade" id="deactivateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirm Deactivation</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to deactivate member <strong>@Model.MemberNo - @fullName</strong>?</p>
+                <p class="text-muted small">This action will mark the member as inactive. You can reactivate them later if needed.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form asp-action="Deactivate" asp-route-memberNo="@Model.MemberNo" method="post" style="display: inline;">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-ban"></i> Deactivate Member
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function confirmDeactivate(memberNo) {
+            $('#deactivateModal').modal('show');
+        }
+
+        // Copy member number to clipboard
+        function copyMemberNumber() {
+            navigator.clipboard.writeText('@Model.MemberNo').then(function() {
+                showToast('Member number copied to clipboard!', 'success');
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast align-items-center text-white bg-${type} border-0`;
+            toast.style.position = 'fixed';
+            toast.style.bottom = '20px';
+            toast.style.right = '20px';
+            toast.style.zIndex = '9999';
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
+                </div>
+            `;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 3000);
+        }
+    </script>
+}

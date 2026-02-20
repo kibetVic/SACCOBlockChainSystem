@@ -33,31 +33,20 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? ProfilePicture { get; set; }
         public string? BlockchainTxId { get; set; }
     }
-    //public class MemberRegistrationDTO
-    //{
-    //    public string? Surname { get; set; }
-    //    public string? OtherNames { get; set; }
-    //    public string? IdNo { get; set; }
-    //    public string? PhoneNo { get; set; }
-    //    public string? Email { get; set; }
-    //    public DateTime? DateOfBirth { get; set; }
-    //    public string? Gender { get; set; }
-    //    public string? CompanyCode { get; set; }
-    //    public decimal InitialShares { get; set; } 
-    //    public string? CreatedBy { get; set; }
-    //}
 
     public class MemberResponseDTO
     {
-        public string MemberNo { get; set; }
-        public string FullName { get; set; }
-        public string Status { get; set; }
+        public string? MemberNo { get; set; }
+        public string? FullName { get; set; }
+        public string? Status { get; set; }
         public DateTime RegistrationDate { get; set; }
-        public string BlockchainTxId { get; set; }
+        public string? BlockchainTxId { get; set; }
         public decimal ShareBalance { get; set; }
         public string? Email { get; set; }
         public string? Phone { get; set; }
         public string? CompanyCode { get; set; }
+        public string? MembershipType { get; set; }
+        public string? RegistrationType { get; set; }
     }
 
 
@@ -76,6 +65,21 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? CompanyCode { get; set; }
         public decimal InitialShares { get; set; } = 0;
         public string? CreatedBy { get; set; }
+        public string? MemberNo { get; set; }
+
+        public string? PresentAddr { get; set; }
+
+        [Required(ErrorMessage = "Membership type is required")]
+        public string MembershipType { get; set; } = "Individual";
+
+        [Required(ErrorMessage = "Registration type is required")]
+        public string RegistrationType { get; set; } = "Regular";
+        public string? CigCode { get; set; }
+        [Range(18, 120)]
+        public int? Age { get; set; }
+        public string? Dept { get; set; }
+        public decimal? RegFee { get; set; } = 0;
+        public bool Mstatus { get; set; } = true;
     }
 
     public class MemberUpdateDTO

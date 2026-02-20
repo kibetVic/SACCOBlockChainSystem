@@ -72,7 +72,7 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     MemberNo = memberNo ?? string.Empty,
                     TransactionDate = DateTime.Now,
-                    CreatedBy = User.Identity?.Name ?? "SYSTEM",
+                    CreatedBy = User.Identity?.Name,
                     CompanyCode = companyCode
                 };
 
@@ -105,7 +105,7 @@ namespace SACCOBlockChainSystem.Controllers
 
                 // Set user information
                 contributionDto.CompanyCode = GetUserCompanyCode();
-                contributionDto.CreatedBy = User.Identity?.Name ?? "SYSTEM";
+                contributionDto.CreatedBy = User.Identity?.Name;
 
                 _logger.LogInformation($"Adding contribution for member: {contributionDto.MemberNo}");
 
@@ -137,8 +137,6 @@ namespace SACCOBlockChainSystem.Controllers
                 return View(contributionDto);
             }
         }
-
-        // Add these methods to your existing ContributionMvcController
 
         // GET: /ContributionMvc/Edit/{id}
         public async Task<IActionResult> Edit(int id)

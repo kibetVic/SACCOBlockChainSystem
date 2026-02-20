@@ -1,0 +1,673 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.JournalEntryViewModel
+
+@{
+    ViewData["Title"] = "Journal Posting";
+}
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h2 style="color: #3f2b96; margin: 0;">
+        <i class="fas fa-book"></i> Journal Voucher Entry
+    </h2>
+    <div style="display: flex; gap: 10px;">
+        <a href="@Url.Action("List")" class="btn btn-info">
+            <i class="fas fa-list"></i> View Journals
+        </a>
+    </div>
+</div>
+
+<!-- Company Info Card -->
+<div style="background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%); border-left: 5px solid #3f2b96; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <i class="fas fa-building" style="color: #3f2b96; font-size: 24px;"></i>
+            <div>
+                <strong style="color: #3f2b96;">@ViewBag.CompanyName</strong>
+                <span style="color: #6c757d; margin-left: 10px;">(@ViewBag.CompanyCode)</span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 20px;">
+            <span><i class="fas fa-calendar"></i> Date: @DateTime.Now.ToString("dd/MM/yyyy")</span>
+            <span><i class="fas fa-user"></i> User: @User.Identity?.Name</span>
+        </div>
+    </div>
+</div>
+
+@if (Model.Posted)
+{
+    <div class="alert alert-info mb-3">
+        <i class="fas fa-info-circle"></i> This journal is already <strong>POSTED</strong> and cannot be edited.
+        <a href="@Url.Action("List")" class="alert-link">View all journals</a>
+    </div>
+}
+
+<form id="journalForm" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="VoucherNo" />
+    <input type="hidden" asp-for="CompanyCode" />
+    <input type="hidden" asp-for="AuditId" />
+    <input type="hidden" asp-for="AuditDate" />
+    <input type="hidden" asp-for="Posted" />
+    <input type="hidden" asp-for="PostedDate" />
+
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+        <div>
+            <label style="font-weight: 600; color: #495057;">Voucher No:</label>
+            <input type="text" class="form-control" value="@Model.VoucherNo" readonly style="background-color: #f8f9fa;" />
+        </div>
+        <div>
+            <label style="font-weight: 600; color: #495057;">Voucher Date:</label>
+            <input asp-for="VoucherDate" type="date" class="form-control" required (Model.Posted ? "disabled" : "") />
+        </div>
+        <div>
+            <label style="font-weight: 600; color: #495057;">Member No:</label>
+            <input asp-for="MemberNo" class="form-control" placeholder="Optional" (Model.Posted ? "disabled" : "") />
+        </div>
+        <div>
+            <label style="font-weight: 600; color: #495057;">Loan No:</label>
+            <input asp-for="LoanNo" class="form-control" placeholder="Optional" (Model.Posted ? "disabled" : "") />
+        </div>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <label style="font-weight: 600; color: #495057;">Description/Narration:</label>
+        <textarea asp-for="Description" class="form-control" rows="2" placeholder="Enter journal description..." (Model.Posted ? "disabled" : "")></textarea>
+    </div>
+
+    <!-- Journal Entries Table -->
+    <div style="background-color: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 30px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h4 style="color: #3f2b96; margin: 0;">
+                <i class="fas fa-pen-alt"></i> Journal Entry Lines
+            </h4>
+            @if (!Model.Posted)
+            {
+                <button type="button" id="addRow" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Add Line
+                </button>
+            }
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table id="journalTable" style="width: 100%; border-collapse: collapse;">
+                <thead style="background-color: #3f2b96; color: white;">
+                    <tr>
+                        <th style="padding: 12px; text-align: left;">Account No</th>
+                        <th style="padding: 12px; text-align: left;">Account Name</th>
+                        <th style="padding: 12px; text-align: left;">Narration</th>
+                        <th style="padding: 12px; text-align: left;">Share Type</th>
+                        <th style="padding: 12px; text-align: right;">Debit (DR)</th>
+                        <th style="padding: 12px; text-align: right;">Credit (CR)</th>
+                        <th style="padding: 12px; text-align: center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="journalRows">
+                    @if (Model.Details != null && Model.Details.Any())
+                    {
+                        foreach (var detail in Model.Details)
+                        {
+                            <tr>
+                                <td>
+                                    <select class="form-control account-select" style="width: 150px;" @(Model.Posted ? "disabled" : "") required>
+                                        <option value="">-- Select --</option>
+                                        @if (ViewBag.Accounts != null)
+                                        {
+                                            foreach (var acc in ViewBag.Accounts)
+                                            {
+                                                var isSelected = detail.AccountNo == acc.AccNo;
+                                                if (isSelected)
+                                                {
+                                                    <option value="@acc.AccNo" data-name="@acc.Glaccname" data-balance="@acc.Normalbal" selected="selected">
+                                                        @acc.AccNo - @acc.Glaccname
+                                                    </option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@acc.AccNo" data-name="@acc.Glaccname" data-balance="@acc.Normalbal">
+                                                        @acc.AccNo - @acc.Glaccname
+                                                    </option>
+                                                }
+                                            }
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" class="form-control account-name" readonly style="background-color: #f8f9fa;" value="@detail.AccountName" />
+                                </td>
+                                <td>
+                                    <input type="text" class="form-control narration" placeholder="Line narration" value="@detail.Narration" @(Model.Posted ? "disabled" : "") />
+                                </td>
+                                <td>
+                                    <select class="form-control share-type" @(Model.Posted ? "disabled" : "")>
+                                        @if (detail.ShareType == "CASH")
+                                        {
+                                            <option value="CASH" selected="selected">CASH</option>
+                                            <option value="SHARES">SHARES</option>
+                                            <option value="LOAN">LOAN</option>
+                                            <option value="INTEREST">INTEREST</option>
+                                            <option value="FEE">FEE</option>
+                                        }
+                                        else if (detail.ShareType == "SHARES")
+                                        {
+                                            <option value="CASH">CASH</option>
+                                            <option value="SHARES" selected="selected">SHARES</option>
+                                            <option value="LOAN">LOAN</option>
+                                            <option value="INTEREST">INTEREST</option>
+                                            <option value="FEE">FEE</option>
+                                        }
+                                        else if (detail.ShareType == "LOAN")
+                                        {
+                                            <option value="CASH">CASH</option>
+                                            <option value="SHARES">SHARES</option>
+                                            <option value="LOAN" selected="selected">LOAN</option>
+                                            <option value="INTEREST">INTEREST</option>
+                                            <option value="FEE">FEE</option>
+                                        }
+                                        else if (detail.ShareType == "INTEREST")
+                                        {
+                                            <option value="CASH">CASH</option>
+                                            <option value="SHARES">SHARES</option>
+                                            <option value="LOAN">LOAN</option>
+                                            <option value="INTEREST" selected="selected">INTEREST</option>
+                                            <option value="FEE">FEE</option>
+                                        }
+                                        else if (detail.ShareType == "FEE")
+                                        {
+                                            <option value="CASH">CASH</option>
+                                            <option value="SHARES">SHARES</option>
+                                            <option value="LOAN">LOAN</option>
+                                            <option value="INTEREST">INTEREST</option>
+                                            <option value="FEE" selected="selected">FEE</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="CASH">CASH</option>
+                                            <option value="SHARES">SHARES</option>
+                                            <option value="LOAN">LOAN</option>
+                                            <option value="INTEREST">INTEREST</option>
+                                            <option value="FEE">FEE</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="number" step="0.01" min="0" class="form-control debit text-right" style="text-align: right;" value="@detail.Debit.ToString("F2")" @(Model.Posted ? "disabled" : "") />
+                                </td>
+                                <td>
+                                    <input type="number" step="0.01" min="0" class="form-control credit text-right" style="text-align: right;" value="@detail.Credit.ToString("F2")" @(Model.Posted ? "disabled" : "") />
+                                </td>
+                                <td style="text-align: center;">
+                                    @if (!Model.Posted)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-danger remove-row">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Posted</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td>
+                                <select class="form-control account-select" style="width: 150px;" required>
+                                    <option value="">-- Select --</option>
+                                    @if (ViewBag.Accounts != null)
+                                    {
+                                        foreach (var acc in ViewBag.Accounts)
+                                        {
+                                            <option value="@acc.AccNo" data-name="@acc.Glaccname" data-balance="@acc.Normalbal">
+                                                @acc.AccNo - @acc.Glaccname
+                                            </option>
+                                        }
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" class="form-control account-name" readonly style="background-color: #f8f9fa;" />
+                            </td>
+                            <td>
+                                <input type="text" class="form-control narration" placeholder="Line narration" />
+                            </td>
+                            <td>
+                                <select class="form-control share-type">
+                                    <option value="CASH" selected>CASH</option>
+                                    <option value="SHARES">SHARES</option>
+                                    <option value="LOAN">LOAN</option>
+                                    <option value="INTEREST">INTEREST</option>
+                                    <option value="FEE">FEE</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="number" step="0.01" min="0" class="form-control debit text-right" style="text-align: right;" value="0.00" />
+                            </td>
+                            <td>
+                                <input type="number" step="0.01" min="0" class="form-control credit text-right" style="text-align: right;" value="0.00" />
+                            </td>
+                            <td style="text-align: center;">
+                                <button type="button" class="btn btn-sm btn-danger remove-row">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot style="background-color: #e9ecef; font-weight: bold;">
+                    <tr>
+                        <td colspan="4" style="padding: 12px; text-align: right;">Totals:</td>
+                        <td style="padding: 12px; text-align: right;">
+                            <span id="totalDebit">0.00</span>
+                        </td>
+                        <td style="padding: 12px; text-align: right;">
+                            <span id="totalCredit">0.00</span>
+                        </td>
+                        <td style="padding: 12px;"></td>
+                    </tr>
+                    <tr>
+                        <td colspan="4" style="padding: 12px; text-align: right;">Difference:</td>
+                        <td colspan="2" style="padding: 12px; text-align: left;">
+                            <span id="difference" style="font-weight: bold; color: #dc3545;">0.00</span>
+                        </td>
+                        <td style="padding: 12px;"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-bottom: 30px;">
+        @if (!Model.Posted)
+        {
+            <button type="button" id="saveDraft" class="btn btn-primary">
+                <i class="fas fa-save"></i> Save Draft
+            </button>
+            <button type="button" id="savePost" class="btn btn-success">
+                <i class="fas fa-check-circle"></i> Save & Post
+            </button>
+        }
+        <a href="@Url.Action("List")" class="btn btn-info">
+            <i class="fas fa-list"></i> View All Journals
+        </a>
+        <a href="@Url.Action("Index")" class="btn btn-secondary">
+            <i class="fas fa-plus-circle"></i> New Journal
+        </a>
+    </div>
+</form>
+
+<!-- Transaction Records Display Section -->
+<div style="background-color: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; margin-top: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h4 style="color: #3f2b96; margin: 0;">
+            <i class="fas fa-history"></i> Transaction Records
+        </h4>
+        <span class="badge" style="background-color: #3f2b96; color: white; padding: 8px 15px; border-radius: 20px;">
+            <i class="fas fa-book"></i> @(Model.Details?.Count ?? 0) Entries
+        </span>
+    </div>
+    
+    <div style="overflow-x: auto;">
+    <table id="transactionRecords" style="width: 100%; border-collapse: collapse;">
+        <thead style="background-color: #343a40; color: white;">
+            <tr>
+                <th style="padding: 12px; text-align: left;">#</th>
+                <th style="padding: 12px; text-align: left;">Account No</th>
+                <th style="padding: 12px; text-align: left;">Account Name</th>
+                <th style="padding: 12px; text-align: left;">Voucher No</th>
+                <th style="padding: 12px; text-align: left;">Date</th>
+                <th style="padding: 12px; text-align: left;">Narration</th>
+                <th style="padding: 12px; text-align: right;">Amount</th>
+                <th style="padding: 12px; text-align: center;">Trans Type</th>
+                <th style="padding: 12px; text-align: center;">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.Details != null && Model.Details.Any())
+            {
+                int count = 1;
+                foreach (var detail in Model.Details)
+                {
+                    <tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">@count</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6;"><strong>@detail.AccountNo</strong></td>
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">@detail.AccountName</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">@Model.VoucherNo</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">@Model.VoucherDate.ToString("dd/MM/yyyy")</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">@(detail.Narration ?? Model.Description)</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6; text-align: right; font-weight: bold;">
+                            @{
+                                var amount = detail.Debit > 0 ? detail.Debit : detail.Credit;
+                                var transType = detail.Debit > 0 ? "DR" : "CR";
+                                var color = detail.Debit > 0 ? "#28a745" : "#dc3545";
+                            }
+                            <span style="color: @color;">@amount.ToString("N2")</span>
+                        </td>
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6; text-align: center;">
+                            <span class="badge" style="background-color: @(detail.Debit > 0 ? "#28a745" : "#dc3545"); color: white; padding: 4px 8px; border-radius: 4px;">
+                                @(detail.Debit > 0 ? "DR" : "CR")
+                            </span>
+                        </td>
+                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6; text-align: center;">
+                            @if (Model.Posted)
+                            {
+                                <span class="badge bg-success">Posted</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning">Draft</span>
+                            }
+                        </td>
+                    </tr>
+                    count++;
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="9" style="padding: 30px; text-align: center; color: #6c757d;">
+                        <i class="fas fa-inbox" style="font-size: 24px; margin-bottom: 10px; display: block;"></i>
+                        No transaction records found. Add journal entries above.
+                    </td>
+                </tr>
+            }
+        </tbody>
+        <tfoot style="background-color: #f8f9fa; font-weight: bold;">
+            <tr>
+                <td colspan="6" style="padding: 12px; text-align: right;">Total Amount:</td>
+                <td style="padding: 12px; text-align: right; color: #17a2b8;">
+                    @{
+                        var totalAmount = (Model.Details?.Where(x => x.Debit > 0).Sum(x => x.Debit) ?? 0) + 
+                                        (Model.Details?.Where(x => x.Credit > 0).Sum(x => x.Credit) ?? 0);
+                    }
+                    @totalAmount.ToString("N2")
+                </td>
+                <td style="padding: 12px; text-align: center;">
+                    <span class="badge" style="background-color: #17a2b8; color: white; padding: 6px 12px;">
+                        @(Model.Details?.Count ?? 0) Entries
+                    </span>
+                </td>
+                <td style="padding: 12px; text-align: center;"></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+
+
+<!-- Audit Trail -->
+@if (!string.IsNullOrEmpty(Model.VoucherNo))
+{
+    <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; font-size: 12px; color: #6c757d; border-left: 4px solid #3f2b96;">
+        <div style="display: flex; gap: 25px; flex-wrap: wrap; align-items: center;">
+            <span><i class="fas fa-hashtag" style="color: #3f2b96;"></i> Voucher: <strong>@Model.VoucherNo</strong></span>
+            <span><i class="fas fa-user" style="color: #3f2b96;"></i> Created by: <strong>@(Model.AuditId ?? "SYSTEM")</strong></span>
+            <span><i class="fas fa-calendar" style="color: #3f2b96;"></i> Created: <strong>@(Model.AuditDate.ToString("dd/MM/yyyy HH:mm"))</strong></span>
+            @if (Model.Posted)
+            {
+                <span><i class="fas fa-check-circle" style="color: #28a745;"></i> Posted: <strong>@(Model.PostedDate.ToString("dd/MM/yyyy HH:mm"))</strong></span>
+            }
+            <span><i class="fas fa-building" style="color: #3f2b96;"></i> Company: <strong>@ViewBag.CompanyCode</strong></span>
+        </div>
+    </div>
+}
+    
+    
+
+<style>
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background-color: #007bff; color: white; }
+    .btn-success { background-color: #28a745; color: white; }
+    .btn-danger { background-color: #dc3545; color: white; }
+    .btn-info { background-color: #17a2b8; color: white; }
+    .btn-secondary { background-color: #6c757d; color: white; }
+    .btn-sm { padding: 4px 8px; font-size: 12px; }
+    .form-control { padding: 8px; border: 1px solid #ced4da; border-radius: 4px; width: 100%; }
+    .form-control:focus { border-color: #3f2b96; outline: none; box-shadow: 0 0 0 0.2rem rgba(63,43,150,0.25); }
+    .form-control:disabled { background-color: #e9ecef; opacity: 0.8; }
+    .text-right { text-align: right; }
+    #journalTable td { padding: 8px; vertical-align: middle; }
+    #transactionRecords td { padding: 10px; vertical-align: middle; }
+    #transactionRecords tr:hover { background-color: #f8f9fa; }
+    .alert { padding: 12px 20px; border-radius: 4px; margin-bottom: 20px; }
+    .alert-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .bg-secondary { background-color: #6c757d; color: white; }
+    .bg-success { background-color: #28a745; color: white; }
+    .bg-warning { background-color: #ffc107; color: black; }
+</style>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // Check if journal is posted
+        var isPosted = @Model.Posted.ToString().ToLower();
+        
+        if (!isPosted) {
+            // Calculate totals on page load
+            calculateTotals();
+
+            // Initialize all rows
+            $('#journalRows tr').each(function() {
+                initializeRow($(this));
+            });
+
+            // Add new row
+            $('#addRow').click(function() {
+                var newRow = $('#journalRows tr:first').clone();
+                newRow.find('input, select').val('');
+                newRow.find('.account-name').val('');
+                newRow.find('.debit').val('0.00');
+                newRow.find('.credit').val('0.00');
+                newRow.find('select').prop('selectedIndex', 0);
+                newRow.find('option').removeAttr('selected');
+                $('#journalRows').append(newRow);
+                initializeRow(newRow);
+            });
+
+            // Remove row
+            $(document).on('click', '.remove-row', function() {
+                if ($('#journalRows tr').length > 1) {
+                    $(this).closest('tr').remove();
+                    calculateTotals();
+                } else {
+                    alert('At least one journal line is required.');
+                }
+            });
+
+            // Account selection change
+            $(document).on('change', '.account-select', function() {
+                var row = $(this).closest('tr');
+                var selected = $(this).find('option:selected');
+                var accountName = selected.data('name');
+                row.find('.account-name').val(accountName);
+            });
+
+            // Calculate on debit/credit change
+            $(document).on('input', '.debit, .credit', function() {
+                var row = $(this).closest('tr');
+                var debit = parseFloat(row.find('.debit').val()) || 0;
+                var credit = parseFloat(row.find('.credit').val()) || 0;
+                
+                if ($(this).hasClass('debit') && debit > 0) {
+                    row.find('.credit').val('0.00');
+                }
+                if ($(this).hasClass('credit') && credit > 0) {
+                    row.find('.debit').val('0.00');
+                }
+                
+                calculateTotals();
+            });
+
+            // Save Draft
+            $('#saveDraft').click(function() {
+                saveJournal(false);
+            });
+
+            // Save & Post
+            $('#savePost').click(function() {
+                saveJournal(true);
+            });
+        }
+
+        function initializeRow(row) {
+            row.find('.debit, .credit').off('input').on('input', function() {
+                var debit = parseFloat(row.find('.debit').val()) || 0;
+                var credit = parseFloat(row.find('.credit').val()) || 0;
+                
+                if (debit > 0 && credit > 0) {
+                    if ($(this).hasClass('debit')) {
+                        row.find('.credit').val('0.00');
+                    } else {
+                        row.find('.debit').val('0.00');
+                    }
+                }
+                calculateTotals();
+            });
+        }
+
+        function calculateTotals() {
+            var totalDebit = 0;
+            var totalCredit = 0;
+            
+            $('#journalRows tr').each(function() {
+                totalDebit += parseFloat($(this).find('.debit').val()) || 0;
+                totalCredit += parseFloat($(this).find('.credit').val()) || 0;
+            });
+            
+            $('#totalDebit').text(totalDebit.toFixed(2));
+            $('#totalCredit').text(totalCredit.toFixed(2));
+            
+            var difference = totalDebit - totalCredit;
+            $('#difference').text(difference.toFixed(2));
+            
+            if (Math.abs(difference) < 0.01) {
+                $('#difference').css('color', '#28a745');
+            } else {
+                $('#difference').css('color', '#dc3545');
+            }
+        }
+
+        function saveJournal(postImmediately) {
+            var details = [];
+            var isValid = true;
+            
+            $('#journalRows tr').each(function() {
+                var row = $(this);
+                var accountNo = row.find('.account-select').val();
+                var accountName = row.find('.account-name').val();
+                var narration = row.find('.narration').val();
+                var shareType = row.find('.share-type').val();
+                var debit = parseFloat(row.find('.debit').val()) || 0;
+                var credit = parseFloat(row.find('.credit').val()) || 0;
+                
+                if (!accountNo) {
+                    isValid = false;
+                    alert('Please select account for all rows.');
+                    return false;
+                }
+                
+                if (debit === 0 && credit === 0) {
+                    isValid = false;
+                    alert('Each line must have either Debit or Credit amount.');
+                    return false;
+                }
+                
+                details.push({
+                    accountNo: accountNo,
+                    accountName: accountName,
+                    narration: narration,
+                    shareType: shareType,
+                    debit: debit,
+                    credit: credit
+                });
+            });
+            
+            if (!isValid) return;
+            
+            var totalDebit = parseFloat($('#totalDebit').text());
+            var totalCredit = parseFloat($('#totalCredit').text());
+            
+            if (Math.abs(totalDebit - totalCredit) > 0.01) {
+                alert('Journal is not balanced! Debits must equal Credits.');
+                return;
+            }
+            
+            var formData = {
+                voucherNo: $('#VoucherNo').val(),
+                voucherDate: $('#VoucherDate').val(),
+                description: $('#Description').val(),
+                memberNo: $('#MemberNo').val(),
+                loanNo: $('#LoanNo').val(),
+                companyCode: $('#CompanyCode').val(),
+                details: details
+            };
+            
+            $.ajax({
+                url: '/Journal/Save',
+                type: 'POST',
+                data: JSON.stringify(formData),
+                contentType: 'application/json',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        if (postImmediately) {
+                            postJournal(response.voucherNo);
+                        } else {
+                            alert('Journal saved successfully! Voucher No: ' + response.voucherNo);
+                            window.location.href = '/Journal/Edit?voucherNo=' + encodeURIComponent(response.voucherNo);
+                        }
+                    } else {
+                        alert(response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Error saving journal: ' + error);
+                }
+            });
+        }
+                      function postJournal(voucherNo) {
+            // Show loading indicator
+            var postBtn = $('#savePost');
+            var originalText = postBtn.html();
+            postBtn.html('<i class="fas fa-spinner fa-spin"></i> Posting...').prop('disabled', true);
+
+               $.ajax({
+        url: '/Journal/Post/' + voucherNo,
+        type: 'POST',
+        headers: {
+            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+        },
+                success: function(response) {
+                    if (response.success) {
+                        alert('Journal posted successfully!\n' +
+                              'Voucher: ' + response.voucherNo + '\n' +
+                              'Transaction No: ' + response.transactionNo + '\n' +
+                              'Debit: ' + response.totalDebit.toFixed(2) + '\n' +
+                              'Credit: ' + response.totalCredit.toFixed(2));
+                        window.location.href = '/Journal/View?voucherNo=' + encodeURIComponent(voucherNo);
+                    } else {
+                        alert('Error: ' + response.message);
+                        postBtn.html(originalText).prop('disabled', false);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Post error:', xhr.responseText);
+                    try {
+                        var response = JSON.parse(xhr.responseText);
+                        alert('Error posting journal: ' + (response.message || error));
+                    } catch {
+                        alert('Error posting journal: ' + error);
+                    }
+                    postBtn.html(originalText).prop('disabled', false);
+                }
+            });
+        }
+    });
+</script>

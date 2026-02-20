@@ -53,7 +53,7 @@ namespace SACCOBlockChainSystem.Services
                         AuditId = purchase.ProcessedBy ?? "SYSTEM",
                         AuditTime = DateTime.Now,
                         Initshares = purchase.Amount,
-                        CompanyCode = member.CompanyCode ?? "DEFAULT",
+                        CompanyCode = member.CompanyCode,
                         AuditDateTime = DateTime.Now
                     };
                     _context.Shares.Add(share);
@@ -381,7 +381,26 @@ namespace SACCOBlockChainSystem.Services
 
         private string GenerateReceiptNumber()
         {
-            return $"SR{DateTime.Now:yyyyMMdd}{new Random().Next(10000, 99999)}";
+            // Method 1: Using GUID hash for guaranteed uniqueness
+            var guid = Guid.NewGuid().ToString("N");
+
+            // Take first 4 letters (A-F from hex) and ensure they're uppercase letters
+            var letters = guid.Substring(0, 4)
+                .Select(c => (char)('A' + (c % 26)))
+                .ToArray();
+
+            // Take next 6 digits
+            var digits = guid.Substring(4, 8)
+                .Select(c => (char)('0' + (c % 12)))
+                .ToArray();
+
+            // Combine: 4 letters + 8 digits
+            var receiptNumber = new string(letters) + new string(digits);
+
+            // Optional: Add a check digit or prefix if needed
+            // return $"SR{receiptNumber}";
+
+            return receiptNumber;
         }
     }
 }

@@ -135,9 +135,11 @@ public partial class Member
 
     public string? ProfileString { get; set; }
 
+    [NotMapped]
+    public dynamic? FullName { get; set; }
+    [NotMapped]
+    public string? RegistrationType { get; set; }
+
     public DateTime? AuditDateTime { get; set; }
     public string? BlockchainTxId { get; set; }
-
-    [NotMapped]
-    public dynamic FullName { get; internal set; }
 }

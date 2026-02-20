@@ -34,6 +34,8 @@ namespace SACCOBlockChainSystem.Data
         public DbSet<WicciClient> WicciClients { get; set; }
         public DbSet<Wallet> Wallets { get; set; }
         public DbSet<MemberNumberCounter> MemberNumberCounters { get; set; }
+        public DbSet<GlSetup> GlSetup { get; set; }
+        public DbSet<Journal> Journals { get; set; }
 
         // NEW BLOCKCHAIN TABLES
         public DbSet<Block> Blocks { get; set; }
