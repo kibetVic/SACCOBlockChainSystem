@@ -501,158 +501,71 @@
 
 
 
-                                <!-- ADMINISTRATION (Only for Admins) -->
-                                @if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin"))
-                                {
+                        <!-- ADMINISTRATION (Only for Admins) -->
+                        @if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin"))
+                        {
+                            <li class="nav-item">
+                                <a href="#" class="nav-link">
+                                    <i class="nav-icon bi bi-gear-fill"></i>
+                                    <p>
+                                        Administration
+                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview">
                                     <li class="nav-item">
-                                        <a href="#" class="nav-link">
-                                            <i class="nav-icon bi bi-gear-fill"></i>
-                                            <p>
-                                                Administration
-                                                <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                            </p>
+                                        <a asp-controller="Admin" asp-action="Users" class="nav-link">
+                                            <i class="nav-icon bi bi-people"></i>
+                                            <p>User Management</p>
                                         </a>
-                                        <ul class="nav nav-treeview">
-                                            <li class="nav-item">
-                                                <a asp-controller="Admin" asp-action="Users" class="nav-link">
-                                                    <i class="nav-icon bi bi-people"></i>
-                                                    <p>User Management</p>
-                                                </a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a asp-controller="Admin" asp-action="Settings" class="nav-link">
-                                                    <i class="nav-icon bi bi-sliders"></i>
-                                                    <p>System Settings</p>
-                                                </a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a asp-controller="Admin" asp-action="Backup" class="nav-link">
-                                                    <i class="nav-icon bi bi-hdd"></i>
-                                                    <p>Backup & Restore</p>
-                                                </a>
-                                            </li>
-                                        </ul>
                                     </li>
-                                }
+                                    <li class="nav-item">
+                                        <a asp-controller="Admin" asp-action="Settings" class="nav-link">
+                                            <i class="nav-icon bi bi-sliders"></i>
+                                            <p>System Settings</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="Admin" asp-action="Backup" class="nav-link">
+                                            <i class="nav-icon bi bi-hdd"></i>
+                                            <p>Backup & Restore</p>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                        }
 
-                                <!-- HELP & SUPPORT -->
-                                <li class="nav-item">
-                                    <a href="#" class="nav-link">
-                                        <i class="nav-icon bi bi-question-circle"></i>
-                                        <p>
-                                            Help & Support
-                                            <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                        </p>
-                                    </a>
-                                    <ul class="nav nav-treeview">
-                                        <li class="nav-item">
-                                            <a asp-controller="Help" asp-action="FAQ" class="nav-link">
-                                                <i class="nav-icon bi bi-question-square"></i>
-                                                <p>FAQ & Help</p>
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a asp-controller="Contact" asp-action="Index" class="nav-link">
-                                                <i class="nav-icon bi bi-headset"></i>
-                                                <p>Contact Support</p>
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a asp-controller="About" asp-action="Index" class="nav-link">
-                                                <i class="nav-icon bi bi-info-circle"></i>
-                                                <p>About System</p>
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </li>
-                            </ul>
-
-                            <!-- REPORTS -->
+                        <!-- HELP & SUPPORT -->
                         <li class="nav-item">
                             <a href="#" class="nav-link">
-                                <i class="nav-icon bi bi-bar-chart"></i>
+                                <i class="nav-icon bi bi-question-circle"></i>
                                 <p>
-                                    Reports
+                                    Help & Support
                                     <i class="nav-arrow bi bi-chevron-right float-end"></i>
                                 </p>
                             </a>
                             <ul class="nav nav-treeview">
                                 <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="LoansPerSacco" class="nav-link">
-                                        <i class="nav-icon bi bi-file-earmark-diff"></i>
-                                        <p>Loans Per Sacco</p>
+                                    <a asp-controller="Help" asp-action="FAQ" class="nav-link">
+                                        <i class="nav-icon bi bi-question-square"></i>
+                                        <p>FAQ & Help</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="LoansIssued" class="nav-link">
-                                        <i class="nav-icon bi bi-file-earmark-text"></i>
-                                        <p>Loans Issued</p>
+                                    <a asp-controller="Contact" asp-action="Index" class="nav-link">
+                                        <i class="nav-icon bi bi-headset"></i>
+                                        <p>Contact Support</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="FullyPaidShares" class="nav-link">
-                                        <i class="nav-icon bi bi-check-circle-fill"></i>
-                                        <p>Fully Paid Shares</p>
+                                    <a asp-controller="About" asp-action="Index" class="nav-link">
+                                        <i class="nav-icon bi bi-info-circle"></i>
+                                        <p>About System</p>
                                     </a>
                                 </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="PartiallyPaidShares" class="nav-link">
-                                        <i class="nav-icon bi bi-exclamation-triangle-fill"></i>
-                                        <p>Partially Paid Shares</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="MembersPerSacco" class="nav-link">
-                                        <i class="nav-icon bi bi-building"></i>
-                                        <p>Members Per SACCO</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="WithdrawnMembers" class="nav-link">
-                                        <i class="nav-icon bi bi-person-x-fill"></i>
-                                        <p>Withdrawn Members</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="AgingAnalysis" class="nav-link">
-                                        <i class="nav-icon bi bi-graph-up-arrow"></i>
-                                        <p>Aging Analysis</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="PeriodicRegisteredMembers" class="nav-link">
-                                        <i class="nav-icon bi bi-calendar-range"></i>
-                                        <p>Periodic Registered Members</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="SharesAndLoans" class="nav-link">
-                                        <i class="nav-icon bi bi-pie-chart-fill"></i>
-                                        <p>Shares & Loans Report</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="ActiveMembers" class="nav-link">
-                                        <i class="nav-icon bi bi-people-fill"></i>
-                                        <p>Active Members</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="InactiveMembers" class="nav-link">
-                                        <i class="nav-icon bi bi-person-dash"></i>
-                                        <p>Inactive Members</p>
-                                    </a>
-                                </li>
-
-
-                                @*  <li class="nav-item">
-                            <a asp-controller="Reports" asp-action="MemberStatement" class="nav-link">
-                                <i class="nav-icon bi bi-file-text"></i>
-                                <p>Member Statement</p>
-                            </a>
-                        </li> *@
                             </ul>
                         </li>
+                    </ul>
                 </nav>
                 <!-- Sidebar Footer -->
                 <div class="sidebar-footer text-center p-3">

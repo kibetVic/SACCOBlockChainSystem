@@ -200,7 +200,7 @@ namespace SACCOBlockChainSystem.Controllers
         // POST: /Account/Signup - SIMPLIFIED AND FIXED
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Signup(SignupVm model)
+        public async Task<IActionResult> Signup (SignupVm model)
         {
             // Debug: Log what's being received
             _logger.LogInformation("=== SIGNUP ATTEMPT ===");
@@ -316,25 +316,10 @@ namespace SACCOBlockChainSystem.Controllers
                 TempData["SuccessMessage"] = $"Registration successful! Your account is pending approval for {company.CompanyName}. You will be notified once approved.";
                 return RedirectToAction("Login");
             }
-            catch (DbUpdateException dbEx)
-            {
-                _logger.LogError(dbEx, "Database error during signup");
-                ModelState.AddModelError(string.Empty, "A database error occurred. Please try again.");
-
-                if (dbEx.InnerException != null)
-                {
-                    _logger.LogError($"Inner exception: {dbEx.InnerException.Message}");
-                }
-
-                await LoadCompanies();
-                return View(model);
-            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error during signup");
-                ModelState.AddModelError(string.Empty, "An unexpected error occurred. Please try again.");
-                await LoadCompanies();
-                return View(model);
+                _logger.LogError(ex, "Error during user registration");
+                ModelState.AddModelError(string.Empty, "An error occurred during registration. Please try again.");
             }
         }
 
