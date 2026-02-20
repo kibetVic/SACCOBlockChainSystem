@@ -106,7 +106,7 @@ namespace SACCOBlockChainSystem.Controllers
                 var company = await _context.Companies
                     .FirstOrDefaultAsync(c => c.CompanyCode == user.CompanyCode);
 
-                var companyName = company?.CompanyName;
+                var companyName = company?.CompanyName ?? "Unknown Company";
 
                 // Reset failed attempts on successful login
                 user.FailedAttempts = 0;
@@ -120,8 +120,8 @@ namespace SACCOBlockChainSystem.Controllers
                     new Claim("FullName", user.UserName ?? string.Empty),
                     new Claim("Email", user.Email ?? string.Empty),
                     new Claim("UserId", user.UserId.ToString()),
-                    new Claim("CompanyCode", user.CompanyCode),
-                    new Claim("CompanyName", companyName), 
+                    new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                    new Claim("CompanyName", companyName), // ADD COMPANY NAME CLAIM
                     new Claim("UserLoginId", user.UserLoginId ?? string.Empty)
                 };
 
@@ -200,7 +200,7 @@ namespace SACCOBlockChainSystem.Controllers
         // POST: /Account/Signup - SIMPLIFIED AND FIXED
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Signup (SignupVm model)
+        public async Task<IActionResult> Signup(SignupVm model)
         {
             // Debug: Log what's being received
             _logger.LogInformation("=== SIGNUP ATTEMPT ===");
@@ -300,8 +300,8 @@ namespace SACCOBlockChainSystem.Controllers
                     PassExpire = "No",
                     UserGroup = string.IsNullOrEmpty(model.UserGroup) ? "Member" : model.UserGroup,
                     Cigcode = company.Cigcode,
-                    CompanyCode = (string)model.CompanyCode,
-                    Branchcode = (string)(company.Cigcode ?? model.CompanyCode),
+                    CompanyCode = model.CompanyCode,
+                    Branchcode = company.Cigcode ?? model.CompanyCode,
                     Superuser = 0,
                     Authorize = false,
                     Count = 0
@@ -316,12 +316,72 @@ namespace SACCOBlockChainSystem.Controllers
                 TempData["SuccessMessage"] = $"Registration successful! Your account is pending approval for {company.CompanyName}. You will be notified once approved.";
                 return RedirectToAction("Login");
             }
+            catch (DbUpdateException dbEx)
+            {
+                _logger.LogError(dbEx, "Database error during signup");
+                ModelState.AddModelError(string.Empty, "A database error occurred. Please try again.");
+
+                if (dbEx.InnerException != null)
+                {
+                    _logger.LogError($"Inner exception: {dbEx.InnerException.Message}");
+                }
+
+                await LoadCompanies();
+                return View(model);
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during user registration");
-                ModelState.AddModelError(string.Empty, "An error occurred during registration. Please try again.");
+                _logger.LogError(ex, "Unexpected error during signup");
+                ModelState.AddModelError(string.Empty, "An unexpected error occurred. Please try again.");
+                await LoadCompanies();
+                return View(model);
             }
         }
+
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<IActionResult> TestSignup()
+        {
+            try
+            {
+                // Create a test user directly
+                var testUser = new UserAccounts1
+                {
+                    UserName = "testuser_" + DateTime.Now.Ticks,
+                    UserLoginId = "TEST" + DateTime.Now.ToString("yyyyMMddHHmmss"),
+                    Password = HashPassword("Test123!"),
+                    Email = "test@example.com",
+                    Phone = "1234567890",
+                    PhoneNo = "1234567890",
+                    MemberNo = "TEST001",
+                    Department = "Test",
+                    DateCreated = DateTime.Now,
+                    Status = "Pending",
+                    Userstatus = "Pending",
+                    ApprovalStatus = "Pending",
+                    FailedAttempts = 0,
+                    IsLocked = false,
+                    PasswordStatus = "Active",
+                    PassExpire = "No",
+                    UserGroup = "Member",
+                    CompanyCode = "001", // Use an existing company code from your database
+                    Branchcode = "001",
+                    Superuser = 0,
+                    Authorize = false,
+                    Count = 0
+                };
+
+                _context.UserAccounts1.Add(testUser);
+                var result = await _context.SaveChangesAsync();
+
+                return Content($"Test user created successfully! Rows affected: {result}, UserId: {testUser.UserId}");
+            }
+            catch (Exception ex)
+            {
+                return Content($"Error: {ex.Message}\n\n{ex.StackTrace}");
+            }
+        }
+
 
         // Helper method to load companies
         private async Task LoadCompanies()
@@ -382,7 +442,7 @@ namespace SACCOBlockChainSystem.Controllers
                 DateCreated = user.DateCreated
             };
 
-            ViewBag.CompanyName = company?.CompanyName;
+            ViewBag.CompanyName = company?.CompanyName ?? "Unknown Company";
             ViewBag.CompanyCode = user.CompanyCode;
 
             return View(profile);
@@ -439,8 +499,8 @@ namespace SACCOBlockChainSystem.Controllers
                     new Claim("FullName", user.UserName ?? string.Empty),
                     new Claim("Email", user.Email ?? string.Empty),
                     new Claim("UserId", user.UserId.ToString()),
-                    new Claim("CompanyCode", user.CompanyCode),
-                    new Claim("CompanyName", newCompany.CompanyName),
+                    new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                    new Claim("CompanyName", newCompany.CompanyName ?? "Unknown Company"),
                 };
 
                 if (!string.IsNullOrEmpty(user.UserGroup))
