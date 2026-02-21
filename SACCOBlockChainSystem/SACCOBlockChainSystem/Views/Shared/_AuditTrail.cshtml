@@ -1,0 +1,91 @@
+﻿@model List<SACCOBlockChainSystem.Models.LoanAuditTrail>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Audit Trail</h5>
+    </div>
+    <div class="card-body p-0">
+        @if (Model.Any())
+        {
+            <div class="timeline p-4">
+                @foreach (var audit in Model.OrderByDescending(a => a.PerformedDate))
+                {
+                    <div class="timeline-item">
+                        <div class="timeline-badge bg-@(GetAuditColor(audit.Action))">
+                            <i class="bi bi-@(GetAuditIcon(audit.Action))"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <div class="d-flex justify-content-between">
+                                <h6 class="mb-1">@audit.Action</h6>
+                                <small class="text-muted">@audit.PerformedDate.ToString("dd MMM yyyy HH:mm")</small>
+                            </div>
+                            <p class="mb-1">@audit.Description</p>
+                            <small class="text-muted">
+                                By: @audit.PerformedBy (@audit.PerformedByRole)
+                                @if (!string.IsNullOrEmpty(audit.PreviousStatus) && !string.IsNullOrEmpty(audit.NewStatus))
+                                {
+                                    <span>
+                                        <br>Status: @audit.PreviousStatus → @audit.NewStatus
+                                    </span>
+                                }
+                            </small>
+                            @if (!string.IsNullOrEmpty(audit.BlockchainTxId))
+                            {
+                                <div class="mt-2">
+                                    <span class="badge bg-light text-dark">
+                                        <i class="bi bi-link me-1"></i> TX: @audit.BlockchainTxId.Substring(0, 20)...
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-clock-history fs-1 text-muted"></i>
+                <p class="text-muted mt-3">No audit records found</p>
+            </div>
+        }
+    </div>
+</div>
+
+@functions {
+    string GetAuditColor(string action)
+    {
+        return action switch
+        {
+            "CREATE" => "success",
+            "STATUS_CHANGE" => "info",
+            "GUARANTOR_ASSIGNED" => "primary",
+            "GUARANTOR_APPROVED" => "success",
+            "GUARANTOR_REJECTED" => "danger",
+            "APPRAISAL_COMPLETED" => "warning",
+            "APPROVAL_PROCESSED" => "success",
+            "DISBURSEMENT_COMPLETED" => "success",
+            "REPAYMENT_PROCESSED" => "primary",
+            "REPAYMENT_REVERSED" => "danger",
+            _ => "secondary"
+        };
+    }
+
+    string GetAuditIcon(string action)
+    {
+        return action switch
+        {
+            "CREATE" => "file-plus",
+            "STATUS_CHANGE" => "arrow-repeat",
+            "GUARANTOR_ASSIGNED" => "person-plus",
+            "GUARANTOR_APPROVED" => "person-check",
+            "GUARANTOR_REJECTED" => "person-x",
+            "APPRAISAL_COMPLETED" => "clipboard-check",
+            "APPROVAL_PROCESSED" => "check2-circle",
+            "DISBURSEMENT_COMPLETED" => "cash-stack",
+            "REPAYMENT_PROCESSED" => "arrow-left-right",
+            "REPAYMENT_REVERSED" => "arrow-return-left",
+            _ => "info-circle"
+        };
+    }
+}

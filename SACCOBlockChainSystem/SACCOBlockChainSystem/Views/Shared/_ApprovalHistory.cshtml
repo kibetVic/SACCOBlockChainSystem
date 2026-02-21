@@ -1,0 +1,82 @@
+﻿@model List<SACCOBlockChainSystem.Models.LoanApproval>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Approval History</h5>
+    </div>
+    <div class="card-body p-0">
+        @if (Model.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Level</th>
+                            <th>Approver</th>
+                            <th>Role</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Amount</th>
+                            <th>Interest</th>
+                            <th>Period</th>
+                            <th>Comments</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var approval in Model.OrderBy(a => a.ApprovalLevel))
+                        {
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary">Level @approval.ApprovalLevel</span>
+                                    @if (approval.IsFinalApproval)
+                                    {
+                                        <span class="badge bg-primary ms-1">Final</span>
+                                    }
+                                </td>
+                                <td>
+                                    <strong>@approval.ApprovedBy</strong>
+                                </td>
+                                <td>@approval.ApprovalRole</td>
+                                <td>@approval.ApprovalDate.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>
+                                    @{
+                                        var statusClass = approval.ApprovalStatus switch
+                                        {
+                                                            "Approved" => "success",
+                                                            "Rejected" => "danger",
+                                                            "Pending" => "warning",
+                                            _ => "secondary"
+                                        };
+                                    }
+                                    <span class="badge bg-@statusClass">@approval.ApprovalStatus</span>
+                                </td>
+                                <td class="fw-bold">KES @approval.ApprovedAmount.ToString("N2")</td>
+                                <td>@(approval.ApprovedInterestRate * 100)%</td>
+                                <td>@approval.ApprovedPeriod months</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(approval.ApprovalComments))
+                                    {
+                                        <span title="@approval.ApprovalComments">
+                                            <i class="bi bi-chat-dots text-muted"></i>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-check2-circle fs-1 text-muted"></i>
+                <p class="text-muted mt-3">No approval records found</p>
+            </div>
+        }
+    </div>
+</div>

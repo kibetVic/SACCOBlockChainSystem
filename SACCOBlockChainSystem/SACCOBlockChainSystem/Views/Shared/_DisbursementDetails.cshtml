@@ -1,0 +1,158 @@
+﻿@model SACCOBlockChainSystem.Models.LoanDisbursement
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Disbursement Details</h5>
+    </div>
+    <div class="card-body">
+        @if (Model != null)
+        {
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-3">Disbursement Information</h6>
+                    <div class="info-row">
+                        <span class="text-muted">Disbursement No:</span>
+                        <span class="fw-bold">@Model.DisbursementNo</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Disbursement Date:</span>
+                        <span>@Model.DisbursementDate.ToString("dd MMM yyyy")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Disbursed By:</span>
+                        <span>@Model.DisbursedBy</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Authorized By:</span>
+                        <span>@Model.AuthorizedBy</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Authorization Date:</span>
+                        <span>@Model.AuthorizationDate?.ToString("dd MMM yyyy HH:mm")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Status:</span>
+                        <span class="badge bg-success">@Model.Status</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-3">Amount Details</h6>
+                    <div class="info-row">
+                        <span class="text-muted">Disbursed Amount:</span>
+                        <span class="fw-bold">KES @Model.DisbursedAmount.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Processing Fee:</span>
+                        <span>KES @Model.ProcessingFee.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Insurance Fee:</span>
+                        <span>KES @Model.InsuranceFee.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Legal Fees:</span>
+                        <span>KES @Model.LegalFees.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Other Fees:</span>
+                        <span>KES @Model.OtherFees.ToString("N2")</span>
+                    </div>
+                    <div class="info-row border-top pt-2 mt-2">
+                        <span class="text-muted fw-bold">Total Deductions:</span>
+                        <span class="fw-bold text-danger">KES @Model.TotalDeductions.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted fw-bold">Net Amount:</span>
+                        <span class="fw-bold text-success">KES @Model.NetAmount.ToString("N2")</span>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-3">Disbursement Method</h6>
+                    <div class="info-row">
+                        <span class="text-muted">Method:</span>
+                        <span>
+                            @{
+                                var methodIcon = Model.DisbursementMethod?.ToLower() switch
+                                {
+                                                "bank" => "bank2",
+                                                "cheque" => "file-text",
+                                                "mobile" => "phone",
+                                                "cash" => "cash",
+                                    _ => "question-circle"
+                                };
+                            }
+                            <i class="bi bi-@methodIcon me-1"></i>@Model.DisbursementMethod
+                        </span>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.BankName))
+                    {
+                        <div class="info-row">
+                            <span class="text-muted">Bank Name:</span>
+                            <span>@Model.BankName</span>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.BankAccountNo))
+                    {
+                        <div class="info-row">
+                            <span class="text-muted">Account Number:</span>
+                            <span>@Model.BankAccountNo</span>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.ChequeNo))
+                    {
+                        <div class="info-row">
+                            <span class="text-muted">Cheque Number:</span>
+                            <span>@Model.ChequeNo</span>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.MobileNo))
+                    {
+                        <div class="info-row">
+                            <span class="text-muted">Mobile Number:</span>
+                            <span>@Model.MobileNo</span>
+                        </div>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(Model.Remarks))
+                {
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Remarks</h6>
+                        <div class="bg-light p-3 rounded">
+                            @Model.Remarks
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(Model.BlockchainTxId))
+            {
+                <div class="mt-3 p-3 bg-success bg-opacity-10 rounded">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-shield-check fs-4 text-success me-3"></i>
+                        <div>
+                            <strong class="text-success">Blockchain Verified</strong>
+                            <p class="text-muted small mb-0">Transaction ID: @Model.BlockchainTxId</p>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-cash-stack fs-1 text-muted"></i>
+                <p class="text-muted mt-3">Loan has not been disbursed yet</p>
+            </div>
+        }
+    </div>
+</div>

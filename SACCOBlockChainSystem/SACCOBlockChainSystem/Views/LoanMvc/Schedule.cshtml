@@ -1,0 +1,240 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.LoanScheduleDTO>
+@{
+    ViewData["Title"] = "Loan Repayment Schedule";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var loan = ViewBag.Loan as SACCOBlockChainSystem.Models.Loan;
+}
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <a asp-action="Details" asp-route-loanNo="@loan?.LoanNo" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i> Back to Loan
+                </a>
+                <h2 class="page-title mb-0">
+                    <i class="bi bi-table me-2"></i>Repayment Schedule
+                </h2>
+            </div>
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-primary" onclick="exportSchedule()">
+                    <i class="bi bi-download me-2"></i>Export
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="printSchedule()">
+                    <i class="bi bi-printer me-2"></i>Print
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule Summary -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h6 class="text-white-50">Total Principal</h6>
+                <h3 class="mb-0">KES @ViewBag.TotalPrincipal?.ToString("N2")</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h6 class="text-white-50">Total Interest</h6>
+                <h3 class="mb-0">KES @ViewBag.TotalInterest?.ToString("N2")</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h6 class="text-white-50">Total Repayable</h6>
+                <h3 class="mb-0">KES @ViewBag.TotalRepayable?.ToString("N2")</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <h6 class="text-white-50">Outstanding Balance</h6>
+                <h3 class="mb-0">KES @ViewBag.TotalOutstanding?.ToString("N2")</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Amortization Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Amortization Schedule</h5>
+                    <span class="badge bg-info">@Model.Count Installments</span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0" id="scheduleTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Due Date</th>
+                                <th class="text-end">Principal</th>
+                                <th class="text-end">Interest</th>
+                                <th class="text-end">Total</th>
+                                <th class="text-end">Paid</th>
+                                <th class="text-end">Outstanding</th>
+                                <th class="text-end">Penalty</th>
+                                <th>Status</th>
+                                <th>Paid Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var installment in Model)
+                            {
+                                <tr class="@(installment.Status == "Overdue" ? "table-danger" : installment.Status == "Paid" ? "table-success" : "")">
+                                    <td><strong>@installment.InstallmentNo</strong></td>
+                                    <td>
+                                        @installment.DueDate.ToString("dd/MM/yyyy")
+                                        @if (installment.DueDate < DateTime.Now && installment.Status != "Paid")
+                                        {
+                                            <span class="badge bg-danger ms-1">Overdue</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">@installment.PrincipalAmount.ToString("N2")</td>
+                                    <td class="text-end">@installment.InterestAmount.ToString("N2")</td>
+                                    <td class="text-end fw-bold">@installment.TotalInstallment.ToString("N2")</td>
+                                    <td class="text-end text-success">@installment.PaidAmount.ToString("N2")</td>
+                                    <td class="text-end @(installment.OutstandingAmount > 0 ? "text-danger fw-bold" : "")">
+                                        @installment.OutstandingAmount.ToString("N2")
+                                    </td>
+                                    <td class="text-end text-danger">@installment.PenaltyAmount.ToString("N2")</td>
+                                    <td>
+                                        @await Html.PartialAsync("_ScheduleStatusBadge", installment.Status)
+                                    </td>
+                                    <td>
+                                        @(installment.PaidDate?.ToString("dd/MM/yyyy") ?? "-")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th colspan="2">Totals</th>
+                                <th class="text-end">@Model.Sum(i => i.PrincipalAmount).ToString("N2")</th>
+                                <th class="text-end">@Model.Sum(i => i.InterestAmount).ToString("N2")</th>
+                                <th class="text-end">@Model.Sum(i => i.TotalInstallment).ToString("N2")</th>
+                                <th class="text-end">@Model.Sum(i => i.PaidAmount).ToString("N2")</th>
+                                <th class="text-end">@Model.Sum(i => i.OutstandingAmount).ToString("N2")</th>
+                                <th class="text-end">@Model.Sum(i => i.PenaltyAmount).ToString("N2")</th>
+                                <th colspan="2"></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Chart -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Payment Projection</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="paymentChart" style="height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable
+            $('#scheduleTable').DataTable({
+                pageLength: 25,
+                order: [[0, 'asc']],
+                language: {
+                    search: "Filter:",
+                    lengthMenu: "Show _MENU_ entries"
+                }
+            });
+
+            // Payment Chart
+            var ctx = document.getElementById('paymentChart').getContext('2d');
+            var installments = @Html.Raw(Json.Serialize(Model.Select(i => i.InstallmentNo)));
+            var principal = @Html.Raw(Json.Serialize(Model.Select(i => i.PrincipalAmount)));
+            var interest = @Html.Raw(Json.Serialize(Model.Select(i => i.InterestAmount)));
+            var outstanding = @Html.Raw(Json.Serialize(Model.Select(i => i.OutstandingAmount)));
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: installments.map(i => 'Month ' + i),
+                    datasets: [{
+                        label: 'Outstanding Balance',
+                        data: outstanding,
+                        borderColor: '#ffc107',
+                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        fill: true
+                    }, {
+                        label: 'Principal',
+                        data: principal,
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        fill: true
+                    }, {
+                        label: 'Interest',
+                        data: interest,
+                        borderColor: '#17a2b8',
+                        backgroundColor: 'rgba(23, 162, 184, 0.1)',
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return 'KES ' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': KES ' + context.raw.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+
+        function exportSchedule() {
+            window.location.href = '@Url.Action("ExportSchedule", new { loanNo = loan?.LoanNo })';
+        }
+
+        function printSchedule() {
+            var printContents = document.getElementById('scheduleTable').outerHTML;
+            var originalContents = document.body.innerHTML;
+            document.body.innerHTML = printContents;
+            window.print();
+            document.body.innerHTML = originalContents;
+            location.reload();
+        }
+    </script>
+}

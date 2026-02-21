@@ -1,0 +1,243 @@
+﻿@using SACCOBlockChainSystem.Models.DTOs
+@model ContributionDTO
+@{
+    ViewData["Title"] = "Add Contribution";
+    var shareTypes = ViewBag.ShareTypes as List<ShareTypeDTO>;
+    var companyCode = ViewBag.CompanyCode as string;
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4>
+                        <i class="fas fa-hand-holding-usd"></i> Add New Contribution
+                    </h4>
+                </div>
+
+                <div class="card-body">
+                    <!-- Display validation summary -->
+                    @if (!ViewData.ModelState.IsValid)
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <h5 class="alert-heading">
+                                <i class="fas fa-exclamation-triangle"></i> Please fix the following errors:
+                            </h5>
+                            <ul class="mb-0">
+                                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                                {
+                                    <li>@error.ErrorMessage</li>
+                                }
+                            </ul>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    }
+
+                    <form asp-action="Add" method="post">
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden" asp-for="CompanyCode" value="@companyCode" />
+                        <input type="hidden" asp-for="CreatedBy" />
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="MemberNo">Member Number *</label>
+                                    <div class="input-group">
+                                        <input asp-for="MemberNo" class="form-control" required
+                                               placeholder="Enter member number or search..." />
+                                        <button type="button" class="btn btn-outline-secondary"
+                                                onclick="searchMember()">
+                                            <i class="fas fa-search"></i> Search
+                                        </button>
+                                    </div>
+                                    <small class="text-muted">Enter member number and click search to verify</small>
+                                    <div id="memberInfo" class="mt-2" style="display: none;">
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-user-check"></i>
+                                            <span id="memberName"></span>
+                                        </div>
+                                    </div>
+                                    <span asp-validation-for="MemberNo" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="TransactionDate">Transaction Date *</label>
+                                    <input asp-for="TransactionDate" type="date" class="form-control" required
+                                           value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                                    <span asp-validation-for="TransactionDate" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="SharesCode">Share Type *</label>
+                                    <select asp-for="SharesCode" class="form-control" required>
+                                        <option value="">Select Share Type</option>
+                                        @foreach (var shareType in shareTypes)
+                                        {
+                                            <option value="@shareType.SharesCode"
+                                                    data-min="@shareType.MinAmount"
+                                                    data-max="@shareType.MaxAmount">
+                                                @shareType.SharesType (@shareType.SharesCode)
+                                                @if (shareType.IsMainShares)
+                                                {
+                                                    <text> - Main Shares</text>
+                                                }
+                                            </option>
+                                        }
+                                    </select>
+                                    <small class="text-muted" id="shareTypeInfo"></small>
+                                    <span asp-validation-for="SharesCode" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="Amount">Amount (KES) *</label>
+                                    <input asp-for="Amount" type="number" step="0.01" class="form-control"
+                                           required placeholder="Enter amount" />
+                                    <div id="amountValidation" class="text-danger mt-1"></div>
+                                    <span asp-validation-for="Amount" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="ReceiptNo">Receipt Number</label>
+                                    <input asp-for="ReceiptNo" class="form-control"
+                                           placeholder="Auto-generated if empty" />
+                                    <small class="text-muted">Leave empty for auto-generation</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="PaymentMethod">Payment Method</label>
+                                    <select asp-for="PaymentMethod" class="form-control">
+                                        <option value="CASH">Cash</option>
+                                        <option value="CHEQUE">Cheque</option>
+                                        <option value="BANK_TRANSFER">Bank Transfer</option>
+                                        <option value="MPESA">M-Pesa</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="ReferenceNo">Reference Number</label>
+                                    <input asp-for="ReferenceNo" class="form-control"
+                                           placeholder="Cheque No, M-Pesa Code, etc." />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group mb-3">
+                                    <label asp-for="Remarks">Remarks</label>
+                                    <textarea asp-for="Remarks" class="form-control" rows="3"
+                                              placeholder="Enter any additional information..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group mt-4">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-check-circle"></i> Add Contribution
+                            </button>
+                            <a asp-action="Index" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="reset" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-redo"></i> Reset
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Search member function
+        async function searchMember() {
+            const memberNo = document.getElementById('MemberNo').value;
+            if (!memberNo) {
+                alert('Please enter a member number');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/Member/${memberNo}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        const member = data.data;
+                        document.getElementById('memberName').textContent =
+                            `Verified: ${member.surname} ${member.otherNames} (ID: ${member.idno})`;
+                        document.getElementById('memberInfo').style.display = 'block';
+                    } else {
+                        alert('Member not found');
+                        document.getElementById('memberInfo').style.display = 'none';
+                    }
+                } else {
+                    alert('Error searching member');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error searching member');
+            }
+        }
+
+        // Share type change handler
+        document.getElementById('SharesCode').addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const minAmount = selectedOption.getAttribute('data-min');
+            const maxAmount = selectedOption.getAttribute('data-max');
+
+            let infoText = `Minimum amount: KES ${parseFloat(minAmount).toLocaleString()}`;
+            if (maxAmount && parseFloat(maxAmount) > 0) {
+                infoText += `, Maximum amount: KES ${parseFloat(maxAmount).toLocaleString()}`;
+            }
+
+            document.getElementById('shareTypeInfo').textContent = infoText;
+        });
+
+        // Amount validation
+        document.getElementById('Amount').addEventListener('input', function() {
+            const amount = parseFloat(this.value);
+            const shareSelect = document.getElementById('SharesCode');
+            const selectedOption = shareSelect.options[shareSelect.selectedIndex];
+
+            if (selectedOption.value) {
+                const minAmount = parseFloat(selectedOption.getAttribute('data-min'));
+                const maxAmount = parseFloat(selectedOption.getAttribute('data-max'));
+
+                const validationDiv = document.getElementById('amountValidation');
+
+                if (amount < minAmount) {
+                    validationDiv.textContent = `Amount cannot be less than KES ${minAmount.toLocaleString()}`;
+                } else if (maxAmount > 0 && amount > maxAmount) {
+                    validationDiv.textContent = `Amount cannot exceed KES ${maxAmount.toLocaleString()}`;
+                } else {
+                    validationDiv.textContent = '';
+                }
+            }
+        });
+
+        // Auto-focus on member number field
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('MemberNo').focus();
+        });
+    </script>
+}

@@ -1,0 +1,244 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanTypeResponseDTO
+
+@{
+    ViewData["Title"] = "Delete Loan Type";
+    var canDelete = ViewBag.CanDelete as bool? ?? false;
+    var usageCount = ViewBag.UsageCount as int? ?? 0;
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3 mb-0 text-gray-800 text-danger">Delete Loan Type</h1>
+            <p class="text-muted">Are you sure you want to delete this loan type?</p>
+        </div>
+        <div class="col-auto">
+            <a asp-action="Index" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow mb-4 border-left-danger">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Delete Confirmation
+                    </h6>
+                </div>
+                <div class="card-body">
+                    @if (!canDelete)
+                    {
+                        <div class="alert alert-warning">
+                            <h5 class="alert-heading">
+                                <i class="fas fa-exclamation-circle"></i> Cannot Delete
+                            </h5>
+                            <p>
+                                This loan type cannot be deleted because it is currently used by
+                                <strong>@usageCount</strong> loan(s).
+                            </p>
+                            <p class="mb-0">
+                                To delete this loan type, you must first reassign or delete all loans
+                                that use this loan type.
+                            </p>
+                        </div>
+
+                        <div class="text-center mt-4">
+                            <a asp-action="Details" asp-route-loanCode="@Model.LoanCode" class="btn btn-info">
+                                <i class="fas fa-eye"></i> View Details
+                            </a>
+                            <a asp-action="Index" class="btn btn-secondary">
+                                <i class="fas fa-list"></i> Back to List
+                            </a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-danger">
+                            <h5 class="alert-heading">
+                                <i class="fas fa-exclamation-triangle"></i> Warning
+                            </h5>
+                            <p>
+                                You are about to permanently delete the loan type
+                                <strong>"@Model.LoanType"</strong> with code <strong>@Model.LoanCode</strong>.
+                            </p>
+                            <p class="mb-0">
+                                This action cannot be undone. All associated data will be permanently removed
+                                from the system.
+                            </p>
+                        </div>
+
+                        <!-- Loan Type Summary -->
+                        <div class="card border-left-warning shadow mb-4">
+                            <div class="card-body">
+                                <h6 class="font-weight-bold text-warning">Loan Type Details</h6>
+                                <table class="table table-sm">
+                                    <tbody>
+                                        <tr>
+                                            <th style="width: 40%">Loan Code</th>
+                                            <td>@Model.LoanCode</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Loan Type Name</th>
+                                            <td>@Model.LoanType</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Loan Product</th>
+                                            <td>@(Model.LoanProduct ?? "-")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Maximum Amount</th>
+                                            <td>
+                                                @if (Model.MaxAmount.HasValue)
+                                                {
+                                                    @Model.MaxAmount.Value.ToString("C")
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No limit</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Interest Rate</th>
+                                            <td>@(Model.Interest ?? "-")</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Created</th>
+                                            <td>@Model.CreatedAt?.ToString("yyyy-MM-dd") by @Model.CreatedBy</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Statistics -->
+                        @if (Model.TotalLoans > 0)
+                        {
+                            <div class="alert alert-info">
+                                <h6 class="alert-heading">Usage Statistics</h6>
+                                <p class="mb-1">
+                                    <i class="fas fa-hand-holding-usd"></i>
+                                    <strong>Total Loans:</strong> @Model.TotalLoans (Active: @Model.ActiveLoans)
+                                </p>
+                                <p class="mb-1">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                    <strong>Total Loan Amount:</strong> @Model.TotalLoanAmount.ToString("C")
+                                </p>
+                                <p class="mb-0">
+                                    <i class="fas fa-history"></i>
+                                    <strong>Created:</strong> @Model.CreatedAt?.ToString("yyyy-MM-dd HH:mm")
+                                </p>
+                            </div>
+                        }
+
+                        <!-- Delete Form -->
+                        <form asp-action="Delete" asp-route-loanCode="@Model.LoanCode" method="post">
+                            @Html.AntiForgeryToken()
+
+                            <div class="form-group">
+                                <label for="confirmationText" class="font-weight-bold">
+                                    Type the loan code to confirm deletion:
+                                </label>
+                                <input type="text" id="confirmationText" class="form-control"
+                                       placeholder="Type '@Model.LoanCode' to confirm"
+                                       oninput="validateConfirmation()" />
+                                <small class="form-text text-muted">
+                                    This is a safety measure to prevent accidental deletion.
+                                </small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="reason" class="font-weight-bold">Reason for deletion (optional):</label>
+                                <textarea id="reason" name="reason" class="form-control" rows="3"
+                                      placeholder="Provide a reason for deleting this loan type..."></textarea>
+                            </div>
+
+                            <div class="form-group text-center">
+                                <button type="submit" id="deleteButton" class="btn btn-danger" disabled>
+                                    <i class="fas fa-trash"></i> Confirm Delete
+                                </button>
+                                <a asp-action="Details" asp-route-loanCode="@Model.LoanCode" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> Cancel
+                                </a>
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar with Important Information -->
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-info-circle"></i> Important Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading">Before Deleting:</h6>
+                        <ul class="mb-0 pl-3">
+                            <li>Ensure no active loans use this loan type</li>
+                            <li>Consider archiving instead of deleting</li>
+                            <li>Notify affected users if necessary</li>
+                            <li>This action will be recorded in the blockchain</li>
+                        </ul>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <h6 class="alert-heading">Consequences:</h6>
+                        <ul class="mb-0 pl-3">
+                            <li>Cannot be recovered once deleted</li>
+                            <li>Historical records will still show this loan type</li>
+                            <li>May affect reporting and analytics</li>
+                        </ul>
+                    </div>
+
+                    @if (canDelete && Model.TotalLoans == 0)
+                    {
+                        <div class="alert alert-success">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-check-circle"></i> Safe to Delete
+                            </h6>
+                            <p class="mb-0">
+                                This loan type has never been used. Deleting it will not affect any loans.
+                            </p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function validateConfirmation() {
+            const confirmationText = document.getElementById('confirmationText');
+            const deleteButton = document.getElementById('deleteButton');
+            const correctCode = '@Model.LoanCode';
+
+            if (confirmationText.value === correctCode) {
+                deleteButton.disabled = false;
+                deleteButton.classList.remove('btn-secondary');
+                deleteButton.classList.add('btn-danger');
+            } else {
+                deleteButton.disabled = true;
+                deleteButton.classList.remove('btn-danger');
+                deleteButton.classList.add('btn-secondary');
+            }
+        }
+
+        // Disable form submission if button is disabled
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const deleteButton = document.getElementById('deleteButton');
+            if (deleteButton.disabled) {
+                e.preventDefault();
+                alert('Please type the correct loan code to confirm deletion.');
+            }
+        });
+    </script>
+}

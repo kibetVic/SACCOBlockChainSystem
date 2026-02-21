@@ -1,0 +1,351 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanApplicationDTO
+@{
+    ViewData["Title"] = "Loan Application";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var loanTypes = ViewBag.LoanTypes as List<SACCOBlockChainSystem.Models.DTOs.LoanTypeSimpleDTO>;
+}
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <a asp-action="Index" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+            <h2 class="page-title mb-0">
+                <i class="bi bi-file-earmark-text me-2"></i>New Loan Application
+            </h2>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    @if (ViewBag.SuccessMessage != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            @ViewBag.SuccessMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (ViewBag.ErrorMessage != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @ViewBag.ErrorMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Loan Application Form</h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="Apply" method="post" id="loanApplicationForm">
+                    @Html.AntiForgeryToken()
+
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <div class="row mb-3">
+                        <label asp-for="MemberNo" class="col-sm-3 col-form-label">Member Number</label>
+                        <div class="col-sm-9">
+                            <input asp-for="MemberNo" class="form-control" id="memberNo" required />
+                            <span asp-validation-for="MemberNo" class="text-danger"></span>
+                            <small class="text-muted">Enter member number to check eligibility</small>
+                        </div>
+                    </div>
+
+                    <div id="memberInfo" class="alert alert-info d-none">
+                        <h6 class="alert-heading">Member Information</h6>
+                        <div id="memberDetails"></div>
+                        <div id="eligibilityStatus" class="mt-2"></div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label asp-for="LoanCode" class="col-sm-3 col-form-label">Loan Type</label>
+                        <div class="col-sm-9">
+                            <select asp-for="LoanCode" class="form-select" id="loanType" required>
+                                <option value="">-- Select Loan Type --</option>
+                                @foreach (var loanType in ViewBag.LoanTypes)
+                                    {
+                                        <option value="@loanType.LoanCode"
+                                                data-max-amount="@loanType.MaxAmount"
+                                                data-interest="@loanType.Interest">
+                                            @loanType.LoanType -
+                                            (Up to @loanType.MaxAmount?.ToString("N0"))
+                                        </option>
+                                    }
+                            </select>
+                            <span asp-validation-for="LoanCode" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label asp-for="PrincipalAmount" class="col-sm-3 col-form-label">Loan Amount</label>
+                        <div class="col-sm-9">
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input asp-for="PrincipalAmount" class="form-control" id="principalAmount"
+                                       type="number" step="0.01" min="1" required />
+                            </div>
+                            <span asp-validation-for="PrincipalAmount" class="text-danger"></span>
+                            <small class="text-muted" id="maxAmountHint"></small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label asp-for="Purpose" class="col-sm-3 col-form-label">Loan Purpose</label>
+                        <div class="col-sm-9">
+                            <textarea asp-for="Purpose" class="form-control" rows="3"
+                                      placeholder="Describe the purpose of this loan" required></textarea>
+                            <span asp-validation-for="Purpose" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label asp-for="Remarks" class="col-sm-3 col-form-label">Additional Remarks</label>
+                        <div class="col-sm-9">
+                            <textarea asp-for="Remarks" class="form-control" rows="2"></textarea>
+                            <span asp-validation-for="Remarks" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <h5 class="mb-3">Guarantor Information</h5>
+                    <p class="text-muted small">Add guarantors for this loan (if required)</p>
+
+                    <div id="guarantorsContainer">
+                        <!-- Guarantors will be added here dynamically -->
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <button type="button" id="addGuarantorBtn" class="btn btn-outline-primary">
+                            <i class="bi bi-person-plus"></i> Add Guarantor
+                        </button>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="text-end">
+                        <button type="button" class="btn btn-secondary me-2" onclick="history.back()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-send"></i> Submit Application
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Loan Summary</h5>
+            </div>
+            <div class="card-body">
+                <div id="loanSummary" class="text-center text-muted py-4">
+                    <i class="bi bi-calculator fs-1"></i>
+                    <p class="mt-3">Enter loan details to see summary</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Loan Guidelines</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Minimum loan amount: KES 1,000
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Interest rates vary by loan type
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Guarantors must be active members
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Processing fee applicable
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function() {
+            var guarantorIndex = 0;
+
+            // Check member eligibility on blur
+            $('#memberNo').on('blur', function() {
+                var memberNo = $(this).val();
+                var companyCode = '@ViewBag.CompanyCode';
+
+                if (memberNo) {
+                    $.ajax({
+                        url: '/api/LoanApi/eligibility/' + memberNo,
+                        type: 'GET',
+                        data: {
+                            companyCode: companyCode,
+                            loanCode: $('#loanType').val() || ''
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                $('#memberInfo').removeClass('d-none');
+                                $('#eligibilityStatus').html(`
+                                    <strong>Status:</strong>
+                                    <span class="badge ${response.data.isEligible ? 'bg-success' : 'bg-danger'}">
+                                        ${response.data.isEligible ? 'Eligible' : 'Not Eligible'}
+                                    </span>
+                                    <br>
+                                    <strong>Maximum Loan Amount:</strong> KES ${response.data.maximumLoanAmount.toLocaleString()}
+                                `);
+
+                                if (!response.data.isEligible) {
+                                    $('#memberInfo').addClass('alert-warning').removeClass('alert-info');
+                                }
+                            }
+                        },
+                        error: function(xhr) {
+                            console.error('Error checking eligibility:', xhr);
+                        }
+                    });
+
+                    // Fetch member details
+                    $.ajax({
+                        url: '/api/MemberApi/' + memberNo,
+                        type: 'GET',
+                        data: { companyCode: companyCode },
+                        success: function(response) {
+                            if (response.success) {
+                                $('#memberDetails').html(`
+                                    <strong>Name:</strong> ${response.data.surname} ${response.data.otherNames}<br>
+                                    <strong>ID No:</strong> ${response.data.idno || 'N/A'}<br>
+                                    <strong>Share Capital:</strong> KES ${response.data.shareCap?.toLocaleString() || 0}
+                                `);
+                            }
+                        }
+                    });
+                }
+            });
+
+            // Update max amount when loan type changes
+            $('#loanType').on('change', function() {
+                var selected = $(this).find('option:selected');
+                var maxAmount = selected.data('max-amount');
+
+                if (maxAmount) {
+                    $('#principalAmount').attr('max', maxAmount);
+                    $('#maxAmountHint').text(`Maximum allowed: KES ${maxAmount.toLocaleString()}`);
+                } else {
+                    $('#principalAmount').removeAttr('max');
+                    $('#maxAmountHint').text('');
+                }
+
+                updateLoanSummary();
+            });
+
+            // Update summary on amount change
+            $('#principalAmount').on('input', updateLoanSummary);
+
+            function updateLoanSummary() {
+                var amount = parseFloat($('#principalAmount').val()) || 0;
+                var selectedLoanType = $('#loanType').find('option:selected');
+                var interestRate = selectedLoanType.data('interest') || 0;
+
+                if (amount > 0 && interestRate > 0) {
+                    var monthlyRate = interestRate / 100 / 12;
+                    var months = 12; // Default repayment period
+                    var emi = amount * monthlyRate * Math.pow(1 + monthlyRate, months) /
+                             (Math.pow(1 + monthlyRate, months) - 1);
+                    var totalInterest = (emi * months) - amount;
+                    var totalRepayable = amount + totalInterest;
+
+                    $('#loanSummary').html(`
+                        <h6>Loan Summary</h6>
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td>Principal:</td>
+                                <td class="text-end fw-bold">KES ${amount.toLocaleString()}</td>
+                            </tr>
+                            <tr>
+                                <td>Interest Rate:</td>
+                                <td class="text-end">${interestRate}% p.a.</td>
+                            </tr>
+                            <tr>
+                                <td>Monthly Payment:</td>
+                                <td class="text-end">KES ${emi.toFixed(2).toLocaleString()}</td>
+                            </tr>
+                            <tr>
+                                <td>Total Interest:</td>
+                                <td class="text-end">KES ${totalInterest.toFixed(2).toLocaleString()}</td>
+                            </tr>
+                            <tr class="border-top">
+                                <td>Total Repayable:</td>
+                                <td class="text-end fw-bold text-primary">
+                                    KES ${totalRepayable.toFixed(2).toLocaleString()}
+                                </td>
+                            </tr>
+                        </table>
+                    `);
+                }
+            }
+
+            // Add guarantor
+            $('#addGuarantorBtn').click(function() {
+                var html = `
+                    <div class="guarantor-item card mb-3 p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="mb-0">Guarantor #${guarantorIndex + 1}</h6>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-guarantor">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label">Guarantor Member No</label>
+                                <input type="text" name="Guarantors[${guarantorIndex}].GuarantorMemberNo"
+                                       class="form-control" required />
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label">Guarantee Amount</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input type="number" name="Guarantors[${guarantorIndex}].GuaranteeAmount"
+                                           class="form-control" step="0.01" min="1" required />
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Remarks (Optional)</label>
+                                <input type="text" name="Guarantors[${guarantorIndex}].Remarks"
+                                       class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                $('#guarantorsContainer').append(html);
+                guarantorIndex++;
+            });
+
+            // Remove guarantor
+            $(document).on('click', '.remove-guarantor', function() {
+                $(this).closest('.guarantor-item').remove();
+            });
+        });
+    </script>
+}

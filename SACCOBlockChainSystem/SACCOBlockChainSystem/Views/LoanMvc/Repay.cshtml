@@ -1,0 +1,370 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanRepaymentDTO
+@{
+    ViewData["Title"] = "Loan Repayment";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var loan = ViewBag.Loan as SACCOBlockChainSystem.Models.Loan;
+    var schedule = ViewBag.Schedule as List<SACCOBlockChainSystem.Models.DTOs.LoanScheduleDTO>;
+    var totalOutstanding = ViewBag.TotalOutstanding as decimal? ?? 0;
+    var nextInstallment = ViewBag.NextInstallment as SACCOBlockChainSystem.Models.DTOs.LoanScheduleDTO;
+}
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <a asp-action="Details" asp-route-loanNo="@Model.LoanNo" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i> Back to Loan
+            </a>
+            <h2 class="page-title mb-0">
+                <i class="bi bi-arrow-left-right me-2"></i>Loan Repayment
+            </h2>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    @if (ViewBag.SuccessMessage != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            @ViewBag.SuccessMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (ViewBag.ErrorMessage != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @ViewBag.ErrorMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+
+    <!-- Left Column - Loan Summary -->
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Loan Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Loan Number:</span>
+                    <strong>@loan?.LoanNo</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Member:</span>
+                    <span>@loan?.Member?.Surname @loan?.Member?.OtherNames</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Disbursed Amount:</span>
+                    <span>KES @loan?.DisbursedAmount.ToString("N2")</span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Outstanding Principal:</span>
+                    <span class="fw-bold">KES @loan?.OutstandingPrincipal.ToString("N2")</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Outstanding Interest:</span>
+                    <span class="fw-bold">KES @loan?.OutstandingInterest.ToString("N2")</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Outstanding Penalty:</span>
+                    <span class="fw-bold text-danger">KES @loan?.OutstandingPenalty.ToString("N2")</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2 border-top pt-2">
+                    <span class="text-muted fw-bold">Total Outstanding:</span>
+                    <span class="fw-bold text-primary fs-5">KES @loan?.TotalOutstanding.ToString("N2")</span>
+                </div>
+            </div>
+        </div>
+
+        @if (nextInstallment != null)
+        {
+            <div class="card mb-4 border-warning">
+                <div class="card-header bg-warning bg-opacity-10">
+                    <h5 class="card-title mb-0 text-warning">Next Installment</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Due Date:</span>
+                        <span class="fw-bold @(nextInstallment.DueDate < DateTime.Now ? "text-danger" : "")">
+                            @nextInstallment.DueDate.ToString("dd MMM yyyy")
+                            @if (nextInstallment.DueDate < DateTime.Now)
+                            {
+                                <span class="badge bg-danger ms-2">Overdue</span>
+                            }
+                        </span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Principal:</span>
+                        <span>KES @nextInstallment.PrincipalAmount.ToString("N2")</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Interest:</span>
+                        <span>KES @nextInstallment.InterestAmount.ToString("N2")</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Penalty:</span>
+                        <span class="text-danger">KES @nextInstallment.PenaltyAmount.ToString("N2")</span>
+                    </div>
+                    <div class="d-flex justify-content-between border-top pt-2">
+                        <span class="text-muted fw-bold">Total Due:</span>
+                        <span class="fw-bold">KES @nextInstallment.OutstandingAmount.ToString("N2")</span>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Right Column - Repayment Form -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Make Payment</h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="Repay" method="post" id="repaymentForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" asp-for="LoanNo" />
+                    <input type="hidden" asp-for="MemberNo" />
+                    <input type="hidden" asp-for="CompanyCode" />
+                    <input type="hidden" asp-for="ReceivedBy" />
+
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <!-- Payment Date -->
+                    <div class="row mb-3">
+                        <label asp-for="PaymentDate" class="col-sm-3 col-form-label">Payment Date *</label>
+                        <div class="col-sm-9">
+                            <input asp-for="PaymentDate" class="form-control" type="date"
+                                   value="@DateTime.Now.ToString("yyyy-MM-dd")" required />
+                            <span asp-validation-for="PaymentDate" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <!-- Amount Paid -->
+                    <div class="row mb-3">
+                        <label asp-for="AmountPaid" class="col-sm-3 col-form-label">Amount *</label>
+                        <div class="col-sm-9">
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input asp-for="AmountPaid" class="form-control" type="number" step="0.01"
+                                       min="0.01" required id="amountPaid" />
+                            </div>
+                            <span asp-validation-for="AmountPaid" class="text-danger"></span>
+                            <small class="text-muted">Outstanding balance: KES @totalOutstanding.ToString("N2")</small>
+                        </div>
+                    </div>
+
+                    <!-- Quick Amount Buttons -->
+                    <div class="row mb-3">
+                        <div class="col-sm-9 offset-sm-3">
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="setAmount(@nextInstallment?.OutstandingAmount ?? 0)">
+                                    Full Installment
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="setAmount(@totalOutstanding)">
+                                    Full Balance
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="setAmount(5000)">
+                                    KES 5,000
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="setAmount(10000)">
+                                    KES 10,000
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Method -->
+                    <div class="row mb-3">
+                        <label asp-for="PaymentMethod" class="col-sm-3 col-form-label">Payment Method *</label>
+                        <div class="col-sm-9">
+                            <select asp-for="PaymentMethod" class="form-select" required>
+                                <option value="">-- Select Method --</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Cheque">Cheque</option>
+                                <option value="Mobile Money">Mobile Money</option>
+                                <option value="Payroll Deduction">Payroll Deduction</option>
+                            </select>
+                            <span asp-validation-for="PaymentMethod" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <!-- Reference Number -->
+                    <div class="row mb-3">
+                        <label asp-for="ReferenceNo" class="col-sm-3 col-form-label">Reference No</label>
+                        <div class="col-sm-9">
+                            <input asp-for="ReferenceNo" class="form-control"
+                                   placeholder="Transaction ID, Cheque No, etc." />
+                            <span asp-validation-for="ReferenceNo" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <!-- Remarks -->
+                    <div class="row mb-3">
+                        <label asp-for="Remarks" class="col-sm-3 col-form-label">Remarks</label>
+                        <div class="col-sm-9">
+                            <textarea asp-for="Remarks" class="form-control" rows="2"></textarea>
+                            <span asp-validation-for="Remarks" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <!-- Payment Allocation Preview -->
+                    <div class="row mb-4">
+                        <div class="col-sm-9 offset-sm-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">Payment Allocation</h6>
+                                    <p class="text-muted small">Payments are applied in order: Penalty → Interest → Principal</p>
+                                    <table class="table table-sm table-borderless mb-0">
+                                        <tr>
+                                            <td>Penalty:</td>
+                                            <td class="text-end text-danger">KES <span id="allocatedPenalty">0.00</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Interest:</td>
+                                            <td class="text-end text-warning">KES <span id="allocatedInterest">0.00</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Principal:</td>
+                                            <td class="text-end text-success">KES <span id="allocatedPrincipal">0.00</span></td>
+                                        </tr>
+                                        <tr class="border-top">
+                                            <td><strong>Overpayment:</strong></td>
+                                            <td class="text-end"><strong class="text-info">KES <span id="overpayment">0.00</span></strong></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-secondary" onclick="history.back()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="bi bi-check-circle me-2"></i>Process Payment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Recent Payments -->
+        @if (ViewBag.Repayments != null && ((List<SACCOBlockChainSystem.Models.LoanRepayment>)ViewBag.Repayments).Any())
+        {
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Recent Payments</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Receipt No</th>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Method</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var payment in ((List<SACCOBlockChainSystem.Models.LoanRepayment>)ViewBag.Repayments).Take(5))
+                                {
+                                    <tr>
+                                        <td>@payment.ReceiptNo</td>
+                                        <td>@payment.PaymentDate.ToString("dd/MM/yyyy")</td>
+                                        <td class="text-end">KES @payment.AmountPaid.ToString("N2")</td>
+                                        <td>@payment.PaymentMethod</td>
+                                        <td>
+                                            <span class="badge bg-@(payment.Status == "Completed" ? "success" : "secondary")">
+                                                @payment.Status
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function() {
+            // Calculate payment allocation
+            $('#amountPaid').on('input', calculateAllocation);
+
+            function calculateAllocation() {
+                var amount = parseFloat($('#amountPaid').val()) || 0;
+                var outstandingPenalty = @(loan?.OutstandingPenalty ?? 0);
+                var outstandingInterest = @(loan?.OutstandingInterest ?? 0);
+                var outstandingPrincipal = @(loan?.OutstandingPrincipal ?? 0);
+
+                var remaining = amount;
+                var penaltyAllocated = 0;
+                var interestAllocated = 0;
+                var principalAllocated = 0;
+
+                // 1. Pay penalty first
+                if (remaining > 0 && outstandingPenalty > 0) {
+                    penaltyAllocated = Math.min(remaining, outstandingPenalty);
+                    remaining -= penaltyAllocated;
+                }
+
+                // 2. Pay interest second
+                if (remaining > 0 && outstandingInterest > 0) {
+                    interestAllocated = Math.min(remaining, outstandingInterest);
+                    remaining -= interestAllocated;
+                }
+
+                // 3. Pay principal last
+                if (remaining > 0 && outstandingPrincipal > 0) {
+                    principalAllocated = Math.min(remaining, outstandingPrincipal);
+                    remaining -= principalAllocated;
+                }
+
+                $('#allocatedPenalty').text(penaltyAllocated.toFixed(2).toLocaleString());
+                $('#allocatedInterest').text(interestAllocated.toFixed(2).toLocaleString());
+                $('#allocatedPrincipal').text(principalAllocated.toFixed(2).toLocaleString());
+                $('#overpayment').text(remaining.toFixed(2).toLocaleString());
+            }
+
+            // Set amount from quick buttons
+            window.setAmount = function(amount) {
+                $('#amountPaid').val(amount.toFixed(2));
+                calculateAllocation();
+            };
+
+            // Initial calculation if amount is set
+            if ($('#amountPaid').val()) {
+                calculateAllocation();
+            }
+
+            // Form validation
+            $('#repaymentForm').on('submit', function(e) {
+                var amount = parseFloat($('#amountPaid').val()) || 0;
+
+                if (amount <= 0) {
+                    e.preventDefault();
+                    alert('Please enter a valid payment amount');
+                    return false;
+                }
+
+                return confirm('Confirm payment of KES ' + amount.toFixed(2).toLocaleString() + '?');
+            });
+        });
+    </script>
+}

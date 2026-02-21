@@ -1,0 +1,166 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.LoanScheduleDTO>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Repayment Schedule</h5>
+        @if (Model.Any())
+        {
+            <div>
+                <span class="text-muted me-3">
+                    Total: <strong>KES @Model.Sum(s => s.TotalInstallment).ToString("N2")</strong>
+                </span>
+                <button class="btn btn-sm btn-outline-primary" onclick="printSchedule()">
+                    <i class="bi bi-printer"></i> Print
+                </button>
+            </div>
+        }
+    </div>
+    <div class="card-body p-0">
+        @if (Model.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="scheduleTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Due Date</th>
+                            <th class="text-end">Principal</th>
+                            <th class="text-end">Interest</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Paid</th>
+                            <th class="text-end">Outstanding</th>
+                            <th class="text-end">Penalty</th>
+                            <th>Status</th>
+                            <th>Paid Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{
+                            decimal totalPrincipal = 0;
+                            decimal totalInterest = 0;
+                            decimal totalInstallment = 0;
+                            decimal totalPaid = 0;
+                            decimal totalOutstanding = 0;
+                            decimal totalPenalty = 0;
+                        }
+                        @foreach (var item in Model)
+                        {
+                            totalPrincipal += item.PrincipalAmount;
+                            totalInterest += item.InterestAmount;
+                            totalInstallment += item.TotalInstallment;
+                            totalPaid += item.PaidAmount;
+                            totalOutstanding += item.OutstandingAmount;
+                            totalPenalty += item.PenaltyAmount;
+
+                            var statusClass = item.Status switch
+                            {
+                                            "Paid" => "success",
+                                            "Partial" => "warning",
+                                            "Overdue" => "danger",
+                                            "Pending" => "secondary",
+                                _ => "info"
+                            };
+                            <tr>
+                                <td>@item.InstallmentNo</td>
+                                <td>@item.DueDate.ToString("dd/MM/yyyy")</td>
+                                <td class="text-end">KES @item.PrincipalAmount.ToString("N2")</td>
+                                <td class="text-end">KES @item.InterestAmount.ToString("N2")</td>
+                                <td class="text-end fw-bold">KES @item.TotalInstallment.ToString("N2")</td>
+                                <td class="text-end text-success">KES @item.PaidAmount.ToString("N2")</td>
+                                <td class="text-end @(item.OutstandingAmount > 0 ? "text-danger" : "text-success")">
+                                    KES @item.OutstandingAmount.ToString("N2")
+                                </td>
+                                <td class="text-end text-warning">KES @item.PenaltyAmount.ToString("N2")</td>
+                                <td>
+                                    <span class="badge bg-@statusClass">@item.Status</span>
+                                </td>
+                                <td>
+                                    @if (item.PaidDate.HasValue)
+                                    {
+                                        @item.PaidDate.Value.ToString("dd/MM/yyyy")
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="2" class="text-end">Totals:</th>
+                            <th class="text-end">KES @totalPrincipal.ToString("N2")</th>
+                            <th class="text-end">KES @totalInterest.ToString("N2")</th>
+                            <th class="text-end">KES @totalInstallment.ToString("N2")</th>
+                            <th class="text-end">KES @totalPaid.ToString("N2")</th>
+                            <th class="text-end">KES @totalOutstanding.ToString("N2")</th>
+                            <th class="text-end">KES @totalPenalty.ToString("N2")</th>
+                            <th colspan="2"></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="row p-3">
+                <div class="col-md-6">
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Payment Priority:</strong> Payments are applied to Penalty first, then Interest, then Principal.
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-end gap-3">
+                        <div>
+                            <span class="badge bg-success">Paid</span> - Fully paid
+                        </div>
+                        <div>
+                            <span class="badge bg-warning">Partial</span> - Partially paid
+                        </div>
+                        <div>
+                            <span class="badge bg-danger">Overdue</span> - Payment overdue
+                        </div>
+                        <div>
+                            <span class="badge bg-secondary">Pending</span> - Not yet due
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-table fs-1 text-muted"></i>
+                <p class="text-muted mt-3">No repayment schedule generated yet</p>
+            </div>
+        }
+    </div>
+</div>
+
+<script>
+    function printSchedule() {
+        var printContent = document.getElementById('scheduleTable').cloneNode(true);
+        var printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Loan Repayment Schedule</title>
+                    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+                    <style>
+                        body { padding: 20px; }
+                        @@media print {
+                            .btn { display: none; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h2 class="mb-4">Loan Repayment Schedule</h2>
+                    ${printContent.outerHTML}
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+    }
+</script>

@@ -1,0 +1,168 @@
+﻿@model SACCOBlockChainSystem.Models.LoanAppraisal
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Loan Appraisal Details</h5>
+    </div>
+    <div class="card-body">
+        @if (Model != null)
+        {
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-3">Appraisal Information</h6>
+                    <div class="info-row">
+                        <span class="text-muted">Appraisal Date:</span>
+                        <span>@Model.AppraisalDate.ToString("dd MMM yyyy HH:mm")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Appraised By:</span>
+                        <span>@Model.AppraisedBy</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Appraisal Decision:</span>
+                        <span>
+                            @{
+                                var decisionClass = Model.AppraisalDecision switch
+                                {
+                                                "Recommend" => "success",
+                                                "CounterOffer" => "warning",
+                                                "NotRecommend" => "danger",
+                                    _ => "secondary"
+                                };
+                            }
+                            <span class="badge bg-@decisionClass">@Model.AppraisalDecision</span>
+                        </span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-3">Financial Assessment</h6>
+                    <div class="info-row">
+                        <span class="text-muted">Applied Amount:</span>
+                        <span>KES @Model.AppliedAmount.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Recommended Amount:</span>
+                        <span class="fw-bold text-primary">KES @Model.RecommendedAmount.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Recommended Interest Rate:</span>
+                        <span>@(Model.RecommendedInterestRate * 100)%</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Recommended Period:</span>
+                        <span>@Model.RecommendedPeriod months</span>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-3">Member Financial Position</h6>
+                    <div class="info-row">
+                        <span class="text-muted">Shares Value:</span>
+                        <span>KES @Model.MemberSharesValue.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Deposits Value:</span>
+                        <span>KES @Model.MemberDepositsValue.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Monthly Income:</span>
+                        <span>KES @Model.MonthlyIncome.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Existing Loan Obligations:</span>
+                        <span>KES @Model.ExistingLoanObligations.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Disposable Income:</span>
+                        <span>KES @Model.DisposableIncome.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Debt to Income Ratio:</span>
+                        <span>@Model.DebtToIncomeRatio.ToString("N2")%</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-3">Credit Assessment</h6>
+                    <div class="info-row">
+                        <span class="text-muted">Credit Score:</span>
+                        <span>
+                            <span class="badge bg-@(Model.CreditScore >= 700 ? "success" : Model.CreditScore >= 600 ? "warning" : "danger")">
+                                @Model.CreditScore
+                            </span>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Previous Default:</span>
+                        <span>
+                            @if (Model.ExistingLoanDefault)
+                            {
+                                <span class="badge bg-danger">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success">No</span>
+                            }
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="text-muted">Loan History Rating:</span>
+                        <span>
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                if (i <= Model.LoanHistoryRating)
+                                {
+                                    <i class="bi bi-star-fill text-warning"></i>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-star text-muted"></i>
+                                }
+                            }
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(Model.RiskFactors))
+            {
+                <div class="mt-3">
+                    <h6 class="text-muted mb-2">Risk Factors</h6>
+                    <div class="bg-light p-3 rounded">
+                        @Model.RiskFactors
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(Model.MitigationFactors))
+            {
+                <div class="mt-3">
+                    <h6 class="text-muted mb-2">Mitigation Factors</h6>
+                    <div class="bg-light p-3 rounded">
+                        @Model.MitigationFactors
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(Model.AppraisalNotes))
+            {
+                <div class="mt-3">
+                    <h6 class="text-muted mb-2">Appraisal Notes</h6>
+                    <div class="bg-light p-3 rounded">
+                        @Model.AppraisalNotes
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-clipboard-data fs-1 text-muted"></i>
+                <p class="text-muted mt-3">No appraisal has been conducted yet</p>
+            </div>
+        }
+    </div>
+</div>

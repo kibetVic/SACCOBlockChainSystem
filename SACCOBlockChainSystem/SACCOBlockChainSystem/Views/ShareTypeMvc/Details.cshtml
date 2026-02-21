@@ -1,0 +1,257 @@
+﻿@using SACCOBlockChainSystem.Models.DTOs
+@model ShareTypeResponseDTO
+@{
+    ViewData["Title"] = $"Share Type: {Model.SharesType}";
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="display-6">
+                    <i class="fas fa-tag"></i> @Model.SharesType
+                </h1>
+                <div>
+                    <a asp-action="Edit" asp-route-sharesCode="@Model.SharesCode"
+                       class="btn btn-warning btn-lg">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                    @if (Model.TotalMembers == 0)
+                    {
+                        <a asp-action="Delete" asp-route-sharesCode="@Model.SharesCode"
+                           class="btn btn-danger btn-lg">
+                            <i class="fas fa-trash"></i> Delete
+                        </a>
+                    }
+                    <a asp-action="Index" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-arrow-left"></i> Back to List
+                    </a>
+                </div>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Share Types</a></li>
+                    <li class="breadcrumb-item active">@Model.SharesType</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Basic Information -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5>
+                        <i class="fas fa-info-circle"></i> Basic Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Share Code:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge bg-dark">@Model.SharesCode</span>
+                                </dd>
+
+                                <dt class="col-sm-4">Share Type:</dt>
+                                <dd class="col-sm-8">
+                                    @Model.SharesType
+                                    @if (Model.IsMainShares)
+                                    {
+                                        <span class="badge bg-success ms-1">Main Shares</span>
+                                    }
+                                </dd>
+
+                                <dt class="col-sm-4">Share Account:</dt>
+                                <dd class="col-sm-8">@Model.SharesAcc</dd>
+
+                                <dt class="col-sm-4">Contra Account:</dt>
+                                <dd class="col-sm-8">@(Model.ContraAcc ?? "Not Set")</dd>
+
+                                <dt class="col-sm-4">PP Account:</dt>
+                                <dd class="col-sm-8">@Model.Ppacc</dd>
+
+                                <dt class="col-sm-4">Company Code:</dt>
+                                <dd class="col-sm-8">@Model.CompanyCode</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Minimum Amount:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge bg-info">@Model.MinAmount.ToString("C")</span>
+                                </dd>
+
+                                <dt class="col-sm-4">Maximum Amount:</dt>
+                                <dd class="col-sm-8">
+                                    @if (Model.MaxAmount.HasValue)
+                                    {
+                                        <span class="badge bg-warning">@Model.MaxAmount.Value.ToString("C")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No Limit</span>
+                                    }
+                                </dd>
+
+                                <dt class="col-sm-4">Priority:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge bg-dark">@Model.Priority</span>
+                                </dd>
+
+                                <dt class="col-sm-4">Created By:</dt>
+                                <dd class="col-sm-8">@Model.CreatedBy</dd>
+
+                                <dt class="col-sm-4">Created At:</dt>
+                                <dd class="col-sm-8">@Model.CreatedAt?.ToString("dd/MM/yyyy HH:mm")</dd>
+
+                                <dt class="col-sm-4">Last Updated:</dt>
+                                <dd class="col-sm-8">@Model.LastUpdated?.ToString("dd/MM/yyyy HH:mm")</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financial Settings -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5>
+                        <i class="fas fa-money-bill-wave"></i> Financial Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <dl>
+                                <dt>Place Period:</dt>
+                                <dd>@(Model.PlacePeriod?.ToString() ?? "Not Set") months</dd>
+
+                                <dt>Loan to Share Ratio:</dt>
+                                <dd>@(Model.LoanToShareRatio?.ToString("F2") ?? "Not Set")</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-4">
+                            <dl>
+                                <dt>Is Share Capital?</dt>
+                                <dd>@(Model.Issharecapital == 1 ? "Yes" : "No")</dd>
+
+                                <dt>Interest Rate:</dt>
+                                <dd>@(Model.Interest?.ToString("F2") ?? "0")%</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-4">
+                            <dl>
+                                <dt>Lower Limit:</dt>
+                                <dd>@Model.LowerLimit.ToString("C")</dd>
+
+                                <dt>Else Ratio:</dt>
+                                <dd>@Model.ElseRatio.ToString("F2")</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats & Flags -->
+        <div class="col-md-4">
+            <!-- Statistics -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5>
+                        <i class="fas fa-chart-bar"></i> Statistics
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <h2 class="text-primary">@Model.TotalMembers</h2>
+                        <p class="text-muted">Total Members Using</p>
+                    </div>
+                    <div class="mb-3">
+                        <h2 class="text-success">@Model.TotalShares.ToString("C")</h2>
+                        <p class="text-muted">Total Shares Value</p>
+                    </div>
+                    <div>
+                        <a asp-controller="ContributionMvc" asp-action="Search"
+                           asp-route-shareType="@Model.SharesCode"
+                           class="btn btn-primary btn-sm">
+                            <i class="fas fa-search"></i> View Contributions
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Flags -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-white">
+                    <h5>
+                        <i class="fas fa-flag"></i> Share Type Flags
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        @if (Model.IsMainShares)
+                        {
+                            <span class="badge bg-success me-1 mb-1">Main Shares</span>
+                        }
+                        @if (Model.UsedToGuarantee)
+                        {
+                            <span class="badge bg-warning me-1 mb-1">Used for Guarantee</span>
+                        }
+                        @if (Model.Withdrawable)
+                        {
+                            <span class="badge bg-primary me-1 mb-1">Withdrawable</span>
+                        }
+                        @if (Model.UsedToOffset)
+                        {
+                            <span class="badge bg-danger me-1 mb-1">Used for Offset</span>
+                        }
+                        @if (Model.Loanquaranto)
+                        {
+                            <span class="badge bg-info me-1 mb-1">Loan Quaranto</span>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.Guarantor))
+                    {
+                        <div class="mt-2">
+                            <strong>Guarantor:</strong>
+                            <p class="mb-0">@Model.Guarantor</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5>
+                        <i class="fas fa-bolt"></i> Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a asp-action="Edit" asp-route-sharesCode="@Model.SharesCode"
+                           class="btn btn-warning">
+                            <i class="fas fa-edit"></i> Edit Share Type
+                        </a>
+                        @if (Model.TotalMembers == 0)
+                        {
+                            <a asp-action="Delete" asp-route-sharesCode="@Model.SharesCode"
+                               class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Delete Share Type
+                            </a>
+                        }
+                        <a asp-action="Index" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to List
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

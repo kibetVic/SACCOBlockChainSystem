@@ -1,0 +1,122 @@
+﻿@using SACCOBlockChainSystem.Models.DTOs
+@model ShareTypeResponseDTO
+@{
+    ViewData["Title"] = $"Delete Share Type: {Model.SharesType}";
+    var usageCount = ViewBag.UsageCount as int? ?? 0;
+    var canDelete = ViewBag.CanDelete as bool? ?? false;
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h4>
+                        <i class="fas fa-trash"></i> Delete Share Type: @Model.SharesType (@Model.SharesCode)
+                    </h4>
+                </div>
+
+                <div class="card-body">
+                    @if (usageCount > 0)
+                    {
+                        <div class="alert alert-danger">
+                            <h5 class="alert-heading">
+                                <i class="fas fa-exclamation-triangle"></i> Cannot Delete Share Type
+                            </h5>
+                            <p>
+                                This share type cannot be deleted because it is currently used by
+                                <strong>@usageCount member(s)</strong>.
+                            </p>
+                            <p class="mb-0">
+                                To delete this share type, you must first:
+                                <ul>
+                                    <li>Transfer all members using this share type to a different share type</li>
+                                    <li>Or wait until no members are using this share type</li>
+                                </ul>
+                            </p>
+                        </div>
+
+                        <div class="mt-3">
+                            <a asp-action="Details" asp-route-sharesCode="@Model.SharesCode"
+                               class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Details
+                            </a>
+                            <a asp-action="Index" class="btn btn-outline-secondary">
+                                <i class="fas fa-list"></i> Back to List
+                            </a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <h5 class="alert-heading">
+                                <i class="fas fa-exclamation-triangle"></i> Warning: Deleting Share Type
+                            </h5>
+                            <p>
+                                Are you sure you want to delete the share type
+                                <strong>"@Model.SharesType" (@Model.SharesCode)</strong>?
+                            </p>
+                            <p class="mb-0">
+                                <strong>This action cannot be undone!</strong> All configuration for this share type will be permanently removed.
+                            </p>
+                        </div>
+
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-info-circle"></i> Share Type Details
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <dl class="row">
+                                    <dt class="col-sm-3">Share Code:</dt>
+                                    <dd class="col-sm-9">@Model.SharesCode</dd>
+
+                                    <dt class="col-sm-3">Share Type Name:</dt>
+                                    <dd class="col-sm-9">@Model.SharesType</dd>
+
+                                    <dt class="col-sm-3">Share Account:</dt>
+                                    <dd class="col-sm-9">@Model.SharesAcc</dd>
+
+                                    <dt class="col-sm-3">Created By:</dt>
+                                    <dd class="col-sm-9">@Model.CreatedBy</dd>
+
+                                    <dt class="col-sm-3">Created At:</dt>
+                                    <dd class="col-sm-9">@Model.CreatedAt?.ToString("dd/MM/yyyy HH:mm")</dd>
+
+                                    <dt class="col-sm-3">Total Members:</dt>
+                                    <dd class="col-sm-9">
+                                        <span class="badge bg-info">@Model.TotalMembers</span>
+                                        @if (Model.TotalMembers == 0)
+                                        {
+                                            <span class="text-success ms-2">
+                                                <i class="fas fa-check-circle"></i> Safe to delete
+                                            </span>
+                                        }
+                                    </dd>
+                                </dl>
+                            </div>
+                        </div>
+
+                        <form asp-action="Delete" asp-route-sharesCode="@Model.SharesCode" method="post">
+                            @Html.AntiForgeryToken()
+
+                            <div class="form-group mt-4">
+                                <button type="submit" class="btn btn-danger btn-lg">
+                                    <i class="fas fa-trash"></i> Yes, Delete Share Type
+                                </button>
+                                <a asp-action="Details" asp-route-sharesCode="@Model.SharesCode"
+                                   class="btn btn-secondary btn-lg">
+                                    <i class="fas fa-times"></i> No, Cancel
+                                </a>
+                                <a asp-action="Index" class="btn btn-outline-secondary btn-lg">
+                                    <i class="fas fa-list"></i> Back to List
+                                </a>
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

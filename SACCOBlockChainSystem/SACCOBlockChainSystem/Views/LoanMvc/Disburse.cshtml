@@ -1,0 +1,354 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanDisbursementDTO
+@{
+    ViewData["Title"] = "Loan Disbursement";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var loan = ViewBag.Loan as SACCOBlockChainSystem.Models.Loan;
+}
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <a asp-action="Details" asp-route-loanNo="@Model.LoanNo" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i> Back to Loan
+            </a>
+            <h2 class="page-title mb-0">
+                <i class="bi bi-cash-stack me-2"></i>Loan Disbursement
+            </h2>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    @if (ViewBag.SuccessMessage != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            @ViewBag.SuccessMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (ViewBag.ErrorMessage != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @ViewBag.ErrorMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+
+    <!-- Left Column - Loan Summary -->
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Loan Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Loan Number:</span>
+                    <strong>@loan?.LoanNo</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Member:</span>
+                    <span>@loan?.Member?.Surname @loan?.Member?.OtherNames</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Approved Amount:</span>
+                    <strong class="text-primary">KES @loan?.ApprovedAmount.ToString("N2")</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Interest Rate:</span>
+                    <span>@(loan?.InterestRate * 100)% p.a.</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Repayment Period:</span>
+                    <span>@loan?.RepaymentPeriod months</span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Processing Fee:</span>
+                    <span>KES @loan?.ProcessingFee.ToString("N2")</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Insurance Fee:</span>
+                    <span>KES @loan?.InsuranceFee.ToString("N2")</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column - Disbursement Form -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Disbursement Details</h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="Disburse" method="post" id="disbursementForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" asp-for="LoanNo" />
+                    <input type="hidden" asp-for="CompanyCode" />
+                    <input type="hidden" asp-for="DisbursedBy" />
+                    <input type="hidden" asp-for="AuthorizedBy" />
+
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <!-- Disbursement Date -->
+                    <div class="row mb-3">
+                        <label asp-for="DisbursementDate" class="col-sm-3 col-form-label">Disbursement Date *</label>
+                        <div class="col-sm-9">
+                            <input asp-for="DisbursementDate" class="form-control" type="date"
+                                   value="@DateTime.Now.ToString("yyyy-MM-dd")" required />
+                            <span asp-validation-for="DisbursementDate" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <!-- Disbursement Method -->
+                    <div class="row mb-3">
+                        <label asp-for="DisbursementMethod" class="col-sm-3 col-form-label">Disbursement Method *</label>
+                        <div class="col-sm-9">
+                            <select asp-for="DisbursementMethod" class="form-select" required id="disbursementMethod">
+                                <option value="">-- Select Method --</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Cheque">Cheque</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Mobile Money">Mobile Money</option>
+                            </select>
+                            <span asp-validation-for="DisbursementMethod" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <!-- Bank Transfer Details -->
+                    <div id="bankDetails" style="display: none;">
+                        <div class="row mb-3">
+                            <label asp-for="BankName" class="col-sm-3 col-form-label">Bank Name</label>
+                            <div class="col-sm-9">
+                                <input asp-for="BankName" class="form-control" />
+                                <span asp-validation-for="BankName" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label asp-for="BankAccountNo" class="col-sm-3 col-form-label">Account Number</label>
+                            <div class="col-sm-9">
+                                <input asp-for="BankAccountNo" class="form-control" />
+                                <span asp-validation-for="BankAccountNo" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cheque Details -->
+                    <div id="chequeDetails" style="display: none;">
+                        <div class="row mb-3">
+                            <label asp-for="ChequeNo" class="col-sm-3 col-form-label">Cheque Number</label>
+                            <div class="col-sm-9">
+                                <input asp-for="ChequeNo" class="form-control" />
+                                <span asp-validation-for="ChequeNo" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mobile Money Details -->
+                    <div id="mobileDetails" style="display: none;">
+                        <div class="row mb-3">
+                            <label asp-for="MobileNo" class="col-sm-3 col-form-label">Mobile Number</label>
+                            <div class="col-sm-9">
+                                <input asp-for="MobileNo" class="form-control" placeholder="e.g., 254712345678" />
+                                <span asp-validation-for="MobileNo" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fees (Optional - can override defaults) -->
+                    <h6 class="text-uppercase text-muted mb-3 mt-4">Fees & Deductions</h6>
+
+                    <div class="row mb-3">
+                        <label asp-for="ProcessingFee" class="col-sm-3 col-form-label">Processing Fee</label>
+                        <div class="col-sm-9">
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input asp-for="ProcessingFee" class="form-control" type="number" step="0.01"
+                                       value="@loan?.ProcessingFee" id="processingFee" />
+                            </div>
+                            <span asp-validation-for="ProcessingFee" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label asp-for="InsuranceFee" class="col-sm-3 col-form-label">Insurance Fee</label>
+                        <div class="col-sm-9">
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input asp-for="InsuranceFee" class="form-control" type="number" step="0.01"
+                                       value="@loan?.InsuranceFee" id="insuranceFee" />
+                            </div>
+                            <span asp-validation-for="InsuranceFee" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label asp-for="LegalFees" class="col-sm-3 col-form-label">Legal Fees</label>
+                        <div class="col-sm-9">
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input asp-for="LegalFees" class="form-control" type="number" step="0.01"
+                                       value="0" id="legalFees" />
+                            </div>
+                            <span asp-validation-for="LegalFees" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label asp-for="OtherFees" class="col-sm-3 col-form-label">Other Fees</label>
+                        <div class="col-sm-9">
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input asp-for="OtherFees" class="form-control" type="number" step="0.01"
+                                       value="0" id="otherFees" />
+                            </div>
+                            <span asp-validation-for="OtherFees" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <!-- Disbursement Summary -->
+                    <div class="row mb-4">
+                        <div class="col-sm-9 offset-sm-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">Disbursement Summary</h6>
+                                    <table class="table table-sm table-borderless mb-0">
+                                        <tr>
+                                            <td>Gross Amount:</td>
+                                            <td class="text-end fw-bold">KES <span id="grossAmount">@(loan?.ApprovedAmount.ToString("N2"))</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Total Deductions:</td>
+                                            <td class="text-end text-danger">KES <span id="totalDeductions">0.00</span></td>
+                                        </tr>
+                                        <tr class="border-top">
+                                            <td><strong>Net Disbursement:</strong></td>
+                                            <td class="text-end"><strong class="text-success">KES <span id="netAmount">@(loan?.ApprovedAmount.ToString("N2"))</span></strong></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Remarks -->
+                    <div class="row mb-3">
+                        <label asp-for="Remarks" class="col-sm-3 col-form-label">Remarks</label>
+                        <div class="col-sm-9">
+                            <textarea asp-for="Remarks" class="form-control" rows="3"></textarea>
+                            <span asp-validation-for="Remarks" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <!-- Authorization -->
+                    <div class="row mb-3">
+                        <label asp-for="AuthorizedBy" class="col-sm-3 col-form-label">Authorized By *</label>
+                        <div class="col-sm-9">
+                            <input asp-for="AuthorizedBy" class="form-control" required />
+                            <span asp-validation-for="AuthorizedBy" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-secondary" onclick="history.back()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-success" id="submitBtn">
+                            <i class="bi bi-cash-stack me-2"></i>Confirm Disbursement
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function() {
+            // Toggle payment method details
+            $('#disbursementMethod').on('change', function() {
+                var method = $(this).val();
+
+                $('#bankDetails, #chequeDetails, #mobileDetails').hide();
+
+                if (method === 'Bank Transfer') {
+                    $('#bankDetails').show();
+                } else if (method === 'Cheque') {
+                    $('#chequeDetails').show();
+                } else if (method === 'Mobile Money') {
+                    $('#mobileDetails').show();
+                }
+            });
+
+            // Calculate net disbursement
+            function calculateNetAmount() {
+                var gross = parseFloat('@loan?.ApprovedAmount') || 0;
+                var processing = parseFloat($('#processingFee').val()) || 0;
+                var insurance = parseFloat($('#insuranceFee').val()) || 0;
+                var legal = parseFloat($('#legalFees').val()) || 0;
+                var other = parseFloat($('#otherFees').val()) || 0;
+
+                var totalDeductions = processing + insurance + legal + other;
+                var net = gross - totalDeductions;
+
+                $('#totalDeductions').text(totalDeductions.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                $('#netAmount').text(net.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+
+                return net;
+            }
+
+            $('#processingFee, #insuranceFee, #legalFees, #otherFees').on('input', calculateNetAmount);
+
+            // Initial calculation
+            calculateNetAmount();
+
+            // Form validation
+            $('#disbursementForm').on('submit', function(e) {
+                var method = $('#disbursementMethod').val();
+                var netAmount = parseFloat($('#netAmount').text().replace(/,/g, '')) || 0;
+
+                if (netAmount < 0) {
+                    e.preventDefault();
+                    alert('Net disbursement amount cannot be negative');
+                    return false;
+                }
+
+                if (!method) {
+                    e.preventDefault();
+                    alert('Please select a disbursement method');
+                    return false;
+                }
+
+                if (method === 'Bank Transfer') {
+                    if (!$('#BankName').val() || !$('#BankAccountNo').val()) {
+                        e.preventDefault();
+                        alert('Please enter bank name and account number');
+                        return false;
+                    }
+                } else if (method === 'Cheque') {
+                    if (!$('#ChequeNo').val()) {
+                        e.preventDefault();
+                        alert('Please enter cheque number');
+                        return false;
+                    }
+                } else if (method === 'Mobile Money') {
+                    if (!$('#MobileNo').val()) {
+                        e.preventDefault();
+                        alert('Please enter mobile number');
+                        return false;
+                    }
+                }
+
+                return confirm('Are you sure you want to disburse this loan? This action cannot be undone.');
+            });
+        });
+    </script>
+}

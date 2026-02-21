@@ -1,0 +1,378 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanTypeResponseDTO
+
+@{
+    ViewData["Title"] = "Loan Type Details";
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3 mb-0 text-gray-800">Loan Type Details</h1>
+            <p class="text-muted">View complete information about this loan type</p>
+        </div>
+        <div class="col-auto">
+            <a asp-action="Index" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </a>
+            <a asp-action="Edit" asp-route-loanCode="@Model.LoanCode" class="btn btn-primary ml-2">
+                <i class="fas fa-edit"></i> Edit
+            </a>
+        </div>
+    </div>
+
+    <!-- Header Card -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                @Model.LoanType
+                <span class="badge badge-secondary ml-2">@Model.LoanCode</span>
+                @if (Model.MobileLoan)
+                {
+                    <span class="badge badge-info ml-1">Mobile Loan</span>
+                }
+                @if (Model.Bridging)
+                {
+                    <span class="badge badge-warning ml-1">Bridging</span>
+                }
+                @if (Model.SelfGuarantee)
+                {
+                    <span class="badge badge-success ml-1">Self Guarantee</span>
+                }
+            </h6>
+            <div>
+                <span class="badge @(Model.TotalLoans > 0 ? "badge-success" : "badge-secondary")">
+                    <i class="fas fa-hand-holding-usd"></i> @Model.TotalLoans Loans
+                </span>
+                <span class="badge badge-primary ml-2">
+                    <i class="fas fa-sort-amount-up"></i> Priority @Model.Priority
+                </span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <p class="mb-2">
+                        <strong>Product:</strong> @(Model.LoanProduct ?? "Not specified")
+                    </p>
+                    <p class="mb-2">
+                        <strong>Value Chain:</strong> @(Model.ValueChain ?? "Not specified")
+                    </p>
+                    <p class="mb-2">
+                        <strong>Company:</strong> @Model.CompanyCode
+                    </p>
+                    <p class="mb-0">
+                        <strong>Created:</strong> @Model.CreatedAt?.ToString("yyyy-MM-dd HH:mm") by @Model.CreatedBy
+                    </p>
+                    @if (Model.UpdatedAt.HasValue)
+                    {
+                        <p class="mb-0">
+                            <strong>Last Updated:</strong> @Model.UpdatedAt?.ToString("yyyy-MM-dd HH:mm")
+                        </p>
+                    }
+                </div>
+                <div class="col-md-4">
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading">Usage Statistics</h6>
+                        <hr>
+                        <p class="mb-1">
+                            <i class="fas fa-chart-line text-primary"></i>
+                            <strong>Total Loans:</strong> @Model.TotalLoans
+                        </p>
+                        <p class="mb-1">
+                            <i class="fas fa-check-circle text-success"></i>
+                            <strong>Active Loans:</strong> @Model.ActiveLoans
+                        </p>
+                        <p class="mb-1">
+                            <i class="fas fa-money-bill-wave text-warning"></i>
+                            <strong>Total Amount:</strong> @Model.TotalLoanAmount.ToString("C")
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Loan Terms Card -->
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Loan Terms</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th style="width: 50%">Maximum Amount</th>
+                                <td>
+                                    @if (Model.MaxAmount.HasValue)
+                                    {
+                                        <span class="text-success font-weight-bold">@Model.MaxAmount.Value.ToString("C")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No limit</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Interest Rate</th>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(Model.Interest))
+                                    {
+                                        <span class="font-weight-bold">@Model.Interest</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not specified</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Repayment Period</th>
+                                <td>
+                                    @if (Model.RepayPeriod.HasValue)
+                                    {
+                                        <span>@Model.RepayPeriod.Value months</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not specified</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Grace Period</th>
+                                <td>@Model.GracePeriod days</td>
+                            </tr>
+                            <tr>
+                                <th>Processing Fee</th>
+                                <td>
+                                    @if (Model.ProcessingFee.HasValue)
+                                    {
+                                        <span>@Model.ProcessingFee.Value.ToString("C")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">None</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Repayment Method</th>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(Model.RepayMethod))
+                                    {
+                                        <span class="badge badge-info">@Model.RepayMethod</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not specified</span>
+                                    }
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features & Eligibility Card -->
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Features & Eligibility</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th style="width: 50%">Earning Ratio</th>
+                                <td>
+                                    @if (Model.EarningRatio.HasValue)
+                                    {
+                                        <span>@Model.EarningRatio.Value.ToString("N2")</span>
+                                        <small class="text-muted">(Loan = Shares × @Model.EarningRatio.Value.ToString("N2"))</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not specified</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Maximum Loans per Member</th>
+                                <td>
+                                    @if (Model.MaxLoans.HasValue)
+                                    {
+                                        <span>@Model.MaxLoans.Value</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No limit</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Guarantor Required</th>
+                                <td>
+                                    @if (Model.Guarantor == "Y")
+                                    {
+                                        <span class="badge badge-danger">Required</span>
+                                    }
+                                    else if (Model.Guarantor == "N")
+                                    {
+                                        <span class="badge badge-success">Not Required</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-secondary">Optional</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Features</th>
+                                <td>
+                                    @if (Model.UseIntRange == true)
+                                    {
+                                        <span class="badge badge-info mr-1">Interest Range</span>
+                                    }
+                                    @if (Model.Penalty)
+                                    {
+                                        <span class="badge badge-warning mr-1">Late Penalty</span>
+                                    }
+                                    @if (Model.Bridging)
+                                    {
+                                        <span class="badge badge-warning mr-1">Bridging</span>
+                                    }
+                                    @if (Model.SelfGuarantee)
+                                    {
+                                        <span class="badge badge-success mr-1">Self Guarantee</span>
+                                    }
+                                    @if (Model.MobileLoan)
+                                    {
+                                        <span class="badge badge-info mr-1">Mobile</span>
+                                    }
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accounts Information -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Accounts Information</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="card border-left-primary shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                        Loan Account
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.LoanAcc</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-university fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card border-left-success shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                        Interest Account
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                        @(Model.InterestAcc ?? "Not set")
+                                    </div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-percentage fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card border-left-warning shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                        Penalty Account
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                        @(Model.PenaltyAcc ?? "Not set")
+                                    </div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card border-left-info shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                        PP Account
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.Ppacc</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-file-invoice-dollar fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="alert alert-secondary">
+                        <h6 class="alert-heading">Contra Account</h6>
+                        <p class="mb-0">@Model.ContraAccount</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row">
+        <div class="col">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <a asp-action="Edit" asp-route-loanCode="@Model.LoanCode" class="btn btn-primary">
+                        <i class="fas fa-edit"></i> Edit Loan Type
+                    </a>
+                    <a asp-action="Delete" asp-route-loanCode="@Model.LoanCode" class="btn btn-danger ml-2">
+                        <i class="fas fa-trash"></i> Delete Loan Type
+                    </a>
+                    <a asp-action="Index" class="btn btn-secondary ml-2">
+                        <i class="fas fa-list"></i> Back to List
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

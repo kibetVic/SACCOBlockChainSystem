@@ -1,0 +1,498 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.MembersIndexViewModel
+
+@{
+    ViewData["Title"] = "Members List";
+}
+
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <h1><i class="fas fa-users me-2"></i> Members Management</h1>
+                <a asp-action="Register" class="btn btn-primary">
+                    <i class="fas fa-user-plus me-1"></i> Register New Member
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Members
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.TotalMembers</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Active Members
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.ActiveMembers</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Share Capital
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                @{
+                                    var totalShares = Model.Members.Sum(m => m.ShareCap ?? 0);
+                                }
+                                KES @totalShares.ToString("N0")
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-piggy-bank fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Avg. Share Capital
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                @{
+                                    var avgShares = Model.TotalMembers > 0 ? totalShares / Model.TotalMembers : 0;
+                                }
+                                KES @avgShares.ToString("N0")
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top 10 Members Table -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-list-ol me-2"></i>Top 10 Members</h5>
+                    <span class="badge bg-light text-primary">@Model.Members.Count members</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-hover mb-0">
+                            <thead class="bg-light sticky-top" style="position: sticky; top: 0; z-index: 1;">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Member No</th>
+                                    <th>Full Name</th>
+                                    <th>ID Number</th>
+                                    <th>Phone</th>
+                                    @* <th>Share Capital</th> *@
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < Model.Members.Count; i++)
+                                {
+                                    var member = Model.Members[i];
+                                    <tr>
+                                        <td>@(i + 1)</td>
+                                        <td>
+                                            <strong>@member.MemberNo</strong>
+                                            @if (!string.IsNullOrEmpty(member.BlockchainTxId))
+                                            {
+                                                <span class="badge bg-success ms-1" title="On Blockchain">
+                                                    <i class="fas fa-link fa-xs"></i>
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>@member.Surname @member.OtherNames</td>
+                                        <td>@member.Idno</td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(member.PhoneNo))
+                                            {
+                                                <a href="tel:@member.PhoneNo" class="text-decoration-none">
+                                                    <i class="fas fa-phone me-1"></i>@member.PhoneNo
+                                                </a>
+                                            }
+                                        </td>
+                                        @* <td class="fw-bold text-success">
+                                            KES @(member.ShareCap?.ToString("N2") ?? "0.00")
+                                        </td> *@
+                                        <td>
+                                            @if (member.Status == 1)
+                                            {
+                                                <span class="badge bg-success">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <a asp-action="Details" asp-route-memberNo="@member.MemberNo"
+                                               class="btn btn-sm btn-info" title="View Details">
+                                                <i class="fas fa-eye"></i>Details
+                                            </a>
+                                            <a asp-action="Edit" asp-route-memberNo="@member.MemberNo" class="btn btn-warning">
+                                                <i class="fas fa-edit"></i> Edit
+                                            </a>
+                                            @* <a asp-action="Transactions" asp-route-memberNo="@member.MemberNo"
+                                               class="btn btn-sm btn-warning" title="View Transactions">
+                                                <i class="fas fa-exchange-alt"></i>
+                                            </a> *@
+                                        </td>
+                                    </tr>
+                                }
+                                @if (!Model.Members.Any())
+                                {
+                                    <tr>
+                                        <td colspan="8" class="text-center py-4">
+                                            <i class="fas fa-users fa-2x text-muted mb-3"></i>
+                                            <p class="text-muted">No members found. Register a new member to get started.</p>
+                                            <a asp-action="Register" class="btn btn-primary">
+                                                <i class="fas fa-user-plus me-1"></i> Register First Member
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Member Registration Timeline/Blockchain Visualization -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-project-diagram me-2"></i>Member Registration Blockchain Timeline</h5>
+                    <small>Showing @Model.AllMembers.Count members in chronological order</small>
+                </div>
+                <div class="card-body">
+                    <!-- Timeline Visualization -->
+                    <div class="timeline-container" style="max-height: 500px; overflow-y: auto;">
+                        <div class="timeline">
+                            @foreach (var member in Model.AllMembers.OrderBy(m => m.ApplicDate))
+                            {
+                                <div class="timeline-item">
+                                    <div class="timeline-marker @((member.Status == 1) ? "bg-success" : "bg-secondary")"></div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-header d-flex justify-content-between">
+                                            <h6 class="mb-1">
+                                                <i class="fas fa-user me-1"></i>
+                                                @member.Surname @member.OtherNames
+                                                @if (!string.IsNullOrEmpty(member.BlockchainTxId))
+                                                {
+                                                    <span class="badge bg-info ms-2" title="Blockchain Verified">
+                                                        <i class="fas fa-shield-alt fa-xs"></i> Secured
+                                                    </span>
+                                                }
+                                            </h6>
+                                            <small class="text-muted">@member.ApplicDate?.ToString("dd MMM yyyy HH:mm")</small>
+                                        </div>
+                                        <div class="timeline-body">
+                                            <div class="row">
+                                                <div class="col-md-3">
+                                                    <strong>Member No:</strong> @member.MemberNo
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <strong>ID:</strong> @member.Idno
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <strong>Phone:</strong> @member.PhoneNo
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <strong>Shares:</strong>
+                                                    <span class="badge bg-success">KES @(member.ShareCap?.ToString("N0") ?? "0")</span>
+                                                </div>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(member.Email))
+                                            {
+                                                <div class="mt-2">
+                                                    <small><i class="fas fa-envelope me-1"></i> @member.Email</small>
+                                                </div>
+                                            }
+                                            @if (!string.IsNullOrEmpty(member.BlockchainTxId))
+                                            {
+                                                <div class="mt-2">
+                                                    <small class="text-muted">
+                                                        <i class="fas fa-link me-1"></i>
+                                                        Blockchain TX:
+                                                        <code class="small" title="@member.BlockchainTxId">
+                                                            @member.BlockchainTxId.Substring(0, 20)...
+                                                        </code>
+                                                        <a href="/Blockchain/Verify/@member.BlockchainTxId"
+                                                           class="btn btn-sm btn-outline-info btn-xs ms-1" target="_blank">
+                                                            Verify
+                                                        </a>
+                                                    </small>
+                                                </div>
+                                            }
+                                            @if (!string.IsNullOrEmpty(member.BlockchainTxId))
+                                            {
+                                                <div class="mt-2">
+                                                    <small class="text-muted">
+                                                        <i class="fas fa-link me-1"></i>
+                                                        Blockchain TX:
+                                                        <code class="small" title="@member.BlockchainTxId">
+                                                            @member.BlockchainTxId.Substring(0, 20)...
+                                                        </code>
+                                                        <span class="badge bg-success ms-1">On Chain</span>
+                                                    </small>
+                                                </div>
+                                            }
+
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Statistics Summary -->
+                    <div class="row mt-4">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3>@Model.AllMembers.Count</h3>
+                                    <p class="text-muted mb-0">Total Registered</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    @{
+                                        var withBlockchain = Model.AllMembers.Count(m => !string.IsNullOrEmpty(m.BlockchainTxId));
+                                    }
+                                    <h3>@withBlockchain</h3>
+                                    <p class="text-muted mb-0">On Blockchain</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3>
+                                        @{
+                                            var totalSharesAll = Model.AllMembers.Sum(m => m.ShareCap ?? 0);
+                                        }
+                                        KES @totalSharesAll.ToString("N0")
+                                    </h3>
+                                    <p class="text-muted mb-0">Total Share Capital</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3>
+                                        @if (Model.AllMembers.Any())
+                                        {
+                                            var avgSharesAll = totalSharesAll / Model.AllMembers.Count;
+                                            <text>KES @avgSharesAll.ToString("N0")</text>
+                                        }
+                                        else
+                                        {
+                                            <text>KES 0</text>
+                                        }
+                                    </h3>
+                                    <p class="text-muted mb-0">Avg. Per Member</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add CSS for timeline -->
+<style>
+    .timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #dee2e6;
+        }
+
+    .timeline-item {
+        position: relative;
+        margin-bottom: 25px;
+    }
+
+    .timeline-marker {
+        position: absolute;
+        left: -30px;
+        top: 5px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 0 0 3px #dee2e6;
+    }
+
+    .timeline-content {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        transition: all 0.3s ease;
+    }
+
+        .timeline-content:hover {
+            background: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+    .timeline-header {
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px dashed #dee2e6;
+    }
+
+    .sticky-top {
+        background: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* Scrollbar styling */
+    .table-responsive::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+    .timeline-container::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .timeline-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .timeline-container::-webkit-scrollbar-thumb {
+        background: #6c757d;
+        border-radius: 4px;
+    }
+
+        .timeline-container::-webkit-scrollbar-thumb:hover {
+            background: #495057;
+        }
+</style>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize tooltips
+            $('[title]').tooltip();
+
+            // Add animation to timeline items
+            $('.timeline-item').each(function(i) {
+                $(this).css('animation-delay', (i * 100) + 'ms');
+            });
+
+            // Search functionality
+            $('#memberSearch').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('.timeline-item').filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+                });
+            });
+        });
+
+        function copyMemberNumber(memberNo) {
+            navigator.clipboard.writeText(memberNo).then(function() {
+                showToast('Member number copied to clipboard!', 'success');
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            // Simple toast notification
+            const toast = document.createElement('div');
+            toast.className = `toast align-items-center text-white bg-${type} border-0`;
+            toast.style.position = 'fixed';
+            toast.style.bottom = '20px';
+            toast.style.right = '20px';
+            toast.style.zIndex = '9999';
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
+                </div>
+            `;
+            document.body.appendChild(toast);
+
+            // Auto remove after 3 seconds
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 3000);
+        }
+    </script>
+}

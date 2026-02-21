@@ -1,0 +1,314 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.GuarantorAssignmentDTO
+@{
+    ViewData["Title"] = "Assign Guarantor";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var loanNo = ViewBag.LoanNo as string;
+    var loanAmount = ViewBag.LoanAmount as decimal?;
+    var requiredGuarantors = ViewBag.RequiredGuarantors as int?;
+    var assignedGuarantors = ViewBag.AssignedGuarantors as int?;
+}
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <a asp-action="Details" asp-route-loanNo="@loanNo" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i> Back to Loan
+            </a>
+            <h2 class="page-title mb-0">
+                <i class="bi bi-person-plus me-2"></i>Assign Guarantor
+            </h2>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    @if (ViewBag.SuccessMessage != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            @ViewBag.SuccessMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (ViewBag.ErrorMessage != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @ViewBag.ErrorMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Guarantor Assignment Form</h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="AssignGuarantor" method="post" id="guarantorForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="loanNo" value="@loanNo" />
+
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <!-- Progress Indicator -->
+                    <div class="mb-4">
+                        <label class="form-label">Guarantor Progress</label>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar bg-success" role="progressbar"
+                                 style="width: @(assignedGuarantors.HasValue && requiredGuarantors.HasValue && requiredGuarantors > 0 ? (assignedGuarantors.Value * 100 / requiredGuarantors.Value) : 0)%"
+                                 aria-valuenow="@assignedGuarantors"
+                                 aria-valuemin="0"
+                                 aria-valuemax="@requiredGuarantors">
+                            </div>
+                        </div>
+                        <small class="text-muted">
+                            @assignedGuarantors of @requiredGuarantors guarantors assigned
+                        </small>
+                    </div>
+
+                    <!-- Guarantor Search -->
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Search Member</label>
+                        <div class="col-sm-9">
+                            <div class="input-group">
+                                <input type="text" id="memberSearch" class="form-control"
+                                       placeholder="Enter member number or name" />
+                                <button type="button" class="btn btn-outline-primary" id="searchBtn">
+                                    <i class="bi bi-search"></i> Search
+                                </button>
+                            </div>
+                            <div id="searchResults" class="mt-2" style="display: none;">
+                                <!-- Search results will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Guarantor Details -->
+                    <div class="row mb-3">
+                        <label asp-for="GuarantorMemberNo" class="col-sm-3 col-form-label">Member Number *</label>
+                        <div class="col-sm-9">
+                            <input asp-for="GuarantorMemberNo" class="form-control" id="guarantorMemberNo" required readonly />
+                            <span asp-validation-for="GuarantorMemberNo" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Member Name</label>
+                        <div class="col-sm-9">
+                            <input type="text" class="form-control" id="memberName" readonly />
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Available Shares</label>
+                        <div class="col-sm-9">
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input type="text" class="form-control" id="availableShares" readonly />
+                            </div>
+                            <small class="text-muted" id="eligibilityMessage"></small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label asp-for="GuaranteeAmount" class="col-sm-3 col-form-label">Guarantee Amount *</label>
+                        <div class="col-sm-9">
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input asp-for="GuaranteeAmount" class="form-control" type="number" step="0.01"
+                                       min="1" required id="guaranteeAmount" />
+                            </div>
+                            <span asp-validation-for="GuaranteeAmount" class="text-danger"></span>
+                            <small class="text-muted">Loan amount: KES @loanAmount?.ToString("N2")</small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label asp-for="Remarks" class="col-sm-3 col-form-label">Remarks</label>
+                        <div class="col-sm-9">
+                            <textarea asp-for="Remarks" class="form-control" rows="2"></textarea>
+                            <span asp-validation-for="Remarks" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-secondary" onclick="history.back()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                            <i class="bi bi-person-check me-2"></i>Assign Guarantor
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Guarantor Guidelines</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Must be an active member
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Shares value must exceed guarantee amount
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Cannot be the loan applicant
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Maximum 3 guarantors per loan
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                        Guarantors must be approved by loan officer
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        @if (assignedGuarantors > 0)
+        {
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Currently Assigned</h5>
+                </div>
+                <div class="card-body p-0">
+                    <!-- This would show currently assigned guarantors -->
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function() {
+            var selectedMemberNo = '';
+
+            // Search members
+            $('#searchBtn').click(function() {
+                var searchTerm = $('#memberSearch').val();
+                var companyCode = '@ViewBag.CompanyCode';
+
+                if (searchTerm.length < 2) {
+                    alert('Please enter at least 2 characters');
+                    return;
+                }
+
+                $.ajax({
+                    url: '/api/MemberApi/search',
+                    type: 'GET',
+                    data: {
+                        searchTerm: searchTerm,
+                        companyCode: companyCode
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            var results = $('#searchResults');
+                            results.empty().show();
+
+                            if (response.data.length === 0) {
+                                results.append('<div class="alert alert-warning">No members found</div>');
+                                return;
+                            }
+
+                            var html = '<div class="list-group">';
+                            response.data.forEach(function(member) {
+                                html += `
+                                    <button type="button" class="list-group-item list-group-item-action"
+                                            onclick="selectMember('${member.memberNo}', '${member.surname} ${member.otherNames}')">
+                                        <div class="d-flex justify-content-between">
+                                            <div>
+                                                <strong>${member.memberNo}</strong> - ${member.surname} ${member.otherNames}
+                                                <br>
+                                                <small class="text-muted">${member.idno || 'No ID'}</small>
+                                            </div>
+                                            <div class="text-end">
+                                                <small>Shares: KES ${(member.shareCap || 0).toLocaleString()}</small>
+                                            </div>
+                                        </div>
+                                    </button>
+                                `;
+                            });
+                            html += '</div>';
+                            results.html(html);
+                        }
+                    }
+                });
+            });
+
+            // Validate guarantor eligibility
+            $('#guaranteeAmount').on('input', function() {
+                var amount = parseFloat($(this).val()) || 0;
+                var shares = parseFloat($('#availableShares').val().replace(/,/g, '')) || 0;
+
+                if (selectedMemberNo && amount > 0) {
+                    checkEligibility(selectedMemberNo, amount);
+                }
+            });
+        });
+
+        window.selectMember = function(memberNo, memberName) {
+            $('#guarantorMemberNo').val(memberNo);
+            $('#memberName').val(memberName);
+            $('#searchResults').hide();
+            selectedMemberNo = memberNo;
+
+            // Fetch member shares
+            var companyCode = '@ViewBag.CompanyCode';
+
+            $.ajax({
+                url: '/api/Share/member/' + memberNo,
+                type: 'GET',
+                success: function(response) {
+                    if (response.success) {
+                        var sharesValue = response.data.totalValue || 0;
+                        $('#availableShares').val(sharesValue.toLocaleString());
+                        $('#submitBtn').prop('disabled', false);
+                    }
+                }
+            });
+        };
+
+        function checkEligibility(memberNo, amount) {
+            var companyCode = '@ViewBag.CompanyCode';
+
+            $.ajax({
+                url: '/api/LoanApi/validate-guarantor',
+                type: 'GET',
+                data: {
+                    memberNo: memberNo,
+                    guaranteeAmount: amount,
+                    companyCode: companyCode
+                },
+                success: function(response) {
+                    if (response.success) {
+                        if (response.data.isValid) {
+                            $('#eligibilityMessage').html('<span class="text-success">✓ Guarantor is eligible</span>');
+                            $('#submitBtn').prop('disabled', false);
+                        } else {
+                            $('#eligibilityMessage').html('<span class="text-danger">✗ ' + response.data.message + '</span>');
+                            $('#submitBtn').prop('disabled', true);
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+}

@@ -1,0 +1,301 @@
+﻿@using SACCOBlockChainSystem.Models.DTOs
+@model ShareTypeCreateDTO
+@{
+    ViewData["Title"] = "Create Share Type";
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4>
+                        <i class="fas fa-plus-circle"></i> Create New Share Type
+                    </h4>
+                </div>
+
+                <div class="card-body">
+                    <!-- Display validation summary -->
+                    @if (!ViewData.ModelState.IsValid)
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <h5 class="alert-heading">
+                                <i class="fas fa-exclamation-triangle"></i> Please fix the following errors:
+                            </h5>
+                            <ul class="mb-0">
+                                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                                {
+                                    <li>@error.ErrorMessage</li>
+                                }
+                            </ul>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    }
+
+                    <form asp-action="Create" method="post">
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden" asp-for="CompanyCode" />
+                        <input type="hidden" asp-for="CreatedBy" />
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="SharesCode">Share Code *</label>
+                                    <input asp-for="SharesCode" class="form-control" required
+                                           placeholder="e.g., SH01, SH02" maxlength="20" />
+                                    <small class="text-muted">Unique code for this share type (max 20 chars)</small>
+                                    <span asp-validation-for="SharesCode" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="SharesType">Share Type Name *</label>
+                                    <input asp-for="SharesType" class="form-control" required
+                                           placeholder="e.g., Ordinary Shares, Preference Shares" maxlength="100" />
+                                    <small class="text-muted">Display name for this share type</small>
+                                    <span asp-validation-for="SharesType" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="SharesAcc">Share Account *</label>
+                                    <input asp-for="SharesAcc" class="form-control" required
+                                           placeholder="e.g., 300000" maxlength="50" />
+                                    <small class="text-muted">GL account for share transactions</small>
+                                    <span asp-validation-for="SharesAcc" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="ContraAcc">Contra Account</label>
+                                    <input asp-for="ContraAcc" class="form-control"
+                                           placeholder="e.g., 100000" maxlength="50" />
+                                    <small class="text-muted">Offset account for transactions</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group mb-3">
+                                    <label asp-for="MinAmount">Minimum Amount *</label>
+                                    <input asp-for="MinAmount" type="number" step="0.01" class="form-control" required
+                                           value="0" min="0" />
+                                    <small class="text-muted">Minimum amount per transaction</small>
+                                    <span asp-validation-for="MinAmount" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group mb-3">
+                                    <label asp-for="MaxAmount">Maximum Amount</label>
+                                    <input asp-for="MaxAmount" type="number" step="0.01" class="form-control"
+                                           min="0" />
+                                    <small class="text-muted">Maximum amount per transaction (leave empty for no limit)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group mb-3">
+                                    <label asp-for="Priority">Priority *</label>
+                                    <select asp-for="Priority" class="form-control" required>
+                                        @for (int i = 1; i <= 10; i++)
+                                        {
+                                            <option value="@i">@i</option>
+                                        }
+                                    </select>
+                                    <small class="text-muted">Display priority (1 = highest)</small>
+                                    <span asp-validation-for="Priority" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="Ppacc">PP Account *</label>
+                                    <input asp-for="Ppacc" class="form-control" required
+                                           placeholder="e.g., 200000" />
+                                    <small class="text-muted">PP Account for this share type</small>
+                                    <span asp-validation-for="Ppacc" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group mb-3">
+                                    <label asp-for="LowerLimit">Lower Limit</label>
+                                    <input asp-for="LowerLimit" type="number" step="0.01" class="form-control"
+                                           value="0" min="0" />
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group mb-3">
+                                    <label asp-for="ElseRatio">Else Ratio</label>
+                                    <input asp-for="ElseRatio" type="number" step="0.01" class="form-control"
+                                           value="0" min="0" max="10" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Advanced Settings -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-cog"></i> Advanced Settings
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="form-group mb-3">
+                                            <label asp-for="PlacePeriod">Place Period (Months)</label>
+                                            <input asp-for="PlacePeriod" type="number" class="form-control"
+                                                   min="0" max="100" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group mb-3">
+                                            <label asp-for="LoanToShareRatio">Loan to Share Ratio</label>
+                                            <input asp-for="LoanToShareRatio" type="number" step="0.01"
+                                                   class="form-control" min="0" max="10" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group mb-3">
+                                            <label asp-for="Issharecapital">Is Share Capital?</label>
+                                            <select asp-for="Issharecapital" class="form-control">
+                                                <option value="1">Yes</option>
+                                                <option value="0">No</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group mb-3">
+                                            <label asp-for="Interest">Interest Rate (%)</label>
+                                            <input asp-for="Interest" type="number" step="0.01"
+                                                   class="form-control" min="0" max="100" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Flags Section -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-warning text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-flag"></i> Share Type Flags
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="form-check form-switch mb-3">
+                                            <input asp-for="IsMainShares" class="form-check-input" type="checkbox" />
+                                            <label asp-for="IsMainShares" class="form-check-label">
+                                                Main Shares
+                                            </label>
+                                            <small class="form-text text-muted d-block">
+                                                Primary share type for members
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check form-switch mb-3">
+                                            <input asp-for="UsedToGuarantee" class="form-check-input" type="checkbox" />
+                                            <label asp-for="UsedToGuarantee" class="form-check-label">
+                                                Used for Guarantee
+                                            </label>
+                                            <small class="form-text text-muted d-block">
+                                                Can be used as loan guarantee
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check form-switch mb-3">
+                                            <input asp-for="Withdrawable" class="form-check-input" type="checkbox" />
+                                            <label asp-for="Withdrawable" class="form-check-label">
+                                                Withdrawable
+                                            </label>
+                                            <small class="form-text text-muted d-block">
+                                                Members can withdraw these shares
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check form-switch mb-3">
+                                            <input asp-for="UsedToOffset" class="form-check-input" type="checkbox" />
+                                            <label asp-for="UsedToOffset" class="form-check-label">
+                                                Used for Offset
+                                            </label>
+                                            <small class="form-text text-muted d-block">
+                                                Can be used to offset loans
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch mb-3">
+                                            <input asp-for="Loanquaranto" class="form-check-input" type="checkbox" />
+                                            <label asp-for="Loanquaranto" class="form-check-label">
+                                                Loan Quaranto
+                                            </label>
+                                            <small class="form-text text-muted d-block">
+                                                Special loan qualification flag
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label asp-for="Guarantor">Guarantor</label>
+                                            <input asp-for="Guarantor" class="form-control"
+                                                   placeholder="Guarantor requirements" maxlength="100" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group mt-4">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-check-circle"></i> Create Share Type
+                            </button>
+                            <a asp-action="Index" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="reset" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-redo"></i> Reset Form
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+    <script>
+        // Auto-focus on first field
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('SharesCode').focus();
+        });
+
+        // Validate that MaxAmount is greater than MinAmount if provided
+        document.getElementById('MaxAmount').addEventListener('blur', function() {
+            const minAmount = parseFloat(document.getElementById('MinAmount').value) || 0;
+            const maxAmount = parseFloat(this.value);
+
+            if (!isNaN(maxAmount) && maxAmount > 0 && maxAmount < minAmount) {
+                alert('Maximum amount cannot be less than minimum amount');
+                this.value = '';
+                this.focus();
+            }
+        });
+    </script>
+}

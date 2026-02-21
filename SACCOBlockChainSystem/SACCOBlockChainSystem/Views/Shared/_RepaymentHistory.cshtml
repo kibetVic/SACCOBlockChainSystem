@@ -1,0 +1,160 @@
+﻿@model List<SACCOBlockChainSystem.Models.LoanRepayment>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Repayment History</h5>
+    </div>
+    <div class="card-body p-0">
+        @if (Model.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Receipt No</th>
+                            <th>Date</th>
+                            <th class="text-end">Amount Paid</th>
+                            <th class="text-end">Penalty</th>
+                            <th class="text-end">Interest</th>
+                            <th class="text-end">Principal</th>
+                            <th class="text-end">Overpayment</th>
+                            <th class="text-end">Balance</th>
+                            <th>Method</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var repayment in Model.OrderByDescending(r => r.PaymentDate))
+                        {
+                            <tr class="@(repayment.Status == "Reversed" ? "table-danger" : "")">
+                                <td>
+                                    <strong>@repayment.ReceiptNo</strong>
+                                </td>
+                                <td>@repayment.PaymentDate.ToString("dd/MM/yyyy")</td>
+                                <td class="text-end fw-bold">KES @repayment.AmountPaid.ToString("N2")</td>
+                                <td class="text-end text-warning">KES @repayment.PenaltyAllocated.ToString("N2")</td>
+                                <td class="text-end text-info">KES @repayment.InterestAllocated.ToString("N2")</td>
+                                <td class="text-end text-success">KES @repayment.PrincipalAllocated.ToString("N2")</td>
+                                <td class="text-end text-primary">KES @repayment.OverpaymentAmount.ToString("N2")</td>
+                                <td class="text-end">KES @repayment.BalanceAfterPayment.ToString("N2")</td>
+                                <td>
+                                    <span class="badge bg-light text-dark">
+                                        @repayment.PaymentMethod
+                                        @if (!string.IsNullOrEmpty(repayment.ReferenceNo))
+                                        {
+                                            <br>
+                                
+                                            <small>Ref: @repayment.ReferenceNo</small>
+                                        }
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (repayment.Status == "Completed")
+                                    {
+                                        <span class="badge bg-success">Completed</span>
+                                    }
+                                    else if (repayment.Status == "Reversed")
+                                    {
+                                        <span class="badge bg-danger">Reversed</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">@repayment.Status</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (repayment.Status == "Completed" && (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                                onclick="showReverseModal(@repayment.Id, '@repayment.LoanNo')"
+                                                title="Reverse Repayment">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                    }
+                                    @if (!string.IsNullOrEmpty(repayment.BlockchainTxId))
+                                    {
+                                        <span class="badge bg-light text-dark" title="Blockchain Verified">
+                                            <i class="bi bi-link"></i>
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                            @if (repayment.Status == "Reversed")
+                            {
+                                <tr class="table-danger small">
+                                    <td colspan="11">
+                                        <div class="ps-3">
+                                            <i class="bi bi-info-circle me-2"></i>
+                                            <strong>Reversal Reason:</strong> @repayment.ReversalReason
+                                            <span class="text-muted ms-3">
+                                                Reversed by: @repayment.ReversedBy on @(repayment.ReversedDate?.ToString("dd/MM/yyyy HH:mm"))
+                                            </span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="2" class="text-end">Totals:</th>
+                            <th class="text-end">KES @Model.Where(r => r.Status == "Completed").Sum(r => r.AmountPaid).ToString("N2")</th>
+                            <th class="text-end">KES @Model.Where(r => r.Status == "Completed").Sum(r => r.PenaltyAllocated).ToString("N2")</th>
+                            <th class="text-end">KES @Model.Where(r => r.Status == "Completed").Sum(r => r.InterestAllocated).ToString("N2")</th>
+                            <th class="text-end">KES @Model.Where(r => r.Status == "Completed").Sum(r => r.PrincipalAllocated).ToString("N2")</th>
+                            <th class="text-end">KES @Model.Where(r => r.Status == "Completed").Sum(r => r.OverpaymentAmount).ToString("N2")</th>
+                            <th colspan="4"></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-arrow-left-right fs-1 text-muted"></i>
+                <p class="text-muted mt-3">No repayments have been recorded yet</p>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Reverse Repayment Modal -->
+<div class="modal fade" id="reverseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="ReverseRepayment" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="repaymentId" id="reverseRepaymentId" />
+                <input type="hidden" name="loanNo" id="reverseLoanNo" />
+                <div class="modal-header">
+                    <h5 class="modal-title text-danger">Reverse Repayment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Reversing a repayment will undo all allocations and recalculate loan balances. This action cannot be undone.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason for Reversal <span class="text-danger">*</span></label>
+                        <textarea name="reason" class="form-control" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Reverse Repayment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showReverseModal(repaymentId, loanNo) {
+        $('#reverseRepaymentId').val(repaymentId);
+        $('#reverseLoanNo').val(loanNo);
+        $('#reverseModal').modal('show');
+    }
+</script>
