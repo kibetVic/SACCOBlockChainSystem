@@ -42,5 +42,6 @@ namespace SACCOBlockChainSystem.Services
             object data);
 
         Task<List<BlockchainTransaction>> GetMemberTransactions(string memberNo);
+        Task<BlockchainStatistics> GetBlockchainStatistics();
     }
 }

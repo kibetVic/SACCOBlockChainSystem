@@ -19,6 +19,84 @@ namespace SACCOBlockChainSystem.Controllers
             _logger = logger;
         }
 
+        // ============== ADD THIS METHOD ==============
+        // GET: /Blockchain/Status (called from JavaScript)
+        [HttpGet("Blockchain/Status")]
+        public async Task<IActionResult> Status()
+        {
+            try
+            {
+                _logger.LogInformation("Getting blockchain status");
+
+                var status = await _blockchainService.GetBlockchainStatus();
+
+                return Json(new
+                {
+                    success = true,
+                    totalBlocks = status.TotalBlocks,
+                    totalTransactions = status.TotalTransactions,
+                    pendingTransactions = status.PendingTransactions,
+                    latestBlockHash = status.LatestBlockHash,
+                    latestBlockTimestamp = status.LatestBlockTimestamp,
+                    //isChainValid = status.IsChainValid,
+                    //blockchainHeight = status.BlockchainHeight
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting blockchain status");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        // GET: /Blockchain/Stats (optional, for additional data)
+        [HttpGet("Blockchain/Stats")]
+        public async Task<IActionResult> Stats()
+        {
+            try
+            {
+                var stats = await _blockchainService.GetBlockchainStatistics();
+                return Json(stats);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting blockchain stats");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+        // Add this to your BlockchainController.cs
+        //[HttpGet("Status")]
+        //public async Task<IActionResult> Status()
+        //{
+        //    try
+        //    {
+        //        var status = await _blockchainService.GetBlockchainStatus();
+
+        //        return Json(new
+        //        {
+        //            success = true,
+        //            status = status.IsValid ? "Connected" : "Issues Detected",
+        //            totalTransactions = status.TotalTransactions,
+        //            totalBlocks = status.TotalBlocks,
+        //            pendingTransactions = status.PendingTransactions,
+        //            lastSync = DateTime.Now,
+        //            pendingLoans = 0 // You can calculate this from your loan service if needed
+        //        });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error getting blockchain status");
+        //        return Json(new
+        //        {
+        //            success = false,
+        //            status = "Error",
+        //            totalTransactions = 0,
+        //            totalBlocks = 0,
+        //            pendingTransactions = 0,
+        //            lastSync = DateTime.Now
+        //        });
+        //    }
+        //}
         // GET: /Blockchain/Verify/{transactionId}
         [HttpGet("Blockchain/Verify/{transactionId}")]
         public async Task<IActionResult> Verify(string transactionId)
@@ -27,7 +105,6 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 _logger.LogInformation($"Verifying blockchain transaction: {transactionId}");
 
-                // Get transaction from blockchain service
                 var transaction = await _blockchainService.GetTransactionAsync(transactionId);
 
                 if (transaction == null)
@@ -39,10 +116,9 @@ namespace SACCOBlockChainSystem.Controllers
                     });
                 }
 
-                // Verify the transaction
                 var isVerified = await _blockchainService.VerifyTransactionAsync(transactionId);
 
-                return Ok(new
+                return Json(new
                 {
                     success = true,
                     transaction = new
@@ -99,7 +175,6 @@ namespace SACCOBlockChainSystem.Controllers
                     return NotFound();
                 }
 
-                // Get the block containing this transaction
                 var block = transaction.BlockHash != null
                     ? await _blockchainService.GetBlockAsync(transaction.BlockHash)
                     : null;
@@ -131,7 +206,7 @@ namespace SACCOBlockChainSystem.Controllers
                 if (isValid)
                 {
                     var block = await _blockchainService.GetBlockAsync(blockHash);
-                    return Ok(new
+                    return Json(new
                     {
                         success = true,
                         message = "Blockchain is valid",
@@ -142,7 +217,7 @@ namespace SACCOBlockChainSystem.Controllers
                 }
                 else
                 {
-                    return Ok(new
+                    return Json(new
                     {
                         success = false,
                         message = "Blockchain integrity check failed"

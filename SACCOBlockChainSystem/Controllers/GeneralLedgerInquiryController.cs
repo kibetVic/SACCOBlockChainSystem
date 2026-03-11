@@ -98,20 +98,100 @@ namespace SACCOBlockChainSystem.Controllers
                 model.SelectedAccountName = account.Glaccname;
                 model.CurrentAccount = $"{account.AccNo} - {account.Glaccname}";
 
-                // Calculate opening balance as of start date
+                // Calculate opening balance as of start date (including both tables)
                 model.OpeningBalance = await CalculateAccountBalance(
                     model.SelectedAccountNo,
                     model.StartDate.AddDays(-1),
                     companyCode);
 
-                // Get transactions for the period
-                model.Transactions = await GetAccountTransactions(
-                    model.SelectedAccountNo,
-                    model.StartDate,
-                    model.EndDate,
-                    companyCode);
+                // ============================================
+                // GET TRANSACTIONS FROM BOTH TABLES
+                // ============================================
+                var transactions = new List<GeneralLedgerTransaction>();
 
-                // Calculate book balance (opening balance + net activity)
+                // 1. Get from Journals table (POSTED entries)
+                var journalEntries = await _context.Journals
+                    .Where(x => x.ACCNO == model.SelectedAccountNo
+                             && x.TRANSDATE >= model.StartDate
+                             && x.TRANSDATE <= model.EndDate
+                             && x.CompanyCode == companyCode
+                             && x.POSTED == true)  // Only posted entries
+                    .OrderBy(x => x.TRANSDATE)
+                    .ThenBy(x => x.JVID)
+                    .ToListAsync();
+
+                foreach (var j in journalEntries)
+                {
+                    transactions.Add(new GeneralLedgerTransaction
+                    {
+                        AuditId = j.AUDITID,
+                        TransactionDate = j.TRANSDATE ?? DateTime.Now,
+                        TransactionNo = j.Transactionno ?? j.VNO,
+                        TransactionRemarks = j.NARATION ?? "No description",
+                        MemberNo = j.MEMBERNO ?? "-",
+                        DebitAmount = j.TRANSTYPE == "DR" ? j.AMOUNT ?? 0 : 0,
+                        CreditAmount = j.TRANSTYPE == "CR" ? j.AMOUNT ?? 0 : 0,
+                        DocumentNo = j.VNO,
+                        //Source = "POSTED",  // Changed from "JOURNAL" to "POSTED" for clarity
+                        Posted = true,
+                        PostedDate = j.POSTEDDATE
+                    });
+                }
+
+                // 2. Get from JournalsListings (DRAFT/COMBINED entries)
+                var journalListings = await _context.JournalsListings
+                    .Where(x => x.AccountNo == model.SelectedAccountNo
+                             && x.TransDate >= model.StartDate
+                             && x.TransDate <= model.EndDate
+                             && x.CompanyCode == companyCode
+                             && x.TransType != "REF"
+                             && x.TransType != "GRP")
+                    .OrderBy(x => x.TransDate)
+                    .ThenBy(x => x.JlId)
+                    .ToListAsync();
+
+                foreach (var j in journalListings)
+                {
+                    transactions.Add(new GeneralLedgerTransaction
+                    {
+                        AuditId = j.AuditId,
+                        TransactionDate = j.TransDate ?? DateTime.Now,
+                        TransactionNo = j.VoucherNo,
+                        TransactionRemarks = j.Narration ?? "No description",
+                        MemberNo = j.MemberNo ?? "-",
+                        DebitAmount = j.AmountDr ?? 0,
+                        CreditAmount = j.AmountCr ?? 0,
+                        DocumentNo = j.VoucherNo,
+                        //Source = "DRAFT",
+                        Posted = j.Posted ,
+                        PostedDate = j.PostedDate
+                    });
+                }
+
+                // Sort all transactions by date
+                transactions = transactions
+                    .OrderBy(x => x.TransactionDate)
+                    .ThenBy(x => x.TransactionNo)
+                    .ToList();
+
+                model.Transactions = transactions;
+
+                // Calculate running balance
+                decimal runningBalance = model.OpeningBalance;
+                foreach (var transaction in model.Transactions)
+                {
+                    if (account.Normalbal == "DR")
+                    {
+                        runningBalance += transaction.DebitAmount - transaction.CreditAmount;
+                    }
+                    else
+                    {
+                        runningBalance += transaction.CreditAmount - transaction.DebitAmount;
+                    }
+                    transaction.RunningBalance = runningBalance;
+                }
+
+                // Calculate period totals
                 var periodDebit = model.Transactions.Sum(x => x.DebitAmount);
                 var periodCredit = model.Transactions.Sum(x => x.CreditAmount);
 
@@ -127,7 +207,9 @@ namespace SACCOBlockChainSystem.Controllers
                 model.Accounts = await GetActiveAccounts(companyCode);
 
                 _logger.LogInformation($"GL Inquiry executed for Account: {model.SelectedAccountNo}, " +
-                    $"Period: {model.StartDate:dd/MM/yyyy} - {model.EndDate:dd/MM/yyyy}");
+                    $"Period: {model.StartDate:dd/MM/yyyy} - {model.EndDate:dd/MM/yyyy}, " +
+                    $"Found {model.Transactions.Count} transactions " +
+                    $"({journalEntries.Count} posted, {journalListings.Count} draft)");
 
                 return View("Index", model);
             }
@@ -158,7 +240,7 @@ namespace SACCOBlockChainSystem.Controllers
                     return NotFound();
 
                 var balance = await CalculateAccountBalance(accountNo, asAtDate, companyCode);
-                var transactions = await GetAccountTransactions(
+                var transactions = await GetAllAccountTransactions(
                     accountNo,
                     asAtDate.AddMonths(-3),
                     asAtDate,
@@ -201,7 +283,7 @@ namespace SACCOBlockChainSystem.Controllers
                 if (account == null)
                     return NotFound();
 
-                var transactions = await GetAccountTransactions(
+                var transactions = await GetAllAccountTransactions(
                     accountNo, startDate, endDate, companyCode);
 
                 var openingBalance = await CalculateAccountBalance(
@@ -240,7 +322,7 @@ namespace SACCOBlockChainSystem.Controllers
                 if (account == null)
                     return NotFound();
 
-                var transactions = await GetAccountTransactions(
+                var transactions = await GetAllAccountTransactions(
                     accountNo, startDate, endDate, companyCode);
 
                 var openingBalance = await CalculateAccountBalance(
@@ -296,32 +378,68 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
         private async Task<decimal> CalculateAccountBalance(
-            string accountNo,
-            DateTime asAtDate,
-            string companyCode)
+      string accountNo,
+      DateTime asAtDate,
+      string companyCode)
         {
-            // Get opening balance from GL Setup
+            // Get account details
             var account = await _context.GlSetup
                 .FirstOrDefaultAsync(x => x.AccNo == accountNo
                                        && x.CompanyCode == companyCode);
 
             var openingBalance = account?.OpeningBal ?? 0;
 
-            // Get transactions up to asAtDate
-            var transactions = await _context.Gltransactions
-                .Where(x => (x.DrAccNo == accountNo || x.CrAccNo == accountNo)
-                         && x.TransDate <= asAtDate
+            decimal totalDebit = 0;
+            decimal totalCredit = 0;
+
+            // ============================================
+            // 1. Get from Journals table (where posted journals are stored)
+            // ============================================
+            var journalEntries = await _context.Journals
+                .Where(x => x.ACCNO == accountNo
+                         && x.TRANSDATE <= asAtDate
                          && x.CompanyCode == companyCode
-                         && x.DocPosted == 1)
+                         && x.POSTED == true)  // Only posted entries
                 .ToListAsync();
 
-            var totalDebit = transactions
-                .Where(x => x.DrAccNo == accountNo)
-                .Sum(x => x.Amount);
+            if (journalEntries.Any())
+            {
+                totalDebit += journalEntries
+                    .Where(x => x.TRANSTYPE == "DR")
+                    .Sum(x => x.AMOUNT ?? 0);
 
-            var totalCredit = transactions
-                .Where(x => x.CrAccNo == accountNo)
-                .Sum(x => x.Amount);
+                totalCredit += journalEntries
+                    .Where(x => x.TRANSTYPE == "CR")
+                    .Sum(x => x.AMOUNT ?? 0);
+
+                _logger.LogDebug($"Journals table - Account {accountNo}: Debits={totalDebit:N2}, Credits={totalCredit:N2}");
+            }
+
+            // ============================================
+            // 2. Also get from JournalsListings (for unposted/draft entries)
+            // ============================================
+            var journalListings = await _context.JournalsListings
+                .Where(x => x.AccountNo == accountNo
+                         && x.TransDate <= asAtDate
+                         && x.CompanyCode == companyCode
+                         && x.TransType != "REF"
+                         && x.TransType != "GRP")
+                .ToListAsync();
+
+            if (journalListings.Any())
+            {
+                totalDebit += journalListings
+                    .Where(x => x.TransType == "DR" || x.AmountDr > 0)
+                    .Sum(x => x.AmountDr ?? 0);
+
+                totalCredit += journalListings
+                    .Where(x => x.TransType == "CR" || x.AmountCr > 0)
+                    .Sum(x => x.AmountCr ?? 0);
+
+                _logger.LogDebug($"JournalsListings table - Account {accountNo}: Debits={journalListings.Sum(x => x.AmountDr ?? 0):N2}, Credits={journalListings.Sum(x => x.AmountCr ?? 0):N2}");
+            }
+
+            _logger.LogInformation($"Account {accountNo}: Total Debits={totalDebit:N2}, Total Credits={totalCredit:N2}");
 
             if (account?.Normalbal == "DR")
             {
@@ -332,76 +450,115 @@ namespace SACCOBlockChainSystem.Controllers
                 return openingBalance + totalCredit - totalDebit;
             }
         }
-
-        private async Task<List<GeneralLedgerTransaction>> GetAccountTransactions(
-            string accountNo,
-            DateTime startDate,
-            DateTime endDate,
-            string companyCode,
-            int? limit = null)
+        private async Task<List<GeneralLedgerTransaction>> GetAllAccountTransactions(
+     string accountNo,
+     DateTime startDate,
+     DateTime endDate,
+     string companyCode,
+     int? limit = null)
         {
-            var query = _context.Gltransactions
-                .Where(x => (x.DrAccNo == accountNo || x.CrAccNo == accountNo)
+            var result = new List<GeneralLedgerTransaction>();
+
+            // ============================================
+            // 1. Get from Journals table (posted journals)
+            // ============================================
+            var journalEntries = await _context.Journals
+                .Where(x => x.ACCNO == accountNo
+                         && x.TRANSDATE >= startDate
+                         && x.TRANSDATE <= endDate
+                         && x.CompanyCode == companyCode
+                         && x.POSTED == true)  // Only posted entries
+                .OrderBy(x => x.TRANSDATE)
+                .ThenBy(x => x.JVID)
+                .ToListAsync();
+
+            foreach (var j in journalEntries)
+            {
+                result.Add(new GeneralLedgerTransaction
+                {
+                    AuditId = j.AUDITID,
+                    TransactionDate = j.TRANSDATE ?? DateTime.Now,
+                    TransactionNo = j.Transactionno ?? j.VNO,
+                    TransactionRemarks = j.NARATION ?? "No description",
+                    MemberNo = j.MEMBERNO ?? "-",
+                    DebitAmount = j.TRANSTYPE == "DR" ? j.AMOUNT ?? 0 : 0,
+                    CreditAmount = j.TRANSTYPE == "CR" ? j.AMOUNT ?? 0 : 0,
+                    DocumentNo = j.VNO,
+                    //Source = "JOURNAL",
+                    Posted = j.POSTED,
+                    PostedDate = j.POSTEDDATE,
+                    Reference = $"JV {j.VNO}"
+                });
+            }
+
+            // ============================================
+            // 2. Get from JournalsListings (draft/combined entries)
+            // ============================================
+            var journalListings = await _context.JournalsListings
+                .Where(x => x.AccountNo == accountNo
                          && x.TransDate >= startDate
                          && x.TransDate <= endDate
                          && x.CompanyCode == companyCode
-                         && x.DocPosted == 1)
+                         && x.TransType != "REF"
+                         && x.TransType != "GRP")
                 .OrderBy(x => x.TransDate)
-                .ThenBy(x => x.Id);
+                .ThenBy(x => x.JlId)
+                .ToListAsync();
+
+            foreach (var j in journalListings)
+            {
+                result.Add(new GeneralLedgerTransaction
+                {
+                    AuditId = j.AuditId,
+                    TransactionDate = j.TransDate ?? DateTime.Now,
+                    TransactionNo = j.VoucherNo,
+                    TransactionRemarks = j.Narration ?? "No description",
+                    MemberNo = j.MemberNo ?? "-",
+                    DebitAmount = j.AmountDr ?? 0,
+                    CreditAmount = j.AmountCr ?? 0,
+                    DocumentNo = j.VoucherNo,
+                    //Source = "DRAFT",
+                    Posted = j.Posted,
+                    PostedDate = j.PostedDate,
+                    Reference = $"Draft {j.VoucherNo}"
+                });
+            }
+
+            // Sort all transactions by date
+            result = result.OrderBy(x => x.TransactionDate)
+                           .ThenBy(x => x.TransactionNo)
+                           .ToList();
 
             if (limit.HasValue)
-                query = (IOrderedQueryable<Gltransaction>)query.Take(limit.Value);
+                result = result.Take(limit.Value).ToList();
 
-            var transactions = await query.ToListAsync();
-
-            var result = new List<GeneralLedgerTransaction>();
+            // Calculate running balance
             decimal runningBalance = await CalculateAccountBalance(accountNo, startDate.AddDays(-1), companyCode);
+            var account = await _context.GlSetup
+                .FirstOrDefaultAsync(x => x.AccNo == accountNo);
 
-            foreach (var t in transactions)
+            foreach (var transaction in result)
             {
-                var isDebit = t.DrAccNo == accountNo;
-                var amount = t.Amount;
-
-                var transaction = new GeneralLedgerTransaction
-                {
-                    AuditId = t.AuditId,
-                    TransactionDate = t.TransDate,
-                    TransactionNo = t.TransactionNo ?? t.DocumentNo,
-                    TransactionRemarks = t.TransDescript,
-                    MemberNo = ExtractMemberNo(t.TransDescript),
-                    DebitAmount = isDebit ? amount : 0,
-                    CreditAmount = !isDebit ? amount : 0,
-                    DocumentNo = t.DocumentNo,
-                    Source = t.Source
-                };
-
-                // Calculate running balance
-                var account = await _context.GlSetup
-                    .FirstOrDefaultAsync(x => x.AccNo == accountNo);
-
                 if (account?.Normalbal == "DR")
                 {
-                    runningBalance += (isDebit ? amount : -amount);
+                    runningBalance += transaction.DebitAmount - transaction.CreditAmount;
                 }
                 else
                 {
-                    runningBalance += (!isDebit ? amount : -amount);
+                    runningBalance += transaction.CreditAmount - transaction.DebitAmount;
                 }
 
                 transaction.RunningBalance = runningBalance;
-                result.Add(transaction);
             }
 
             return result;
         }
-
         private string ExtractMemberNo(string? description)
         {
             if (string.IsNullOrEmpty(description))
                 return "-";
 
             // Try to extract member number from description
-            // This pattern may need adjustment based on your data
             var words = description.Split(' ');
             foreach (var word in words)
             {
@@ -431,7 +588,7 @@ namespace SACCOBlockChainSystem.Controllers
             sb.AppendLine();
 
             // Column Headers
-            sb.AppendLine("Date,Transaction No,Description,Member No,Debit,Credit,Balance");
+            sb.AppendLine("Date,Transaction No,Description,Member No,Debit,Credit,Balance,Source");
 
             // Transactions
             foreach (var t in transactions)
@@ -442,7 +599,8 @@ namespace SACCOBlockChainSystem.Controllers
                     $"{t.MemberNo}," +
                     $"{t.DebitAmount:N2}," +
                     $"{t.CreditAmount:N2}," +
-                    $"{t.RunningBalance:N2}");
+                    $"{t.RunningBalance:N2}," +
+                    $"{t.Source}");
             }
 
             // Footer

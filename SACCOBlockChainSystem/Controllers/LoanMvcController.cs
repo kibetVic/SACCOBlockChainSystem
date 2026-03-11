@@ -10,13 +10,14 @@ using System.Threading.Tasks;
 namespace SACCOBlockChainSystem.Controllers
 {
     [Authorize]
+    
     public class LoanMvcController : Controller
     {
         private readonly ILoanService _loanService;
         private readonly IMemberService _memberService;
         private readonly ICompanyContextService _companyContextService;
         private readonly ILogger<LoanMvcController> _logger;
-
+       
         public LoanMvcController(
             ILoanService loanService,
             IMemberService memberService,
@@ -28,7 +29,10 @@ namespace SACCOBlockChainSystem.Controllers
             _companyContextService = companyContextService;
             _logger = logger;
         }
-
+        public IActionResult Index()
+        {
+            return RedirectToAction("Dashboard");
+        }
         // GET: Loan/Application
         public IActionResult Application()
         {
@@ -176,7 +180,7 @@ namespace SACCOBlockChainSystem.Controllers
 
                 ViewBag.Loan = loan;
                 ViewBag.Guarantors = guarantors;
-                ViewBag.NextStatuses = Helpers.LoanStatusHelper.GetNextAllowedStatuses(loan.Status);
+               ViewBag.NextStatuses = Helpers.LoanStatusHelper.GetNextAllowedStatuses(loan.Status);
 
                 return View();
             }

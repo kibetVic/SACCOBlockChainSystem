@@ -148,7 +148,9 @@ namespace SACCOBlockChainSystem.Controllers
             return View("Index", account);
         }
 
-        // ===============================
+       
+
+       
         // POST: /GlSetup/Update
         // ===============================
         [HttpPost("Update")]
@@ -171,35 +173,48 @@ namespace SACCOBlockChainSystem.Controllers
 
             try
             {
-                var existing = _context.GlSetup.Find(model.GlId);
-                if (existing == null)
-                    return NotFound();
+                var existing = _context.GlSetup.FirstOrDefault(x => x.GlId == model.GlId);
+                if (existing == null) return NotFound();
 
-                // Check if account number is being changed and if it already exists
-                if (existing.AccNo != model.AccNo)
+                // Check for duplicate account number
+                var duplicateAccount = _context.GlSetup
+                    .FirstOrDefault(x => x.AccNo == model.AccNo && x.GlId != model.GlId);
+                if (duplicateAccount != null)
                 {
-                    var duplicateAccount = _context.GlSetup.FirstOrDefault(x => x.AccNo == model.AccNo && x.GlId != model.GlId);
-                    if (duplicateAccount != null)
-                    {
-                        ModelState.AddModelError("AccNo", "Account number already exists.");
-                        ViewBag.Accounts = _context.GlSetup.OrderBy(x => x.AccNo).ToList();
-                        ViewBag.AccountTypes = GetAccountTypes();
-                        ViewBag.AccountCategories = GetAccountCategories();
-                        ViewBag.Currencies = GetCurrencies();
-                        ViewBag.SubCategories = GetSubCategories();
-                        return View("Index", model);
-                    }
+                    ModelState.AddModelError("AccNo", "Account number already exists.");
+                    ViewBag.Accounts = _context.GlSetup.OrderBy(x => x.AccNo).ToList();
+                    ViewBag.AccountTypes = GetAccountTypes();
+                    ViewBag.AccountCategories = GetAccountCategories();
+                    ViewBag.Currencies = GetCurrencies();
+                    ViewBag.SubCategories = GetSubCategories();
+                    return View("Index", model);
                 }
 
-                // Update normal balance based on account group
-                model.Normalbal = GetNormalBalanceByGroup(model.GlAccMainGroup);
+                // Editable fields ONLY
+                existing.AccNo = model.AccNo;
+                existing.Glaccname = model.Glaccname;
+                existing.GlAccMainGroup = model.GlAccMainGroup;
+                existing.Glacctype = model.Glacctype;
+                existing.Glaccgroup = model.Glaccgroup;
+                existing.AccCategory = model.AccCategory;
+                existing.Curr = model.Curr;
+                existing.Normalbal = GetNormalBalanceByGroup(model.GlAccMainGroup);
 
-                // Preserve audit information
-                model.AuditDate = DateTime.Now;
-                model.AuditId = User.Identity?.Name ?? "SYSTEM";
-                model.TransDate = existing.TransDate; // Keep original transaction date
+                // ✅ FIX: ALWAYS preserve the existing Status value
+                // Only allow Status to be changed through a dedicated "Activate/Deactivate" function
+                // existing.Status = existing.Status; // Keep as is
 
-                _context.Entry(existing).CurrentValues.SetValues(model);
+                // If you want to allow Status changes, add a hidden field in your form
+                // and check for it explicitly:
+                if (Request.Form.ContainsKey("UpdateStatus") && Request.Form["UpdateStatus"] == "true")
+                {
+                    existing.Status = model.Status;
+                }
+
+                // Audit
+                existing.AuditDate = DateTime.Now;
+                existing.AuditId = User.Identity?.Name ?? "SYSTEM";
+
                 _context.SaveChanges();
 
                 TempData["Success"] = "Account updated successfully.";
@@ -216,10 +231,6 @@ namespace SACCOBlockChainSystem.Controllers
                 return View("Index", model);
             }
         }
-
-        // ===============================
-        // POST: /GlSetup/Delete
-        // ===============================
         [HttpPost("Delete")]
         [ValidateAntiForgeryToken]
         public IActionResult Delete(long glId)

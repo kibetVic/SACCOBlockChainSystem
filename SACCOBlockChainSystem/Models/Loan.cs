@@ -12,6 +12,7 @@ namespace SACCOBlockChainSystem.Models
         public DateTime ApplicDate { get; set; }
         public decimal? LoanAmt { get; set; }
         public int? RepayPeriod { get; set; }
+        public int Loanbal { get; set; }
         public decimal? PremiumPayable { get; set; }
         public decimal? Phcf { get; set; }
         public decimal? TotalPremium { get; set; }

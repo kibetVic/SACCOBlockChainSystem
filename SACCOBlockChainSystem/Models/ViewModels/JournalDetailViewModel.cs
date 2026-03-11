@@ -22,5 +22,14 @@ namespace SACCOBlockChainSystem.Models.ViewModels
 
         [Display(Name = "Credit Amount")]
         public decimal Credit { get; set; }
+
+        [Display(Name = "Posted")]
+        public bool Posted { get; set; }
+
+        [Display(Name = "Normal Balance")]
+        public string? NormalBalance { get; set; }
+
+        [Display(Name = "Transaction Type")]
+        public string? TransType => Debit > 0 ? "DR" : Credit > 0 ? "CR" : "";
     }
 }

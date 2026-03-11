@@ -209,7 +209,7 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 // Get loans by status
                 var loansByStatus = await _context.Loans
-                    .GroupBy(l => l.Status ?? 0)
+                    .GroupBy(l => l.Status  )
                     .Select(g => new { Status = g.Key, Count = g.Count() })
                     .ToListAsync();
 

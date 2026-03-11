@@ -22,6 +22,109 @@ namespace SACCOBlockChainSystem.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("JournalPostingRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CreditAccount")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DebitAccount")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Keyword")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("JournalPostingRules");
+                });
+
+            modelBuilder.Entity("SACCOBlockChainSystem.Models.AssetsRegister", b =>
+                {
+                    b.Property<long?>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long?>("ID"));
+
+                    b.Property<decimal?>("ActualValue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("AssetName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("AssetType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("AuditId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("AuditTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Class")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("DateOfManufacture")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DatePurchased")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("MarketValue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SerialNo")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TagNo")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("TotalValue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("TransactionNo")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool?>("posted")
+                        .HasColumnType("bit");
+
+                    b.HasKey("ID");
+
+                    b.ToTable("AssetsRegisters");
+                });
+
             modelBuilder.Entity("SACCOBlockChainSystem.Models.AuditLog", b =>
                 {
                     b.Property<int>("AuditLogId")
@@ -765,6 +868,9 @@ namespace SACCOBlockChainSystem.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<bool>("IsPostable")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsREarning")
                         .HasColumnType("bit");
 
@@ -953,7 +1059,8 @@ namespace SACCOBlockChainSystem.Migrations
                     b.Property<bool>("POSTED")
                         .HasColumnType("bit");
 
-                    b.Property<DateTime>("POSTEDDATE")
+                    b.Property<DateTime?>("POSTEDDATE")
+                        .IsRequired()
                         .HasColumnType("datetime2");
 
                     b.Property<string>("SHARETYPE")
@@ -979,6 +1086,106 @@ namespace SACCOBlockChainSystem.Migrations
                     b.HasKey("JVID");
 
                     b.ToTable("Journals");
+                });
+
+            modelBuilder.Entity("SACCOBlockChainSystem.Models.JournalsListing", b =>
+                {
+                    b.Property<long>("JlId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("JLID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("JlId"));
+
+                    b.Property<string>("AccountName")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .HasColumnName("NAME");
+
+                    b.Property<string>("AccountNo")
+                        .HasMaxLength(15)
+                        .HasColumnType("nvarchar(15)")
+                        .HasColumnName("ACCNO");
+
+                    b.Property<decimal?>("Amount")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("AMOUNT");
+
+                    b.Property<decimal?>("AmountCr")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("AMOUNT_CR");
+
+                    b.Property<decimal?>("AmountDr")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("AMOUNT_DR");
+
+                    b.Property<DateTime>("AuditDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("AUDITDATE");
+
+                    b.Property<string>("AuditId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("AUDITID");
+
+                    b.Property<string>("CompanyCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("CompanyCode");
+
+                    b.Property<string>("LoanNo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("Loanno");
+
+                    b.Property<string>("MemberNo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("MEMBERNO");
+
+                    b.Property<string>("Narration")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)")
+                        .HasColumnName("NARATION");
+
+                    b.Property<bool>("Posted")
+                        .HasColumnType("bit")
+                        .HasColumnName("POSTED");
+
+                    b.Property<DateTime>("PostedDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("POSTEDDATE");
+
+                    b.Property<string>("ShareType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("SHARETYPE");
+
+                    b.Property<DateTime?>("TransDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("TRANSDATE");
+
+                    b.Property<string>("TransType")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)")
+                        .HasColumnName("TRANSTYPE");
+
+                    b.Property<string>("TransactionNo")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("Transactionno");
+
+                    b.Property<string>("VoucherNo")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("VNO");
+
+                    b.HasKey("JlId");
+
+                    b.ToTable("JournalsListing");
                 });
 
             modelBuilder.Entity("SACCOBlockChainSystem.Models.Loan", b =>
@@ -1088,6 +1295,9 @@ namespace SACCOBlockChainSystem.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<int?>("LoanTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Loanbal")
                         .HasColumnType("int");
 
                     b.Property<long?>("Loancount")
@@ -1271,9 +1481,12 @@ namespace SACCOBlockChainSystem.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("LoanId")
+                        .HasColumnType("int");
+
                     b.Property<string>("LoanNo")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("MemberNo")
                         .IsRequired()
@@ -1330,7 +1543,7 @@ namespace SACCOBlockChainSystem.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LoanNo");
+                    b.HasIndex("LoanId");
 
                     b.ToTable("Loanbals");
                 });
@@ -1909,6 +2122,9 @@ namespace SACCOBlockChainSystem.Migrations
                     b.Property<decimal?>("LoanBalance")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("LoanId")
+                        .HasColumnType("int");
+
                     b.Property<string>("LoanNo")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
@@ -1985,6 +2201,8 @@ namespace SACCOBlockChainSystem.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BlockchainTxId");
+
+                    b.HasIndex("LoanId");
 
                     b.HasIndex("LoanNo");
 
@@ -2581,10 +2799,7 @@ namespace SACCOBlockChainSystem.Migrations
                 {
                     b.HasOne("SACCOBlockChainSystem.Models.Loan", null)
                         .WithMany("Loanbals")
-                        .HasForeignKey("LoanNo")
-                        .HasPrincipalKey("LoanNo")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("LoanId");
                 });
 
             modelBuilder.Entity("SACCOBlockChainSystem.Models.Loanguar", b =>
@@ -2598,10 +2813,7 @@ namespace SACCOBlockChainSystem.Migrations
                 {
                     b.HasOne("SACCOBlockChainSystem.Models.Loan", null)
                         .WithMany("Repays")
-                        .HasForeignKey("LoanNo")
-                        .HasPrincipalKey("LoanNo")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("LoanId");
                 });
 
             modelBuilder.Entity("SACCOBlockChainSystem.Models.Block", b =>

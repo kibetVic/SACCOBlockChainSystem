@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.ViewModels;
@@ -26,36 +27,52 @@ namespace SACCOBlockChainSystem.Controllers
             _logger = logger;
         }
 
-        // ===============================
-        // GET: /Journal
-        // ===============================
         [HttpGet("")]
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? voucherNo)
         {
-            ViewBag.Accounts = await _context.GlSetup
-                .Where(x => x.Status)
-                .OrderBy(x => x.AccNo)
+            var companyCode = User.FindFirst("CompanyCode")?.Value ?? "001";
+
+            var accounts = await _context.GlSetup
+                .Where(x => x.Status == true && x.CompanyCode == companyCode)
                 .ToListAsync();
 
-            ViewBag.CompanyCode = User.FindFirst("CompanyCode")?.Value ?? "001";
+            ViewBag.Accounts = accounts;
+            ViewBag.CompanyCode = companyCode;
+            ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "Main SACCO";
 
             var model = new JournalEntryViewModel
             {
-                VoucherNo = await GenerateVoucherNumberAsync(),
+                VoucherNo = voucherNo ?? await GenerateVoucherNumberAsync(),
                 VoucherDate = DateTime.Now,
-                CompanyCode = ViewBag.CompanyCode,
+                CompanyCode = companyCode,
                 AuditId = User.Identity?.Name ?? "SYSTEM",
-                AuditDate = DateTime.Now,
-                Posted = false,
-                PostedDate = DateTime.MinValue
+                AuditDate = DateTime.Now
             };
+
+            // 🔥 VERY IMPORTANT PART
+            if (!string.IsNullOrEmpty(voucherNo))
+            {
+                var journalEntries = await _context.Journals
+                    .Where(x => x.VNO == voucherNo && x.CompanyCode == companyCode)
+                    .ToListAsync();
+
+                model.Details = journalEntries.Select(x => new JournalDetailViewModel
+                {
+                    AccountNo = x.ACCNO,
+                    AccountName = x.NAME,
+                    Narration = x.NARATION,
+                    Debit = x.AMOUNT ?? 0,
+                    Credit = x.AMOUNT ?? 0,
+                    Posted = x.POSTED
+                }).ToList();
+
+                model.Posted = journalEntries.FirstOrDefault()?.POSTED ?? false;
+                model.PostedDate = journalEntries.FirstOrDefault()?.POSTEDDATE ?? DateTime.MinValue;
+            }
 
             return View(model);
         }
 
-        // ===============================
-        // POST: /Journal/Save
-        // ===============================
         // ===============================
         // POST: /Journal/Save
         // ===============================
@@ -116,6 +133,10 @@ namespace SACCOBlockChainSystem.Controllers
                         .Where(x => x.VNO == model.VoucherNo)
                         .ToListAsync();
 
+                    var oldListingEntries = await _context.JournalsListings
+                        .Where(x => x.VoucherNo == model.VoucherNo)
+                        .ToListAsync();
+
                     if (oldEntries.Any())
                     {
                         if (oldEntries.First().POSTED)
@@ -128,6 +149,7 @@ namespace SACCOBlockChainSystem.Controllers
                         }
 
                         _context.Journals.RemoveRange(oldEntries);
+                        _context.JournalsListings.RemoveRange(oldListingEntries);
                         await _context.SaveChangesAsync();
                     }
                 }
@@ -145,6 +167,7 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 var journals = new List<Journal>();
+                var journalListings = new List<JournalsListing>();
                 var detailList = model.Details.Where(d => d.Debit > 0 || d.Credit > 0).ToList();
 
                 foreach (var d in detailList)
@@ -157,6 +180,10 @@ namespace SACCOBlockChainSystem.Controllers
                         d.AccountName = account?.Glaccname;
                     }
 
+                    var amount = d.Debit > 0 ? d.Debit : d.Credit;
+                    var transType = d.Debit > 0 ? "DR" : "CR";
+
+                    // Add to Journals table
                     journals.Add(new Journal
                     {
                         VNO = model.VoucherNo,
@@ -166,14 +193,37 @@ namespace SACCOBlockChainSystem.Controllers
                         MEMBERNO = model.MemberNo ?? "SYSTEM",
                         SHARETYPE = d.ShareType ?? "CASH",
                         Loanno = model.LoanNo ?? "0",
-                        AMOUNT = d.Debit > 0 ? d.Debit : d.Credit,
-                        TRANSTYPE = d.Debit > 0 ? "DR" : "CR",
-                        TRANSDATE = null,
+                        AMOUNT = amount,
+                        TRANSTYPE = transType,
+                        TRANSDATE = model.VoucherDate,
                         AUDITID = auditUser,
                         AUDITDATE = now,
                         POSTED = false,
-                        POSTEDDATE = null,   // ✅ THIS FIXES YOUR ERROR
+                        POSTEDDATE = DateTime.MinValue,
                         Transactionno = model.TransactionNo,
+                        CompanyCode = companyCode
+                    });
+
+                    // Add to JournalsListing table
+                    journalListings.Add(new JournalsListing
+                    {
+                        VoucherNo = model.VoucherNo,
+                        AccountNo = d.AccountNo,
+                        AccountName = d.AccountName,
+                        Narration = d.Narration ?? model.Description,
+                        MemberNo = model.MemberNo ?? "SYSTEM",
+                        ShareType = d.ShareType ?? "CASH",
+                        LoanNo = model.LoanNo ?? "0",
+                        AmountDr = d.Debit > 0 ? d.Debit : (decimal?)null,
+                        AmountCr = d.Credit > 0 ? d.Credit : (decimal?)null,
+                        Amount = amount,
+                        TransType = transType,
+                        AuditId = auditUser,
+                        TransDate = model.VoucherDate,
+                        AuditDate = now,
+                        Posted = false,
+                        PostedDate = DateTime.MinValue,
+                        TransactionNo = model.TransactionNo,
                         CompanyCode = companyCode
                     });
                 }
@@ -198,6 +248,7 @@ namespace SACCOBlockChainSystem.Controllers
 
                 #region Save to Database
                 await _context.Journals.AddRangeAsync(journals);
+                await _context.JournalsListings.AddRangeAsync(journalListings);
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation($"Journal saved successfully. Voucher No: {model.VoucherNo}, Entries: {journals.Count}, DR: {totalDr:N2}, CR: {totalCr:N2}");
@@ -243,89 +294,295 @@ namespace SACCOBlockChainSystem.Controllers
                 });
             }
         }
-        
-       
-        
-        [HttpPost("Post/{voucherNo}")]
+        [HttpPost("ProcessAndCombine")]
         [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Admin,SuperAdmin,Accountant")]
-        public async Task<IActionResult> Post(string voucherNo)
+        public async Task<IActionResult> ProcessAndCombine([FromBody] ProcessAndCombineViewModel model)
         {
-            if (string.IsNullOrWhiteSpace(voucherNo))
-                return Json(new { success = false, message = "Voucher number is required." });
-
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            IDbContextTransaction? trx = null;
 
             try
             {
-                var journals = await _context.Journals
-                    .Where(x => x.VNO == voucherNo && !x.POSTED)
-                    .OrderBy(x => x.TRANSTYPE)
+                #region Validation
+                if (model == null)
+                    return Json(new { success = false, message = "Invalid data." });
+
+                _logger.LogInformation("===== PROCESS AND COMBINE JOURNAL =====");
+                _logger.LogInformation($"VoucherNo: {model.VoucherNo}");
+                _logger.LogInformation($"OriginalEntries count: {model.OriginalEntries?.Count ?? 0}");
+
+                if (model.OriginalEntries == null || !model.OriginalEntries.Any())
+                    return Json(new { success = false, message = "No entries provided." });
+
+                // Start transaction
+                trx = await _context.Database.BeginTransactionAsync();
+
+                // =========================================================
+                // DELETE ALL EXISTING UNPOSTED ENTRIES FOR THIS VOUCHER
+                // =========================================================
+                var existingJournals = await _context.Journals
+                    .Where(x => x.VNO == model.VoucherNo && x.POSTED == false)
                     .ToListAsync();
 
-                if (!journals.Any())
+                var existingListings = await _context.JournalsListings
+                    .Where(x => x.VoucherNo == model.VoucherNo && x.Posted == false)
+                    .ToListAsync();
+
+                if (existingJournals.Any() || existingListings.Any())
+                {
+                    _logger.LogInformation($"Deleting {existingJournals.Count} existing journal entries and {existingListings.Count} listings for voucher {model.VoucherNo}");
+
+                    if (existingJournals.Any())
+                        _context.Journals.RemoveRange(existingJournals);
+
+                    if (existingListings.Any())
+                        _context.JournalsListings.RemoveRange(existingListings);
+
+                    await _context.SaveChangesAsync();
+                }
+
+                // Calculate totals and validate balance
+                decimal totalDebit = 0;
+                decimal totalCredit = 0;
+
+                foreach (var entry in model.OriginalEntries)
+                {
+                    _logger.LogInformation($"Entry - Account: {entry.AccountNo}, DR: {entry.Debit}, CR: {entry.Credit}");
+                    totalDebit += entry.Debit;
+                    totalCredit += entry.Credit;
+                }
+
+                _logger.LogInformation($"Total Debit: {totalDebit:N2}, Total Credit: {totalCredit:N2}");
+
+                if (Math.Abs(totalDebit - totalCredit) > 0.01m)
+                {
+                    await trx.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"Entries not balanced. DR: {totalDebit:N2}, CR: {totalCredit:N2}"
+                    });
+                }
+                #endregion
+
+                var companyCode = model.CompanyCode ?? User.FindFirst("CompanyCode")?.Value ?? "001";
+                var auditUser = User.Identity?.Name ?? "SYSTEM";
+                var now = DateTime.Now;
+
+                // Create entries for EACH original entry (don't combine into one)
+                var journalsList = new List<Journal>();
+                var listingsList = new List<JournalsListing>();
+
+                foreach (var entry in model.OriginalEntries)
+                {
+                    var amount = entry.Debit > 0 ? entry.Debit : entry.Credit;
+                    var transType = entry.Debit > 0 ? "DR" : "CR";
+
+                    // Add to Journals table
+                    journalsList.Add(new Journal
+                    {
+                        VNO = model.VoucherNo,
+                        ACCNO = entry.AccountNo,
+                        NAME = entry.AccountName ?? entry.AccountNo,
+                        NARATION = entry.Narration ?? model.Description,
+                        MEMBERNO = model.MemberNo ?? "SYSTEM",
+                        SHARETYPE = entry.ShareType ?? "CASH",
+                        Loanno = model.LoanNo ?? "0",
+                        AMOUNT = amount,
+                        TRANSTYPE = transType,
+                        TRANSDATE = DateTime.Now,
+                        AUDITID = auditUser,
+                        AUDITDATE = now,
+                        POSTED = false,
+                        POSTEDDATE = DateTime.MinValue,
+                        Transactionno = GenerateTransactionNumber(),
+                        CompanyCode = companyCode
+                    });
+
+                    // Add to JournalsListing table
+                    listingsList.Add(new JournalsListing
+                    {
+                        VoucherNo = model.VoucherNo,
+                        AccountNo = entry.AccountNo,
+                        AccountName = entry.AccountName ?? entry.AccountNo,
+                        Narration = entry.Narration ?? model.Description,
+                        MemberNo = model.MemberNo ?? "SYSTEM",
+                        ShareType = entry.ShareType ?? "CASH",
+                        LoanNo = model.LoanNo ?? "0",
+                        AmountDr = entry.Debit > 0 ? entry.Debit : (decimal?)null,
+                        AmountCr = entry.Credit > 0 ? entry.Credit : (decimal?)null,
+                        Amount = amount,
+                        TransType = transType,
+                        AuditId = auditUser,
+                        TransDate = DateTime.Now,
+                        AuditDate = now,
+                        Posted = false,
+                        PostedDate = DateTime.MinValue,
+                        TransactionNo = GenerateTransactionNumber(),
+                        CompanyCode = companyCode
+                    });
+                }
+
+                await _context.Journals.AddRangeAsync(journalsList);
+                await _context.JournalsListings.AddRangeAsync(listingsList);
+                await _context.SaveChangesAsync();
+
+                await trx.CommitAsync();
+
+                _logger.LogInformation($"Successfully saved {model.OriginalEntries.Count} entries for voucher {model.VoucherNo}");
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Entries saved successfully.",
+                    voucherNo = model.VoucherNo,
+                    totalDebit = totalDebit,
+                    totalCredit = totalCredit,
+                    entries = model.OriginalEntries.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                if (trx != null) await trx.RollbackAsync();
+                _logger.LogError(ex, "Error saving journal entries");
+                return Json(new
+                {
+                    success = false,
+                    message = "Error saving entries: " + ex.Message
+                });
+            }
+        }
+        // ===============================
+        // POST: /Journal/Post
+        // ===============================
+        [HttpPost("Post/{voucherNo}")]
+        public async Task<IActionResult> Post(string voucherNo)
+        {
+            IDbContextTransaction? trx = null;
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(voucherNo))
+                    return Json(new { success = false, message = "Voucher number is required." });
+
+                trx = await _context.Database.BeginTransactionAsync();
+
+                // 🔹 Load unposted journals
+                var journals = await _context.Journals
+                    .Where(x => x.VNO == voucherNo && !x.POSTED)
+                    .OrderBy(x => x.JVID)
+                    .ToListAsync();
+
+                var listings = await _context.JournalsListings
+                    .Where(x => x.VoucherNo == voucherNo && !x.Posted)
+                    .OrderBy(x => x.JlId)
+                    .ToListAsync();
+
+                if (!journals.Any() && !listings.Any())
                     return Json(new { success = false, message = "Journal already posted or not found." });
 
-                decimal totalDr = journals.Where(x => x.TRANSTYPE == "DR").Sum(x => x.AMOUNT ?? 0);
-                decimal totalCr = journals.Where(x => x.TRANSTYPE == "CR").Sum(x => x.AMOUNT ?? 0);
+                // 🔹 Calculate balance
+                decimal totalDr = 0;
+                decimal totalCr = 0;
+
+                foreach (var j in journals)
+                {
+                    if (j.TRANSTYPE == "DR")
+                        totalDr += j.AMOUNT ?? 0;
+                    else
+                        totalCr += j.AMOUNT ?? 0;
+                }
+
+                foreach (var jl in listings)
+                {
+                    if (jl.TransType == "DR")
+                        totalDr += jl.Amount ?? 0;
+                    else
+                        totalCr += jl.Amount ?? 0;
+                }
 
                 if (Math.Abs(totalDr - totalCr) > 0.01m)
-                    return Json(new { success = false, message = $"Journal is not balanced. DR: {totalDr:N2}, CR: {totalCr:N2}" });
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"Journal not balanced. DR: {totalDr:N2}, CR: {totalCr:N2}"
+                    });
 
-                string companyCode = journals.First().CompanyCode ?? "001";
+                string companyCode =
+                    journals.FirstOrDefault()?.CompanyCode ??
+                    listings.FirstOrDefault()?.CompanyCode ??
+                    "001";
+
                 string auditUser = User.Identity?.Name ?? "SYSTEM";
                 DateTime now = DateTime.Now;
                 string txnNo = GenerateTransactionNumber();
 
-                var glTransactions = new List<Gltransaction>();
+                var glList = new List<Gltransaction>();
 
-                foreach (var j in journals)
+                // 🔹 Post Journals table
+                for (int i = 0; i < journals.Count; i += 2)
                 {
-                    var accountExists = await _context.GlSetup.AnyAsync(x => x.AccNo == j.ACCNO);
-                    if (!accountExists)
-                        throw new Exception($"GL Account {j.ACCNO} not found.");
+                    var dr = journals.FirstOrDefault(x => x.TRANSTYPE == "DR");
+                    var cr = journals.FirstOrDefault(x => x.TRANSTYPE == "CR");
 
-                    // Get cash/bank account for contra entry
-                    string cashAccount = GetCashOrBankAccount();
-
-                    glTransactions.Add(new Gltransaction
+                    if (dr != null && cr != null)
                     {
-                        TransDate = j.TRANSDATE ?? now,
-                        Amount = j.AMOUNT ?? 0,
-                        DrAccNo = j.TRANSTYPE == "DR" ? j.ACCNO : cashAccount,
-                        CrAccNo = j.TRANSTYPE == "CR" ? j.ACCNO : cashAccount,
+                        glList.Add(new Gltransaction
+                        {
+                            TransDate = now,
+                            Amount = dr.AMOUNT ?? 0,
+                            DrAccNo = dr.ACCNO,
+                            CrAccNo = cr.ACCNO,
+                            DocumentNo = voucherNo,
+                            Source = "JOURNAL",
+                            Temp = "JV",
+                            CompanyCode = companyCode,
+                            TransDescript = dr.NARATION,
+                            AuditId = auditUser,
+                            AuditTime = now,
+                            TransactionNo = txnNo,
+                            DocPosted = 1,
+                            Module = "GL"
+                        });
+                    }
+                }
+
+                // 🔹 Post JournalsListings table
+                // Combine DR and CR into proper GL rows
+                var drEntries = journals.Where(x => x.TRANSTYPE == "DR").ToList();
+                var crEntries = journals.Where(x => x.TRANSTYPE == "CR").ToList();
+
+                for (int i = 0; i < drEntries.Count; i++)
+                {
+                    var dr = drEntries[i];
+                    var cr = crEntries[i];
+                    
+                    glList.Add(new Gltransaction
+                    {
+                        TransDate = now,
+                        Amount = dr.AMOUNT ?? 0,
+                        DrAccNo = dr.ACCNO,
+                        CrAccNo = cr.ACCNO,
                         DocumentNo = voucherNo,
-                        Source = "JOURNAL",
+                        Source = "JV",
                         Temp = "JV",
                         CompanyCode = companyCode,
-                        TransDescript = j.NARATION ?? $"Journal Entry {voucherNo}",
+                        TransDescript = dr.NARATION,
                         AuditId = auditUser,
                         AuditTime = now,
-                        TransactionNo = txnNo,
+                        TransactionNo = GenerateTransactionNumber(),
                         DocPosted = 1,
-                        Module = "GL",
-                        Cash = 0,
-                        Recon = false,
-                        Dregard = false,
-                        ReconId = 0
+                        Module = "GL"
                     });
+
+                    // Mark posted
+                    dr.POSTED = true;
+                    cr.POSTED = true;
+                    dr.POSTEDDATE = now;
+                    cr.POSTEDDATE = now;
                 }
-
-                await _context.Gltransactions.AddRangeAsync(glTransactions);
-
-                foreach (var j in journals)
-                {
-                    j.POSTED = true;
-                    j.POSTEDDATE = now;
-                    j.AUDITID = auditUser;
-                    j.AUDITDATE = now;
-                    j.Transactionno = txnNo;
-                }
-
+                await _context.Gltransactions.AddRangeAsync(glList);
                 await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-
-                _logger.LogInformation($"Journal POSTED: {voucherNo}, TXN: {txnNo}, DR: {totalDr:N2}, CR: {totalCr:N2}");
+                await trx.CommitAsync();
 
                 return Json(new
                 {
@@ -334,66 +591,25 @@ namespace SACCOBlockChainSystem.Controllers
                     voucherNo,
                     transactionNo = txnNo,
                     totalDebit = totalDr,
-                    totalCredit = totalCr,
-                    entries = journals.Count
+                    totalCredit = totalCr
                 });
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
-
-                var error = ex.InnerException?.InnerException?.Message ??
-                           ex.InnerException?.Message ??
-                           ex.Message ??
-                           "Unknown posting error";
-
-                _logger.LogError(ex, $"Journal posting failed for {voucherNo}");
-
-                return Json(new
-                {
-                    success = false,
-                    message = error
-                });
+                if (trx != null) await trx.RollbackAsync();
+                return Json(new { success = false, message = ex.Message });
             }
         }
-        // ===============================
-        // Helper: Generate Transaction Number
-        // ===============================
-        private string GenerateTransactionNumber()
-        {
-            var date = DateTime.Now.ToString("yyyyMMdd");
-            var random = new Random();
-            var randomPart = random.Next(1000, 9999);
-            return $"TXN-{date}-{randomPart}";
-        }
 
-        // ===============================
-        // Helper: Get Cash/Bank Account
-        // ===============================
-        private string GetCashOrBankAccount()
-        {
-            try
-            {
-                // Try to get default cash account from GL Setup
-                var cashAccount = _context.GlSetup
-                    .FirstOrDefault(x => x.AccNo == "1010" && x.Status == true);
-
-                return cashAccount?.AccNo ?? "1010"; // Default to Cash in Bank
-            }
-            catch
-            {
-                return "1010"; // Default fallback
-            }
-        }
         // ===============================
         // GET: /Journal/List
         // ===============================
         [HttpGet("List")]
         public async Task<IActionResult> List(
-    DateTime? fromDate,
-    DateTime? toDate,
-    string? memberNo,
-    string? loanNo)
+            DateTime? fromDate,
+            DateTime? toDate,
+            string? memberNo,
+            string? loanNo)
         {
             try
             {
@@ -403,59 +619,19 @@ namespace SACCOBlockChainSystem.Controllers
                     .Select(g => new
                     {
                         VoucherNo = g.Key,
-
-                        VoucherDate = g
-                            .OrderBy(x => x.JVID)
-                            .Select(x => x.TRANSDATE)
-                            .FirstOrDefault(),
-
-                        Description = g
-                            .OrderBy(x => x.JVID)
-                            .Select(x => x.NARATION)
-                            .FirstOrDefault(),
-
-                        MemberNo = g
-                            .OrderBy(x => x.JVID)
-                            .Select(x => x.MEMBERNO)
-                            .FirstOrDefault(),
-
-                        LoanNo = g
-                            .OrderBy(x => x.JVID)
-                            .Select(x => x.Loanno)
-                            .FirstOrDefault(),
-
-                        TotalDebit = g
-                            .Where(x => x.TRANSTYPE == "DR")
-                            .Sum(x => x.AMOUNT ?? 0),
-
-                        TotalCredit = g
-                            .Where(x => x.TRANSTYPE == "CR")
-                            .Sum(x => x.AMOUNT ?? 0),
-
+                        VoucherDate = g.OrderBy(x => x.JVID).Select(x => x.TRANSDATE).FirstOrDefault(),
+                        Description = g.OrderBy(x => x.JVID).Select(x => x.NARATION).FirstOrDefault(),
+                        MemberNo = g.OrderBy(x => x.JVID).Select(x => x.MEMBERNO).FirstOrDefault(),
+                        LoanNo = g.OrderBy(x => x.JVID).Select(x => x.Loanno).FirstOrDefault(),
+                        TotalDebit = g.Where(x => x.TRANSTYPE == "DR").Sum(x => x.AMOUNT ?? 0),
+                        TotalCredit = g.Where(x => x.TRANSTYPE == "CR").Sum(x => x.AMOUNT ?? 0),
                         EntryCount = g.Count(),
-
-                        Posted = g
-                            .OrderBy(x => x.JVID)
-                            .Select(x => x.POSTED)
-                            .FirstOrDefault(),
-
-                        PostedDate = g
-                            .OrderBy(x => x.JVID)
-                            .Select(x => x.POSTEDDATE)
-                            .FirstOrDefault(),
-
-                        CreatedBy = g
-                            .OrderBy(x => x.JVID)
-                            .Select(x => x.AUDITID)
-                            .FirstOrDefault(),
-
-                        CreatedDate = g
-                            .OrderBy(x => x.JVID)
-                            .Select(x => x.AUDITDATE)
-                            .FirstOrDefault()
+                        Posted = g.OrderBy(x => x.JVID).Select(x => x.POSTED).FirstOrDefault(),
+                        PostedDate = g.OrderBy(x => x.JVID).Select(x => x.POSTEDDATE).FirstOrDefault(),
+                        CreatedBy = g.OrderBy(x => x.JVID).Select(x => x.AUDITID).FirstOrDefault(),
+                        CreatedDate = g.OrderBy(x => x.JVID).Select(x => x.AUDITDATE).FirstOrDefault()
                     });
 
-                // Filters
                 if (fromDate.HasValue)
                     query = query.Where(x => x.VoucherDate >= fromDate);
 
@@ -485,9 +661,9 @@ namespace SACCOBlockChainSystem.Controllers
                 return View(new List<dynamic>());
             }
         }
+
         // ===============================
         // GET: /Journal/Edit
-        // GET: /Journal/Edit/{voucherNo}
         // ===============================
         [HttpGet("Edit")]
         [HttpGet("Edit/{voucherNo}")]
@@ -512,19 +688,20 @@ namespace SACCOBlockChainSystem.Controllers
 
                 var firstJournal = journals.First();
 
-                // Check if journal is posted
                 if (firstJournal.POSTED)
                 {
                     TempData["Info"] = "This journal is already posted and cannot be edited.";
                     return RedirectToAction("View", new { voucherNo });
                 }
 
+                var companyCode = User.FindFirst("CompanyCode")?.Value ?? "001";
+
                 ViewBag.Accounts = await _context.GlSetup
-                    .Where(x => x.Status == true)
+                    .Where(x => x.Status == true && x.CompanyCode == companyCode)
                     .OrderBy(x => x.AccNo)
                     .ToListAsync();
 
-                ViewBag.CompanyCode = User.FindFirst("CompanyCode")?.Value ?? "001";
+                ViewBag.CompanyCode = companyCode;
                 ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "Main SACCO";
 
                 var model = new JournalEntryViewModel
@@ -560,9 +737,9 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("List");
             }
         }
+
         // ===============================
         // GET: /Journal/View
-        // GET: /Journal/View/{voucherNo}
         // ===============================
         [HttpGet("View")]
         [HttpGet("View/{voucherNo}")]
@@ -585,12 +762,14 @@ namespace SACCOBlockChainSystem.Controllers
                     return NotFound($"Journal with voucher number {voucherNo} not found.");
                 }
 
+                var companyCode = User.FindFirst("CompanyCode")?.Value ?? "001";
+
                 ViewBag.Accounts = await _context.GlSetup
-                    .Where(x => x.Status == true)
+                    .Where(x => x.Status == true && x.CompanyCode == companyCode)
                     .OrderBy(x => x.AccNo)
                     .ToListAsync();
 
-                ViewBag.CompanyCode = User.FindFirst("CompanyCode")?.Value ?? "001";
+                ViewBag.CompanyCode = companyCode;
                 ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "Main SACCO";
 
                 var firstJournal = journals.First();
@@ -627,52 +806,71 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("List");
             }
         }
+
         // ===============================
-// POST: /Journal/Delete
-// POST: /Journal/Delete/{voucherNo}
-// ===============================
-[HttpPost("Delete")]
-[HttpPost("Delete/{voucherNo}")]
-[ValidateAntiForgeryToken]
-[Authorize(Roles = "Admin,SuperAdmin")]
-public async Task<IActionResult> Delete(string voucherNo)
-{
-    if (string.IsNullOrEmpty(voucherNo))
-    {
-        return Json(new { success = false, message = "Voucher number is required." });
-    }
-    
-    try
-    {
-        var journals = await _context.Journals
-            .Where(x => x.VNO == voucherNo)
-            .ToListAsync();
-
-        if (!journals.Any())
+        // POST: /Journal/Delete
+        // ===============================
+        [HttpPost("Delete")]
+        [HttpPost("Delete/{voucherNo}")]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> Delete(string voucherNo)
         {
-            return Json(new { success = false, message = "Journal not found." });
+            if (string.IsNullOrEmpty(voucherNo))
+            {
+                return Json(new { success = false, message = "Voucher number is required." });
+            }
+
+            try
+            {
+                var journals = await _context.Journals
+                    .Where(x => x.VNO == voucherNo)
+                    .ToListAsync();
+
+                var journalListings = await _context.JournalsListings
+                    .Where(x => x.VoucherNo == voucherNo)
+                    .ToListAsync();
+
+                if (!journals.Any() && !journalListings.Any())
+                {
+                    return Json(new { success = false, message = "Journal not found." });
+                }
+
+                if ((journals.Any() && journals.First().POSTED) ||
+                    (journalListings.Any() && journalListings.First().Posted))
+                {
+                    return Json(new { success = false, message = "Cannot delete posted journal!" });
+                }
+
+                if (journals.Any())
+                    _context.Journals.RemoveRange(journals);
+
+                if (journalListings.Any())
+                    _context.JournalsListings.RemoveRange(journalListings);
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation($"Journal deleted successfully. Voucher No: {voucherNo}");
+                return Json(new { success = true, message = "Journal deleted successfully!" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error deleting journal {voucherNo}");
+                return Json(new { success = false, message = $"Error deleting journal: {ex.Message}" });
+            }
         }
 
-        if (journals.First().POSTED)
-        {
-            return Json(new { success = false, message = "Cannot delete posted journal!" });
-        }
-
-        _context.Journals.RemoveRange(journals);
-        await _context.SaveChangesAsync();
-
-        _logger.LogInformation($"Journal deleted successfully. Voucher No: {voucherNo}");
-        return Json(new { success = true, message = "Journal deleted successfully!" });
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, $"Error deleting journal {voucherNo}");
-        return Json(new { success = false, message = $"Error deleting journal: {ex.Message}" });
-    }
-}
         // ===============================
         // Helpers
         // ===============================
+        private string GenerateTransactionNumber()
+        {
+            var date = DateTime.Now.ToString("yyyyMMdd");
+            var random = new Random();
+            var randomPart = random.Next(1000, 9999);
+            return $"TXN-{date}-{randomPart}";
+        }
+
         private async Task<string> GenerateVoucherNumberAsync()
         {
             string companyCode = User.FindFirst("CompanyCode")?.Value ?? "001";
@@ -691,4 +889,52 @@ public async Task<IActionResult> Delete(string voucherNo)
             return $"JV-{companyCode}-{date}-{seq:D4}";
         }
     }
+
+    // ViewModels
+    public class OriginalEntryViewModel
+    {
+        public string AccountNo { get; set; } = string.Empty;
+        public string? AccountName { get; set; }
+        public string? Narration { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public string? ShareType { get; set; }
+    }
+    public class ProcessAndCombineViewModel
+    {
+    
+        public string? VoucherNo { get; set; }
+
+        /// <summary>
+        /// The date of the journal entry
+        /// </summary>
+        public DateTime VoucherDate { get; set; }
+
+        /// <summary>
+        /// Description/narration for the journal entry
+        /// </summary>
+        public string? Description { get; set; }
+
+        /// <summary>
+        /// Member number associated with the journal entry
+        /// </summary>
+        public string? MemberNo { get; set; }
+
+        /// <summary>
+        /// Loan number associated with the journal entry
+        /// </summary>
+        public string? LoanNo { get; set; }
+
+        /// <summary>
+        /// Company code for multi-company support
+        /// </summary>
+        public string? CompanyCode { get; set; }
+
+        /// <summary>
+        /// List of original journal entries to be combined
+        /// </summary>
+        public List<OriginalEntryViewModel> OriginalEntries { get; set; } = new();
+    }
+
+   
 }

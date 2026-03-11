@@ -65,7 +65,8 @@ namespace SACCOBlockChainSystem.Models
 
         [Required]
         public DateTime TransDate { get; set; }
-
+        [Required]
+        public bool IsPostable { get; set; } = true;
         public bool? IsSubLedger { get; set; }
 
         [StringLength(50)]

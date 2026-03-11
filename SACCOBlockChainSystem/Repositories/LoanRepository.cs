@@ -16,7 +16,7 @@ namespace SACCOBlockChainSystem.Repositories
         public async Task<Loan> GetByLoanNoAsync(string loanNo)
         {
             return await _context.Loans
-                .Include(l => l.Loanbals)
+                .Include(l => l.Loanbal)
                 .FirstOrDefaultAsync(l => l.LoanNo == loanNo);
         }
 

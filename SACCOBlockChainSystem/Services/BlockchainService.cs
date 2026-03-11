@@ -89,9 +89,6 @@ namespace SACCOBlockChainSystem.Services
             string offChainRefId,
             object data)
         {
-            // REMOVE the using transaction statement here since we're already in a transaction
-            // using var transaction = await _context.Database.BeginTransactionAsync();
-
             try
             {
                 // Generate data hash
@@ -147,9 +144,8 @@ namespace SACCOBlockChainSystem.Services
                 // Save block to database
                 _context.Blocks.Add(newBlock);
 
-                // Save all changes (transaction will be committed by the caller)
+                // Save all changes
                 await _context.SaveChangesAsync();
-                // REMOVED: await transaction.CommitAsync();
 
                 _logger.LogInformation($"Created and added transaction {transactionId} to block {newBlock.BlockHash}");
 
@@ -157,7 +153,6 @@ namespace SACCOBlockChainSystem.Services
             }
             catch (Exception ex)
             {
-                // REMOVED: await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error creating and adding transaction to blockchain");
                 throw;
             }
@@ -452,19 +447,112 @@ namespace SACCOBlockChainSystem.Services
                     .OrderByDescending(b => b.BlockId)
                     .FirstOrDefaultAsync();
 
+                // Validate blockchain
+                var isValid = await ValidateBlockchain();
+
                 return new BlockchainStatus
                 {
                     TotalBlocks = totalBlocks,
                     TotalTransactions = totalTransactions,
                     PendingTransactions = pendingTransactions,
                     LatestBlockHash = latestBlock?.BlockHash,
-                    LatestBlockTimestamp = latestBlock?.Timestamp
+                    LatestBlockTimestamp = latestBlock?.Timestamp,
+                    BlockHeight = totalBlocks,
+                    IsValid = isValid
                 };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting blockchain status");
                 throw;
+            }
+        }
+
+        // GET BLOCKCHAIN STATISTICS - NEW METHOD
+        public async Task<BlockchainStatistics> GetBlockchainStatistics()
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                var yesterday = now.AddDays(-1);
+
+                // Get all transactions
+                var transactions = await _context.BlockchainTransactions.ToListAsync();
+
+                // Calculate statistics
+                var totalValue = transactions.Sum(t => t.Amount);
+                var avgValue = transactions.Any() ? totalValue / transactions.Count : 0;
+
+                // Count by type
+                var depositCount = transactions.Count(t => t.TransactionType == "DEPOSIT");
+                var withdrawalCount = transactions.Count(t => t.TransactionType == "WITHDRAWAL");
+                var transferCount = transactions.Count(t => t.TransactionType == "TRANSFER");
+                var loanCount = transactions.Count(t => t.TransactionType == "LOAN");
+
+                // Value by type
+                var totalDeposits = transactions.Where(t => t.TransactionType == "DEPOSIT").Sum(t => t.Amount);
+                var totalWithdrawals = transactions.Where(t => t.TransactionType == "WITHDRAWAL").Sum(t => t.Amount);
+                var totalTransfers = transactions.Where(t => t.TransactionType == "TRANSFER").Sum(t => t.Amount);
+                var totalLoans = transactions.Where(t => t.TransactionType == "LOAN").Sum(t => t.Amount);
+
+                // Unique addresses
+                var uniqueAddresses = transactions.Select(t => t.MemberNo)
+                    .Where(a => !string.IsNullOrEmpty(a))
+                    .Distinct()
+                    .Count();
+
+                // Active addresses in last 24h
+                var activeAddresses = transactions
+                    .Where(t => t.Timestamp >= yesterday)
+                    .Select(t => t.MemberNo)
+                    .Where(a => !string.IsNullOrEmpty(a))
+                    .Distinct()
+                    .Count();
+
+                // Get latest block
+                var latestBlock = await _context.Blocks
+                    .OrderByDescending(b => b.BlockId)
+                    .FirstOrDefaultAsync();
+
+                // Calculate average block time (simplified)
+                double avgBlockTime = 0;
+                var blocks = await _context.Blocks.OrderBy(b => b.BlockId).ToListAsync();
+                if (blocks.Count > 1)
+                {
+                    var totalTime = (blocks.Last().Timestamp - blocks.First().Timestamp).TotalSeconds;
+                    avgBlockTime = totalTime / (blocks.Count - 1);
+                }
+
+                return new BlockchainStatistics
+                {
+                    TotalBlocks = await _context.Blocks.CountAsync(),
+                    TotalTransactions = transactions.Count,
+                    PendingTransactions = transactions.Count(t => t.Status == "PENDING"),
+                    TotalValue = totalValue,
+                    AverageTransactionValue = avgValue,
+                    UniqueAddresses = uniqueAddresses,
+                    ActiveAddressesLast24h = activeAddresses,
+                    AverageBlockTimeSeconds = avgBlockTime,
+                    LatestBlockTimestamp = latestBlock?.Timestamp ?? DateTime.MinValue,
+                    LatestBlockHash = latestBlock?.BlockHash ?? "N/A",
+                    IsChainValid = await ValidateBlockchain(),
+                    BlockchainHeight = await _context.Blocks.CountAsync(),
+
+                    DepositCount = depositCount,
+                    WithdrawalCount = withdrawalCount,
+                    TransferCount = transferCount,
+                    LoanCount = loanCount,
+
+                    TotalDeposits = totalDeposits,
+                    TotalWithdrawals = totalWithdrawals,
+                    TotalTransfers = totalTransfers,
+                    TotalLoans = totalLoans
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting blockchain statistics");
+                return new BlockchainStatistics();
             }
         }
 
@@ -814,15 +902,6 @@ namespace SACCOBlockChainSystem.Services
                     }
                 }
 
-                // Check if all blocks are confirmed
-                var unconfirmedBlocks = blocks.Where(b => !b.Confirmed).ToList();
-                if (unconfirmedBlocks.Any())
-                {
-                    _logger.LogWarning($"Found {unconfirmedBlocks.Count} unconfirmed blocks");
-                    // For demo purposes, we'll return true anyway
-                    // In production, you might want stricter validation
-                }
-
                 _logger.LogInformation($"Blockchain verification successful: {blocks.Count} blocks verified");
                 return true;
             }
@@ -833,7 +912,6 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-        // You'll need this helper method for VerifyBlockchainAsync
         private string CalculateBlockHash(Block block)
         {
             // Combine block data for hashing
@@ -860,5 +938,34 @@ namespace SACCOBlockChainSystem.Services
         public DateTime? LatestBlockTimestamp { get; set; }
         public int BlockHeight { get; set; }
         public bool IsValid { get; set; }
+    }
+
+    // Blockchain statistics DTO - NEW CLASS
+    public class BlockchainStatistics
+    {
+        public int TotalBlocks { get; set; }
+        public int TotalTransactions { get; set; }
+        public int PendingTransactions { get; set; }
+        public decimal TotalValue { get; set; }
+        public decimal AverageTransactionValue { get; set; }
+        public int UniqueAddresses { get; set; }
+        public int ActiveAddressesLast24h { get; set; }
+        public double AverageBlockTimeSeconds { get; set; }
+        public DateTime LatestBlockTimestamp { get; set; }
+        public string LatestBlockHash { get; set; } = string.Empty;
+        public bool IsChainValid { get; set; }
+        public int BlockchainHeight { get; set; }
+
+        // Transaction type breakdown
+        public int DepositCount { get; set; }
+        public int WithdrawalCount { get; set; }
+        public int TransferCount { get; set; }
+        public int LoanCount { get; set; }
+
+        // Value by type
+        public decimal TotalDeposits { get; set; }
+        public decimal TotalWithdrawals { get; set; }
+        public decimal TotalTransfers { get; set; }
+        public decimal TotalLoans { get; set; }
     }
 }

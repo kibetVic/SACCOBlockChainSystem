@@ -46,7 +46,17 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public decimal RunningBalance { get; set; }
         public string? DocumentNo { get; set; }
         public string? Source { get; set; }
+        public bool Posted { get; set; }
+        public DateTime? PostedDate { get; set; }
+        public string? Reference { get; set; }
+
+        // Computed properties for display
+        public string PostedStatus => Posted ? "Posted" : "Draft";
+        public string PostedBadgeClass => Posted ? "bg-success" : "bg-warning";
+        public string DisplayAmount => DebitAmount > 0 ? DebitAmount.ToString("N2") : CreditAmount.ToString("N2");
+        public string DisplayType => DebitAmount > 0 ? "DR" : "CR";
     }
+}
 
     public class AccountDropdownViewModel
     {
@@ -56,4 +66,3 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public string? NormalBalance { get; set; }
         public bool IsActive { get; set; }
     }
-}

@@ -1,5 +1,17 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
+    @using Microsoft.AspNetCore.Antiforgery
+@inject IAntiforgery antiforgery
+
+@{
+        var tokenSet = antiforgery.GetAndStoreTokens(Context);
+}
+
+<!-- Add this meta tag for JavaScript to read -->
+<meta name="csrf-token" content="@tokenSet.RequestToken">
+
+<!-- Also add hidden input as fallback -->
+<input type="hidden" id="RequestVerificationToken" name="__RequestVerificationToken" value="@tokenSet.RequestToken">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -370,7 +382,7 @@
 
 
 
-                        @* <!-- LOAN MANAGEMENT -->
+                        <!-- LOAN MANAGEMENT -->
                         <li class="nav-item">
                             <a href="#" class="nav-link">
                                 <i class="nav-icon bi bi-bank"></i>
@@ -443,7 +455,47 @@
                                     </a>
                                 </li>
                             </ul>
-                        </li> *@
+                        </li>
+
+                        <!-- SHARES & CONTRIBUTIONS -->
+                        <li class="nav-item">
+                            <a href="#" class="nav-link">
+                                <i class="nav-icon bi bi-pie-chart-fill"></i>
+                                <p>
+                                    Loans & LoanType
+                                    <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                </p>
+                            </a>
+                            <ul class="nav nav-treeview">
+                                <li class="nav-item">
+                                    <a asp-controller="LoanTypeMvc" asp-action="Index" class="nav-link">
+                                        <i class="nav-icon bi bi-cart-plus"></i>
+                                        <p>LoanTypes</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a asp-controller="Share" asp-action="MyShares" class="nav-link">
+                                        <i class="nav-icon bi bi-graph-up"></i>
+                                        <p>My Shares</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a asp-controller="Share" asp-action="Transfer" class="nav-link">
+                                        <i class="nav-icon bi bi-arrow-left-right"></i>
+                                        <p>Transfer Shares</p>
+                                    </a>
+                                </li>
+                                @if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin"))
+                                {
+                                    <li class="nav-item">
+                                        <a asp-controller="Share" asp-action="Dividends" class="nav-link">
+                                            <i class="nav-icon bi bi-gift"></i>
+                                            <p>Distribute Dividends</p>
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                        </li>
 
                         <!-- SHARES & CONTRIBUTIONS -->
                         <li class="nav-item">
@@ -518,6 +570,25 @@
                                        class="nav-link">
                                         <i class="nav-icon bi bi-journal-plus"></i>
                                         <p>GL Inquiry</p>
+                                    </a>
+                                </li>
+                                <!-- Financial Reports -->
+                                <li class="nav-item">
+                                     <a asp-controller="Reports"
+                                       asp-action="Index"
+                                       class="nav-link">
+                                        <i class="nav-icon bi bi-file-earmark-bar-graph"></i>
+                                        <p>
+                                            Financial Reports
+                                            <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                        </p>
+                                    </a>
+                                <li class="nav-item">
+                                    <a asp-controller="Assets"
+                                       asp-action="Index"
+                                       class="nav-link">
+                                        <i class="nav-icon bi bi-bank"></i>
+                                        <p>Assets</p>
                                     </a>
                                 </li>
                                 <!-- BLOCKCHAIN -->
@@ -802,29 +873,29 @@
             }
 
             // Load blockchain stats
-            loadBlockchainStats();
-            setInterval(loadBlockchainStats, 30000); // Update every 30 seconds
-        });
+        //     loadBlockchainStats();
+        //     setInterval(loadBlockchainStats, 30000); // Update every 30 seconds
+        // });
 
-        function loadBlockchainStats() {
-            // Fetch blockchain status
-            fetch('/api/Blockchain/Status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('blockchainStatus').textContent = data.status;
-                        document.getElementById('transactionCount').textContent = data.totalTransactions;
-                        document.getElementById('lastSyncTime').textContent = new Date(data.lastSync).toLocaleTimeString();
+        // function loadBlockchainStats() {
+        //     // Fetch blockchain status
+        //     fetch('/api/Blockchain/Status')
+        //         .then(response => response.json())
+        //         .then(data => {
+        //             if (data.success) {
+        //                 document.getElementById('blockchainStatus').textContent = data.status;
+        //                 document.getElementById('transactionCount').textContent = data.totalTransactions;
+        //                 document.getElementById('lastSyncTime').textContent = new Date(data.lastSync).toLocaleTimeString();
 
-                        // Update pending loans count for admin
-                        if (data.pendingLoans) {
-                            document.getElementById('pendingLoansCount').textContent = data.pendingLoans;
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading blockchain stats:', error);
-                });
+        //                 // Update pending loans count for admin
+        //                 if (data.pendingLoans) {
+        //                     document.getElementById('pendingLoansCount').textContent = data.pendingLoans;
+        //                 }
+        //             }
+        //         })
+        //         .catch(error => {
+        //             console.error('Error loading blockchain stats:', error);
+        //         });
         }
                     $(document).ready(function() {
                         // Initialize menu collapse/expand

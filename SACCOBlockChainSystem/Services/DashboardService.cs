@@ -40,7 +40,7 @@ namespace SACCOBlockChainSystem.Services
                 dashboard.PendingMembers = await _context.Members.CountAsync(m => m.Status == 0);
 
                 dashboard.TotalShareCapital = await _context.Shares.SumAsync(s => s.TotalShares ?? 0);
-                dashboard.TotalLoansIssued = await _context.Loans.Where(l => l.Status == 1).SumAsync(l => l.LoanAmt ?? 0);
+                //dashboard.TotalLoansIssued = await _context.Loans.Where(l => l.Status == 1).SumAsync(l => l.LoanAmt ?? 0);
                 dashboard.TotalLoanRepayments = await _context.Repays.SumAsync(r => r.Amount ?? 0);
 
                 dashboard.TotalDeposits = await _context.Transactions2
@@ -67,7 +67,7 @@ namespace SACCOBlockChainSystem.Services
 
                 // Recent activities
                 dashboard.RecentTransactions = await GetRecentTransactionsAsync();
-                dashboard.RecentLoans = await GetRecentLoansAsync();
+                //dashboard.RecentLoans = await GetRecentLoansAsync();
                 dashboard.PendingLoans = await GetPendingLoansAsync();
 
                 // Quick stats
@@ -93,7 +93,7 @@ namespace SACCOBlockChainSystem.Services
                 dashboard.TotalShareCapital = await _memberRepository.GetShareBalanceAsync(memberNo);
 
                 var memberLoans = await _loanRepository.GetMemberLoansAsync(memberNo);
-                dashboard.TotalLoansIssued = memberLoans.Where(l => l.Status == 1).Sum(l => l.LoanAmt ?? 0);
+                //dashboard.TotalLoansIssued = memberLoans.Where(l => l.Status == 1).Sum(l => l.LoanAmt ?? 0);
 
                 var memberTransactions = await _transactionRepository.GetMemberTransactionsAsync(memberNo, null, null);
                 dashboard.TotalDeposits = await _transactionRepository.GetMemberTotalDepositsAsync(memberNo);
@@ -200,13 +200,13 @@ namespace SACCOBlockChainSystem.Services
         private async Task<List<LoanTypeDistribution>> GetLoanTypeDistributionAsync()
         {
             var distribution = await _context.Loans
-                .Where(l => l.Status == 1) // Approved loans
+                //.Where(l => l.Status == 1) // Approved loans
                 .GroupBy(l => l.LoanCode)
                 .Select(g => new LoanTypeDistribution
                 {
                     LoanType = g.Key ?? "Unknown",
                     Count = g.Count(),
-                    TotalAmount = g.Sum(l => l.LoanAmt ?? 0)
+                    //TotalAmount = g.Sum(l => l.LoanAmt ?? 0)
                 })
                 .ToListAsync();
 
@@ -274,41 +274,14 @@ namespace SACCOBlockChainSystem.Services
             return result;
         }
 
-        private async Task<List<RecentLoan>> GetRecentLoansAsync(int count = 5)
-        {
-            // Get loans and join with members manually
-            var recentLoans = await _context.Loans
-                .Where(l => l.Status == 1) // Approved loans
-                .OrderByDescending(l => l.ApplicDate)
-                .Take(count)
-                .ToListAsync();
 
-            var result = new List<RecentLoan>();
 
-            foreach (var loan in recentLoans)
-            {
-                // Get member details separately
-                var member = await _context.Members
-                    .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo);
-
-                result.Add(new RecentLoan
-                {
-                    LoanNo = loan.LoanNo,
-                    MemberName = member != null ? $"{member.Surname} {member.OtherNames}" : "Unknown",
-                    Amount = loan.LoanAmt ?? 0,
-                    Status = "Approved",
-                    ApplicationDate = loan.ApplicDate
-                });
-            }
-
-            return result;
-        }
 
         private async Task<List<PendingLoan>> GetPendingLoansAsync()
         {
             // Get pending loans and join with members manually
             var pendingLoans = await _context.Loans
-                .Where(l => l.Status == 0) // Pending loans
+                //.Where(l => l.Status == 0) // Pending loans
                 .OrderBy(l => l.ApplicDate)
                 .Take(10)
                 .ToListAsync();
@@ -485,9 +458,9 @@ namespace SACCOBlockChainSystem.Services
                 case "LOANOFFICER":
                     // Loan officer dashboard
                     dashboard.PendingLoans = await GetPendingLoansAsync();
-                    dashboard.RecentLoans = await GetRecentLoansAsync();
-                    dashboard.TotalLoansProcessedToday = await _context.Loans
-                        .CountAsync(l => l.ApplicDate.Date == DateTime.Today);
+                    //dashboard.RecentLoans = await GetRecentLoansAsync();
+                    //dashboard.TotalLoansProcessedToday = await _context.Loans
+                        //.CountAsync(l => l.ApplicDate.Date == DateTime.Today);
                     break;
 
                 case "AUDITOR":

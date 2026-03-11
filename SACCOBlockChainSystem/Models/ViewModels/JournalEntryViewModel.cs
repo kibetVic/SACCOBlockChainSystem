@@ -6,19 +6,16 @@ namespace SACCOBlockChainSystem.Models.ViewModels
 {
     public class JournalEntryViewModel
     {
-        [Display(Name = "Voucher No")]
         public string? VoucherNo { get; set; }
 
-        [Display(Name = "Voucher Date")]
-        public DateTime VoucherDate { get; set; }
+        [Required]
+        [DataType(DataType.Date)]
+        public DateTime VoucherDate { get; set; } = DateTime.Now;
 
-        [Display(Name = "Description")]
         public string? Description { get; set; }
 
-        [Display(Name = "Member No")]
         public string? MemberNo { get; set; }
 
-        [Display(Name = "Loan No")]
         public string? LoanNo { get; set; }
 
         public string? CompanyCode { get; set; }
@@ -33,8 +30,13 @@ namespace SACCOBlockChainSystem.Models.ViewModels
 
         public DateTime PostedDate { get; set; }
 
-        // 🔥 Journal Lines
-        public List<JournalDetailViewModel> Details { get; set; }
-            = new List<JournalDetailViewModel>();
+        public List<JournalDetailViewModel> Details { get; set; } = new List<JournalDetailViewModel>();
+
+        // Summary properties
+        public decimal TotalDebit => Details?.Sum(x => x.Debit) ?? 0;
+        public decimal TotalCredit => Details?.Sum(x => x.Credit) ?? 0;
+        public decimal Difference => TotalDebit - TotalCredit;
+        public bool IsBalanced => Math.Abs(Difference) < 0.01m;
+        public int EntryCount => Details?.Count ?? 0;
     }
 }

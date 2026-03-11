@@ -35,6 +35,9 @@ namespace SACCOBlockChainSystem.Data
         public DbSet<Wallet> Wallets { get; set; }
         public DbSet<GlSetup> GlSetup { get; set; }
         public DbSet<Journal> Journals { get; set; }
+        public DbSet<JournalPostingRule> JournalPostingRules { get; set; }
+        public DbSet<JournalsListing> JournalsListings { get; set; }
+        public DbSet<AssetsRegister> AssetsRegisters { get; set; }
         //public DbSet<BudgetHeader> BudgetHeader { get; set; }
 
         //public DbSet<BudgetEntry> BudgetEntries { get; set; }
@@ -98,20 +101,7 @@ namespace SACCOBlockChainSystem.Data
                 .HasForeignKey(l => l.MemberNo)
                 .HasPrincipalKey(m => m.MemberNo);
 
-            // Configure Loan-Loanbals relationship
-            modelBuilder.Entity<Loan>()
-                .HasMany(l => l.Loanbals)
-                .WithOne() // If Loanbal doesn't have Loan navigation property
-                .HasForeignKey(lb => lb.LoanNo)
-                .HasPrincipalKey(l => l.LoanNo);
-
-            // Configure Loan-Repays relationship
-            modelBuilder.Entity<Loan>()
-                .HasMany(l => l.Repays)
-                .WithOne() // If Repay doesn't have Loan navigation property
-                .HasForeignKey(r => r.LoanNo)
-                .HasPrincipalKey(l => l.LoanNo);
-
+            
             // Block - BlockchainTransaction relationship
             modelBuilder.Entity<BlockchainTransaction>()
                 .HasOne(t => t.Block)
