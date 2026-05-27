@@ -29,7 +29,7 @@ namespace SACCOBlockChainSystem.Controllers
             var isUser = User.Identity.IsAuthenticated;
             if (!isUser)
             {
-                return RedirectToAction("Login","AccountController");
+                return RedirectToAction("Login", "Account");
             }
             var companyCode = User.FindFirst("CompanyCode")?.Value;
             var wallets = _context.Wallets.AsNoTracking().Where(c=>c.CompanyCode == companyCode).ToList();
@@ -45,7 +45,7 @@ namespace SACCOBlockChainSystem.Controllers
             var isUser = User.Identity.IsAuthenticated;
             if (!isUser)
             {
-                return RedirectToAction("Login", "AccountController");
+                return RedirectToAction("Login", "Account");
             }
             var companyCode = User.FindFirst("CompanyCode")?.Value;
 
@@ -73,7 +73,7 @@ namespace SACCOBlockChainSystem.Controllers
             var isUser = User.Identity.IsAuthenticated;
             if (!isUser)
             {
-                return RedirectToAction("Login", "AccountController");
+                return RedirectToAction("Login", "Account");
             }
             var companyCode = User.FindFirst("CompanyCode")?.Value;
             //var wallets = _context.Wallets.AsNoTracking().Where(c => c.CompanyCode == companyCode).ToList();
@@ -91,7 +91,7 @@ namespace SACCOBlockChainSystem.Controllers
             var isUser = User.Identity.IsAuthenticated;
             if (!isUser)
             {
-                return RedirectToAction("Login", "AccountController");
+                return RedirectToAction("Login", "Account");
             }
             var companyCode = User.FindFirst("CompanyCode")?.Value;
             //var wallets = _context.Wallets.AsNoTracking().Where(c => c.CompanyCode == companyCode).ToList();
@@ -112,7 +112,7 @@ namespace SACCOBlockChainSystem.Controllers
             var isUser = User.Identity.IsAuthenticated;
             if (!isUser)
             {
-                return RedirectToAction("Login", "AccountController");
+                return RedirectToAction("Login", "Account");
             }
             try
             {
