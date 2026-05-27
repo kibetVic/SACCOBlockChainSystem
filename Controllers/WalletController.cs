@@ -83,8 +83,8 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 return NotFound();
             }
-            member.Wallet = wallet;
-            return View(member);
+            wallet.Member = member;
+            return View(wallet);
         }
         [HttpPost]
         public async Task<IActionResult> RegisterMemberWallet(int id, string mno)
