@@ -258,7 +258,7 @@ namespace SACCOBlockChainSystem.Data
                     .HasPrincipalKey(l => l.LoanCode);
             });
 
-            modelBuilder.Entity<Member>().Ignore(m => m.Id);
+            //modelBuilder.Entity<Member>().Ignore(m => m.Id);
 
             // Explicitly configure Company entity
             modelBuilder.Entity<Company>(entity =>

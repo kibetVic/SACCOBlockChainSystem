@@ -9,6 +9,7 @@ namespace SACCOBlockChainSystem.Models
     {
         [NotMapped]
         public Member Member { get; set; }
+        public string MemberNo { get; set; }
         public int MemberId { get; set; }
         public decimal CapitalBalance { get; set; }
         public decimal DepositBalance { get; set; }

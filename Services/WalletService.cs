@@ -169,6 +169,7 @@ namespace SACCOBlockChainSystem.Services
                     wallet.PrivateKeyEncrypted = EncryptionHelper.Encrypt(privateKey);
                     wallet.PublicKey = publicKey;
                     wallet.Address = walletAddress;
+                    wallet.MemberNo = registration.MemberNo;
                     _context.Wallets.Add(wallet);
 
 
