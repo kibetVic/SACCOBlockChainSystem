@@ -95,7 +95,7 @@ namespace SACCOBlockChainSystem.Controllers
 
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
-                var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == mno && m.CompanyCode == companyCode);
+                var member = await _context.Members.FirstOrDefaultAsync(m => m.MemberNo == mno && m.CompanyCode == companyCode);
                 if(member == null)
                 {
                     return Ok(new { Success = false, Message = "No member found" });
