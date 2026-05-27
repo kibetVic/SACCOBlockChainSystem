@@ -132,7 +132,7 @@ namespace SACCOBlockChainSystem.Services
 
                 // Check for duplicate ID number within the same company
                 var existingById = await _context.Wallets
-                    .FirstOrDefaultAsync(m => m.MemberId == registration.Id && m.CompanyCode == currentCompanyCode);
+                    .FirstOrDefaultAsync(m => m.memberNo == registration.MobileNo && m.CompanyCode == currentCompanyCode);
 
                 if (existingById != null)
                 {
@@ -164,7 +164,7 @@ namespace SACCOBlockChainSystem.Services
 
                     var wallet = new Wallet();
                     wallet.CompanyCode = currentCompanyCode;
-                    wallet.MemberId = registration.Id;
+                    wallet.memberNo = registration.MobileNo;
                     wallet.CreatedAt = DateTime.Now;
                     wallet.PrivateKeyEncrypted = EncryptionHelper.Encrypt(privateKey);
                     wallet.PublicKey = publicKey;

@@ -142,21 +142,16 @@ namespace SACCOBlockChainSystem.Models
         [NotMapped]
         public string? FullName { get; set; }
 
-        // ========== TRANSACTION SIGNING PROPERTIES ==========
-        public long TransactionNonce { get; set; } = 0;           // Sync with Wallet.TransactionNonce
+        public string? WalletAddress { get; set; }
+        public long TransactionNonce { get; set; } = 0;
         public string? LastTransactionHash { get; set; }
         public string? LastTransactionSignature { get; set; }
         public bool IsWalletActive { get; set; } = true;
         public DateTime? LastSignatureAt { get; set; }
-
-        // ========== FRAUD DETECTION ==========
         public int FraudRiskScore { get; set; } = 0;
         public DateTime? LastFraudAssessmentAt { get; set; }
-        public string? SuspiciousFlags { get; set; }  // JSON array of flags
-        public string? WalletAddress { get; set; }
+        public string? SuspiciousFlags { get; set; }
 
-        [ForeignKey("WalletAddress")]
-        public virtual Wallet? Wallet { get; set; }
         public virtual ICollection<NextOfKeen> NextOfKeens { get; set; } = new List<NextOfKeen>();
     }
 }

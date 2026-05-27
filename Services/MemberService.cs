@@ -17,6 +17,7 @@ namespace SACCOBlockChainSystem.Services
         private readonly ICompanyContextService _companyContextService;
         private readonly IHttpContextAccessor _httpContextAccesso;
         private readonly AuditTrailService _auditService;
+        private readonly ICryptoService _cryptoService;
         // private readonly UserManager<IdentityUser> _userManager;
 
         public MemberService(
@@ -25,6 +26,7 @@ namespace SACCOBlockChainSystem.Services
             ILogger<MemberService> logger,
             IHttpContextAccessor httpContextAccessor,
             AuditTrailService auditService,
+            ICryptoService cryptoService,
             //UserManager<IdentityUser> userManager,
             ICompanyContextService companyContextService)
         {
@@ -33,6 +35,7 @@ namespace SACCOBlockChainSystem.Services
             _httpContextAccessor = httpContextAccessor;
             _auditService = auditService;
             _logger = logger;
+            _cryptoService = cryptoService;
             //_userManager = userManager;
             _companyContextService = companyContextService;
         }
@@ -277,6 +280,25 @@ namespace SACCOBlockChainSystem.Services
                 _context.Members.Add(member);
                 await _context.SaveChangesAsync();
                 _logger.LogInformation($"Member saved to database successfully with MemberNo: {member.MemberNo}");
+
+                // Create wallet for the new member
+                try
+                {
+                    //var walletResult = await _cryptoService.CreateWalletForMemberAsync(member.MemberNo, currentCompanyCode);
+                    var walletResult = await _cryptoService.CreateWalletForMemberAsync(member.MemberNo, currentCompanyCode);
+                    if (walletResult.Success)
+                    {
+                        _logger.LogInformation($"Wallet created for new member {memberNo}: {walletResult.WalletAddress}");
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"Failed to create wallet for member {memberNo}: {walletResult.Message}");
+                    }
+                }
+                catch (Exception walletEx)
+                {
+                    _logger.LogError(walletEx, $"Error creating wallet for member {memberNo}");
+                }
 
                 // Rest of your blockchain and response code remains the same...
                 try

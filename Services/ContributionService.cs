@@ -28,6 +28,7 @@ namespace SACCOBlockChainSystem.Services
         private readonly ICompanyContextService _companyContextService;
         private readonly IHttpContextAccessor _httpContextAccesso;
         private readonly AuditTrailService _auditService;
+        private readonly ICryptoService _cryptoService;
         // private readonly UserManager<IdentityUser> _userManager;
 
         public ContributionService(
@@ -37,7 +38,8 @@ namespace SACCOBlockChainSystem.Services
             IHttpContextAccessor httpContextAccessor,
             AuditTrailService auditService,
             //UserManager<IdentityUser> userManager,
-            ICompanyContextService companyContextService)
+            ICompanyContextService companyContextService,
+            ICryptoService cryptoService)
         {
             _context = context;
             _blockchainService = blockchainService;
@@ -46,6 +48,7 @@ namespace SACCOBlockChainSystem.Services
             _logger = logger;
             //_userManager = userManager;
             _companyContextService = companyContextService;
+            _cryptoService = cryptoService;
         }
 
 
@@ -190,6 +193,88 @@ namespace SACCOBlockChainSystem.Services
                     TransferDesc = null,
                     Schemecode = contributionDto.CompanyCode
                 };
+
+                // =============================================
+                // STEP: CHECK/CREATE WALLET BEFORE SIGNING
+                // =============================================
+                var memberRecord = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == contributionDto.MemberNo);
+
+                if (memberRecord == null)
+                {
+                    throw new Exception($"Member {contributionDto.MemberNo} not found");
+                }
+
+                var hasWallet = await _cryptoService.HasWalletAsync(memberRecord.MobileNo);
+                if (!hasWallet)
+                {
+                    _logger.LogWarning($"Member {memberRecord.MemberNo} has no wallet. Creating now...");
+                    var walletResult = await _cryptoService.CreateWalletForMemberAsync(memberRecord.MobileNo, contributionDto.CompanyCode);
+                    if (!walletResult.Success)
+                    {
+                        throw new Exception($"Cannot process transaction: {walletResult.Message}");
+                    }
+                }
+
+                // =============================================
+                // STEP: RUN FRAUD DETECTION
+                // =============================================
+                var fraudResult = await _cryptoService.AnalyzeTransactionAsync(
+                    contributionDto.MemberNo,
+                    contributionDto.Amount,
+                    contributionCategory);
+
+                if (fraudResult.ShouldBlock)
+                {
+                    throw new Exception($"Transaction blocked by fraud detection: {string.Join(", ", fraudResult.Flags)}");
+                }
+
+                // =============================================
+                // STEP: SIGN THE TRANSACTION
+                // =============================================
+                var txDataForSigning = new
+                {
+                    MemberNo = contrib.MemberNo,
+                    Amount = contrib.Amount,
+                    TransactionDate = contrib.ContrDate?.ToString("o") ?? DateTime.UtcNow.ToString("o"),
+                    SharesCode = contrib.Sharescode,
+                    ReceiptNo = contrib.ReceiptNo,
+                    TransactionNo = contrib.TransactionNo,
+                    CompanyCode = contrib.CompanyCode,
+                    ContributionCategory = contributionCategory
+                };
+
+                var signingResult = await _cryptoService.SignTransactionAsync(memberRecord.MobileNo, txDataForSigning);
+
+                if (!signingResult.Success)
+                {
+                    throw new Exception($"Failed to sign transaction: {signingResult.Message}");
+                }
+
+                // =============================================
+                // STEP: ATTACH SIGNATURE TO CONTRIB
+                // =============================================
+                contrib.TransactionSignature = signingResult.Signature;
+                contrib.TransactionHash = signingResult.TransactionHash;
+                contrib.TransactionSequence = signingResult.Nonce;
+                contrib.IsSignatureVerified = false;
+
+                // Get previous transaction hash for chaining
+                var lastContrib = await _context.Contribs
+                    .Where(c => c.MemberNo == contributionDto.MemberNo)
+                    .OrderByDescending(c => c.Id)
+                    .FirstOrDefaultAsync();
+
+                if (lastContrib != null)
+                {
+                    contrib.PreviousTransactionHash = lastContrib.TransactionHash;
+                }
+
+                // Add fraud warning to remarks if suspicious
+                if (fraudResult.IsSuspicious)
+                {
+                    contrib.Remarks = $"⚠️ FLAGGED: {string.Join("; ", fraudResult.Flags)} - {contrib.Remarks}";
+                }
 
                 _context.Contribs.Add(contrib);
                 await _context.SaveChangesAsync();
