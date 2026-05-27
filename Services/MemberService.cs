@@ -281,11 +281,42 @@ namespace SACCOBlockChainSystem.Services
                 await _context.SaveChangesAsync();
                 _logger.LogInformation($"Member saved to database successfully with MemberNo: {member.MemberNo}");
 
+
+                // CRITICAL: Verify member.Id is not 0
+                _logger.LogInformation($"Member saved with ID: {member.Id}, MemberNo: {member.MemberNo}");
+
+                if (member.Id == 0)
+                {
+                    _logger.LogError("Member Id is 0 after SaveChanges! This should not happen.");
+                    throw new Exception("Failed to save member properly");
+                }
+
+                // Create wallet for the new member
+                try
+                {
+                    _logger.LogInformation($"Calling CreateWalletForMemberAsync with ID={member.Id}, MemberNo={member.MemberNo}, Company={currentCompanyCode}");
+                    var walletResult = await _cryptoService.CreateWalletForMemberAsync(member.Id, member.MemberNo, currentCompanyCode);
+                    if (walletResult.Success)
+                    {
+                        _logger.LogInformation($"Wallet created for new member {memberNo}: {walletResult.WalletAddress}");
+
+                        // Refresh member to get updated WalletAddress
+                        await _context.Entry(member).ReloadAsync();
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"Failed to create wallet for member {memberNo}: {walletResult.Message}");
+                    }
+                }
+                catch (Exception walletEx)
+                {
+                    _logger.LogError(walletEx, $"Error creating wallet for member {memberNo}");
+                }
                 // Create wallet for the new member
                 try
                 {
                     //var walletResult = await _cryptoService.CreateWalletForMemberAsync(member.MemberNo, currentCompanyCode);
-                    var walletResult = await _cryptoService.CreateWalletForMemberAsync(member.MemberNo, currentCompanyCode);
+                    var walletResult = await _cryptoService.CreateWalletForMemberAsync(member.Id, member.MemberNo, currentCompanyCode);
                     if (walletResult.Success)
                     {
                         _logger.LogInformation($"Wallet created for new member {memberNo}: {walletResult.WalletAddress}");
@@ -299,8 +330,6 @@ namespace SACCOBlockChainSystem.Services
                 {
                     _logger.LogError(walletEx, $"Error creating wallet for member {memberNo}");
                 }
-
-                // Rest of your blockchain and response code remains the same...
                 try
                 {
                     var blockchainData = new

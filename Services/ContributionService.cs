@@ -209,7 +209,7 @@ namespace SACCOBlockChainSystem.Services
                 if (!hasWallet)
                 {
                     _logger.LogWarning($"Member {memberRecord.MemberNo} has no wallet. Creating now...");
-                    var walletResult = await _cryptoService.CreateWalletForMemberAsync(memberRecord.MobileNo, contributionDto.CompanyCode);
+                    var walletResult = await _cryptoService.CreateWalletForMemberAsync(memberRecord.Id, memberRecord.MemberNo, contributionDto.CompanyCode);
                     if (!walletResult.Success)
                     {
                         throw new Exception($"Cannot process transaction: {walletResult.Message}");
@@ -244,7 +244,7 @@ namespace SACCOBlockChainSystem.Services
                     ContributionCategory = contributionCategory
                 };
 
-                var signingResult = await _cryptoService.SignTransactionAsync(memberRecord.MobileNo, txDataForSigning);
+                var signingResult = await _cryptoService.SignTransactionAsync(memberRecord.MemberNo, txDataForSigning);
 
                 if (!signingResult.Success)
                 {

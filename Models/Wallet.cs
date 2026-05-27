@@ -10,6 +10,7 @@ namespace SACCOBlockChainSystem.Models
     {
         [NotMapped]
         public Member Member { get; set; }
+        public int MemberId { get; set; }
         public string memberNo { get; set; }
         public decimal CapitalBalance { get; set; }
         public decimal DepositBalance { get; set; }
@@ -37,7 +38,7 @@ namespace SACCOBlockChainSystem.Models
         public long TransactionNonce { get; set; } = 0;
 
         // ========== CREATE NEW WALLET ==========
-        public static Wallet CreateNewWallet(string memberNo, string companyCode)
+        public static Wallet CreateNewWallet(int memberId, string memberNo, string companyCode)
         {
             using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
@@ -58,6 +59,7 @@ namespace SACCOBlockChainSystem.Models
                 Address = address,
                 PublicKey = publicKey,
                 PrivateKeyEncrypted = privateKeyEncrypted,
+                MemberId = memberId,
                 memberNo = memberNo,
                 CompanyCode = companyCode,
                 CreatedAt = DateTime.UtcNow,

@@ -10,22 +10,15 @@ namespace SACCOBlockChainSystem.Services
     public interface ICryptoService
     {
         // ========== WALLET MANAGEMENT ==========
-        Task<WalletResult> CreateWalletForMemberAsync(string memberNo, string companyCode);
+
+        Task<WalletResult> CreateWalletForMemberAsync(int memberId, string memberNo, string companyCode);
+       //Task<WalletResult> CreateWalletForMemberAsync(string memberNo, string companyCode);
         Task<Wallet> GetWalletByMemberNoAsync(string memberNo);
         Task<bool> HasWalletAsync(string memberNo);
         Task<WalletInfo> GetWalletInfoAsync(string memberNo);
 
         Task<SigningResult> SignTransactionAsync(string memberNo, object transactionData);
         Task<bool> VerifySignatureAsync(string memberNo, string data, string signature);
-        //Task<WalletResult> CreateWalletForMemberAsync(int memberId, string companyCode);
-
-        //Task<Wallet> GetWalletByMemberIdAsync(int memberId);
-        //Task<bool> HasWalletAsync(int memberId);
-        //Task<WalletInfo> GetWalletInfoAsync(int memberId);
-
-        //// ========== SIGNING ==========
-        //Task<SigningResult> SignTransactionAsync(int memberId, object transactionData);
-        //Task<bool> VerifySignatureAsync(int memberId, string data, string signature);
 
         // ========== VERIFICATION ==========
         Task<VerificationResult> VerifyTransactionAsync(int contribId);
@@ -123,19 +116,24 @@ namespace SACCOBlockChainSystem.Services
         // ============================================================
         // WALLET MANAGEMENT
         // ============================================================
-
-        public async Task<WalletResult> CreateWalletForMemberAsync(string memberNo, string companyCode)
+        public async Task<WalletResult> CreateWalletForMemberAsync(int memberId, string memberNo, string companyCode)
         {
-            _logger.LogInformation($"Creating wallet for member ID: {memberNo}, Company: {companyCode}");
+            //var member = await _context.Members.FirstOrDefaultAsync(m => m.Id == memberId);
 
+            _logger.LogInformation($"Creating wallet for member: {memberNo}, Company: {companyCode}");
+
+            // Find member by MemberNo AND CompanyCode
             var member = await _context.Members
-                .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
+                .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
 
             if (member == null)
             {
                 return new WalletResult { Success = false, Message = "Member not found" };
             }
 
+            _logger.LogInformation($"Found member: ID={member.Id}, MemberNo={member.MemberNo}, CompanyCode={member.CompanyCode}");
+
+            // Check if wallet already exists
             var existingWallet = await _context.Wallets
                 .FirstOrDefaultAsync(w => w.memberNo == memberNo && w.CompanyCode == companyCode);
 
@@ -151,11 +149,21 @@ namespace SACCOBlockChainSystem.Services
 
             try
             {
-                var wallet = Wallet.CreateNewWallet(memberNo, companyCode);
+                // Create wallet with MemberId AND MemberNo
+                var wallet = Wallet.CreateNewWallet(member.Id, member.MemberNo, companyCode);
+
                 _context.Wallets.Add(wallet);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation($"Wallet created for member {member.MemberNo}: {wallet.Address}");
+                // =============================================
+                // CRITICAL: Update Member table with WalletAddress
+                // =============================================
+                member.WalletAddress = wallet.Address;
+                member.IsWalletActive = true;
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation($"Wallet created for member {memberNo} (ID: {member.Id}): {wallet.Address}");
+                _logger.LogInformation($"Updated Member {memberNo} with WalletAddress: {wallet.Address}");
 
                 return new WalletResult
                 {
@@ -166,10 +174,11 @@ namespace SACCOBlockChainSystem.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to create wallet for member ID {memberNo}");
+                _logger.LogError(ex, $"Failed to create wallet for member {memberNo}");
                 return new WalletResult { Success = false, Message = ex.Message };
             }
         }
+
 
         public async Task<Wallet> GetWalletByMemberNoAsync(string memberNo)
         {
@@ -205,6 +214,7 @@ namespace SACCOBlockChainSystem.Services
 
         public async Task<SigningResult> SignTransactionAsync(string memberNo, object transactionData)
         {
+            // Find wallet by MemberNo
             var wallet = await _context.Wallets
                 .FirstOrDefaultAsync(w => w.memberNo == memberNo);
 
@@ -235,9 +245,20 @@ namespace SACCOBlockChainSystem.Services
                 var signatureBase64 = Convert.ToBase64String(signature);
                 var transactionHash = ComputeHash(canonicalData);
 
+                // Also update the Member table's nonce for consistency
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
+                if (member != null)
+                {
+                    member.TransactionNonce = wallet.TransactionNonce;
+                    member.LastTransactionHash = transactionHash;
+                    member.LastTransactionSignature = signatureBase64;
+                    member.LastSignatureAt = DateTime.UtcNow;
+                }
+
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation($"Transaction signed for member ID {memberNo}, nonce: {wallet.TransactionNonce}");
+                _logger.LogInformation($"Transaction signed for member {memberNo}, nonce: {wallet.TransactionNonce}");
 
                 return new SigningResult
                 {
@@ -250,10 +271,62 @@ namespace SACCOBlockChainSystem.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to sign transaction for member ID {memberNo}");
+                _logger.LogError(ex, $"Failed to sign transaction for member {memberNo}");
                 return new SigningResult { Success = false, Message = ex.Message };
             }
         }
+
+        //public async Task<SigningResult> SignTransactionAsync(string memberNo, object transactionData)
+        //{
+        //    var wallet = await _context.Wallets
+        //        .FirstOrDefaultAsync(w => w.memberNo == memberNo);
+
+        //    if (wallet == null)
+        //    {
+        //        return new SigningResult { Success = false, Message = "Member has no wallet. Create wallet first." };
+        //    }
+
+        //    if (!wallet.IsActive)
+        //    {
+        //        return new SigningResult { Success = false, Message = "Wallet is inactive" };
+        //    }
+
+        //    try
+        //    {
+        //        wallet.TransactionNonce++;
+        //        wallet.LastUsedAt = DateTime.UtcNow;
+
+        //        var canonicalData = CreateCanonicalString(transactionData, wallet.TransactionNonce);
+        //        var dataBytes = Encoding.UTF8.GetBytes(canonicalData);
+
+        //        var privateKeyBytes = DecryptPrivateKey(wallet.PrivateKeyEncrypted!);
+
+        //        using var ecdsa = ECDsa.Create();
+        //        ecdsa.ImportECPrivateKey(privateKeyBytes, out _);
+
+        //        var signature = ecdsa.SignData(dataBytes, HashAlgorithmName.SHA256);
+        //        var signatureBase64 = Convert.ToBase64String(signature);
+        //        var transactionHash = ComputeHash(canonicalData);
+
+        //        await _context.SaveChangesAsync();
+
+        //        _logger.LogInformation($"Transaction signed for member ID {memberNo}, nonce: {wallet.TransactionNonce}");
+
+        //        return new SigningResult
+        //        {
+        //            Success = true,
+        //            Signature = signatureBase64,
+        //            TransactionHash = transactionHash,
+        //            Nonce = wallet.TransactionNonce,
+        //            Message = "Transaction signed successfully"
+        //        };
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"Failed to sign transaction for member ID {memberNo}");
+        //        return new SigningResult { Success = false, Message = ex.Message };
+        //    }
+        //}
 
         public async Task<bool> VerifySignatureAsync(string memberNo, string data, string signature)
         {
