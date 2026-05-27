@@ -6,6 +6,8 @@ namespace SACCOBlockChainSystem.Models
 {
     public partial class Member
     {
+        [NotMapped]
+        public Wallet Wallet { get; set; }
         public int Id { get; set; }
         public string MemberNo { get; set; } = null!;
 

@@ -7,6 +7,12 @@ namespace SACCOBlockChainSystem.Models
 {
     public class Wallet
     {
+        [NotMapped]
+        public Member Member { get; set; }
+        public int MemberId { get; set; }
+        public decimal CapitalBalance { get; set; }
+        public decimal DepositBalance { get; set; }
+        public string CompanyCode { get; set; }
         [Key]
         [MaxLength(100)]
         public string Address { get; set; }
@@ -24,30 +30,6 @@ namespace SACCOBlockChainSystem.Models
 
         public DateTime? LastActivity { get; set; }
 
-        // We'll remove navigation properties to avoid circular references
-        // Use queries to get transactions instead
-
-        public static Wallet CreateNew()
-        {
-            using var rsa = RSA.Create(2048);
-
-            var wallet = new Wallet
-            {
-                PublicKey = Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo()),
-                PrivateKeyEncrypted = Convert.ToBase64String(rsa.ExportRSAPrivateKey())
-            };
-
-            // Generate address from public key hash
-            using var sha256 = SHA256.Create();
-            var publicKeyBytes = Encoding.UTF8.GetBytes(wallet.PublicKey);
-            var hash = sha256.ComputeHash(publicKeyBytes);
-
-            // Take first 20 bytes for address (like Ethereum)
-            var addressBytes = new byte[20];
-            Array.Copy(hash, addressBytes, 20);
-            wallet.Address = "0x" + Convert.ToHexString(addressBytes).ToLower();
-
-            return wallet;
-        }
+        
     }
 }

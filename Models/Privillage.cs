@@ -14,6 +14,6 @@ namespace SACCOBlockChainSystem.Models
         public string? UpdatedBy { get; set; }
         public DateTime DateUpdated { get; set; }
 
-        public List<RolePrivilage>? RolePrivilage { get; set; }
+       // public List<RolePrivilage>? RolePrivilage { get; set; }
     }
 }

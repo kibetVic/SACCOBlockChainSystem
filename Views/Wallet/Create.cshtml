@@ -1,0 +1,147 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@model IEnumerable<Member>
+@{
+}
+
+
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <h5><i class="fas fa-list"></i> Existing Members</h5>
+    </div>
+    <div class="card-body">
+        <!-- Search Bar -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" id="memberSearchInput" class="form-control" placeholder="Search by Member No, Name, ID Number, Phone, Email..." autocomplete="off">
+                    <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn">
+                        <i class="fas fa-times"></i> Clear
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select id="statusFilter" class="form-select">
+                    <option value="all">All Status</option>
+                    <option value="active">Active Only</option>
+                    <option value="inactive">Inactive Only</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select id="sortBy" class="form-select">
+                    <option value="name">Sort by Name</option>
+                    <option value="memberNo">Sort by Member No</option>
+                    <option value="date">Sort by Registration Date</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="membersTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Member No</th>
+                        <th>Full Name</th>
+                        <th>ID Number</th>
+                        <th>Phone</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Registration Date</th>
+                        <th style="width: 100px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="membersTableBody">
+                    @{
+                        var counter = 1;
+                    }
+                    @foreach (var member in Model.OrderBy(m => m.Surname))
+                    {
+                        var fullName = $"{member.Surname} {member.OtherNames}";
+                        var statusText = member.Status == 1 ? "Active" : "Inactive";
+                        var statusClass = member.Status == 1 ? "bg-success" : "bg-secondary";
+                        var registrationDate = member.ApplicDate?.ToString("dd/MM/yyyy") ?? "N/A";
+
+                        <tr data-memberno="@member.MemberNo"
+                            data-surname="@member.Surname"
+                            data-othernames="@member.OtherNames"
+                            data-idno="@member.Idno"
+                            data-phone="@member.PhoneNo"
+                            data-email="@member.Email"
+                            data-landline="@member.HomeTelNo"
+                            data-gender="@member.Sex"
+                            data-dob="@member.Dob?.ToString("yyyy-MM-dd")"
+                            data-age="@member.Age"
+                            data-marital="@(member.Mstatus == true ? "Married" : member.Mstatus == false ? "Single" : "")"
+                            data-station="@member.Station"
+                            data-dept="@member.Dept"
+                            data-address="@member.PresentAddr"
+                            data-cigcode="@member.Cigcode"
+                            data-membershiptype="@member.MembershipType"
+                            data-registrationtype="@member.MemberDescription"
+                            data-status="@member.Status"
+                            data-status-text="@statusText"
+                            data-regdate="@member.ApplicDate?.ToString("yyyy-MM-dd")"
+                            data-initialshares="@member.InitShares">
+                            <td class="row-number">@counter</td>
+                            <td>
+                                <strong>@member.MemberNo</strong>
+                                @if (!string.IsNullOrEmpty(member.BlockchainTxId))
+                                {
+                                    <span class="badge bg-success ms-1" title="On Blockchain">
+                                        <i class="fas fa-link fa-xs"></i>
+                                    </span>
+                                }
+                            </td>
+                            <td class="member-name">@fullName</td>
+                            <td class="member-idno">@member.Idno</td>
+                            <td class="member-phone">@member.PhoneNo</td>
+                            <td class="member-email">@(member.Email ?? "N/A")</td>
+                            <td class="member-status">
+                                <span class="badge @statusClass status-badge">@statusText</span>
+                            </td>
+                            <td class="member-date">@registrationDate</td>
+                            <td>
+                                <a type="button" class="btn btn-sm btn-info select-btn w-100" data-memberno="@member.MemberNo" asp-action="CreateWallet" asp-route-mno="@member.MemberNo">
+                                    <i class="fas fa-edit"></i> Select
+                                </a>
+                            </td>
+                        </tr>
+                        counter++;
+                    }
+                    @if (!Model.Any())
+                    {
+                        <tr id="noMembersRow">
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="fas fa-info-circle"></i> No members found. Click "New" to register one.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Statistics Summary -->
+        <div class="row mt-4">
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h3 id="totalMembersCount">@Model.Count()</h3>
+                        <p class="text-muted mb-0">Total Registered</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                
+            </div>
+            <div class="col-md-3">
+                
+            </div>
+            <div class="col-md-3">
+                
+            </div>
+        </div>
+    </div>
+</div>

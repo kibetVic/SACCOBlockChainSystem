@@ -165,7 +165,7 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     IsPersistent = model.RememberMe,
                     ExpiresUtc = model.RememberMe ? DateTimeOffset.UtcNow.AddDays(30) : DateTimeOffset.UtcNow.AddHours(2),
-                    RedirectUri = returnUrl ?? "/Home/Index"
+                    RedirectUri = returnUrl ?? "/MembersMVC/Index"
                 };
 
                 await HttpContext.SignInAsync(
