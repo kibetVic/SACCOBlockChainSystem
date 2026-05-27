@@ -26,6 +26,11 @@ namespace SACCOBlockChainSystem.Controllers
         }
         public async Task<IActionResult> Index()
         {
+            var isUser = User.Identity.IsAuthenticated;
+            if (!isUser)
+            {
+                return RedirectToAction("Login","AccountController");
+            }
             var companyCode = User.FindFirst("CompanyCode")?.Value;
             var wallets = _context.Wallets.AsNoTracking().Where(c=>c.CompanyCode == companyCode).ToList();
             var members = await _memberService.GetAllMembersAsync();
@@ -37,6 +42,11 @@ namespace SACCOBlockChainSystem.Controllers
 
         public async Task<IActionResult> Create()
         {
+            var isUser = User.Identity.IsAuthenticated;
+            if (!isUser)
+            {
+                return RedirectToAction("Login", "AccountController");
+            }
             var companyCode = User.FindFirst("CompanyCode")?.Value;
 
             // Get member IDs that already have wallets
@@ -60,6 +70,11 @@ namespace SACCOBlockChainSystem.Controllers
         [HttpGet]
         public async Task<IActionResult> CreateWallet(string mno)
         {
+            var isUser = User.Identity.IsAuthenticated;
+            if (!isUser)
+            {
+                return RedirectToAction("Login", "AccountController");
+            }
             var companyCode = User.FindFirst("CompanyCode")?.Value;
             //var wallets = _context.Wallets.AsNoTracking().Where(c => c.CompanyCode == companyCode).ToList();
             var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m=>m.MemberNo == mno && m.CompanyCode == companyCode);
@@ -73,6 +88,11 @@ namespace SACCOBlockChainSystem.Controllers
         [HttpGet]
         public async Task<IActionResult> ViewWallet(string mno)
         {
+            var isUser = User.Identity.IsAuthenticated;
+            if (!isUser)
+            {
+                return RedirectToAction("Login", "AccountController");
+            }
             var companyCode = User.FindFirst("CompanyCode")?.Value;
             //var wallets = _context.Wallets.AsNoTracking().Where(c => c.CompanyCode == companyCode).ToList();
             var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == mno && m.CompanyCode == companyCode);
@@ -89,6 +109,11 @@ namespace SACCOBlockChainSystem.Controllers
         [HttpPost]
         public async Task<IActionResult> RegisterMemberWallet(int id, string mno)
         {
+            var isUser = User.Identity.IsAuthenticated;
+            if (!isUser)
+            {
+                return RedirectToAction("Login", "AccountController");
+            }
             try
             {
                 var companyCode = User.FindFirst("CompanyCode")?.Value;
