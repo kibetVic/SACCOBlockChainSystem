@@ -79,7 +79,7 @@ namespace SACCOBlockChainSystem.Services
             return _httpContextAccessor.HttpContext?.User;
         }
 
-        public async Task<MemberResponseDTO> RegisterMemberAsync(Member registration)
+        public async Task<Wallet> RegisterMemberAsync(Member registration)
         {
             _logger.LogInformation($"Starting member registration for: {registration.Surname} {registration.OtherNames}");
 
@@ -198,7 +198,7 @@ namespace SACCOBlockChainSystem.Services
 
                     await transaction.CommitAsync();
                     //_logger.LogInformation($"Transaction committed successfully for member: {memberNo}");
-                    return new MemberResponseDTO();
+                    return wallet;
                     //return new MemberResponseDTO
                     //{
                     //    MemberNo = memberNo, // Return the SAME member number
@@ -218,7 +218,7 @@ namespace SACCOBlockChainSystem.Services
                 {
                     _logger.LogError(blockchainEx, "Error with blockchain transaction, but member was saved to database");
                     await transaction.CommitAsync();
-                    return new MemberResponseDTO();
+                    return new Wallet();
                     //return new MemberResponseDTO
                     //{
                     //    MemberNo = memberNo,

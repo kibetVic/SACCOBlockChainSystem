@@ -58,6 +58,8 @@
             border-radius: 5px;
         }
     </style>
+    <base href="~/" />
+    <component type="typeof(RadzenTheme)" render-mode="ServerPrerendered" param-Theme="@("material")" />
 
     @RenderSection("Styles", required: false)
 
@@ -79,6 +81,7 @@
 
                     <li class="nav-item">
                         @using System.Security.Claims
+@using Radzen.Blazor
                         @if (User.Identity.IsAuthenticated)
                         {
                             var userGroupClaim = User.FindFirstValue(ClaimTypes.Role);
@@ -366,12 +369,22 @@
                                 @{
                                     var userRole = User.FindFirstValue(ClaimTypes.Role);
                                     var userGroup = User.FindFirstValue("UserGroup");
+                                    var Company = User.FindFirstValue("CompanyCode");
                                     var canManageUsers = userRole == "Super Admin" ||
                                     userRole == "Admin" ||
                                     userRole == "System Administrator" ||
                                     userGroup == "Super Admin" ||
                                     userGroup == "Admin" ||
                                     userGroup == "System Administrator";
+                                }
+
+                                @if (Company == "SACCO145111624-001")
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Account" asp-action="UserGroups">
+                                            <i class="bi bi-arrow-left-right"></i> UserGroups
+                                        </a>
+                                    </li>
                                 }
 
                                 @if (canManageUsers)
@@ -382,6 +395,7 @@
                                         </a>
                                     </li>
                                 }
+                               
                             </ul>
                         </li>
 

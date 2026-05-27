@@ -50,7 +50,7 @@
                         <th>Address</th>
                         <th>Phone</th>
                         <th>Email</th>
-                        <th>Status</th>
+                        
                         <th>Created</th>
                         <th style="width: 100px;">Action</th>
                     </tr>
@@ -84,7 +84,7 @@
                             data-cigcode="@member.Cigcode"
                             data-membershiptype="@member.MembershipType"
                             data-registrationtype="@member.MemberDescription"
-                            data-status="@member.Status"
+                           
                             data-status-text="@statusText"
                             data-regdate="@member.ApplicDate?.ToString("yyyy-MM-dd")"
                             data-initialshares="@member.InitShares">
@@ -102,9 +102,9 @@
                             <td class="member-idno">@wallet.Address</td>
                             <td class="member-phone">@member.PhoneNo</td>
                             <td class="member-email">@(member.Email ?? "N/A")</td>
-                            <td class="member-status">
+                            @* <td class="member-status">
                                 <span class="badge @statusClass status-badge">@statusText</span>
-                            </td>
+                            </td> *@
                             <td class="member-date">@wallet.CreatedAt</td>
                             <td>
                                 <a type="button" class="btn btn-sm btn-info select-btn w-100" asp-action="ViewWallet" asp-route-mno="@member.MemberNo">

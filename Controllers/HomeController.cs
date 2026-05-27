@@ -20,18 +20,20 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly ILogger<HomeController> _logger;
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _webHostEnvironment;
+        private WalletService _walletService;
 
         public HomeController(
             IDashboardService dashboardService,
             IBlockchainService blockchainService,
             ILogger<HomeController> logger,
-            ApplicationDbContext context,
+            ApplicationDbContext context,WalletService walletService,
             IWebHostEnvironment webHostEnvironment)
         {
             _dashboardService = dashboardService;
             _blockchainService = blockchainService;
             _logger = logger;
             _context = context;
+            _walletService = walletService;
             _webHostEnvironment = webHostEnvironment;
         }
 
@@ -46,6 +48,25 @@ namespace SACCOBlockChainSystem.Controllers
                                       User.FindFirst("SaccoCode")?.Value ??
                                       User.FindFirst("Company")?.Value;
 
+                if(userRole.ToUpper() == "MEMBER")
+                {
+                   // var companyCode = User.FindFirst("CompanyCode")?.Value;
+                    var uid = User.FindFirst("UserId")?.Value;
+                    
+                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
+                    if(wallet == null)
+                    {
+                        var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
+                        wallet = await _walletService.RegisterMemberAsync(member );
+                        if (wallet == null || wallet.MemberId == 0)
+                        {
+                            ModelState.AddModelError(string.Empty, "Invalid no wallet associated with member.");
+                            return RedirectToAction("MemberLogin", "Account");
+                        }
+                    }
+                    return View("MemberIndex");
+                }
+                
                 // Determine the effective company code for filtering
                 string effectiveCompanyCode = null;
 

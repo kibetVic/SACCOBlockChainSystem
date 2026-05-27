@@ -1,0 +1,231 @@
+﻿@using Radzen
+@using Radzen.Blazor
+@using SACCOBlockChainSystem.Data
+@using SACCOBlockChainSystem.Models
+
+@using SACCOBlockChainSystem.Models.ViewModels
+@using SACCOBlockChainSystem.Services
+@inject Microsoft.JSInterop.IJSRuntime JSRuntime
+@inject NotificationService notificationService
+@inject ContextMenuService contextMenuService
+@inject DialogService dialogservice
+@inject RoleService RoleService
+@inject PrivilegeService PrivilegeService
+<RadzenComponent />
+<RadzenDialog />
+<RadzenNotification />
+
+<RadzenRow Gap="20px">
+
+    <!-- LEFT: ROLE PRIVILEGES -->
+    <RadzenColumn Size="5">
+
+        <RadzenDropDown Data="@Roles"
+                        TValue="int"
+                        TextProperty="Name"
+                        TValue="int"
+                        ValueProperty="UserGroupId"
+                        Placeholder="Select Role"
+                        AllowFiltering="true"
+                        FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                        FilterAsYouType="true"
+                        Style="width:100%"
+                        Change="OnRoleChanged" />
+
+        <RadzenCard Style="margin-top:15px">
+            <h4>Role Privileges</h4>
+
+            <RadzenTextBox Placeholder="Search..."
+                           Style="width:100%; margin-bottom:10px"
+                           @bind-Value="SearchRolePrivileges" />
+
+            <RadzenDataGrid Data="@FilteredRolePrivileges"
+                            TItem="PrivilegeViewModel"
+                            AllowPaging="true"
+                            PageSize="10"
+                            Density="Density.Compact"
+                            AllowColumnResize="true"
+                            AllowSorting="true"
+                            PagerHorizontalAlign="HorizontalAlign.Left"
+                            ShowPagingSummary="true"
+                            SelectionMode="DataGridSelectionMode.Multiple">
+
+                <Columns>
+                    <RadzenDataGridColumn Width="50px">
+                        <Template Context="p">
+                            <RadzenCheckBox @bind-Value="p.IsSelected" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn Property="Id" Title="ID" Width="80px" />
+                    <RadzenDataGridColumn Property="Name" Title="Privilege Name" />
+                </Columns>
+
+            </RadzenDataGrid>
+        </RadzenCard>
+
+    </RadzenColumn>
+
+    <!-- MIDDLE BUTTONS -->
+    <RadzenColumn Size="2" Style="display:flex; align-items:center; justify-content:center;">
+        <RadzenStack Gap="5px">
+
+
+
+            <!-- REMOVE FROM ROLE -->
+            <RadzenButton Icon="chevron_left"
+                          ButtonStyle="ButtonStyle.Success"
+                          Click="AddSelectedPrivilegesToRole" />
+            <!-- ADD TO ROLE -->
+            <RadzenButton Icon="chevron_right"
+                          ButtonStyle="ButtonStyle.Success"
+                          Click="RemoveSelectedPrivilegesFromRole" />
+
+        </RadzenStack>
+    </RadzenColumn>
+
+    <!-- RIGHT: ALL PRIVILEGES -->
+    <RadzenColumn Size="5">
+
+        <RadzenStack Gap="5px">
+            <RadzenTextBox Placeholder="Add privilege..."
+                           Style="width:100%"
+                           @bind-Value="NewPrivilegeName" />
+
+            <RadzenButton Icon="add"
+                          ButtonStyle="ButtonStyle.Success"
+                          Click="AddNewPrivilege" />
+        </RadzenStack>
+
+        <RadzenCard Style="margin-top:15px">
+            <h4>All Privileges</h4>
+
+            <RadzenTextBox Placeholder="Search..."
+                           Style="width:100%; margin-bottom:10px"
+                           @bind-Value="SearchAllPrivileges" />
+
+            <RadzenDataGrid Data="@FilteredAllPrivileges"
+                            TItem="PrivilegeViewModel"
+                            AllowPaging="true"
+                            Density="Density.Compact"
+                            AllowColumnResize="true"
+                            AllowSorting="true"
+                            PagerHorizontalAlign="HorizontalAlign.Left"
+                            ShowPagingSummary="true"
+                            PageSize="10"
+                            SelectionMode="DataGridSelectionMode.Multiple">
+
+                <Columns>
+                    <RadzenDataGridColumn Width="50px">
+                        <Template Context="p">
+                            <RadzenCheckBox @bind-Value="p.IsSelected" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn Property="Id" Title="ID" Width="80px" />
+                    <RadzenDataGridColumn Property="Name" Title="Privilege Name" />
+                </Columns>
+
+            </RadzenDataGrid>
+        </RadzenCard>
+
+    </RadzenColumn>
+
+</RadzenRow>
+
+
+
+@code {
+
+    List<UserGroup> Roles = new List<UserGroup>();
+    List<PrivilegeViewModel> RolePrivileges = new();
+    List<PrivilegeViewModel> AllPrivileges = new();
+
+    List<PrivilegeViewModel> SelectedRolePrivileges = new();
+    List<PrivilegeViewModel> SelectedAllPrivileges = new();
+
+    int SelectedRoleId;
+    string? SearchRolePrivileges;
+    string? SearchAllPrivileges;
+    string? NewPrivilegeName;
+
+    IEnumerable<PrivilegeViewModel> FilteredRolePrivileges =>
+        string.IsNullOrWhiteSpace(SearchRolePrivileges)
+            ? RolePrivileges
+            : RolePrivileges.Where(p =>
+                p.Name.Contains(SearchRolePrivileges, StringComparison.OrdinalIgnoreCase));
+
+    IEnumerable<PrivilegeViewModel> FilteredAllPrivileges =>
+        string.IsNullOrWhiteSpace(SearchAllPrivileges)
+            ? AllPrivileges
+            : AllPrivileges.Where(p =>
+                p.Name.Contains(SearchAllPrivileges, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        Roles = await RoleService.GetRolesAsync();
+        AllPrivileges = await PrivilegeService.GetAllPrivilegesAsync();
+    }
+
+    private async Task OnRoleChanged(object value)
+    {
+        if (value == null) return;
+
+        SelectedRoleId = (int)value;
+        await LoadRolePrivileges();
+    }
+
+    async Task LoadRolePrivileges()
+    {
+        RolePrivileges = await RoleService.GetPrivilegesForRoleAsync(SelectedRoleId);
+
+        var all = await PrivilegeService.GetAllPrivilegesAsync();
+        var assignedIds = RolePrivileges.Select(p => p.Id).ToHashSet();
+
+        AllPrivileges = all.Where(p => !assignedIds.Contains(p.Id)).ToList();
+    }
+
+    async Task AddSelectedPrivilegesToRole()
+    {
+
+        var selected = AllPrivileges.Where(p => p.IsSelected).ToList();
+
+        foreach (var privilege in selected)
+        {
+            await RoleService.AddPrivilegeToRoleAsync(SelectedRoleId, privilege.Id);
+        }
+
+        await LoadRolePrivileges();
+
+    }
+
+    async Task RemoveSelectedPrivilegesFromRole()
+    {
+        var selected = RolePrivileges.Where(p => p.IsSelected).ToList();
+
+        foreach (var privilege in selected)
+        {
+            await RoleService.RemovePrivilegeFromRoleAsync(SelectedRoleId, privilege.Id);
+        }
+
+        await LoadRolePrivileges();
+    }
+
+    async Task AddNewPrivilege()
+    {
+        if (string.IsNullOrWhiteSpace(NewPrivilegeName))
+            return;
+
+        var success = await PrivilegeService.AddPrivilegeAsync(
+            new Usergrp { Feature = NewPrivilegeName });
+
+        if (!success)
+        {
+            notificationService.Notify(NotificationSeverity.Error,
+                "Error", "Privilege already exists");
+            return;
+        }
+
+        NewPrivilegeName = string.Empty;
+        AllPrivileges = await PrivilegeService.GetAllPrivilegesAsync();
+    }
+}
+

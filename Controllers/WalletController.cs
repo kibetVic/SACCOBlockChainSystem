@@ -4,6 +4,7 @@ using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
 using SACCOBlockChainSystem.Services;
+using SACCOBlockChainSystem.Utils;
 using System.Threading.Tasks;
 
 namespace SACCOBlockChainSystem.Controllers
@@ -15,6 +16,7 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly IUserService _userService;
         private readonly IMemberService _memberService;
         private readonly WalletService _walletService;
+        private Utilities utilities;
 
         public WalletController(ApplicationDbContext context, IUserService userService, ILogger<AccountController> logger, IMemberService memberService, WalletService walletService)
         {
@@ -23,6 +25,7 @@ namespace SACCOBlockChainSystem.Controllers
             _logger = logger;
             _walletService = walletService;
             _memberService = memberService;
+            utilities = new Utilities(context);
         }
         public async Task<IActionResult> Index()
         {
@@ -31,6 +34,7 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 return RedirectToAction("Login", "Account");
             }
+            utilities.SetUpPrivileges(this);
             var companyCode = User.FindFirst("CompanyCode")?.Value;
             var wallets = _context.Wallets.AsNoTracking().Where(c=>c.CompanyCode == companyCode).ToList();
             var members = await _memberService.GetAllMembersAsync();

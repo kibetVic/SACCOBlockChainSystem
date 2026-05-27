@@ -19,7 +19,7 @@ namespace SACCOBlockChainSystem.Data
     {
         public int GroupId { get; set; }
         [ForeignKey("GroupId")]
-        public Usergroup? Usergroup { get; set; }
+        public UserGroup? Usergroup { get; set; }
         public int RightId { get; set; }
         [ForeignKey("RightId")]
         public Usergrp? Usergrp { get; set; }

@@ -12,10 +12,10 @@ namespace SACCOBlockChainSystem.Data
             : base(options)
         {
         }
-        public virtual DbSet<Usergroup> Usergroups { get; set; }
+        //public virtual DbSet<Usergroup> Usergroups { get; set; }
         public virtual DbSet<Usergrp> GroupRights { get; set; }
 
-        //public DbSet<UserGroup> UserGroups { get; set; }
+        public DbSet<UserGroup> UserGroups { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
         public DbSet<ColloanGuar> ColloanGuars { get; set; }
         public DbSet<Collateral> Collaterals { get; set; }
@@ -88,10 +88,10 @@ namespace SACCOBlockChainSystem.Data
             modelBuilder.Entity<TransactionDetail>().HasKey(t => t.Id);
             modelBuilder.Entity<Transactions2>().HasKey(t => t.Id);
 
-            modelBuilder.Entity<Usergroup>(entity =>
+            modelBuilder.Entity<UserGroup>(entity =>
             {
-                entity.HasKey(e => e.GroupId);
-                entity.ToTable("UserGroups1");
+                entity.HasKey(e => e.UserGroupId);
+                entity.ToTable("UserGroups");
             });
 
             modelBuilder.Entity<Usergrp>(entity =>
