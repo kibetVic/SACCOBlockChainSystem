@@ -47,11 +47,11 @@
                         <th>#</th>
                         <th>Member No</th>
                         <th>Full Name</th>
-                        <th>ID Number</th>
+                        <th>Address</th>
                         <th>Phone</th>
                         <th>Email</th>
                         <th>Status</th>
-                        <th>Registration Date</th>
+                        <th>Created</th>
                         <th style="width: 100px;">Action</th>
                     </tr>
                 </thead>
@@ -99,17 +99,17 @@
                                 }
                             </td>
                             <td class="member-name">@fullName</td>
-                            <td class="member-idno">@member.Idno</td>
+                            <td class="member-idno">@wallet.Address</td>
                             <td class="member-phone">@member.PhoneNo</td>
                             <td class="member-email">@(member.Email ?? "N/A")</td>
                             <td class="member-status">
                                 <span class="badge @statusClass status-badge">@statusText</span>
                             </td>
-                            <td class="member-date">@registrationDate</td>
+                            <td class="member-date">@wallet.CreatedAt</td>
                             <td>
-                                <button type="button" class="btn btn-sm btn-info select-btn w-100" data-memberno="@member.MemberNo">
+                                <a type="button" class="btn btn-sm btn-info select-btn w-100" asp-action="ViewWallet" asp-route-mno="@member.MemberNo">
                                     <i class="fas fa-edit"></i> Select
-                                </button>
+                                </a>
                             </td>
                         </tr>
                         counter++;
