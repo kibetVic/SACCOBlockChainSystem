@@ -1,0 +1,1271 @@
+﻿@using SACCOBlockChainSystem.Models.ViewModels
+@model MembersIndexViewModel
+
+@{
+    ViewData["Title"] = "Member Management";
+    var companyName = ViewBag.CompanyName as string ?? "JUHUDI SACCO";
+}
+
+<div class="container-fluid">
+    <!-- Success/Error Messages -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- FORM CARD -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h4><i class="fas fa-users"></i> Member Management</h4>
+        </div>
+        <div class="card-body">
+            <form id="memberForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="MemberNo" name="MemberNo" />
+                <input type="hidden" id="CompanyCode" name="CompanyCode" value="@Model.UserCompanyCode" />
+
+                <div class="row">
+                    <!-- LEFT SIDE - Form Fields -->
+                    <div class="col-md-8">
+                        <!-- Basic Information Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Member Number</label>
+                                <input type="text" id="DisplayMemberNo" class="form-control" />
+                                <small class="text-muted">Auto-generated, can be edited for new members</small>
+                                <span id="memberNoError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="required">ID Number *</label>
+                                <input type="text" id="IdNo" class="form-control" maxlength="20" />
+                                <span id="idNoError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Registration Date</label>
+                                <input type="date" id="RegistrationDate" class="form-control" />
+                                <span id="regDateError" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Name Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="required">Surname *</label>
+                                <input type="text" id="Surname" class="form-control" />
+                                <span id="surnameError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="required">Other Names *</label>
+                                <input type="text" id="OtherNames" class="form-control" />
+                                <span id="othernamesError" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Contact Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="required">Phone Number *</label>
+                                <input type="tel" id="PhoneNo" class="form-control" placeholder="0712345678" />
+                                <span id="phoneError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Landline</label>
+                                <input type="tel" id="LandLine" class="form-control" placeholder="0201234567" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Email</label>
+                                <input type="email" id="Email" class="form-control" placeholder="member@example.com" />
+                                <span id="emailError" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Personal Details Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label>Gender</label>
+                                <select id="Gender" class="form-control">
+                                    <option value="">Select</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Date of Birth</label>
+                                <input type="date" id="DateOfBirth" class="form-control" />
+                                <span id="ageError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-2">
+                                <label>Age</label>
+                                <input type="number" id="Age" class="form-control" readonly />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Marital Status</label>
+                                <select id="MaritalStatus" class="form-control">
+                                    <option value="">Select</option>
+                                    <option value="Single">Single</option>
+                                    <option value="Married">Married</option>
+                                    <option value="Divorced">Divorced</option>
+                                    <option value="Widowed">Widowed</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Location Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Department</label>
+                                <input type="text" id="Department" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Station/County</label>
+                                <select id="Station" class="form-control">
+                                    <option value="">-- Select County --</option>
+                                    @if (ViewBag.Counties != null)
+                                    {
+                                        foreach (var county in ViewBag.Counties)
+                                        {
+                                            <option value="@county.CountyName">@county.CountyName</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Present Address</label>
+                                <textarea id="PresentAddress" class="form-control" rows="1"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT SIDE - Checkboxes and Dropdowns -->
+                    <div class="col-md-4">
+                        <div class="card bg-light mb-3">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="mb-0"><i class="fas fa-check-square"></i> Membership Settings</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label>Member Status</label>
+                                    <select id="Status" class="form-control">
+                                        <option value="Active">Active</option>
+                                        <option value="Withdrawn">Withdrawn</option>
+                                        <option value="Deceased">Deceased</option>
+                                        <option value="Dormant">Dormant</option>
+                                        <option value="Suspended">Suspended</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Membership Type</label><br />
+                                    <div class="form-check form-check-inline">
+                                        <input type="radio" id="MembershipType_Individual" name="MembershipType" value="Individual" class="form-check-input" checked />
+                                        <label class="form-check-label" for="MembershipType_Individual">Individual</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input type="radio" id="MembershipType_Corporate" name="MembershipType" value="Corporate" class="form-check-input" />
+                                        <label class="form-check-label" for="MembershipType_Corporate">Corporate</label>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Registration Type</label><br />
+                                    <div class="form-check form-check-inline">
+                                        <input type="radio" id="RegistrationType_Ordinary" name="RegistrationType" value="Ordinary Member" class="form-check-input" checked />
+                                        <label class="form-check-label" for="RegistrationType_Ordinary">Ordinary Member</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input type="radio" id="RegistrationType_Board" name="RegistrationType" value="Board Member" class="form-check-input" />
+                                        <label class="form-check-label" for="RegistrationType_Board">Board Member</label>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Group CIG</label>
+                                    <select id="Cigcode" class="form-control">
+                                        <option value="">-- Select CIG Group --</option>
+                                        @if (ViewBag.CIGs != null)
+                                        {
+                                            foreach (var cig in ViewBag.CIGs)
+                                            {
+                                                <option value="@cig.GigCode">@cig.GigName (@cig.GigCode)</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BUTTONS -->
+                <div class="mt-4 d-flex gap-2">
+                    <button type="button" class="btn btn-primary" id="btnSave">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                    <button type="button" class="btn btn-warning" id="btnUpdate" style="display:none;">
+                        <i class="fas fa-edit"></i> Update
+                    </button>
+                    <button type="button" class="btn btn-danger" id="btnDelete" style="display:none;">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                    <button type="button" class="btn btn-dark" id="btnNew">
+                        <i class="fas fa-plus"></i> New
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EXISTING MEMBERS TABLE -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5><i class="fas fa-list"></i> Existing Members</h5>
+        </div>
+        <div class="card-body">
+            <!-- Search Bar -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="memberSearchInput" class="form-control" placeholder="Search by Member No, Name, ID Number, Phone, Email..." autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select id="statusFilter" class="form-select">
+                        <option value="all">All Status</option>
+                        <option value="active">Active Only</option>
+                        <option value="inactive">Inactive Only</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select id="sortBy" class="form-select">
+                        <option value="name">Sort by Name</option>
+                        <option value="memberNo">Sort by Member No</option>
+                        <option value="date">Sort by Registration Date</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="membersTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Member No</th>
+                            <th>Full Name</th>
+                            <th>ID Number</th>
+                            <th>Phone</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Registration Date</th>
+                            <th style="width: 100px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="membersTableBody">
+                        @{
+                            var counter = 1;
+                        }
+                        @foreach (var member in Model.AllMembers.OrderBy(m => m.Surname))
+                        {
+                            var fullName = $"{member.Surname} {member.OtherNames}";
+                            var statusText = member.Status == 1 ? "Active" : "Inactive";
+                            var statusClass = member.Status == 1 ? "bg-success" : "bg-secondary";
+                            var registrationDate = member.ApplicDate?.ToString("dd/MM/yyyy") ?? "N/A";
+
+                            <tr data-memberno="@member.MemberNo"
+                                data-surname="@member.Surname"
+                                data-othernames="@member.OtherNames"
+                                data-idno="@member.Idno"
+                                data-phone="@member.PhoneNo"
+                                data-email="@member.Email"
+                                data-landline="@member.HomeTelNo"
+                                data-gender="@member.Sex"
+                                data-dob="@member.Dob?.ToString("yyyy-MM-dd")"
+                                data-age="@member.Age"
+                                data-marital="@(member.Mstatus == true ? "Married" : member.Mstatus == false ? "Single" : "")"
+                                data-station="@member.Station"
+                                data-dept="@member.Dept"
+                                data-address="@member.PresentAddr"
+                                data-cigcode="@member.Cigcode"
+                                data-membershiptype="@member.MembershipType"
+                                data-registrationtype="@member.MemberDescription"
+                                data-status="@member.Status"
+                                data-status-text="@statusText"
+                                data-regdate="@member.ApplicDate?.ToString("yyyy-MM-dd")"
+                                data-initialshares="@member.InitShares">
+                                <td class="row-number">@counter</td>
+                                <td>
+                                    <strong>@member.MemberNo</strong>
+                                    @if (!string.IsNullOrEmpty(member.BlockchainTxId))
+                                    {
+                                        <span class="badge bg-success ms-1" title="On Blockchain">
+                                            <i class="fas fa-link fa-xs"></i>
+                                        </span>
+                                    }
+                                </td>
+                                <td class="member-name">@fullName</td>
+                                <td class="member-idno">@member.Idno</td>
+                                <td class="member-phone">@member.PhoneNo</td>
+                                <td class="member-email">@(member.Email ?? "N/A")</td>
+                                <td class="member-status">
+                                    <span class="badge @statusClass status-badge">@statusText</span>
+                                </td>
+                                <td class="member-date">@registrationDate</td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-info select-btn w-100" data-memberno="@member.MemberNo">
+                                        <i class="fas fa-edit"></i> Select
+                                    </button>
+                                </td>
+                            </tr>
+                            counter++;
+                        }
+                        @if (!Model.AllMembers.Any())
+                        {
+                            <tr id="noMembersRow">
+                                <td colspan="9" class="text-center text-muted py-4">
+                                    <i class="fas fa-info-circle"></i> No members found. Click "New" to register one.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Statistics Summary -->
+            <div class="row mt-4">
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="totalMembersCount">@Model.TotalMembers</h3>
+                            <p class="text-muted mb-0">Total Registered</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="activeMembersCount">@Model.ActiveMembers</h3>
+                            <p class="text-muted mb-0">Active Members</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="inactiveMembersCount">@(Model.TotalMembers - Model.ActiveMembers)</h3>
+                            <p class="text-muted mb-0">Inactive Members</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="blockchainMembersCount">@Model.BlockchainVerifiedCount</h3>
+                            <p class="text-muted mb-0">On Blockchain</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete member <strong id="deleteMemberName"></strong>?</p>
+                <p class="text-danger">This action will archive the member and cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; text-align:center; padding-top:20%;">
+    <div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="text-light mt-2">Processing...</div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: red;
+    }
+
+    .table-primary {
+        background-color: #cfe2ff !important;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .alert {
+        animation: slideDown 0.5s ease;
+    }
+
+    @@keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .form-check {
+        margin-bottom: 5px;
+    }
+
+    .form-check-input {
+        cursor: pointer;
+    }
+
+    .form-check-label {
+        cursor: pointer;
+        margin-left: 5px;
+    }
+
+    .text-end {
+        text-align: right;
+    }
+
+    .w-100 {
+        width: 100%;
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+
+    .highlight {
+        background-color: #ffeb3b;
+        padding: 0 2px;
+        border-radius: 3px;
+    }
+</style>
+
+@section Scripts {
+    <script>
+    let currentMemberNo = null;
+    let deleteMemberNo = null;
+    let deleteMemberName = null;
+
+    $(document).ready(function() {
+        // Set default registration date to today
+        const today = new Date().toISOString().split('T')[0];
+        $('#RegistrationDate').val(today);
+
+        // Generate preview member number for new registration
+        generatePreviewMemberNumber();
+
+        // Search functionality
+        $('#memberSearchInput').on('keyup', function() {
+            performSearch();
+        });
+
+        $('#statusFilter').on('change', function() {
+            performSearch();
+        });
+
+        $('#sortBy').on('change', function() {
+            sortMembers();
+            performSearch();
+        });
+
+        $('#clearSearchBtn').on('click', function() {
+            clearAllFilters();
+        });
+
+        // Save button click
+        $('#btnSave').on('click', function() {
+            saveMember();
+        });
+
+        // Update button click
+        $('#btnUpdate').on('click', function() {
+            updateMember();
+        });
+
+        // Delete button click
+        $('#btnDelete').on('click', function() {
+            if (currentMemberNo) {
+                deleteMember(currentMemberNo, $('#Surname').val() + ' ' + $('#OtherNames').val());
+            }
+        });
+
+        // New button click
+        $('#btnNew').on('click', function() {
+            resetForm();
+        });
+
+        // Confirm delete button
+        $('#confirmDeleteBtn').on('click', function() {
+            confirmDelete();
+        });
+
+        // Membership type change - triggers age validation
+        $('input[name="MembershipType"]').on('change', function() {
+            validateAge();
+        });
+
+        // Date of birth change
+        $('#DateOfBirth').on('change', function() {
+            calculateAge();
+        });
+
+        // Registration date change
+        $('#RegistrationDate').on('change', function() {
+            validateRegistrationDate();
+        });
+
+        // Select existing member from table
+        $(document).on('click', '.select-btn', function() {
+            console.log('=== Select button clicked ===');
+
+            const row = $(this).closest('tr');
+            let memberNo = $(this).data('memberno');
+
+            if (!memberNo || memberNo === '') {
+                memberNo = $(this).attr('data-memberno');
+            }
+
+            if (!memberNo || memberNo === '') {
+                memberNo = row.find('td:eq(1)').text().trim();
+            }
+
+            if (!memberNo || memberNo === '') {
+                memberNo = row.data('memberno');
+            }
+
+            console.log('Final member number:', memberNo);
+
+            if (memberNo && memberNo !== '' && memberNo !== 'undefined' && memberNo !== 'null') {
+                memberNo = memberNo.toString().trim();
+                loadMemberForEdit(memberNo);
+            } else {
+                console.error('Could not find member number');
+                showNotification('Could not identify member number. Please refresh the page and try again.', 'error');
+            }
+        });
+    });
+
+    // Generate preview member number for new registration
+    function generatePreviewMemberNumber() {
+        const now = new Date();
+        const months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+        const monthInitial = months[now.getMonth()];
+        const year = now.getFullYear().toString().slice(-2);
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hour = String(now.getHours()).padStart(2, '0');
+        const minute = String(now.getMinutes()).padStart(2, '0');
+        const second = String(now.getSeconds()).padStart(2, '0');
+
+        const preview = `${monthInitial}${year}${month}${day}${hour}${minute}${second}`;
+        $('#DisplayMemberNo').val(preview);
+        $('#MemberNo').val(preview);
+    }
+
+
+        // Load member for editing
+        function loadMemberForEdit(memberNo) {
+            console.log('=== loadMemberForEdit START ===');
+            console.log('Received memberNo:', memberNo);
+
+            if (!memberNo || memberNo === 'undefined' || memberNo === 'null' || memberNo === '') {
+                showNotification('Invalid member number. Please try again.', 'error');
+                return;
+            }
+
+            memberNo = memberNo.toString().trim();
+            showLoading(true);
+
+            // Store the member number globally for update/delete operations
+            currentMemberNo = memberNo;
+
+            // Set the hidden fields
+            $('#MemberNo').val(memberNo);
+            $('#DisplayMemberNo').val(memberNo);
+            console.log("SETTING MemberNo:", memberNo);
+
+            console.log('Hidden MemberNo set to:', $('#MemberNo').val());
+            console.log('currentMemberNo set to:', currentMemberNo);
+
+            // Make Member Number field READ-ONLY in edit mode
+            $('#DisplayMemberNo').prop('readonly', true);
+
+            const apiUrl = `/MemberMvc/GetMember/${encodeURIComponent(memberNo)}`;
+            console.log('Calling API:', apiUrl);
+
+            $.ajax({
+                url: apiUrl,
+                type: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    console.log('API Response:', response);
+                    showLoading(false);
+
+                    if (response.success && response.member) {
+                        const m = response.member;
+
+                        // ============================================
+                        // POPULATE BASIC INFORMATION
+                        // ============================================
+                        $('#IdNo').val(m.idNo || '');
+
+                        // Registration Date
+                        if (m.registrationDate) {
+                            $('#RegistrationDate').val(m.registrationDate);
+                        } else {
+                            $('#RegistrationDate').val(new Date().toISOString().split('T')[0]);
+                        }
+
+                        // ============================================
+                        // POPULATE NAME SECTION
+                        // ============================================
+                        $('#Surname').val(m.surname || '');
+                        $('#OtherNames').val(m.otherNames || '');
+
+                        // ============================================
+                        // POPULATE CONTACT SECTION
+                        // ============================================
+                        $('#PhoneNo').val(m.phoneNo || '');
+                        $('#LandLine').val(m.landLine || '');
+                        $('#Email').val(m.email || '');
+
+                        // ============================================
+                        // POPULATE PERSONAL DETAILS SECTION
+                        // ============================================
+                        // Gender
+                        if (m.gender) {
+                            $('#Gender').val(m.gender);
+                        } else {
+                            $('#Gender').val('');
+                        }
+
+                        // Date of Birth and Age
+                        if (m.dateOfBirth) {
+                            $('#DateOfBirth').val(m.dateOfBirth);
+                            $('#Age').val(m.age || '');
+                        } else {
+                            $('#DateOfBirth').val('');
+                            $('#Age').val('');
+                        }
+
+                        // Marital Status
+                        if (m.maritalStatus) {
+                            $('#MaritalStatus').val(m.maritalStatus);
+                        } else {
+                            $('#MaritalStatus').val('');
+                        }
+
+                        // ============================================
+                        // POPULATE LOCATION SECTION
+                        // ============================================
+                        $('#Department').val(m.department || '');
+                        $('#Station').val(m.station || '');
+                        $('#PresentAddress').val(m.presentAddress || '');
+
+                        // ============================================
+                        // POPULATE MEMBERSHIP SETTINGS SECTION
+                        // ============================================
+                        // CIG Group
+                        if (m.cigcode) {
+                            $('#Cigcode').val(m.cigcode);
+                        } else {
+                            $('#Cigcode').val('');
+                        }
+
+                        // Member Status
+                        $('#Status').val(m.status || 'Active');
+
+                        // Membership Type Radio Buttons
+                        if (m.membershipType === 'Corporate') {
+                            $('#MembershipType_Corporate').prop('checked', true);
+                            $('#MembershipType_Individual').prop('checked', false);
+                        } else {
+                            $('#MembershipType_Individual').prop('checked', true);
+                            $('#MembershipType_Corporate').prop('checked', false);
+                        }
+
+                        // Registration Type Radio Buttons
+                        if (m.registrationType === 'Board Member') {
+                            $('#RegistrationType_Board').prop('checked', true);
+                            $('#RegistrationType_Ordinary').prop('checked', false);
+                        } else {
+                            $('#RegistrationType_Ordinary').prop('checked', true);
+                            $('#RegistrationType_Board').prop('checked', false);
+                        }
+
+                        // ============================================
+                        // UPDATE UI STATE
+                        // ============================================
+                        // Show/hide buttons
+                        $('#btnSave').hide();
+                        $('#btnUpdate').show();
+                        $('#btnDelete').show();
+
+                        // Highlight selected row
+                        $('.select-btn').closest('tr').removeClass('table-primary');
+                        $(`.select-btn[data-memberno="${memberNo}"]`).closest('tr').addClass('table-primary');
+
+                        // Scroll to form
+                        $('html, body').animate({
+                            scrollTop: $('.card-header.bg-success').offset().top - 20
+                        }, 500);
+
+                        showNotification('Member loaded for editing', 'success');
+
+                        // Verify values were populated
+                        console.log('Form populated - IdNo:', $('#IdNo').val());
+                        console.log('Form populated - Surname:', $('#Surname').val());
+                        console.log('Form populated - PhoneNo:', $('#PhoneNo').val());
+                        console.log('Hidden MemberNo:', $('#MemberNo').val());
+
+                    } else {
+                        console.error('API returned error:', response);
+                        showNotification(response.message || 'Member not found.', 'error');
+                        resetForm();
+                    }
+                },
+                error: function(xhr, status, error) {
+                    showLoading(false);
+                    console.error('AJAX Error:', xhr.status, error);
+                    console.error('Response:', xhr.responseText);
+
+                    let errorMsg = 'Error loading member data. ';
+                    if (xhr.status === 404) {
+                        errorMsg += 'Member not found.';
+                    } else {
+                        errorMsg += 'Please try again.';
+                    }
+
+                    showNotification(errorMsg, 'error');
+                    resetForm();
+                }
+            });
+        }
+
+
+    // Helper function to calculate age from DOB
+    function calculateAgeFromDOB(dateOfBirth) {
+        if (!dateOfBirth) return null;
+        const birthDate = new Date(dateOfBirth);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age;
+    }
+
+    // Reset form for new member
+             function resetForm() {
+            currentMemberNo = null;
+
+            // Clear all form fields
+            $('#MemberNo').val('');
+            $('#DisplayMemberNo').val('');
+            $('#IdNo').val('');
+            $('#Surname').val('');
+            $('#OtherNames').val('');
+            $('#PhoneNo').val('');
+            $('#LandLine').val('');
+            $('#Email').val('');
+            $('#Gender').val('');
+            $('#DateOfBirth').val('');
+            $('#Age').val('');
+            $('#MaritalStatus').val('');
+            $('#Department').val('');
+            $('#Station').val('');
+            $('#PresentAddress').val('');
+            $('#Cigcode').val('');
+            $('#Status').val('Active');
+
+            // Make Member Number field EDITABLE for new registration
+            $('#DisplayMemberNo').prop('readonly', false);
+
+            // Reset radio buttons
+            $('#MembershipType_Individual').prop('checked', true);
+            $('#MembershipType_Corporate').prop('checked', false);
+            $('#RegistrationType_Ordinary').prop('checked', true);
+            $('#RegistrationType_Board').prop('checked', false);
+
+            // Set default registration date to today
+            const today = new Date().toISOString().split('T')[0];
+            $('#RegistrationDate').val(today);
+
+            // Clear validation errors
+            $('.text-danger').text('');
+            $('.input-validation-error').removeClass('input-validation-error');
+            $('.select-btn').closest('tr').removeClass('table-primary');
+
+            // Show/hide buttons
+            $('#btnSave').show();
+            $('#btnUpdate').hide();
+            $('#btnDelete').hide();
+
+            // Generate a preview member number for new registration
+            generatePreviewMemberNumber();
+        }
+
+    // Calculate age from date of birth
+    function calculateAge() {
+        const dob = $('#DateOfBirth').val();
+        if (dob) {
+            const birthDate = new Date(dob);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            $('#Age').val(age);
+            validateAge();
+        } else {
+            $('#Age').val('');
+        }
+    }
+
+    // Validate age based on Membership Type
+    function validateAge() {
+        const age = parseInt($('#Age').val());
+        const membershipType = $('input[name="MembershipType"]:checked').val();
+        const ageErrorSpan = $('#ageError');
+
+        if (isNaN(age) || age <= 0) {
+            ageErrorSpan.text('');
+            return true;
+        }
+
+        if (membershipType === 'Individual' && age < 18) {
+            ageErrorSpan.text('Individual members must be 18 years or older.');
+            return false;
+        }
+
+        ageErrorSpan.text('');
+        return true;
+    }
+
+    // Validate registration date (cannot be future)
+    function validateRegistrationDate() {
+        const regDate = $('#RegistrationDate').val();
+        const regDateError = $('#regDateError');
+
+        if (regDate) {
+            const selectedDate = new Date(regDate);
+            const today = new Date();
+            selectedDate.setHours(0, 0, 0, 0);
+            today.setHours(0, 0, 0, 0);
+
+            if (selectedDate > today) {
+                regDateError.text('Registration date cannot be in the future.');
+                return false;
+            } else {
+                regDateError.text('');
+                return true;
+            }
+        }
+        return true;
+    }
+
+    // Validate entire form
+    function validateForm() {
+        let isValid = true;
+
+        // Clear previous errors
+        $('.text-danger').text('');
+        $('.input-validation-error').removeClass('input-validation-error');
+
+        // Validate surname
+        if (!$('#Surname').val().trim()) {
+            $('#surnameError').text('Surname is required');
+            $('#Surname').addClass('input-validation-error');
+            isValid = false;
+        }
+
+        // Validate other names
+        if (!$('#OtherNames').val().trim()) {
+            $('#othernamesError').text('Other Names are required');
+            $('#OtherNames').addClass('input-validation-error');
+            isValid = false;
+        }
+
+        // Validate ID number
+        if (!$('#IdNo').val().trim()) {
+            $('#idNoError').text('ID Number is required');
+            $('#IdNo').addClass('input-validation-error');
+            isValid = false;
+        }
+
+        // Validate phone number
+        const phone = $('#PhoneNo').val().trim();
+        if (!phone) {
+            $('#phoneError').text('Phone Number is required');
+            $('#PhoneNo').addClass('input-validation-error');
+            isValid = false;
+        } else if (!/^[0-9]{10,12}$/.test(phone.replace(/\D/g, ''))) {
+            $('#phoneError').text('Please enter a valid phone number (10-12 digits)');
+            $('#PhoneNo').addClass('input-validation-error');
+            isValid = false;
+        }
+
+        // Validate email format if provided
+        const email = $('#Email').val().trim();
+        if (email && !/^[^\s@@]+@@[^\s@@]+\.[^\s@@]+$/.test(email)) {
+            $('#emailError').text('Please enter a valid email address');
+            $('#Email').addClass('input-validation-error');
+            isValid = false;
+        }
+
+        // Validate registration date
+        if (!validateRegistrationDate()) {
+            isValid = false;
+        }
+
+        // Validate age based on membership type
+        if (!validateAge()) {
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
+       // Save new member (CREATE)
+        function saveMember() {
+            console.log("SAVE clicked → calling CREATE");
+
+            if (!validateForm()) return;
+
+            showLoading(true);
+
+            const formData = {
+                // ❌ DO NOT SEND MemberNo for new member
+                // MemberNo: null,
+
+                IdNo: $('#IdNo').val(),
+                Surname: $('#Surname').val(),
+                OtherNames: $('#OtherNames').val(),
+                PhoneNo: $('#PhoneNo').val(),
+                LandLine: $('#LandLine').val(),
+                Email: $('#Email').val(),
+                Gender: $('#Gender').val(),
+                DateOfBirth: $('#DateOfBirth').val() || null,
+                Age: parseInt($('#Age').val()) || 0,
+                MaritalStatus: $('#MaritalStatus').val(),
+                Department: $('#Department').val(),
+                Station: $('#Station').val(),
+                PresentAddress: $('#PresentAddress').val(),
+                Cigcode: $('#Cigcode').val(),
+                MembershipType: $('input[name="MembershipType"]:checked').val(),
+                RegistrationType: $('input[name="RegistrationType"]:checked').val(),
+                Status: $('#Status').val(),
+                RegistrationDate: $('#RegistrationDate').val(),
+                InitialShares: parseFloat($('#InitialShares').val()) || 0,
+                CompanyCode: $('#CompanyCode').val()
+            };
+
+            console.log("CREATE FormData:", formData);
+
+            $.ajax({
+                url: '/MemberMvc/Create', 
+                type: 'POST',
+                contentType: 'application/json', 
+                data: JSON.stringify(formData),
+
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+
+                success: function (response) {
+                    showLoading(false);
+                    console.log('Create response:', response);
+
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+
+                error: function (xhr) {
+                    showLoading(false);
+                    console.error('Create error:', xhr.responseText);
+
+                    let errorMsg = 'Error creating member';
+
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+
+                    showNotification(errorMsg, 'error');
+                }
+            });
+        }
+
+        // Update existing member
+        function updateMember() {
+
+            if (!validateForm()) return;
+
+            // 🔥 FORCE GET MEMBER NUMBER FROM HIDDEN FIELD ONLY
+            let memberNumber = $('#MemberNo').val();
+
+            console.log("MemberNo from hidden field:", memberNumber);
+
+            if (!memberNumber || memberNumber.trim() === '') {
+                showNotification('Member number is missing. Please re-select the member.', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            const formData = {
+                MemberNo: memberNumber, // 🔥 guaranteed source
+                IdNo: $('#IdNo').val(),
+                RegistrationDate: $('#RegistrationDate').val(),
+                Surname: $('#Surname').val(),
+                OtherNames: $('#OtherNames').val(),
+                PhoneNo: $('#PhoneNo').val(),
+                LandLine: $('#LandLine').val(),
+                Email: $('#Email').val(),
+                Gender: $('#Gender').val(),
+                DateOfBirth: $('#DateOfBirth').val() || null,
+                Age: parseInt($('#Age').val()) || 0,
+                MaritalStatus: $('#MaritalStatus').val(),
+                Department: $('#Department').val(),
+                Station: $('#Station').val(),
+                PresentAddress: $('#PresentAddress').val(),
+                Cigcode: $('#Cigcode').val(),
+                MembershipType: $('input[name="MembershipType"]:checked').val(),
+                RegistrationType: $('input[name="RegistrationType"]:checked').val(),
+                Status: $('#Status').val(),
+                CompanyCode: $('#CompanyCode').val()
+            };
+
+            console.log("FINAL DATA SENT:", formData);
+
+            $.ajax({
+                url: '/MemberMvc/Update',
+                type: 'POST',
+                data: formData,
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    console.log('Response:', response);
+
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    console.error(xhr.responseText);
+                    showNotification('Error updating member', 'error');
+                }
+            });
+        }
+
+    function deleteMember(memberNo, memberName) {
+        deleteMemberNo = memberNo;
+        deleteMemberName = memberName;
+        $('#deleteMemberName').text(memberName);
+        const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        modal.show();
+    }
+
+    // Confirm delete
+    function confirmDelete() {
+        showLoading(true);
+
+        $.ajax({
+            url: `/MemberMvc/Delete/${deleteMemberNo}`,
+            type: 'DELETE',
+            headers: {
+                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+            },
+            success: function(response) {
+                showLoading(false);
+                $('#deleteModal').modal('hide');
+                if (response.success) {
+                    showNotification(response.message, 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showNotification(response.message, 'error');
+                }
+            },
+            error: function(xhr) {
+                showLoading(false);
+                $('#deleteModal').modal('hide');
+                let errorMsg = 'Error deleting member';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMsg = xhr.responseJSON.message;
+                }
+                showNotification(errorMsg, 'error');
+            }
+        });
+    }
+
+    // Search functionality
+    function performSearch() {
+        const searchTerm = $('#memberSearchInput').val().toLowerCase().trim();
+        const statusFilter = $('#statusFilter').val();
+        let visibleCount = 0;
+        let totalMembers = 0;
+
+        $('#membersTableBody tr').each(function() {
+            const row = $(this);
+            if (row.attr('id') === 'noMembersRow') return;
+
+            totalMembers++;
+
+            const memberNo = row.find('td:eq(1)').text().toLowerCase();
+            const name = row.find('td.member-name').text().toLowerCase();
+            const idNo = row.find('td.member-idno').text().toLowerCase();
+            const phone = row.find('td.member-phone').text().toLowerCase();
+            const email = row.find('td.member-email').text().toLowerCase();
+            const statusValue = row.data('status') || '';
+            const statusText = row.find('td.member-status .status-badge').text().toLowerCase();
+
+            let matchesSearch = true;
+            if (searchTerm) {
+                matchesSearch = memberNo.includes(searchTerm) ||
+                               name.includes(searchTerm) ||
+                               idNo.includes(searchTerm) ||
+                               phone.includes(searchTerm) ||
+                               email.includes(searchTerm);
+            }
+
+            let matchesStatus = true;
+            if (statusFilter === 'active') {
+                matchesStatus = statusValue === '1' || statusText === 'active';
+            } else if (statusFilter === 'inactive') {
+                matchesStatus = statusValue !== '1' && statusText !== 'active';
+            }
+
+            if (matchesSearch && matchesStatus) {
+                row.show();
+                visibleCount++;
+            } else {
+                row.hide();
+            }
+        });
+    }
+
+    // Sort members
+    function sortMembers() {
+        const sortBy = $('#sortBy').val();
+        const tbody = $('#membersTableBody');
+        const rows = tbody.find('tr:visible:not(#noMembersRow)').get();
+
+        rows.sort(function(a, b) {
+            let aVal, bVal;
+            switch(sortBy) {
+                case 'name':
+                    aVal = $(a).find('td.member-name').text();
+                    bVal = $(b).find('td.member-name').text();
+                    break;
+                case 'memberNo':
+                    aVal = $(a).find('td:eq(1)').text();
+                    bVal = $(b).find('td:eq(1)').text();
+                    break;
+                case 'date':
+                    aVal = $(a).data('regdate') || '9999-12-31';
+                    bVal = $(b).data('regdate') || '9999-12-31';
+                    break;
+                default:
+                    aVal = $(a).find('td.member-name').text();
+                    bVal = $(b).find('td.member-name').text();
+            }
+            return aVal.localeCompare(bVal);
+        });
+
+        $.each(rows, function(index, row) {
+            tbody.append(row);
+            $(row).find('.row-number').text(index + 1);
+        });
+    }
+
+    // Clear all filters
+    function clearAllFilters() {
+        $('#memberSearchInput').val('');
+        $('#statusFilter').val('all');
+        $('#sortBy').val('name');
+        performSearch();
+        $('#memberSearchInput').focus();
+    }
+
+    // Show notification
+    function showNotification(message, type) {
+        const alertDiv = $(`
+            <div class="alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed top-0 end-0 m-3"
+                 style="z-index: 9999; min-width: 300px;" role="alert">
+                <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info'} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `);
+        $('body').append(alertDiv);
+        setTimeout(() => alertDiv.fadeOut('slow', function() { $(this).remove(); }), 5000);
+    }
+
+    // Show/hide loading overlay
+    function showLoading(show) {
+        if (show) {
+            $('#loadingOverlay').fadeIn(200);
+        } else {
+            $('#loadingOverlay').fadeOut(200);
+        }
+    }
+</script>
+}

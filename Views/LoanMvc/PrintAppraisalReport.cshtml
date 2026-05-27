@@ -1,0 +1,638 @@
+﻿@using SACCOBlockChainSystem.Models.ViewModels
+@model AppraisalReportViewModel
+
+@{
+    ViewData["Title"] = "Appraisal Report";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Appraisal Report - @Model.LoanNo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <style>
+        @@media print {
+            /* Print-specific styles - Times New Roman, size 12 */
+            body, .report-container, .report-body, .company-details, 
+            .section-title, .info-list, .list-item, .list-label, .list-value,
+            .table, .table th, .table td, .signature-section, .report-footer,
+            .p-3, .badge-approved, .badge-rejected, .badge-pending {
+                font-family: 'Times New Roman', Times, serif !important;
+                font-size: 12pt !important;
+            }
+            
+            /* Headers slightly larger */
+            .report-title {
+                font-size: 18pt !important;
+                font-family: 'Times New Roman', Times, serif !important;
+            }
+            
+            .report-subtitle {
+                font-size: 12pt !important;
+                font-family: 'Times New Roman', Times, serif !important;
+            }
+            
+            .section-title {
+                font-size: 14pt !important;
+                font-family: 'Times New Roman', Times, serif !important;
+                font-weight: bold !important;
+            }
+            
+            /* Company details */
+            .company-details {
+                font-size: 10pt !important;
+            }
+            
+            /* Footer */
+            .report-footer {
+                font-size: 9pt !important;
+            }
+            
+            /* Keep badge styles but adjust font */
+            .badge-approved, .badge-rejected, .badge-pending {
+                font-size: 11pt !important;
+            }
+            
+            body {
+                margin: 0;
+                padding: 0;
+                background: white;
+            }
+
+            .no-print,
+            .print-btn-group,
+            .btn-print {
+                display: none !important;
+            }
+
+            .report-container {
+                box-shadow: none;
+                margin: 0;
+                padding: 0;
+                max-width: 100%;
+            }
+
+            .report-body {
+                padding: 20px;
+            }
+
+            .report-footer {
+                position: relative;
+                margin-top: 30px;
+            }
+
+            @@page {
+                size: A4;
+                margin: 20mm 15mm 25mm 15mm;
+            }
+
+            .section-title {
+                page-break-after: avoid;
+            }
+
+            table, .info-list {
+                page-break-inside: avoid;
+            }
+
+            .signature-section {
+                page-break-inside: avoid;
+            }
+
+            .list-item {
+                page-break-inside: avoid;
+            }
+            
+            /* Table cell padding for print */
+            .table td, .table th {
+                padding: 6px !important;
+            }
+        }
+
+        @@media screen {
+            body {
+                background: #f0f2f5;
+                padding: 20px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            }
+
+            .report-container {
+                max-width: 900px;
+                margin: 0 auto;
+                background: white;
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+
+            .print-btn-group {
+                position: sticky;
+                top: 20px;
+                z-index: 1000;
+            }
+
+            .btn-print {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 1000;
+            }
+        }
+
+        .report-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .report-header {
+            background: linear-gradient(135deg, #007bff, #00c4ff);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .report-title {
+            font-size: 28px;
+            font-family: 'Times New Roman', Times, serif;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .report-subtitle {
+            font-size: 14px;
+            font-family: 'Times New Roman', Times, serif;
+            opacity: 0.9;
+        }
+
+        .company-details {
+            font-size: 11px;
+            font-family: 'Times New Roman', Times, serif;
+            text-align: center;
+            padding: 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .report-body {
+            padding: 30px;
+            padding-bottom: 60px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            font-family: 'Times New Roman', Times, serif;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #007bff;
+            color: #007bff;
+        }
+
+        /* List Styles */
+        .info-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .list-item {
+            display: flex;
+            padding: 12px 15px;
+            border-bottom: 1px solid #e9ecef;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 13px;
+        }
+
+            .list-item:last-child {
+                border-bottom: none;
+            }
+
+        .list-label {
+            font-weight: 600;
+            width: 35%;
+            color: #495057;
+            display: flex;
+            align-items: center;
+        }
+
+        .list-value {
+            width: 65%;
+            color: #212529;
+            font-weight: 500;
+        }
+
+            .list-value strong {
+                color: #28a745;
+            }
+
+        .info-table {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+            .info-table td {
+                padding: 8px;
+                font-size: 12px;
+                border-bottom: 1px solid #f0f0f0;
+            }
+
+                .info-table td:first-child {
+                    font-weight: 600;
+                    width: 35%;
+                    color: #6c757d;
+                }
+
+                .info-table td:last-child {
+                    width: 65%;
+                }
+
+        .amount-value {
+            font-size: 24px;
+            font-family: 'Times New Roman', Times, serif;
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        .signature-section {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .signature-line {
+            text-align: center;
+            flex: 1;
+            min-width: 150px;
+        }
+
+            .signature-line .line {
+                width: 100%;
+                max-width: 200px;
+                border-top: 1px solid #000;
+                margin: 40px auto 5px auto;
+            }
+
+        .table-light {
+            font-family: 'Times New Roman', Times, serif;
+        }
+
+        .report-footer {
+            background: #f8f9fa;
+            padding: 15px;
+            text-align: center;
+            font-size: 10px;
+            font-family: 'Times New Roman', Times, serif;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .badge-approved {
+            background: #28a745;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: inline-block;
+        }
+
+        .badge-rejected {
+            background: #dc3545;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: inline-block;
+        }
+
+        .badge-pending {
+            background: #ffc107;
+            color: #212529;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: inline-block;
+        }
+
+        .bg-light {
+            background-color: #f8f9fa !important;
+        }
+
+        .rounded {
+            border-radius: 8px !important;
+        }
+
+        .p-3 {
+            padding: 1rem !important;
+        }
+
+        .text-success {
+            color: #28a745 !important;
+        }
+
+        .text-muted {
+            color: #6c757d !important;
+        }
+
+        .fw-bold {
+            font-weight: bold;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-end {
+            text-align: right;
+        }
+
+        .mb-1 {
+            margin-bottom: 5px;
+        }
+
+        .mb-2 {
+            margin-bottom: 10px;
+        }
+
+        .mb-3 {
+            margin-bottom: 15px;
+        }
+
+        .mb-4 {
+            margin-bottom: 20px;
+        }
+
+        .mt-1 {
+            margin-top: 5px;
+        }
+
+        .mt-2 {
+            margin-top: 10px;
+        }
+
+        .mt-3 {
+            margin-top: 15px;
+        }
+
+        .me-2 {
+            margin-right: 8px;
+        }
+
+        hr {
+            margin: 20px 0;
+        }
+
+        .table {
+            width: 100%;
+            margin-bottom: 1rem;
+            border-collapse: collapse;
+        }
+
+        .table-bordered {
+            border: 1px solid #dee2e6;
+        }
+
+            .table-bordered th,
+            .table-bordered td {
+                border: 1px solid #dee2e6;
+                padding: 8px;
+            }
+
+        .table-sm th,
+        .table-sm td {
+            padding: 5px;
+        }
+
+        .btn-print .btn-lg {
+            width: 50px;
+            height: 50px;
+            border-radius: 50% !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="print-btn-group no-print">
+        <div class="d-flex justify-content-between mb-3">
+            <button onclick="window.print()" class="btn btn-primary">
+                <i class="fas fa-print"></i> Print / Save as PDF
+            </button>
+            <button onclick="goBack()" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+        </div>
+    </div>
+
+    <div class="report-container">
+        <!-- Header -->
+        <div class="report-header">
+            <div class="report-title">LOAN APPRAISAL REPORT</div>
+            <div class="report-subtitle">Credit Assessment & Recommendation</div>
+        </div>
+
+        <!-- Company Details -->
+        <div class="company-details">
+            <strong>@Model.CompanyName</strong><br />
+            @Model.CompanyAddress<br />
+            Tel: @Model.CompanyPhone | Email: @Model.CompanyEmail
+        </div>
+
+        <!-- Report Body -->
+        <div class="report-body">
+
+            <!-- Section 1: Member Details -->
+            <div class="section-title">
+                <i class="fas fa-user me-2"></i>MEMBER'S DETAILS
+            </div>
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>Member No</th>
+                        <th>Full Name</th>
+                        <th>ID Number</th>
+                        <th>Phone</th>
+                        <th class="text-end">Total Shares/Deposits</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>@Model.MemberNo</td>
+                        <td>@Model.MemberName</td>
+                        <td>@Model.MemberIdNo</td>
+                        <td>@Model.MemberPhone</td>
+                        <td class="text-end"><strong>KES @Model.TotalShares.ToString("N2")</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Section 2: Loan Details -->
+            <div class="section-title">
+                <i class="fas fa-hand-holding-usd me-2"></i>LOAN DETAILS
+            </div>
+
+            <!-- Table 1: Loan Identification & Amounts -->
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Loan No</th>
+                            <th>Loan Type</th>
+                            <th class="text-end">Applied (KES)</th>
+                            <th class="text-end">Recommended (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>@Model.LoanNo</td>
+                            <td>@Model.LoanType</td>
+                            <td class="text-end">@Model.AppliedAmount.ToString("N0")</td>
+                            <td class="text-end">
+                                <strong class="text-success">@Model.RecommendedAmount.ToString("N0")</strong>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Interest (% p.a.)</th>
+                            <th>Period (months)</th>
+                            <th>Application Date</th>
+                            <th>Appraisal Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>@Model.InterestRate.ToString("N0")%</td>
+                            <td>@Model.RepaymentPeriod</td>
+                            <td>@Model.ApplicationDate.ToString("dd/MM/yy")</td>
+                            <td>@Model.AppraisalDate.ToString("dd/MM/yy")</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Section 3: Guarantors -->
+            <div class="section-title">
+                <i class="fas fa-users me-2"></i>GUARANTORS
+            </div>
+            @if (Model.Guarantors.Any())
+            {
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>ID Number</th>
+                            <th>Phone</th>
+                            <th>Member No</th>
+                            <th class="text-end">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{
+                            int counter = 1;
+                        }
+                        @foreach (var guarantor in Model.Guarantors)
+                        {
+                            <tr>
+                                <td>@counter</td>
+                                <td>@guarantor.GuarantorName</td>
+                                <td>@guarantor.IdNo</td>
+                                <td>@guarantor.PhoneNo</td>
+                                <td>@guarantor.GuarantorMemberNo</td>
+                                <td class="text-end">KES @guarantor.GuaranteeAmount.ToString("N2")</td>
+                            </tr>
+                            counter++;
+                        }
+                        <tr class="table-light fw-bold">
+                            <td colspan="5" class="text-end">Total Guarantee:</td>
+                            <td class="text-end">KES @Model.TotalGuaranteeAmount.ToString("N2")</td>
+                        </tr>
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p class="text-muted">No guarantors assigned for this loan.</p>
+            }
+            <!-- Section 4: Appraisal Notes -->
+            <div class="section-title">
+                <i class="fas fa-clipboard-list me-2"></i>APPRAISAL NOTES
+            </div>
+            <div class="p-3 bg-light rounded" style="min-height: 100px;">
+                <p>
+                    Upon appraisal, the member has shown consistent savings contributions and a good repayment history.
+                    The requested loan amount is within the eligible limit, and sufficient guarantors have been provided.
+                    Based on the assessment, the loan is recommended for approval under the stated terms.
+                </p>
+            </div>
+
+            <!-- Section 5: Signatures -->
+            <div class="signature-section">
+                <div class="signature-line">
+                    <div class="line"></div>
+                    <div><strong>Appraised By (Loan Officer)</strong></div>
+                </div>
+                <div class="signature-line">
+                    <div class="line"></div>
+                    <div><strong>Approved By (Manager)</strong></div>
+                </div>
+                <div class="signature-line">
+                    <div class="line"></div>
+                    <div><strong>Chairperson</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="report-footer">
+            <div>Generated by: @Model.AppraisedBy</div>
+            <div>Generated on: @DateTime.Now.ToString("dd MMM yyyy HH:mm:ss")</div>
+            <div class="mt-1">This is an official loan appraisal report</div>
+        </div>
+    </div>
+
+    <!-- Mobile print button -->
+    <div class="btn-print no-print">
+        <button onclick="window.print()" class="btn btn-primary btn-lg rounded-circle" style="width: 50px; height: 50px; border-radius: 50%;">
+            <i class="fas fa-print"></i>
+        </button>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function goBack() {
+            window.location.href = '@Url.Action("AllLoans", "LoanMvc")';
+        }
+
+        // Auto-open print dialog when page loads (only if autoPrint flag is true)
+        var autoPrint = @(ViewBag.AutoPrint ?? false).toString().toLowerCase();
+        if (autoPrint === 'true') {
+            $(document).ready(function() {
+                setTimeout(function() {
+                    window.print();
+                }, 500);
+            });
+        }
+
+        // Close window after printing if opened as popup
+        window.onafterprint = function() {
+            if (window.opener && !window.closed) {
+                setTimeout(function() {
+                    window.close();
+                }, 1000);
+            }
+        };
+    </script>
+</body>
+</html>

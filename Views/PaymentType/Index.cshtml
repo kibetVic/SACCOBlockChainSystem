@@ -1,0 +1,721 @@
+﻿@* Views/PaymentType/Index.cshtml *@
+@using SACCOBlockChainSystem.Models
+@using SACCOBlockChainSystem.Models.ViewModels
+@model PaymentTypeCreateDTO
+
+@{
+    ViewData["Title"] = "Payment Types";
+    var glAccounts = ViewBag.GlAccounts as List<GlSetup> ?? new List<GlSetup>();
+    var paymentTypes = ViewBag.PaymentTypes as List<PaymentTypeViewModel> ?? new List<PaymentTypeViewModel>();
+    var companyName = ViewBag.CompanyName as string ?? "JUHUDI SACCO";
+}
+
+<div class="container-fluid">
+
+    <!-- Success Message -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- Error Message -->
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- FORM -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h4><i class="fas fa-money-bill-wave"></i> Payment Types</h4>
+        </div>
+
+        <div class="card-body">
+            <form asp-action="Create" method="post" id="paymentTypeForm">
+                @Html.AntiForgeryToken()
+
+                <!-- Hidden fields -->
+                <input type="hidden" asp-for="Code" id="PaymentCode" />
+                <input type="hidden" asp-for="CompanyCode" />
+                <input type="hidden" asp-for="CreatedBy" />
+                <input type="hidden" name="action" id="actionField" value="" />
+
+                <div class="row">
+                    <!-- LEFT SIDE - Form Fields -->
+                    <div class="col-md-8">
+                        <!-- PAYMENT CODE and PAYMENT TYPE -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label>Payment Code *</label>
+                                <input asp-for="Code" class="form-control" id="PaymentCodeInput"
+                                       placeholder="Enter payment code (e.g., SAL, COM, BON, ALL)" />
+                                <small class="text-muted">Enter a unique code for this payment type (e.g., SAL for Salary)</small>
+                                <span asp-validation-for="Code" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label>Payment Type *</label>
+                                <input asp-for="Name" class="form-control" id="PaymentName"
+                                       placeholder="Enter payment type name (e.g., Salary, Commission, Bonus)" />
+                                <small class="text-muted">Enter a descriptive name for this payment type</small>
+                                <span asp-validation-for="Name" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- DESCRIPTION and DISPLAY ORDER -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label>Description</label>
+                                <textarea asp-for="Description" id="Description" class="form-control" rows="2"
+                                          placeholder="Enter description for this payment type..."></textarea>
+                                <small class="text-muted">Optional description of when/how this payment type is used</small>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label>Display Order</label>
+                                <input asp-for="DisplayOrder" id="DisplayOrder" class="form-control" type="number" value="0" />
+                                <small class="text-muted">Lower numbers appear first in dropdowns</small>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label>Company</label>
+                                <input class="form-control" value="@companyName" readonly />
+                                <small class="text-muted">Your company</small>
+                            </div>
+                        </div>
+
+                        <!-- DEFAULT EXPENSE ACCOUNT -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label>Default Expense Account</label>
+                                <div class="input-group">
+                                    <input asp-for="DefaultExpenseAccountNo" id="DefaultExpenseAccount" class="form-control"
+                                           placeholder="Select a default expense account (optional)" readonly />
+                                    <button type="button" class="btn btn-outline-secondary" id="openAccountModalBtn">
+                                        <i class="fas fa-search"></i> Select Account
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger" id="clearAccountBtn">
+                                        <i class="fas fa-times"></i> Clear
+                                    </button>
+                                </div>
+                                <small class="text-muted">Optional: Default expense account for this payment type</small>
+                                <span asp-validation-for="DefaultExpenseAccountNo" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT SIDE - Checkboxes -->
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="mb-0"><i class="fas fa-check-square"></i> Payment Type Settings</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check mb-3">
+                                    <input asp-for="IsActive" type="checkbox" class="form-check-input" id="IsActive" checked />
+                                    <label class="form-check-label fw-bold" for="IsActive">Active</label>
+                                    <div class="small text-muted">Enable this payment type for use</div>
+                                </div>
+
+                                <hr />
+
+                                <div class="alert alert-info small mb-0">
+                                    <i class="fas fa-info-circle"></i> 
+                                    <strong>Note:</strong> Setting a default expense account will automatically populate 
+                                    the expense account field when creating payments of this type.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BUTTONS -->
+                <div class="mt-4 d-flex gap-2">
+                    <button type="button" class="btn btn-primary" id="btnSave">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+
+                    <button type="button" class="btn btn-warning" id="btnUpdate">
+                        <i class="fas fa-edit"></i> Update
+                    </button>
+
+                    <button type="button" class="btn btn-danger" id="btnDelete">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+
+                    <button type="button" class="btn btn-dark" id="btnNew">
+                        <i class="fas fa-plus"></i> New
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- GL Account Selection Modal -->
+    <div class="modal fade" id="accountModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5><i class="fas fa-search"></i> Select GL Account</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" id="accountSearch" class="form-control mb-3"
+                           placeholder="Search account by code or name...">
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Acc No</th>
+                                    <th>Account Name</th>
+                                    <th>Account Type</th>
+                                    <th style="width: 100px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="accountTable">
+                                @foreach (var acc in glAccounts)
+                                {
+                                    <tr>
+                                        <td><strong>@acc.AccNo</strong></td>
+                                        <td>@acc.Glaccname</td>
+                                        <td>
+                                            @if (acc.Glacctype == "EXPENSE" || acc.AccCategory == "EXPENSE")
+                                            {
+                                                <span class="badge bg-success">Expense</span>
+                                            }
+                                            else if (acc.Glacctype == "ASSET" || acc.AccCategory == "ASSET")
+                                            {
+                                                <span class="badge bg-info">Asset</span>
+                                            }
+                                            else if (acc.Glacctype == "LIABILITY" || acc.AccCategory == "LIABILITY")
+                                            {
+                                                <span class="badge bg-warning">Liability</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">@acc.Glacctype</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-success pick-account"
+                                                    data-acc="@acc.AccNo"
+                                                    data-name="@acc.Glaccname">
+                                                <i class="fas fa-check"></i> Select
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                                @if (!glAccounts.Any())
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">
+                                            No GL accounts found. Please create GL accounts first.
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EXISTING PAYMENT TYPES TABLE -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5><i class="fas fa-list"></i> Existing Payment Types</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="paymentTypesTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Code</th>
+                            <th>Payment Type</th>
+                            <th>Description</th>
+                            <th>Default Expense Account</th>
+                            <th>Display Order</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th style="width: 120px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in paymentTypes)
+                        {
+                            <tr data-id="@item.Id">
+                                <td><strong>@item.Code</strong></td>
+                                <td>@item.Name</td>
+                                <td>@(item.Description?.Length > 50 ? item.Description.Substring(0, 50) + "..." : item.Description)</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(item.DefaultExpenseAccountNo))
+                                    {
+                                        <span class="badge bg-info">
+                                            @item.DefaultExpenseAccountNo
+                                            @if (!string.IsNullOrEmpty(item.DefaultExpenseAccountName))
+                                            {
+                                                <br /><small>@item.DefaultExpenseAccountName</small>
+                                            }
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not set</span>
+                                    }
+                                </td>
+                                <td class="text-center">@item.DisplayOrder</td>
+                                <td>
+                                    @if (item.IsActive)
+                                    {
+                                        <span class="badge bg-success">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    }
+                                </td>
+                                <td><small>@item.CreatedAt.ToString("dd MMM yyyy")</small></td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button"
+                                                class="btn btn-info select-btn"
+                                                data-code="@item.Code"
+                                                data-name="@item.Name"
+                                                data-description="@item.Description"
+                                                data-active="@item.IsActive.ToString().ToLower()"
+                                                data-displayorder="@item.DisplayOrder"
+                                                data-defaultaccount="@item.DefaultExpenseAccountNo">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </button>
+                                        <button type="button"
+                                                class="btn btn-warning toggle-status"
+                                                data-id="@item.Id"
+                                                data-active="@item.IsActive.ToString().ToLower()">
+                                            @if (item.IsActive)
+                                            {
+                                                <i class="fas fa-ban"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-check"></i>
+                                            }
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        @if (!paymentTypes.Any())
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4">
+                                    <i class="fas fa-info-circle"></i> No payment types found. Click "New" to create one.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Function to submit form with specific action
+        window.submitForm = function(action) {
+            console.log('submitForm called with action:', action);
+
+            const paymentCodeInput = document.getElementById('PaymentCodeInput');
+            const paymentName = document.getElementById('PaymentName');
+
+            if (!paymentCodeInput || !paymentName) {
+                console.error('Required form elements not found!');
+                alert('Form elements missing. Please refresh the page.');
+                return;
+            }
+
+            const paymentCode = paymentCodeInput.value.trim();
+            const paymentNameValue = paymentName.value.trim();
+
+            console.log(`Submitting with action: ${action}, PaymentCode: ${paymentCode}`);
+
+            // Basic validation
+            if (!paymentCode) {
+                showNotification('Payment Code is required', 'error');
+                paymentCodeInput.focus();
+                return;
+            }
+
+            if (!paymentNameValue) {
+                showNotification('Payment Type Name is required', 'error');
+                paymentName.focus();
+                return;
+            }
+
+            if (action === 'save') {
+                if (!confirm(`Save new payment type "${paymentCode} - ${paymentNameValue}"?`)) return;
+            }
+
+            if (action === 'update') {
+                if (!paymentCode) {
+                    showNotification('Please select a payment type to update', 'warning');
+                    return;
+                }
+                if (!confirm(`Update payment type "${paymentCode} - ${paymentNameValue}"?`)) return;
+            }
+
+            if (action === 'delete') {
+                if (!paymentCode) {
+                    showNotification('Please select a payment type to delete', 'warning');
+                    return;
+                }
+                if (!confirm(`Delete payment type "${paymentCode} - ${paymentNameValue}"? This action cannot be undone.`)) return;
+            }
+
+            // Set the hidden field value
+            const hiddenPaymentCode = document.getElementById('PaymentCode');
+            if (hiddenPaymentCode) {
+                hiddenPaymentCode.value = paymentCode;
+            }
+
+            // Set action and submit
+            const actionField = document.getElementById('actionField');
+            const form = document.getElementById('paymentTypeForm');
+
+            if (actionField) {
+                actionField.value = action;
+            }
+
+            if (form) {
+                console.log('Submitting form...');
+                form.submit();
+            } else {
+                console.error('Form not found!');
+                alert('Form not found. Please refresh the page.');
+            }
+        };
+
+        // Reset form function
+        window.resetForm = function() {
+            if (confirm('Clear all form fields?')) {
+                document.getElementById('PaymentCodeInput').value = '';
+                document.getElementById('PaymentCode').value = '';
+                document.getElementById('PaymentName').value = '';
+                document.getElementById('Description').value = '';
+                document.getElementById('DefaultExpenseAccount').value = '';
+                document.getElementById('DisplayOrder').value = '0';
+                document.getElementById('IsActive').checked = true;
+
+                // Remove highlighting
+                document.querySelectorAll('#paymentTypesTable tbody tr').forEach(r => r.classList.remove('table-primary'));
+
+                showNotification('Form cleared', 'info');
+                document.getElementById('PaymentCodeInput').focus();
+            }
+        };
+
+        // Helper function to show notifications
+        function showNotification(message, type) {
+            console.log(`Notification: ${type} - ${message}`);
+            if (typeof toastr !== 'undefined') {
+                toastr[type](message);
+            } else {
+                if (type === 'error') {
+                    alert('❌ Error: ' + message);
+                } else if (type === 'warning') {
+                    alert('⚠️ Warning: ' + message);
+                } else if (type === 'success') {
+                    alert('✅ Success: ' + message);
+                } else {
+                    alert('ℹ️ Info: ' + message);
+                }
+            }
+        }
+
+        // Toggle status function
+        async function toggleStatus(id, currentActive) {
+            const newStatus = !currentActive;
+            const action = newStatus ? 'activate' : 'deactivate';
+            
+            if (!confirm(`Are you sure you want to ${action} this payment type?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('@Url.Action("ToggleStatus", "PaymentType")', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                    },
+                    body: JSON.stringify({ id: id })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification(data.message, 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showNotification(data.message || 'Error toggling status', 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showNotification('An error occurred', 'error');
+            }
+        }
+
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM fully loaded and parsed');
+
+            const btnSave = document.getElementById('btnSave');
+            const btnUpdate = document.getElementById('btnUpdate');
+            const btnDelete = document.getElementById('btnDelete');
+            const btnNew = document.getElementById('btnNew');
+            const openAccountModalBtn = document.getElementById('openAccountModalBtn');
+            const clearAccountBtn = document.getElementById('clearAccountBtn');
+
+            if (btnSave) {
+                btnSave.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Save button clicked');
+                    window.submitForm('save');
+                });
+            }
+
+            if (btnUpdate) {
+                btnUpdate.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Update button clicked');
+                    window.submitForm('update');
+                });
+            }
+
+            if (btnDelete) {
+                btnDelete.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Delete button clicked');
+                    window.submitForm('delete');
+                });
+            }
+
+            if (btnNew) {
+                btnNew.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('New button clicked');
+                    window.resetForm();
+                });
+            }
+
+            if (openAccountModalBtn) {
+                openAccountModalBtn.addEventListener('click', function() {
+                    const modalElement = document.getElementById('accountModal');
+                    if (modalElement) {
+                        const modal = new bootstrap.Modal(modalElement);
+                        modal.show();
+                    }
+                });
+            }
+
+            if (clearAccountBtn) {
+                clearAccountBtn.addEventListener('click', function() {
+                    document.getElementById('DefaultExpenseAccount').value = '';
+                    showNotification('Default expense account cleared', 'info');
+                });
+            }
+
+            // PICK ACCOUNT FROM MODAL
+            document.querySelectorAll('.pick-account').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const acc = this.dataset.acc;
+                    const name = this.dataset.name;
+
+                    const defaultExpenseAccount = document.getElementById('DefaultExpenseAccount');
+                    const paymentNameInput = document.getElementById('PaymentName');
+                    const paymentCodeInput = document.getElementById('PaymentCodeInput');
+
+                    if (defaultExpenseAccount) defaultExpenseAccount.value = acc;
+
+                    // ONLY SET NAME IF EMPTY (for new records)
+                    if (paymentNameInput && !paymentNameInput.value) {
+                        // Suggest account name as payment type name, but user can change
+                        paymentNameInput.value = name;
+                    }
+
+                    // ONLY SET CODE IF EMPTY (for new records)
+                    if (paymentCodeInput && !paymentCodeInput.value) {
+                        // Suggest account code as payment code, but user can change
+                        paymentCodeInput.value = acc;
+                    }
+
+                    const modalElement = document.getElementById('accountModal');
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) modal.hide();
+
+                    showNotification('Account selected: ' + acc, 'success');
+                });
+            });
+
+            // SEARCH IN MODAL
+            const accountSearch = document.getElementById('accountSearch');
+            if (accountSearch) {
+                accountSearch.addEventListener('keyup', function() {
+                    let val = this.value.toLowerCase();
+                    document.querySelectorAll('#accountTable tr').forEach(row => {
+                        const text = row.innerText.toLowerCase();
+                        row.style.display = text.includes(val) ? '' : 'none';
+                    });
+                });
+            }
+
+            // SELECT EXISTING PAYMENT TYPE
+            document.querySelectorAll('.select-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    console.log('Select button clicked for:', this.dataset.code);
+
+                    document.getElementById('PaymentCodeInput').value = this.dataset.code;
+                    document.getElementById('PaymentCode').value = this.dataset.code;
+                    document.getElementById('PaymentName').value = this.dataset.name;
+                    document.getElementById('Description').value = this.dataset.description || '';
+                    document.getElementById('DefaultExpenseAccount').value = this.dataset.defaultaccount || '';
+                    document.getElementById('DisplayOrder').value = this.dataset.displayorder || '0';
+                    document.getElementById('IsActive').checked = this.dataset.active === "true";
+
+                    // Highlight selected row
+                    document.querySelectorAll('#paymentTypesTable tbody tr').forEach(r => r.classList.remove('table-primary'));
+                    this.closest('tr').classList.add('table-primary');
+
+                    showNotification('Payment type loaded for ' + (this.dataset.code ? 'update' : 'view'), 'info');
+                });
+            });
+
+            // TOGGLE STATUS BUTTONS
+            document.querySelectorAll('.toggle-status').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const id = parseInt(this.dataset.id);
+                    const isActive = this.dataset.active === "true";
+                    toggleStatus(id, isActive);
+                });
+            });
+
+            // Auto-populate code from name (optional)
+            const paymentNameInput = document.getElementById('PaymentName');
+            const paymentCodeInput = document.getElementById('PaymentCodeInput');
+            
+            if (paymentNameInput && paymentCodeInput) {
+                paymentNameInput.addEventListener('blur', function() {
+                    const name = this.value.trim();
+                    const code = paymentCodeInput.value.trim();
+                    if (name && !code) {
+                        // Auto-generate code from name (first 3-4 letters uppercase)
+                        let generatedCode = name.substring(0, 3).toUpperCase();
+                        if (name.length >= 4 && ['SAL', 'COM', 'BON', 'ALL'].includes(generatedCode)) {
+                            generatedCode = name.substring(0, 4).toUpperCase();
+                        }
+                        paymentCodeInput.value = generatedCode;
+                        showNotification('Code auto-generated: ' + generatedCode, 'info');
+                    }
+                });
+            }
+
+            // Auto-dismiss alerts after 5 seconds
+            setTimeout(function() {
+                const alerts = document.querySelectorAll('.alert');
+                alerts.forEach(alert => {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    setTimeout(() => bsAlert.close(), 5000);
+                });
+            }, 3000);
+
+            if (paymentCodeInput) paymentCodeInput.focus();
+
+            console.log('All event handlers attached successfully');
+        });
+    </script>
+}
+
+<style>
+    .table-primary {
+        background-color: #cfe2ff !important;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .alert {
+        animation: slideDown 0.5s ease;
+    }
+
+    @@keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .form-check {
+        margin-bottom: 5px;
+    }
+
+    .form-check-input {
+        cursor: pointer;
+    }
+
+    .form-check-label {
+        cursor: pointer;
+        margin-left: 5px;
+    }
+
+    .text-end {
+        text-align: right;
+    }
+
+    .w-100 {
+        width: 100%;
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .badge {
+        font-size: 0.85rem;
+        padding: 0.35rem 0.65rem;
+    }
+</style>

@@ -1,0 +1,774 @@
+﻿// Controllers/ContributionMvcController.cs
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SACCOBlockChainSystem.Data;
+using SACCOBlockChainSystem.Models.DTOs;
+using SACCOBlockChainSystem.Models.ViewModels;
+using SACCOBlockChainSystem.Services;
+
+namespace SACCOBlockChainSystem.Controllers
+{
+    [Authorize]
+    public class ContributionMvcController : Controller
+    {
+        private readonly IMemberService _memberService;
+        private readonly IContributionService _contributionService;
+        private readonly ILogger<ContributionMvcController> _logger;
+        private readonly ApplicationDbContext _context;
+
+        public ContributionMvcController(
+            IMemberService memberService,
+            IContributionService contributionService,
+            ILogger<ContributionMvcController> logger,
+            ApplicationDbContext context)
+        {
+            _memberService = memberService;
+            _contributionService = contributionService;
+            _logger = logger;
+            _context = context;
+        }
+
+        // GET: /ContributionMvc/Index
+        public async Task<IActionResult> Index()
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+                ViewBag.CompanyCode = companyCode;
+
+                var allRecentContributions = await _contributionService.SearchContributionsAsync(
+                    DateTime.Now.AddDays(-30),
+                    DateTime.Now,
+                    null,
+                    null);
+
+                var recentContributions = allRecentContributions
+                    .Where(c => c.CompanyCode == companyCode)
+                    .ToList();
+
+                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+
+                var viewModel = new
+                {
+                    RecentContributions = recentContributions,
+                    ShareTypes = shareTypes,
+                    TotalAmount = recentContributions.Sum(c => c.Amount),
+                    TodayAmount = recentContributions
+                        .Where(c => c.TransactionDate.Date == DateTime.Today)
+                        .Sum(c => c.Amount)
+                };
+
+                return View(viewModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading contributions index");
+                return View("Error");
+            }
+        }
+
+        // GET: /ContributionMvc/Add
+        public async Task<IActionResult> Add(string? memberNo = null)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+
+                ViewBag.ShareTypes = shareTypes;
+                ViewBag.CompanyCode = companyCode;
+
+                var contributionDto = new ContributionDTO
+                {
+                    MemberNo = memberNo ?? string.Empty,
+                    TransactionDate = DateTime.Now,
+                    CreatedBy = User.Identity?.Name ?? "SYSTEM",
+                    CompanyCode = companyCode
+                };
+
+                return View(contributionDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading add contribution form");
+                return View("Error");
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Add(ContributionDTO contributionDto, bool printReceipt = true)
+        {
+            try
+            {
+                _logger.LogInformation("Add contribution POST action called");
+
+                if (!ModelState.IsValid)
+                {
+                    _logger.LogWarning("Model state is invalid");
+
+                    // Check if it's an AJAX request
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return BadRequest(new { Success = false, Message = "Invalid form data", Errors = ModelState.Values.SelectMany(v => v.Errors.Select(e => e.ErrorMessage)) });
+                    }
+
+                    var companyCode = GetUserCompanyCode();
+                    var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                    ViewBag.ShareTypes = shareTypes;
+                    return View(contributionDto);
+                }
+
+                contributionDto.CompanyCode = GetUserCompanyCode();
+                contributionDto.CreatedBy = User.Identity?.Name ?? "SYSTEM";
+
+                if (contributionDto.TransactionDate == default)
+                {
+                    contributionDto.TransactionDate = DateTime.Now;
+                }
+
+                _logger.LogInformation($"Adding contribution for member: {contributionDto.MemberNo}, Amount: {contributionDto.Amount:C}");
+
+                var result = await _contributionService.AddContributionAsync(contributionDto);
+
+                TempData["SuccessMessage"] = $"Contribution of {contributionDto.Amount:C} added successfully! Receipt: {result.ReceiptNo}";
+
+                // Check if it's an AJAX request
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Ok(new
+                    {
+                        Success = true,
+                        Message = "Contribution saved successfully",
+                        ReceiptNo = result.ReceiptNo,
+                        RedirectUrl = printReceipt ? Url.Action("PrintReceipt", new { receiptNo = result.ReceiptNo }) : null
+                    });
+                }
+
+                if (printReceipt)
+                {
+                    return RedirectToAction("PrintReceipt", new { receiptNo = result.ReceiptNo });
+                }
+
+                return RedirectToAction("Index");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding contribution");
+
+                // Check if it's an AJAX request
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return StatusCode(500, new { Success = false, Message = ex.Message });
+                }
+
+                if (ex.Message.Contains("not found in GL Setup"))
+                {
+                    ModelState.AddModelError("", ex.Message + " Please contact the administrator to configure the required accounts.");
+                }
+                else if (ex.Message.Contains("Validation error"))
+                {
+                    ModelState.AddModelError("", ex.Message.Replace("Validation error: ", ""));
+                }
+                else if (ex.Message.Contains("cannot be less than minimum") || ex.Message.Contains("cannot exceed maximum"))
+                {
+                    ModelState.AddModelError("Amount", ex.Message);
+                }
+                else
+                {
+                    ModelState.AddModelError("", $"An error occurred: {ex.Message}");
+                }
+
+                var companyCode = GetUserCompanyCode();
+                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                ViewBag.ShareTypes = shareTypes;
+
+                return View(contributionDto);
+            }
+        }
+
+        // GET: /ContributionMvc/PrintReceipt/{receiptNo}
+        public async Task<IActionResult> PrintReceipt(string receiptNo)
+        {
+            try
+            {
+                var contributions = await _contributionService.SearchContributionsAsync(null, null, null, null);
+                var contribution = contributions.FirstOrDefault(c => c.ReceiptNo == receiptNo);
+
+                if (contribution == null)
+                {
+                    return NotFound();
+                }
+
+                var member = await _contributionService.GetMemberByMemberNoAsync(contribution.MemberNo);
+                var companyCode = GetUserCompanyCode();
+                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                var shareType = shareTypes.FirstOrDefault(st => st.SharesCode == contribution.SharesCode);
+
+                var companyName = await GetCompanyNameAsync(companyCode);
+                var companyAddress = await GetCompanyAddressAsync(companyCode);
+                var companyPhone = await GetCompanyPhoneAsync(companyCode);
+                var companyEmail = await GetCompanyEmailAsync(companyCode);
+
+                var receiptModel = new ReceiptViewModel
+                {
+                    ReceiptNo = contribution.ReceiptNo,
+                    MemberNo = contribution.MemberNo,
+                    MemberName = contribution.MemberName,
+                    TransactionDate = contribution.TransactionDate,
+                    Amount = contribution.Amount,
+                    ShareTypeName = shareType?.SharesType ?? contribution.ShareTypeName,
+                    PaymentMethod = "CASH", // You can store this in your Contrib table
+                    ReferenceNo = contribution.ReferenceNo,
+                    Remarks = contribution.Remarks,
+                    BlockchainTxId = contribution.BlockchainTxId,
+                    CompanyCode = companyCode,
+                    CreatedBy = contribution.CreatedBy,
+                    MemberPhone = member?.PhoneNo,
+                    MemberIdNo = member?.Idno,
+                    ShareBalanceAfter = contribution.TotalSharesAfter,
+                    CompanyName = companyName,
+                    CompanyAddress = companyAddress,
+                    CompanyPhone = companyPhone,
+                    CompanyEmail = companyEmail,
+                    PrintedAt = DateTime.Now
+                };
+
+                return View(receiptModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error printing receipt {receiptNo}");
+                TempData["ErrorMessage"] = "Error printing receipt: " + ex.Message;
+                return RedirectToAction("Index");
+            }
+        }
+
+        // GET: /ContributionMvc/Edit/{id}
+        public async Task<IActionResult> Edit(int id)
+        {
+            try
+            {
+                var contributions = await _contributionService.SearchContributionsAsync(null, null, null, null);
+                var contribution = contributions.FirstOrDefault(c => c.Id == id);
+
+                if (contribution == null)
+                {
+                    return NotFound();
+                }
+
+                var canEdit = CanEditContribution(contribution);
+                if (!canEdit)
+                {
+                    TempData["ErrorMessage"] = "This contribution cannot be edited. It may be too old or already reconciled.";
+                    return RedirectToAction("Details", new { id });
+                }
+
+                var companyCode = GetUserCompanyCode();
+                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+
+                ViewBag.ShareTypes = shareTypes;
+                ViewBag.CompanyCode = companyCode;
+                ViewBag.ContributionId = id;
+
+                var editDto = new ContributionDTO
+                {
+                    MemberNo = contribution.MemberNo,
+                    TransactionDate = contribution.TransactionDate,
+                    SharesCode = contribution.SharesCode,
+                    Amount = contribution.Amount,
+                    ReceiptNo = contribution.ReceiptNo,
+                    Remarks = contribution.Remarks,
+                    PaymentMethod = "CASH",
+                    ReferenceNo = "",
+                    CreatedBy = User.Identity?.Name,
+                    CompanyCode = companyCode
+                };
+
+                return View(editDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error loading edit form for contribution {id}");
+                return View("Error");
+            }
+        }
+
+        // POST: /ContributionMvc/Edit/{id}
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, ContributionDTO contributionDto, string editReason)
+        {
+            try
+            {
+                _logger.LogInformation($"Edit contribution POST action for ID: {id}");
+
+                if (!ModelState.IsValid)
+                {
+                    _logger.LogWarning("Model state is invalid for contribution edit");
+                    var companyCode = GetUserCompanyCode();
+                    var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                    ViewBag.ShareTypes = shareTypes;
+                    ViewBag.ContributionId = id;
+                    return View(contributionDto);
+                }
+
+                if (string.IsNullOrEmpty(editReason))
+                {
+                    ModelState.AddModelError("", "Reason for edit is required");
+                    var companyCode = GetUserCompanyCode();
+                    var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                    ViewBag.ShareTypes = shareTypes;
+                    ViewBag.ContributionId = id;
+                    return View(contributionDto);
+                }
+
+                contributionDto.CompanyCode = GetUserCompanyCode();
+                contributionDto.CreatedBy = User.Identity?.Name ?? "SYSTEM";
+
+                var originalContributions = await _contributionService.SearchContributionsAsync(null, null, null, null);
+                var originalContribution = originalContributions.FirstOrDefault(c => c.Id == id);
+
+                if (originalContribution == null)
+                {
+                    return NotFound();
+                }
+
+                var correctedContribution = new ContributionDTO
+                {
+                    MemberNo = contributionDto.MemberNo,
+                    TransactionDate = contributionDto.TransactionDate,
+                    SharesCode = contributionDto.SharesCode,
+                    Amount = contributionDto.Amount,
+                    ReceiptNo = $"{originalContribution.ReceiptNo}-CORR",
+                    Remarks = $"CORRECTION: {editReason}. Original: {originalContribution.Remarks}",
+                    PaymentMethod = contributionDto.PaymentMethod,
+                    ReferenceNo = contributionDto.ReferenceNo,
+                    CreatedBy = contributionDto.CreatedBy,
+                    CompanyCode = contributionDto.CompanyCode
+                };
+
+                var result = await _contributionService.AddContributionAsync(correctedContribution);
+
+                TempData["SuccessMessage"] = $"Contribution corrected successfully! New Receipt: {result.ReceiptNo}";
+                return RedirectToAction("Index");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error editing contribution {id}");
+
+                if (ex.Message.Contains("not found") ||
+                    ex.Message.Contains("Validation error") ||
+                    ex.Message.Contains("cannot be less") ||
+                    ex.Message.Contains("cannot exceed"))
+                {
+                    ModelState.AddModelError("", ex.Message);
+                }
+                else
+                {
+                    ModelState.AddModelError("", $"An error occurred: {ex.Message}");
+                }
+
+                var companyCode = GetUserCompanyCode();
+                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                ViewBag.ShareTypes = shareTypes;
+                ViewBag.ContributionId = id;
+                return View(contributionDto);
+            }
+        }
+
+        // GET: /ContributionMvc/Details/{id}
+        public async Task<IActionResult> Details(int id)
+        {
+            try
+            {
+                var contributions = await _contributionService.SearchContributionsAsync(null, null, null, null);
+                var contribution = contributions.FirstOrDefault(c => c.Id == id);
+
+                if (contribution == null)
+                {
+                    return NotFound();
+                }
+
+                return View(contribution);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading contribution details");
+                return View("Error");
+            }
+        }
+
+        // GET: /ContributionMvc/Member/{memberNo}
+        public async Task<IActionResult> Member(string memberNo)
+        {
+            try
+            {
+                var history = await _contributionService.GetMemberContributionHistoryAsync(memberNo);
+                return View(history);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error loading contributions for member {memberNo}");
+                TempData["ErrorMessage"] = ex.Message;
+                return RedirectToAction("Search");
+            }
+        }
+
+        // GET: /ContributionMvc/Search
+        public async Task<IActionResult> Search()
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+
+                ViewBag.ShareTypes = shareTypes;
+                return View();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading search page");
+                return View("Error");
+            }
+        }
+
+        // GET: /ContributionMvc/SearchResults
+        [HttpGet]
+        public async Task<IActionResult> SearchResults(
+            DateTime? fromDate,
+            DateTime? toDate,
+            string? memberNo,
+            string? shareType)
+        {
+            try
+            {
+                var contributions = await _contributionService.SearchContributionsAsync(
+                    fromDate, toDate, memberNo, shareType);
+
+                ViewBag.FromDate = fromDate;
+                ViewBag.ToDate = toDate;
+                ViewBag.MemberNo = memberNo;
+                ViewBag.ShareType = shareType;
+                ViewBag.TotalAmount = contributions.Sum(c => c.Amount);
+
+                return View(contributions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching contributions");
+                return View("Error");
+            }
+        }
+
+        // GET: /ContributionMvc/Report
+        public async Task<IActionResult> Report()
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+
+                var today = DateTime.Today;
+                var monthStart = new DateTime(today.Year, today.Month, 1);
+                var yearStart = new DateTime(today.Year, 1, 1);
+
+                var todayContributions = await _contributionService.SearchContributionsAsync(today, today, null, null);
+                var monthContributions = await _contributionService.SearchContributionsAsync(monthStart, today, null, null);
+                var yearContributions = await _contributionService.SearchContributionsAsync(yearStart, today, null, null);
+
+                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                var shareTypeSummary = new List<object>();
+
+                foreach (var shareType in shareTypes)
+                {
+                    var contributions = await _contributionService.SearchContributionsAsync(
+                        yearStart, today, null, shareType.SharesCode);
+
+                    shareTypeSummary.Add(new
+                    {
+                        ShareType = shareType.SharesType,
+                        Code = shareType.SharesCode,
+                        Count = contributions.Count,
+                        Total = contributions.Sum(c => c.Amount)
+                    });
+                }
+
+                var viewModel = new
+                {
+                    Today = new
+                    {
+                        Count = todayContributions.Count,
+                        Total = todayContributions.Sum(c => c.Amount)
+                    },
+                    ThisMonth = new
+                    {
+                        Count = monthContributions.Count,
+                        Total = monthContributions.Sum(c => c.Amount)
+                    },
+                    ThisYear = new
+                    {
+                        Count = yearContributions.Count,
+                        Total = yearContributions.Sum(c => c.Amount)
+                    },
+                    ShareTypeSummary = shareTypeSummary
+                };
+
+                return View(viewModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading contribution report");
+                return View("Error");
+            }
+        }
+
+        #region Helper Methods
+
+        private bool CanEditContribution(ContributionResponseDTO contribution)
+        {
+            var daysSinceContribution = (DateTime.Now - contribution.TransactionDate).TotalDays;
+            if (daysSinceContribution > 7)
+            {
+                return false;
+            }
+            return true;
+        }
+
+
+        // Replace the existing helper methods with these:
+
+        private async Task<string> GetCompanyNameAsync(string companyCode)
+        {
+            try
+            {
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                return company?.CompanyName ?? "SACCO Blockchain System";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting company name");
+                return "SACCO Blockchain System";
+            }
+        }
+
+        private async Task<string> GetCompanyAddressAsync(string companyCode)
+        {
+            try
+            {
+                // Try SaccoParram first
+                var sacco = await _context.SaccoParram
+                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
+
+                if (sacco != null && !string.IsNullOrEmpty(sacco.PhysicalAddress))
+                {
+                    return sacco.PhysicalAddress;
+                }
+
+                // Try Company table
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                // Build address from Company fields
+                var addressParts = new List<string>();
+                if (!string.IsNullOrEmpty(company?.Address)) addressParts.Add(company.Address);
+                if (!string.IsNullOrEmpty(company?.County)) addressParts.Add(company.County);
+                if (!string.IsNullOrEmpty(company?.SubCounty)) addressParts.Add(company.SubCounty);
+
+                return addressParts.Any() ? string.Join(", ", addressParts) : "P.O. Box 12345 - 00100, Nairobi, Kenya";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting company address");
+                return "P.O. Box 12345 - 00100, Nairobi, Kenya";
+            }
+        }
+
+        private async Task<string> GetCompanyPhoneAsync(string companyCode)
+        {
+            try
+            {
+                // Try SaccoParram first
+                var sacco = await _context.SaccoParram
+                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
+
+                if (sacco != null && !string.IsNullOrEmpty(sacco.Telephone))
+                {
+                    return sacco.Telephone;
+                }
+
+                // Try Company table
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                return company?.Telephone ?? "+254 700 000 000";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting company phone");
+                return "+254 700 000 000";
+            }
+        }
+
+        private async Task<string> GetCompanyEmailAsync(string companyCode)
+        {
+            try
+            {
+                // Try SaccoParram first
+                var sacco = await _context.SaccoParram
+                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
+
+                if (sacco != null && !string.IsNullOrEmpty(sacco.EmailAddress))
+                {
+                    return sacco.EmailAddress;
+                }
+
+                // Try Company table
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                return company?.Email ?? "info@sacco.co.ke";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting company email");
+                return "info@sacco.co.ke";
+            }
+        }
+
+
+        // GET: /ContributionMvc/DeleteSearch
+        [Authorize(Roles = "Super Admin")]
+        public async Task<IActionResult> DeleteSearch(string searchTerm)
+        {
+            try
+            {
+                // Verify Super Admin role
+                if (!User.IsInRole("Super Admin"))
+                {
+                    TempData["ErrorMessage"] = "Only Super Administrators can delete contributions.";
+                    return RedirectToAction("Index");
+                }
+
+                ViewBag.SearchTerm = searchTerm;
+
+                if (string.IsNullOrEmpty(searchTerm))
+                {
+                    return View();
+                }
+
+                // Search for contribution by ReceiptNo or TransactionNo
+                var companyCode = GetUserCompanyCode();
+
+                var contributions = await _contributionService.SearchContributionsAsync(null, null, null, null);
+
+                var contribution = contributions.FirstOrDefault(c =>
+                    (c.ReceiptNo != null && c.ReceiptNo.Contains(searchTerm)) ||
+                    (c.TransactionNo != null && c.TransactionNo.Contains(searchTerm)));
+
+                if (contribution == null)
+                {
+                    ViewBag.ErrorMessage = $"No transaction found with Receipt/Transaction Number: '{searchTerm}'";
+                    return View();
+                }
+
+                // Map to Delete DTO
+                var deleteDto = new ContributionDeleteDTO
+                {
+                    ContributionId = contribution.Id,
+                    ReceiptNo = contribution.ReceiptNo,
+                    MemberNo = contribution.MemberNo,
+                    MemberName = contribution.MemberName,
+                    Amount = contribution.Amount,
+                    ShareTypeName = contribution.ShareTypeName,
+                    TransactionDate = contribution.TransactionDate,
+                    CreatedBy = contribution.CreatedBy,
+                    BlockchainTxId = contribution.BlockchainTxId,
+                    DeleteReason = string.Empty
+                };
+
+                return View("Delete", deleteDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error searching contribution for deletion");
+                ViewBag.ErrorMessage = $"Error: {ex.Message}";
+                return View();
+            }
+        }
+
+        // POST: /ContributionMvc/Delete
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Super Admin")]
+        public async Task<IActionResult> Delete(ContributionDeleteDTO deleteDto)
+        {
+            try
+            {
+                _logger.LogInformation($"Delete contribution POST action for ID: {deleteDto.ContributionId}");
+
+                if (!ModelState.IsValid)
+                {
+                    return View("Delete", deleteDto);
+                }
+
+                // Verify Super Admin role again
+                if (!User.IsInRole("Super Admin"))
+                {
+                    TempData["ErrorMessage"] = "Only Super Admini can delete contributions.";
+                    return RedirectToAction("Index");
+                }
+
+                var deletedBy = User.Identity?.Name ?? "SYSTEM";
+
+                var result = await _contributionService.DeleteContributionAsync(deleteDto.ContributionId, deleteDto.DeleteReason, deletedBy);
+
+                if (result.Success)
+                {
+                    TempData["SuccessMessage"] = result.Message;
+                    return RedirectToAction("DeleteSearch");
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = result.Message;
+                    return View("Delete", deleteDto);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error deleting contribution {deleteDto.ContributionId}");
+                TempData["ErrorMessage"] = $"Error deleting contribution: {ex.Message}";
+                return View("Delete", deleteDto);
+            }
+        }
+
+
+        private string GetUserCompanyCode()
+        {
+            var companyCode = User.FindFirst("CompanyCode")?.Value;
+            if (string.IsNullOrEmpty(companyCode))
+            {
+                companyCode = HttpContext.Session.GetString("CompanyCode");
+            }
+
+            if (string.IsNullOrEmpty(companyCode))
+            {
+                throw new Exception("Company code not found. Please log in again.");
+            }
+
+            return companyCode;
+        }
+
+        #endregion
+
+        // Helper to get payment method from contribution
+        private string GetPaymentMethodFromContribution(ContributionResponseDTO contribution)
+        {
+            // You can store payment method in your Contrib table
+            // For now, return a default or try to deduce from remarks/reference
+            return "CASH";
+        }
+    }
+}

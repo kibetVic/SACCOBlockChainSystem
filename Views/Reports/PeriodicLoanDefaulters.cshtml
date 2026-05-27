@@ -1,0 +1,438 @@
+@using SACCOBlockChainSystem.Models.ViewModels
+@model SACCOBlockChainSystem.Models.ViewModels.PeriodicLoanDefaultersIndexViewModel
+@{
+    ViewData["Title"] = "Periodic Loan Defaulters Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    .filter-section {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid #dee2e6;
+    }
+    .filter-title {
+        font-weight: bold;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #dc3545;
+    }
+    .report-type-btn {
+        padding: 8px 20px;
+        margin-right: 10px;
+    }
+    .report-type-btn.active {
+        background-color: #dc3545;
+        border-color: #dc3545;
+        color: white;
+    }
+    .region-select {
+        margin-left: 15px;
+    }
+    .defaulted-amount {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    .stats-card {
+        transition: transform 0.2s;
+    }
+    .stats-card:hover {
+        transform: translateY(-5px);
+    }
+    .table-danger th {
+        background-color: #dc3545;
+        color: white;
+    }
+    .dperiod-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+    .dperiod-critical {
+        background-color: #dc3545;
+        color: white;
+    }
+    .dperiod-high {
+        background-color: #fd7e14;
+        color: white;
+    }
+    .dperiod-medium {
+        background-color: #ffc107;
+        color: #333;
+    }
+    .dperiod-low {
+        background-color: #28a745;
+        color: white;
+    }
+    .btn-export {
+        margin-left: 10px;
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Filter Section at the Top -->
+    <div class="filter-section">
+        <div class="filter-title">
+            <i class="bi bi-funnel-fill me-2"></i>Report Filters
+        </div>
+        
+        <form method="post" id="reportForm">
+            <input type="hidden" name="asAtDate" id="asAtDate" value="@Model.AsAtDate.ToString("yyyy-MM-dd")" />
+            
+            <div class="row align-items-end">
+                <!-- Report Type -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Report Type</label>
+                    <div>
+                        <button type="button" id="btnGeneral" class="btn report-type-btn @(Model.ReportType == "General" ? "btn-danger active" : "btn-outline-secondary")">
+                            <i class="bi bi-building me-1"></i>General
+                        </button>
+                        <button type="button" id="btnRegion" class="btn report-type-btn @(Model.ReportType == "Region" ? "btn-danger active" : "btn-outline-secondary")">
+                            <i class="bi bi-map me-1"></i>Region
+                        </button>
+                    </div>
+                    <input type="hidden" name="reportType" id="reportType" value="@Model.ReportType" />
+                </div>
+                
+                <!-- Region Dropdown (visible only when Region is selected) -->
+                <div id="regionDiv" class="col-md-3" style="display: @(Model.ReportType == "Region" ? "block" : "none")">
+                    <label class="form-label fw-bold">Select Region</label>
+                    <select name="selectedRegion" id="selectedRegion" class="form-select">
+                        <option value="">-- Select Region --</option>
+                        @foreach (var region in Model.Regions)
+                        {
+                            <option value="@region" selected="@(Model.SelectedRegion == region)">@region</option>
+                        }
+                    </select>
+                </div>
+                
+                <!-- As At Date -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">As At Date</label>
+                    <input type="date" id="asAtDateInput" class="form-control" value="@Model.AsAtDate.ToString("yyyy-MM-dd")" />
+                </div>
+                
+                <!-- Generate Button -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">&nbsp;</label>
+                    <div>
+                        <button type="button" id="generateReportBtn" class="btn btn-danger w-100">
+                            <i class="bi bi-search me-2"></i>Generate Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Export Buttons Section -->
+    <div class="filter-section">
+        <div class="filter-title">
+            <i class="bi bi-download me-2"></i>Export Options
+        </div>
+        <div>
+            <button type="button" id="exportExcelBtn" class="btn btn-success btn-export">
+                <i class="bi bi-file-excel me-2"></i>Export to Excel
+            </button>
+            <button type="button" id="exportPdfBtn" class="btn btn-danger btn-export">
+                <i class="bi bi-file-pdf me-2"></i>Export to PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="card">
+        <div class="card-header bg-danger text-white">
+            <h4 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Periodic Loan Defaulters Report</h4>
+        </div>
+        <div class="card-body">
+            @if (Model.HasData)
+            {
+                <!-- Report Header -->
+                <div class="text-center mb-4">
+                    <h4>@Model.CompanyName.ToUpper()</h4>
+                    @if (Model.ReportType == "Region" && !string.IsNullOrEmpty(Model.SelectedRegion))
+                    {
+                        <h5>PERIODIC LOAN DEFAULTERS BY REGION - @Model.SelectedRegion.ToUpper()</h5>
+                    }
+                    else
+                    {
+                        <h5>PERIODIC LOAN DEFAULTERS - GENERAL</h5>
+                    }
+                    <p>As At: @Model.AsAtDate.ToString("dd/MM/yyyy HH:mm:ss")</p>
+                    <p>Printed By: @Model.PrintedBy On: @Model.GeneratedOn.ToString("dd-MMM-yyyy HH:mm")</p>
+                </div>
+
+                <!-- Statistics Summary Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white stats-card">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-people"></i> Total Defaulters</h5>
+                                <h3>@Model.TotalDefaulters.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white stats-card">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-currency-dollar"></i> Expected Amount</h5>
+                                <h3>@Model.TotalExpected.ToString("N2")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white stats-card">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-check-circle"></i> Paid Amount</h5>
+                                <h3>@Model.TotalPaid.ToString("N2")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white stats-card">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-exclamation-octagon"></i> Default Amount</h5>
+                                <h3>@Model.GrandDefaultTotal.ToString("N2")</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Defaulters Table -->
+                <div class="table-responsive">
+                    <table id="defaultersTable" class="table table-bordered table-striped table-hover">
+                        <thead class="table-danger">
+                            <tr>
+                                <th>MemberNo</th>
+                                <th>Names</th>
+                                <th>LoanNo</th>
+                                <th class="text-end">RepayRate</th>
+                                <th class="text-end">Paid</th>
+                                <th class="text-end">Expected</th>
+                                <th class="text-end">DefAmount</th>
+                                <th>DPeriod</th>
+                                <th>PhoneNo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Defaulters)
+                            {
+                                // Determine badge class based on DPeriod
+                                string badgeClass = "dperiod-low";
+                                if (item.DPeriod != null && (item.DPeriod.Contains("365+") || item.DPeriod.Contains("181-365")))
+                                {
+                                    badgeClass = "dperiod-critical";
+                                }
+                                else if (item.DPeriod != null && item.DPeriod.Contains("91-180"))
+                                {
+                                    badgeClass = "dperiod-high";
+                                }
+                                else if (item.DPeriod != null && (item.DPeriod.Contains("61-90") || item.DPeriod.Contains("31-60")))
+                                {
+                                    badgeClass = "dperiod-medium";
+                                }
+                                
+                                <tr>
+                                    <td>@item.MemberNo</td>
+                                    <td>@item.Names</td>
+                                    <td>@item.LoanNo</td>
+                                    <td class="text-end">@item.RepayRate.ToString("N2")</td>
+                                    <td class="text-end">@item.Paid.ToString("N2")</td>
+                                    <td class="text-end">@item.Expected.ToString("N2")</td>
+                                    <td class="text-end defaulted-amount">@item.DefAmount.ToString("N2")</td>
+                                    <td class="text-center">
+                                        <span class="dperiod-badge @badgeClass">@item.DPeriod</span>
+                                    </td>
+                                    <td>@item.PhoneNo</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-secondary fw-bold">
+                            <tr>
+                                <td colspan="6" class="text-end">Grand Default Total:</td>
+                                <td class="text-end defaulted-amount">@Model.GrandDefaultTotal.ToString("N2")</td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Footer Note -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="alert alert-warning">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Note:</strong> Defaulters are members with overdue payments beyond the grace period. 
+                            Default Amount represents the total outstanding balance for delinquent loans.
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info text-center">
+                    <i class="bi bi-info-circle me-2"></i>
+                    @(ViewBag.Message ?? "No defaulters found for the selected date. Please select a date and click 'Generate Report'.")
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable
+            if ($('#defaultersTable').length && $('#defaultersTable tbody tr').length > 0) {
+                $('#defaultersTable').DataTable({
+                    pageLength: 25,
+                    order: [[6, 'desc']],
+                    language: {
+                        search: "Search:",
+                        lengthMenu: "Show _MENU_ entries per page",
+                        info: "Showing _START_ to _END_ of _TOTAL_ defaulters"
+                    },
+                    columnDefs: [
+                        { targets: [3, 4, 5, 6], className: 'text-end' },
+                        { targets: [7], className: 'text-center' }
+                    ]
+                });
+            }
+
+            // Toggle between General and Region
+            $('#btnGeneral').click(function() {
+                $('#btnGeneral').addClass('btn-danger active').removeClass('btn-outline-secondary');
+                $('#btnRegion').removeClass('btn-danger active').addClass('btn-outline-secondary');
+                $('#reportType').val('General');
+                $('#regionDiv').hide();
+            });
+
+            $('#btnRegion').click(function() {
+                $('#btnRegion').addClass('btn-danger active').removeClass('btn-outline-secondary');
+                $('#btnGeneral').removeClass('btn-danger active').addClass('btn-outline-secondary');
+                $('#reportType').val('Region');
+                $('#regionDiv').show();
+            });
+
+            // Generate Report
+            $('#generateReportBtn').click(function() {
+                var asAtDate = $('#asAtDateInput').val();
+                var reportType = $('#reportType').val();
+                var selectedRegion = $('#selectedRegion').val();
+                
+                if (!asAtDate) {
+                    alert('Please select an as at date');
+                    return;
+                }
+                
+                if (reportType === 'Region' && !selectedRegion) {
+                    alert('Please select a region');
+                    return;
+                }
+                
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("PeriodicLoanDefaulters", "LoanReport")'
+                });
+                
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'asAtDate',
+                    'value': asAtDate
+                }));
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'reportType',
+                    'value': reportType
+                }));
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'selectedRegion',
+                    'value': selectedRegion || ''
+                }));
+                
+                form.appendTo('body').submit();
+            });
+
+            // Export to Excel
+            $('#exportExcelBtn').click(function() {
+                var asAtDate = $('#asAtDateInput').val();
+                var reportType = $('#reportType').val();
+                var selectedRegion = $('#selectedRegion').val();
+                
+                if (!asAtDate) {
+                    alert('Please select an as at date first');
+                    return;
+                }
+                
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("ExportPeriodicLoanDefaultersToExcel", "LoanReport")'
+                });
+                
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'asAtDate',
+                    'value': asAtDate
+                }));
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'reportType',
+                    'value': reportType
+                }));
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'selectedRegion',
+                    'value': selectedRegion || ''
+                }));
+                
+                form.appendTo('body').submit();
+            });
+
+            // Export to PDF
+            $('#exportPdfBtn').click(function() {
+                var asAtDate = $('#asAtDateInput').val();
+                var reportType = $('#reportType').val();
+                var selectedRegion = $('#selectedRegion').val();
+                
+                if (!asAtDate) {
+                    alert('Please select an as at date first');
+                    return;
+                }
+                
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("ExportPeriodicLoanDefaultersToPdf", "LoanReport")'
+                });
+                
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'asAtDate',
+                    'value': asAtDate
+                }));
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'reportType',
+                    'value': reportType
+                }));
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'selectedRegion',
+                    'value': selectedRegion || ''
+                }));
+                
+                form.appendTo('body').submit();
+            });
+        });
+    </script>
+}

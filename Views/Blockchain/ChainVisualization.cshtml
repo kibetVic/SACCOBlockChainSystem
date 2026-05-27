@@ -1,0 +1,368 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.ChainVisualizationViewModel
+
+@{
+    ViewData["Title"] = "Blockchain Chain Visualization";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section Styles {
+    <style>
+        .chain-viz-container {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .chain-header {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .chain-stats {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .stat-badge {
+            background: #f8f9fa;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+        }
+
+        .chain-scroll {
+            overflow-x: auto;
+            padding: 20px 0;
+        }
+
+        .chain-wrapper {
+            display: flex;
+            gap: 30px;
+            min-width: min-content;
+            padding: 20px;
+        }
+
+        .chain-block {
+            min-width: 280px;
+            background: white;
+            border-radius: 12px;
+            position: relative;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+            .chain-block:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            }
+
+            .chain-block::after {
+                content: "→";
+                position: absolute;
+                right: -25px;
+                top: 50%;
+                transform: translateY(-50%);
+                font-size: 30px;
+                color: #3498db;
+                font-weight: bold;
+            }
+
+            .chain-block:last-child::after {
+                content: "";
+            }
+
+        .block-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            border-radius: 12px 12px 0 0;
+            text-align: center;
+        }
+
+        .block-body {
+            padding: 15px;
+        }
+
+        .hash-value {
+            font-family: monospace;
+            font-size: 12px;
+            background: #f0f0f0;
+            padding: 8px;
+            border-radius: 6px;
+            word-break: break-all;
+            margin-bottom: 10px;
+        }
+
+        .block-detail {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .block-detail-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .block-detail-value {
+            color: #333;
+            font-family: monospace;
+        }
+
+        .transaction-preview {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .transaction-item {
+            font-size: 11px;
+            padding: 4px;
+            border-bottom: 1px solid #e0e0e0;
+            font-family: monospace;
+        }
+
+        .genesis-badge {
+            background: #27ae60;
+            color: white;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .valid-badge {
+            background: #27ae60;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .invalid-badge {
+            background: #e74c3c;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .control-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .depth-control {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+            .depth-control input {
+                width: 80px;
+                padding: 5px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+            }
+
+        .btn-refresh {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+            .btn-refresh:hover {
+                background: #2980b9;
+            }
+            
+        .block-number {
+            font-size: 24px;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .block-id-label {
+            font-size: 10px;
+            opacity: 0.7;
+        }
+    </style>
+}
+
+<div class="chain-viz-container">
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="chain-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2>
+                        <i class="fas fa-project-diagram me-2"></i>Blockchain Chain Visualization
+                    </h2>
+                    <p class="text-muted mb-0">
+                        Company: <strong>@Model.CompanyCode</strong> |
+                        Total Blocks: <strong>@Model.TotalBlocks</strong>
+                    </p>
+                </div>
+                <div>
+                    @* <span class="@(Model.IsValid ? "valid-badge" : "invalid-badge")">
+                        <i class="fas @(Model.IsValid ? "fa-check-circle" : "fa-exclamation-triangle") me-1"></i>
+                        @Model.ValidationMessage
+                    </span> *@
+                </div>
+            </div>
+
+            <div class="chain-stats">
+                <div class="stat-badge">
+                    <small class="text-muted">Genesis Block</small>
+                    <div><strong>@(Model.Blocks.FirstOrDefault()?.ShortHash ?? "N/A")</strong></div>
+                </div>
+                <div class="stat-badge">
+                    <small class="text-muted">Latest Block</small>
+                    <div><strong>@(Model.Blocks.LastOrDefault()?.ShortHash ?? "N/A")</strong></div>
+                </div>
+                <div class="stat-badge">
+                    <small class="text-muted">Chain Length</small>
+                    <div><strong>@Model.TotalBlocks blocks</strong></div>
+                </div>
+            </div>
+
+            <!-- Control Bar -->
+            <div class="control-bar">
+                <div class="depth-control">
+                    <label>Display depth:</label>
+                    <input type="number" id="depthInput" value="20" min="1" max="@Model.TotalBlocks" />
+                    <button class="btn-refresh" onclick="changeDepth()">Apply</button>
+                </div>
+                <a href="@Url.Action("Dashboard")" class="btn btn-outline-primary">
+                    <i class="fas fa-tachometer-alt me-1"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Chain Visualization -->
+        <div class="chain-scroll">
+            <div class="chain-wrapper" id="chainWrapper">
+                @{
+                    int blockNumber = 1;
+                    var orderedBlocks = Model.Blocks.OrderBy(b => b.Timestamp).ToList();
+                }
+                @foreach (var block in orderedBlocks)
+                {
+                    <div class="chain-block">
+                        <div class="block-header">
+                            <div class="block-number">Block #@blockNumber</div>
+                            @if (blockNumber == 1)
+                            {
+                                <span class="genesis-badge ms-2">GENESIS</span>
+                            }
+                        </div>
+                        <div class="block-body">
+                            <div class="hash-value">
+                                <small>Block Hash:</small><br />
+                                <strong>@block.BlockHash</strong>
+                            </div>
+                            <div class="hash-value">
+                                <small>Previous Hash:</small><br />
+                                @block.ShortPreviousHash
+                            </div>
+
+                            <div class="block-detail">
+                                <span class="block-detail-label">Timestamp:</span>
+                                <span class="block-detail-value">@block.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</span>
+                            </div>
+                            <div class="block-detail">
+                                <span class="block-detail-label">Time Ago:</span>
+                                <span class="block-detail-value">@block.TimeAgo</span>
+                            </div>
+                            <div class="block-detail">
+                                <span class="block-detail-label">Nonce:</span>
+                                <span class="block-detail-value">@block.Nonce</span>
+                            </div>
+                            <div class="block-detail">
+                                <span class="block-detail-label">Merkle Root:</span>
+                                <span class="block-detail-value">@(block.MerkleRoot?.Length > 20 ? block.MerkleRoot.Substring(0, 20) + "..." : block.MerkleRoot)</span>
+                            </div>
+                            <div class="block-detail">
+                                <span class="block-detail-label">Transactions:</span>
+                                <span class="block-detail-value">@block.TransactionCount</span>
+                            </div>
+                            <div class="block-detail">
+                                <span class="block-detail-label">Total Amount:</span>
+                                <span class="block-detail-value text-success fw-bold">KES @block.TotalAmount.ToString("N2")</span>
+                            </div>
+
+                            <div class="mt-3 text-center">
+                                <button class="btn btn-sm btn-primary" onclick="viewBlockDetails('@block.BlockHash')">
+                                    <i class="fas fa-info-circle"></i> View Details
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    blockNumber++;
+                }
+            </div>
+        </div>
+
+        @if (!Model.Blocks.Any())
+        {
+            <div class="text-center text-white py-5">
+                <i class="fas fa-link fa-4x mb-3 opacity-50"></i>
+                <h4>No blocks found in the blockchain</h4>
+                <p>The blockchain is currently empty. Create some transactions to generate blocks.</p>
+            </div>
+        }
+
+        <!-- Legend -->
+        <div class="chain-header mt-4">
+            <h6><i class="fas fa-info-circle me-2"></i>Legend</h6>
+            <div class="d-flex gap-4 flex-wrap">
+                <div><span class="genesis-badge me-2">GENESIS</span> - First block in the chain</div>
+                <div><i class="fas fa-arrow-right text-primary me-2"></i> - Chain linkage direction</div>
+                <div><i class="fas fa-check-circle text-success me-2"></i> - Valid block</div>
+                <div><span class="badge bg-secondary me-2">ID: X</span> - Database Block ID (internal)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function viewBlockDetails(blockHash) {
+            window.location.href = '@Url.Action("BlockDetails", "Blockchain")?blockHash=' + blockHash;
+        }
+
+        function changeDepth() {
+            var depth = document.getElementById('depthInput').value;
+            if (depth && depth > 0) {
+                window.location.href = '@Url.Action("ChainVisualization", "Blockchain")?depth=' + depth;
+            }
+        }
+
+        // Auto-scroll to show the latest block
+        $(document).ready(function() {
+            var container = document.querySelector('.chain-scroll');
+            if (container) {
+                container.scrollLeft = container.scrollWidth;
+            }
+        });
+    </script>
+}

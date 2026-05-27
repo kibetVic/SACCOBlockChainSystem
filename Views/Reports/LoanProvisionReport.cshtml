@@ -1,0 +1,310 @@
+@using SACCOBlockChainSystem.Models.ViewModels
+@model SACCOBlockChainSystem.Models.ViewModels.AgingAnalysisIndexViewModel
+@{
+    ViewData["Title"] = "Loan Provision Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0"><i class="bi bi-calculator-fill me-2"></i>Loan Provision Report</h4>
+        </div>
+        <div class="card-body">
+            <!-- Filter Form -->
+            <form method="post" class="mb-4">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">As At Date</label>
+                        <input type="date" name="asAtDate" class="form-control" value="@Model.AsAtDate.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-search me-1"></i>Generate Report
+                            </button>
+                            <button type="button" id="exportPdfBtn" class="btn btn-danger">
+                                <i class="bi bi-file-pdf me-1"></i>Export to PDF
+                            </button>
+                            <button type="button" id="exportExcelBtn" class="btn btn-success">
+                                <i class="bi bi-file-excel me-1"></i>Export to Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            @if (Model.HasData)
+            {
+                <!-- Report Header -->
+                <div class="text-center mb-4">
+                    <h4>@Model.CompanyName.ToUpper()</h4>
+                    <h5>LOAN PROVISIONING REPORT</h5>
+                    <p>As At: @Model.AsAtDate.ToString("dd/MM/yyyy HH:mm:ss")</p>
+                    <p>Printed By: @User.Identity?.Name On: @DateTime.Now.ToString("dd-MMM-yyyy HH:mm")</p>
+                </div>
+
+                <!-- Provision Summary Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-files"></i> Total Loans</h5>
+                                <h3>@Model.TotalLoans.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-currency-dollar"></i> Total Loan Balance</h5>
+                                <h3>@Model.TotalLoanBalance.ToString("N2")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-piggy-bank"></i> Required Provision</h5>
+                                <h3>@Model.TotalRequiredProvision.ToString("N2")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-percent"></i> Provision Ratio</h5>
+                                <h3>@((Model.TotalLoanBalance > 0 ? (Model.TotalRequiredProvision / Model.TotalLoanBalance) * 100 : 0).ToString("N2"))%</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aging Category Breakdown -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="bi bi-bar-chart-steps me-2"></i>Provision Breakdown by Aging Category</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-2">
+                                        <div class="p-2 performing rounded text-center">
+                                            <strong>Performing</strong><br>
+                                            <span class="badge bg-success">@Model.PerformingCount</span><br>
+                                            <small>1% Provision</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="p-2 special-mention rounded text-center">
+                                            <strong>Special Mention</strong><br>
+                                            <span class="badge bg-warning">@Model.SpecialMentionCount</span><br>
+                                            <small>5% Provision</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="p-2 watchful rounded text-center">
+                                            <strong>Watchful</strong><br>
+                                            <span class="badge bg-warning">@Model.WatchfulCount</span><br>
+                                            <small>10% Provision</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="p-2 substandard rounded text-center">
+                                            <strong>Substandard</strong><br>
+                                            <span class="badge bg-orange">@Model.SubstandardCount</span><br>
+                                            <small>25% Provision</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="p-2 doubtful rounded text-center">
+                                            <strong>Doubtful</strong><br>
+                                            <span class="badge bg-danger">@Model.DoubtfulCount</span><br>
+                                            <small>50% Provision</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="p-2 loss rounded text-center">
+                                            <strong>Loss</strong><br>
+                                            <span class="badge bg-dark">@Model.LossCount</span><br>
+                                            <small>100% Provision</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Provision Table -->
+                <div class="table-responsive">
+                    <table id="provisionTable" class="table table-bordered table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>MemberNo</th>
+                                <th>Names</th>
+                                <th>LoanNo</th>
+                                <th class="text-end">Loan Amount (Ksh)</th>
+                                <th class="text-center">Date Issued</th>
+                                <th class="text-end">Loan Balance (Ksh)</th>
+                                <th class="text-center">Days In Arrears</th>
+                                <th>Provision Grade</th>
+                                <th class="text-end">Provision Rate (%)</th>
+                                <th class="text-end">Required Provision(Ksh)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Loans)
+                            {
+                                string rowClass = "";
+                                if (item.ArrearsCategory == AgingCategories.PERFORMING) rowClass = "performing";
+                                else if (item.ArrearsCategory == AgingCategories.SPECIAL_MENTION) rowClass = "special-mention";
+                                else if (item.ArrearsCategory == AgingCategories.WATCHFUL) rowClass = "watchful";
+                                else if (item.ArrearsCategory == AgingCategories.SUBSTANDARD) rowClass = "substandard";
+                                else if (item.ArrearsCategory == AgingCategories.DOUBTFUL) rowClass = "doubtful";
+                                else if (item.ArrearsCategory == AgingCategories.LOSS) rowClass = "loss";
+                                else if (item.ArrearsCategory == AgingCategories.LOSS_OVER_365) rowClass = "loss";
+
+                                <tr class="@rowClass">
+                                    <td>@item.MemberNo</td>
+                                    <td>@item.FullName</td>
+                                    <td>@item.LoanNo</td>
+                                    <td class="text-end">@item.LoanAmount.ToString("N2")</td>
+                                    <td class="text-center">@(item.DateIssued?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                    <td class="text-end">@item.LoanBalance.ToString("N2")</td>
+                                    <td class="text-center fw-bold">@item.DaysInArrears</td>
+                                    <td>@item.ProvisionGrade</td>
+                                    <td class="text-end">@item.ProvisionRate.ToString("P1")</td>
+                                    <td class="text-end fw-bold">@item.RequiredProvision.ToString("N1")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-secondary fw-bold">
+                            <tr>
+                                <td colspan="3" class="text-end">GRAND TOTAL:</td>
+                                <td class="text-end">@Model.TotalLoanAmount.ToString("N2")</td>
+                                <td colspan="2"></td>
+                                <td class="text-end">@Model.TotalLoanBalance.ToString("N2")</td>
+                                <td colspan="2"></td>
+                                <td class="text-end">@Model.TotalRequiredProvision.ToString("N2")</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Provision Note -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Provision Calculation:</strong> Required Provision = Loan Balance × Provision Rate
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info text-center">
+                    <i class="bi bi-info-circle me-2"></i>
+                    @(ViewBag.Message ?? "No active loans found for the selected date. Please select a date and click 'Generate Report'.")
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+
+    <style>
+        .performing {
+            background-color: #d4edda;
+        }
+
+        .special-mention {
+            background-color: #fff3cd;
+        }
+
+        .watchful {
+            background-color: #ffe5b4;
+        }
+
+        .substandard {
+            background-color: #ffd0b0;
+        }
+
+        .doubtful {
+            background-color: #f7b7b7;
+        }
+
+        .loss {
+            background-color: #f5a3a3;
+        }
+
+        .bg-orange {
+            background-color: #fd7e14;
+        }
+    </style>
+
+    <script>
+        $(document).ready(function() {
+            if ($('#provisionTable').length && $('#provisionTable tbody tr').length > 0) {
+                $('#provisionTable').DataTable({
+                    pageLength: 25,
+                    order: [[6, 'desc']], // Sort by Days In Arrears
+                    language: {
+                        search: "Search:",
+                        lengthMenu: "Show _MENU_ entries per page",
+                        info: "Showing _START_ to _END_ of _TOTAL_ loans"
+                    },
+                    columnDefs: [
+                        { targets: [3, 5, 8, 9], className: 'text-end' },
+                        { targets: [4, 6], className: 'text-center' }
+                    ]
+                });
+            }
+
+            // Export to Excel
+            $('#exportExcelBtn').click(function() {
+                var asAtDate = $('input[name="asAtDate"]').val();
+                if (!asAtDate) {
+                    alert('Please select a date first');
+                    return;
+                }
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("ExportLoanProvisionToExcel", "LoanReport")'
+                });
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'asAtDate',
+                    'value': asAtDate
+                }));
+                form.appendTo('body').submit();
+            });
+
+            // Export to PDF
+            $('#exportPdfBtn').click(function() {
+                var asAtDate = $('input[name="asAtDate"]').val();
+                if (!asAtDate) {
+                    alert('Please select a date first');
+                    return;
+                }
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("ExportLoanProvisionToPdf", "LoanReport")'
+                });
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'asAtDate',
+                    'value': asAtDate
+                }));
+                form.appendTo('body').submit();
+            });
+        });
+    </script>
+}

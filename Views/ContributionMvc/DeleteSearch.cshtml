@@ -1,0 +1,67 @@
+﻿@{
+    ViewData["Title"] = "Delete Transaction - Search";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-6 mx-auto">
+            <div class="card card-danger">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-search me-2"></i>
+                        Find Transaction to Delete
+                    </h3>
+                    <div class="card-tools">
+                        <span class="badge bg-danger">Super Admin Only</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This action will permanently delete a transaction from all system tables.
+                        Please enter the Receipt Number or Transaction Number to proceed.
+                    </div>
+
+                    <form asp-action="DeleteSearch" method="get" id="searchForm">
+                        <div class="form-group mb-3">
+                            <label class="control-label">
+                                <i class="fas fa-receipt me-1"></i> Receipt Number / Transaction Number
+                            </label>
+                            <div class="input-group">
+                                <input type="text" name="searchTerm" id="searchTerm" class="form-control form-control-lg"
+                                       placeholder="Enter Receipt No or Transaction No..."
+                                       value="@ViewBag.SearchTerm" required />
+                                <button type="submit" class="btn btn-danger btn-lg">
+                                    <i class="fas fa-search me-1"></i> Search
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">
+                                Example: CONT-20241201-1234 or REC-20241201-5678
+                            </small>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            @if (ViewBag.ErrorMessage != null)
+            {
+                <div class="alert alert-danger mt-3">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    @ViewBag.ErrorMessage
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Auto-submit if search term is present
+            var searchTerm = '@ViewBag.SearchTerm';
+            if (searchTerm && searchTerm !== '') {
+                $('#searchForm').submit();
+            }
+        });
+    </script>
+}

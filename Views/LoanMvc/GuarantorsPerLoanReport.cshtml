@@ -1,0 +1,315 @@
+﻿@* Views/LoanMvc/GuarantorsPerLoanReport.cshtml *@
+@model SACCOBlockChainSystem.Models.DTOs.GuarantorsPerLoanIndexViewModel
+
+@{
+    ViewData["Title"] = "Guarantors Per Loan Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    .guarantor-list {
+        max-width: 400px;
+        white-space: normal;
+        word-wrap: break-word;
+    }
+
+    .guarantor-badge {
+        display: inline-block;
+        background-color: #e9ecef;
+        padding: 4px 8px;
+        margin: 2px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+
+    .fully-guaranteed {
+        background-color: #d4edda;
+        color: #155724;
+    }
+
+    .partially-guaranteed {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+
+    .summary-card {
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-users"></i> Guarantors Per Loan Report
+            </h6>
+            <div>
+                <a href="@Url.Action("ExportGuarantorsPerLoanToExcel", new { startDate = ViewBag.StartDate, endDate = ViewBag.EndDate })"
+                   class="btn btn-success btn-sm">
+                    <i class="fas fa-file-excel"></i> Export to Excel
+                </a>
+                <a href="@Url.Action("ExportGuarantorsPerLoanToPdf", new { startDate = ViewBag.StartDate, endDate = ViewBag.EndDate })"
+                   class="btn btn-danger btn-sm">
+                    <i class="fas fa-file-pdf"></i> Export to PDF
+                </a>
+                <a href="@Url.Action("AllGuarantorsReport")" class="btn btn-info btn-sm">
+                    <i class="fas fa-list"></i> All Guarantors Report
+                </a>
+                <a href="@Url.Action("AllLoans")" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
+            </div>
+        </div>
+
+        <div class="card-body">
+            <!-- Filter Form -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <i class="fas fa-filter"></i> Filter Report
+                        </div>
+                        <div class="card-body">
+                            <form method="get" asp-action="GuarantorsPerLoanReport" class="row">
+                                <div class="col-md-4">
+                                    <label class="form-label">Start Date</label>
+                                    <input type="date" name="startDate" class="form-control"
+                                           value="@(ViewBag.StartDate?.ToString("yyyy-MM-dd"))" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">End Date</label>
+                                    <input type="date" name="endDate" class="form-control"
+                                           value="@(ViewBag.EndDate?.ToString("yyyy-MM-dd"))" />
+                                </div>
+                                <div class="col-md-4" style="margin-top: 32px;">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search"></i> Generate Report
+                                    </button>
+                                    <a href="@Url.Action("GuarantorsPerLoanReport")" class="btn btn-secondary">
+                                        <i class="fas fa-redo"></i> Reset
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (!Model.HasData)
+            {
+                <div class="alert alert-warning text-center">
+                    <i class="fas fa-info-circle"></i> No guarantor records found for the selected date range.
+                </div>
+            }
+            else
+            {
+                <!-- Summary Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="summary-card" style="background-color: #e3f2fd;">
+                            <h6 class="text-muted">Total Loans with Guarantors</h6>
+                            <h2 class="mb-0">@Model.TotalLoans</h2>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="summary-card" style="background-color: #e8f5e9;">
+                            <h6 class="text-muted">Total Guarantors</h6>
+                            <h2 class="mb-0">@Model.TotalGuarantors</h2>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="summary-card" style="background-color: #fff3e0;">
+                            <h6 class="text-muted">Total Guarantee Amount</h6>
+                            <h2 class="mb-0">@Model.TotalGuaranteeAmount.ToString("N0")</h2>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="summary-card" style="background-color: #fce4ec;">
+                            <h6 class="text-muted">Fully / Partially Guaranteed</h6>
+                            <h2 class="mb-0">@Model.FullyGuaranteedLoans / @Model.PartiallyGuaranteedLoans</h2>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Report Info -->
+                <div class="alert alert-info">
+                    <strong>@Model.CompanyName</strong><br />
+                    Report Period: @(Model.StartDate?.ToString("dd/MM/yyyy") ?? "All") - @(Model.EndDate?.ToString("dd/MM/yyyy") ?? "All")<br />
+                    Generated By: @Model.PrintedBy on @Model.GeneratedOn.ToString("dd MMMM yyyy HH:mm:ss")
+                </div>
+
+                <!-- Loans Table -->
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="guarantorsTable" width="100%" cellspacing="0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Loan No</th>
+                                <th>Member No</th>
+                                <th>Member Name</th>
+                                <th>Loan Amount</th>
+                                <th>Total Guarantee</th>
+                                <th>Status</th>
+                                <th>Guarantor Count</th>
+                                <th>Guarantors</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var loan in Model.Loans)
+                            {
+                                <tr>
+                                    <td>@loan.LoanNo</td>
+                                    <td>@loan.MemberNo</td>
+                                    <td>@loan.MemberName</td>
+                                    <td class="text-right">@loan.LoanAmount.ToString("N2")</td>
+                                    <td class="text-right">@loan.TotalGuaranteeAmount.ToString("N2")</td>
+                                    <td>
+                                        @if (loan.IsFullyGuaranteed)
+                                        {
+                                            <span class="badge badge-success">Fully Guaranteed</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-warning">Partially Guaranteed</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">@loan.Guarantors.Count</td>
+                                    <td class="guarantor-list">
+                                        @foreach (var g in loan.Guarantors)
+                                        {
+                                            <span class="guarantor-badge" title="Guarantee: KES @g.GuaranteeAmount.ToString("N0")">
+                                                @g.GuarantorName
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#guarantorModal_@loan.LoanNo.Replace("-", "_")">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                    </td>
+                                </tr>
+
+                                <!-- Modal for Guarantor Details -->
+                                <div class="modal fade" id="guarantorModal_@loan.LoanNo.Replace("-", "_")" tabindex="-1" role="dialog">
+                                    <div class="modal-dialog modal-lg" role="document">
+                                        <div class="modal-content">
+                                            <div class="modal-header bg-primary text-white">
+                                                <h5 class="modal-title">Guarantors for Loan @loan.LoanNo</h5>
+                                                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                                                    <span aria-hidden="true">&times;</span>
+                                                </button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="row mb-3">
+                                                    <div class="col-md-6">
+                                                        <strong>Borrower:</strong> @loan.MemberName (@loan.MemberNo)
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <strong>Loan Amount:</strong> KES @loan.LoanAmount.ToString("N0")
+                                                    </div>
+                                                </div>
+                                                <div class="row mb-3">
+                                                    <div class="col-md-6">
+                                                        <strong>Total Guarantee:</strong> KES @loan.TotalGuaranteeAmount.ToString("N0")
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <strong>Status:</strong>
+                                                        @if (loan.IsFullyGuaranteed)
+                                                        {
+                                                            <span class="badge badge-success">Fully Guaranteed</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-warning">Partially Guaranteed</span>
+                                                        }
+                                                    </div>
+                                                </div>
+
+                                                <table class="table table-sm table-bordered">
+                                                    <thead class="thead-light">
+                                                        <tr>
+                                                            <th>#</th>
+                                                            <th>Guarantor No</th>
+                                                            <th>Guarantor Name</th>
+                                                            <th>ID No</th>
+                                                            <th>Phone</th>
+                                                            <th>Guarantee Amount</th>
+                                                            <th>Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @{
+                                                            int counter = 1;
+                                                        }
+                                                        @foreach (var g in loan.Guarantors)
+                                                        {
+                                                            <tr>
+                                                                <td>@counter</td>
+                                                                <td>@g.GuarantorMemberNo</td>
+                                                                <td>@g.GuarantorName</td>
+                                                                <td>@(g.IdNo ?? "-")</td>
+                                                                <td>@(g.PhoneNo ?? "-")</td>
+                                                                <td class="text-right">@g.GuaranteeAmount.ToString("N2")</td>
+                                                                <td>
+                                                                    @if (g.Transfered)
+                                                                    {
+                                                                        <span class="badge badge-secondary">Released</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="badge badge-success">Active</span>
+                                                                    }
+                                                                </td>
+                                                            </tr>
+                                                            counter++;
+                                                        }
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr class="table-active">
+                                                            <td colspan="5" class="text-right"><strong>TOTAL:</strong></td>
+                                                            <td class="text-right"><strong>@loan.TotalGuaranteeAmount.ToString("N2")</strong></td>
+                                                            <td></td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </tbody>
+                        <tfoot class="bg-light font-weight-bold">
+                            <tr>
+                                <td colspan="4" class="text-right">TOTALS:</td>
+                                <td class="text-right">@Model.TotalGuaranteeAmount.ToString("N2")</td>
+                                <td colspan="4"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#guarantorsTable').DataTable({
+                "order": [[0, "asc"]],
+                "pageLength": 25,
+                "language": {
+                    "search": "Search:",
+                    "lengthMenu": "Show _MENU_ entries",
+                    "info": "Showing _START_ to _END_ of _TOTAL_ entries"
+                }
+            });
+        });
+    </script>
+}

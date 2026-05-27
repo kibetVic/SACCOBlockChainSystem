@@ -1,0 +1,504 @@
+﻿@using SACCOBlockChainSystem.Models.DTOs
+@model SACCOBlockChainSystem.Models.DTOs.WardListResponseDTO
+@{
+    ViewData["Title"] = "Ward Management";
+    var wards = Model?.Wards ?? new List<WardDTO>();
+    var subCounties = ViewBag.SubCounties as List<SubCountyDTO> ?? new List<SubCountyDTO>();
+}
+
+<div class="container-fluid">
+    <!-- Success/Error Messages -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+            @if (TempData["BlockchainTxId"] != null)
+            {
+                <br />
+        
+                <small class="text-muted">Blockchain TX: @TempData["BlockchainTxId"]</small>
+            }
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link @(ViewBag.ActiveTab == "Counties" ? "active" : "")"
+               asp-action="Counties">
+                <i class="fas fa-map-marker-alt"></i> Counties
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(ViewBag.ActiveTab == "SubCounties" ? "active" : "")"
+               asp-action="SubCounties">
+                <i class="fas fa-city"></i> Sub-Counties
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(ViewBag.ActiveTab == "Wards" ? "active" : "")"
+               asp-action="Wards">
+                <i class="fas fa-building"></i> Wards
+            </a>
+        </li>
+    </ul>
+
+    <!-- Filter by Sub-County -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="fw-bold">Filter by Sub-County</label>
+                    <select id="subCountyFilter" class="form-select" onchange="filterBySubCounty()">
+                        <option value="">All Sub-Counties</option>
+                        @foreach (var subCounty in subCounties)
+                        {
+                            if (ViewBag.SelectedSubCountyId == subCounty.Id)
+                            {
+                                <option value="@subCounty.Id" selected>
+                                    @subCounty.SubCountyName (@(subCounty.CountyName ?? "Unknown County"))
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="@subCounty.Id">
+                                    @subCounty.SubCountyName (@(subCounty.CountyName ?? "Unknown County"))
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <div class="mt-4">
+                        <span class="badge bg-info">Total: @wards.Count</span>
+                        <span class="badge bg-success">Active: @wards.Count(w => w.Status == "Active")</span>
+                        <span class="badge bg-primary">On Blockchain: @wards.Count(w => !string.IsNullOrEmpty(w.BlockchainTxId))</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FORM CARD - Add/Edit Ward -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0"><i class="fas fa-plus-circle"></i> <span id="formTitle">Add New Ward</span></h4>
+        </div>
+        <div class="card-body">
+            <form id="wardForm" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="editId" name="Id" />
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label required">Sub-County</label>
+                        <select id="SubCountyId" name="SubCountyId" class="form-select" required>
+                            <option value="">-- Select Sub-County --</option>
+                            @foreach (var subCounty in subCounties)
+                            {
+                                <option value="@subCounty.Id"
+                                        data-subcountycode="@subCounty.SubCountyCode">
+                                    @subCounty.SubCountyName
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Ward Code</label>
+                        <input type="text" id="WardCode" name="WardCode" class="form-control bg-light"
+                               readonly placeholder="Will be auto-generated" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label required">Ward Name</label>
+                        <input type="text" id="WardName" name="WardName" class="form-control"
+                               maxlength="100" required placeholder="Enter ward name" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Constituency</label>
+                        <input type="text" id="Constituency" name="Constituency" class="form-control"
+                               maxlength="100" placeholder="Enter constituency" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Status</label>
+                        <select id="Status" name="Status" class="form-select">
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mt-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-success px-4">
+                        <i class="fas fa-save"></i> <span id="saveButtonText">Save Ward</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary px-4" onclick="resetForm()">
+                        <i class="fas fa-redo"></i> Reset
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EXISTING WARDS TABLE -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-list"></i> Wards List</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="tableSearchInput" class="form-control"
+                               placeholder="Search by name or code..." autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <select id="statusFilter" class="form-select">
+                        <option value="all">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-bordered table-hover align-middle">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th style="width: 120px;">Actions</th>
+                            <th style="width: 100px;">Code</th>
+                            <th>Ward Name</th>
+                            <th>Sub-County</th>
+                            <th>County</th>
+                            <th>Constituency</th>
+                            <th style="width: 80px;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        @if (wards.Any())
+                        {
+                            var counter = 1;
+                            foreach (var ward in wards)
+                            {
+                                <tr data-id="@ward.Id"
+                                    data-code="@ward.WardCode"
+                                    data-name="@ward.WardName"
+                                    data-subcountyid="@ward.SubCountyId"
+                                    data-subcountyname="@ward.SubCountyName"
+                                    data-countyname="@ward.CountyName"
+                                    data-constituency="@ward.Constituency"
+                                    data-status="@ward.Status">
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-warning btn-sm"
+                                                    onclick="editWard(@ward.Id)" title="Edit">
+                                                <i class="fas fa-edit">Select</i>
+                                            </button>
+                                            @if (User.IsInRole("Super Admin"))
+                                            {
+                                                <button type="button" class="btn btn-danger btn-sm"
+                                                        onclick="deleteWard(@ward.Id, '@ward.WardName.Replace("'", "\\'")')" title="Delete">
+                                                    <i class="fas fa-trash">Delete</i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td><strong>@ward.WardCode</strong></td>
+                                    <td>
+                                        @ward.WardName
+                                        @if (!string.IsNullOrEmpty(ward.BlockchainTxId))
+                                        {
+                                            <span class="badge bg-success ms-1" title="On Blockchain">
+                                                <i class="fas fa-link fa-xs"></i>
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>@(ward.SubCountyName ?? "-")</td>
+                                    <td>@(ward.CountyName ?? "-")</td>
+                                    <td>@(ward.Constituency ?? "-")</td>
+                                    <td>
+                                        <span class="badge @(ward.Status == "Active" ? "bg-success" : "bg-secondary")">
+                                            @ward.Status
+                                        </span>
+                                    </td>
+                                </tr>
+                                counter++;
+                            }
+                        }
+                        else
+                        {
+                            <tr id="noDataRow">
+                                <td colspan="7" class="text-center py-5">
+                                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                                    <p class="text-muted mb-0">No wards found.</p>
+                                    <small class="text-muted">Select a sub-county or create a new ward</small>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Statistics Summary -->
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h4 id="totalCount">@wards.Count</h4>
+                            <p class="text-muted mb-0">Total Wards</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h4 id="activeCount">@wards.Count(w => w.Status == "Active")</h4>
+                            <p class="text-muted mb-0">Active Wards</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h4 id="blockchainCount">@wards.Count(w => !string.IsNullOrEmpty(w.BlockchainTxId))</h4>
+                            <p class="text-muted mb-0">On Blockchain</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteItemName"></strong>?</p>
+                <p class="text-danger mb-0"><small><i class="fas fa-warning"></i> This action cannot be undone.</small></p>
+            </div>
+            <div class="modal-footer">
+                <form id="deleteForm" method="post" asp-action="DeleteWard">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" id="deleteId" name="id" />
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: red;
+    }
+
+    .sticky-top {
+        background: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .table-responsive::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+</style>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        $(document).ready(function() {
+            // Handle form submission - set action based on edit mode
+            $('#wardForm').on('submit', function(e) {
+                const isEdit = $('#editId').val() !== '';
+                if (isEdit) {
+                    $(this).attr('action', '@Url.Action("UpdateWard")');
+                } else {
+                    $(this).attr('action', '@Url.Action("CreateWard")');
+                }
+            });
+
+            // Code preview when sub-county is selected
+            $('#SubCountyId').on('change', function() {
+                const selectedOption = $(this).find('option:selected');
+                const subCountyCode = selectedOption.data('subcountycode');
+                const isEdit = $('#editId').val() !== '';
+
+                if (subCountyCode && !isEdit) {
+                    $('#WardCode').val(subCountyCode + '-NEW');
+                } else if (!isEdit) {
+                    $('#WardCode').val('');
+                }
+            });
+
+            // Table filtering
+            $('#tableSearchInput').on('keyup', filterTable);
+            $('#statusFilter').on('change', filterTable);
+        });
+
+        function filterTable() {
+            const searchTerm = $('#tableSearchInput').val().toLowerCase();
+            const statusFilter = $('#statusFilter').val();
+            let visibleCount = 0;
+            let activeCount = 0;
+            let blockchainCount = 0;
+
+            $('#tableBody tr').each(function() {
+                const row = $(this);
+                if (row.attr('id') === 'noDataRow') return;
+
+                const code = row.data('code')?.toLowerCase() || '';
+                const name = row.data('name')?.toLowerCase() || '';
+                const status = row.data('status') || '';
+                const hasBlockchain = row.find('.badge.bg-success').length > 0;
+
+                const matchesSearch = searchTerm === '' ||
+                    code.includes(searchTerm) ||
+                    name.includes(searchTerm);
+
+                const matchesStatus = statusFilter === 'all' || status === statusFilter;
+
+                if (matchesSearch && matchesStatus) {
+                    row.show();
+                    visibleCount++;
+                    if (status === 'Active') activeCount++;
+                    if (hasBlockchain) blockchainCount++;
+                } else {
+                    row.hide();
+                }
+            });
+
+            $('#totalCount').text(visibleCount);
+            $('#activeCount').text(activeCount);
+            $('#blockchainCount').text(blockchainCount);
+        }
+
+        function clearSearch() {
+            $('#tableSearchInput').val('');
+            $('#statusFilter').val('all');
+            filterTable();
+        }
+
+        function filterBySubCounty() {
+            const subCountyId = $('#subCountyFilter').val();
+            if (subCountyId) {
+                window.location.href = '@Url.Action("Wards")?subCountyId=' + subCountyId;
+            } else {
+                window.location.href = '@Url.Action("Wards")';
+            }
+        }
+
+        function resetForm() {
+            $('#editId').val('');
+            $('#SubCountyId').val('').trigger('change');
+            $('#WardCode').val('');
+            $('#WardName').val('');
+            $('#Constituency').val('');
+            $('#Status').val('Active');
+            $('#formTitle').text('Add New Ward');
+            $('#saveButtonText').text('Save Ward');
+            $('#saveButton').removeClass('btn-warning').addClass('btn-success');
+            $('.card-header.bg-success').removeClass('bg-warning').addClass('bg-success');
+            $('html, body').animate({ scrollTop: 0 }, 'slow');
+        }
+
+        function editWard(id) {
+            const row = $(`#tableBody tr[data-id="${id}"]`);
+
+            if (!row.length) {
+                Swal.fire('Error', 'Ward not found', 'error');
+                return;
+            }
+
+            $('#editId').val(id);
+            $('#SubCountyId').val(row.data('subcountyid'));
+            $('#WardCode').val(row.data('code')).prop('readonly', true);
+            $('#WardName').val(row.data('name'));
+            $('#Constituency').val(row.data('constituency') || '');
+            $('#Status').val(row.data('status'));
+
+            $('#formTitle').text('Edit Ward');
+            $('#saveButtonText').text('Update Ward');
+            $('#saveButton').removeClass('btn-success').addClass('btn-warning');
+            $('.card-header.bg-success').removeClass('bg-success').addClass('bg-warning');
+
+            $('html, body').animate({ scrollTop: 0 }, 'slow');
+        }
+
+        function deleteWard(id, name) {
+            $('#deleteItemName').text(name);
+            $('#deleteId').val(id);
+            $('#deleteModal').modal('show');
+        }
+
+        // Auto-hide alerts after 5 seconds
+        setTimeout(function() {
+            $('.alert').fadeOut('slow');
+        }, 5000);
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+                <text>
+                Swal.fire({
+                    title: 'Success!',
+                    text: '@TempData["SuccessMessage"]',
+                    icon: 'success',
+                    timer: 3000,
+                    showConfirmButton: false
+                });
+                </text>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+                <text>
+                Swal.fire({
+                    title: 'Error!',
+                    text: '@TempData["ErrorMessage"]',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                </text>
+        }
+    </script>
+}

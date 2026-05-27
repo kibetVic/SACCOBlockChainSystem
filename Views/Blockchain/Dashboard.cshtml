@@ -1,0 +1,478 @@
+﻿@* Views/Blockchain/Dashboard.cshtml *@
+@model SACCOBlockChainSystem.Models.ViewModels.BlockchainDashboardViewModel
+
+@{
+    ViewData["Title"] = "Blockchain Dashboard";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section Styles {
+    <style>
+        .blockchain-dashboard {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stats-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .chain-container {
+            display: flex;
+            overflow-x: auto;
+            padding: 20px;
+            gap: 15px;
+        }
+
+        .block-box {
+            min-width: 200px;
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            border-radius: 12px;
+            padding: 15px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .block-box:hover {
+            transform: scale(1.02);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .block-box::after {
+            content: "→";
+            position: absolute;
+            right: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 24px;
+            color: #667eea;
+        }
+
+        .block-box:last-child::after {
+            content: "";
+        }
+
+        .block-hash {
+            font-family: monospace;
+            font-size: 11px;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 8px;
+            border-radius: 6px;
+            word-break: break-all;
+        }
+
+        .transaction-row {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .transaction-row:hover {
+            background-color: #f3f4f6;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-confirmed {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-pending {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .refresh-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .chain-link {
+            display: inline-block;
+            width: 40px;
+            height: 2px;
+            background: #667eea;
+            margin: 0 5px;
+        }
+
+        @@keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        .pending-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        canvas {
+            max-height: 300px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+}
+
+<div class="blockchain-dashboard">
+    <div class="container-fluid p-4">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="text-white mb-0">
+                    <i class="fas fa-link me-2"></i>Blockchain Dashboard
+                </h1>
+                <p class="text-white-50 mt-2">
+                    Company: <strong>@Model.CompanyName</strong> |
+                    Code: @Model.CompanyCode |
+                    Last Updated: @Model.Summary.LastUpdated.ToString("HH:mm:ss")
+                </p>
+            </div>
+            <button class="refresh-btn" onclick="refreshDashboard()">
+                <i class="fas fa-sync-alt me-2"></i>Refresh
+            </button>
+        </div>
+
+        <!-- Summary Statistics Cards -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1">Total Blocks</p>
+                            <h2 class="mb-0">@Model.Summary.TotalBlocks</h2>
+                            <small class="text-success">
+                                <i class="fas fa-arrow-up"></i> Block Height
+                            </small>
+                        </div>
+                        <div class="stats-icon bg-primary bg-opacity-10 text-primary">
+                            <i class="fas fa-cube"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1">Total Transactions</p>
+                            <h2 class="mb-0">@Model.Summary.TotalTransactions.ToString("N0")</h2>
+                            <small class="text-muted">
+                                @Model.Summary.ConfirmedTransactions.ToString("N0") confirmed
+                            </small>
+                        </div>
+                        <div class="stats-icon bg-success bg-opacity-10 text-success">
+                            <i class="fas fa-exchange-alt"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1">Total Volume</p>
+                            <h3 class="mb-0">@Model.Summary.TotalVolume.ToString("N2")</h3>
+                            <small class="text-muted">All time</small>
+                        </div>
+                        <div class="stats-icon bg-warning bg-opacity-10 text-warning">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1">Pending</p>
+                            <h2 class="mb-0 @(Model.Summary.PendingTransactions > 0 ? "text-warning pending-pulse" : "")">
+                                @Model.Summary.PendingTransactions
+                            </h2>
+                            <small class="text-muted">Awaiting confirmation</small>
+                        </div>
+                        <div class="stats-icon bg-info bg-opacity-10 text-info">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Blockchain Chain Visualization -->
+        <div class="stats-card mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="mb-0">
+                    <i class="fas fa-link me-2"></i>Blockchain Chain
+                </h4>
+                @* <span class="badge @(Model.BlockchainValid ? "bg-success" : "bg-danger")">
+                     @(Model.BlockchainValid ? "✓ Valid" : "✗ Invalid")
+                </span> *@
+            </div>
+            <div class="chain-container">
+                @{
+                    int blockNumber = 1;
+                    var orderedBlocks = Model.RecentBlocks.OrderBy(b => b.Timestamp).ToList();
+                }
+                @foreach (var block in orderedBlocks)
+                {
+                    <div class="block-box" onclick="viewBlock('@block.BlockHash')">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong>Block #@blockNumber</strong>
+                            @if (blockNumber == 1)
+                            {
+                                <span class="badge bg-success ms-2" style="font-size: 8px;">GENESIS</span>
+                            }
+                            @if (block.Confirmed)
+                            {
+                                <i class="fas fa-check-circle text-success"></i>
+                            }
+                        </div>
+                        <div class="block-hash mb-2">
+                            <small>Hash: @block.ShortHash</small>
+                        </div>
+                        <div class="small mb-2">
+                            <i class="far fa-clock me-1"></i>@block.TimeAgo
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span><i class="fas fa-list me-1"></i>@block.TransactionCount txs</span>
+                            <span><i class="fas fa-kenyan-shilling-sign me-1"></i>@block.TotalAmount.ToString("N2")</span>
+                        </div>
+                        <div class="mt-2 small text-white-50">
+                            <i class="fas fa-link me-1"></i>Prev: @block.ShortPreviousHash
+                        </div>
+                    </div>
+                    blockNumber++;
+                }
+            </div>
+            @if (Model.RecentBlocks.Count < Model.BlockHeight)
+            {
+                <div class="text-center mt-3">
+                    <a href="@Url.Action("ChainVisualization")" class="btn btn-sm btn-outline-primary">
+                        View Full Chain (@Model.BlockHeight blocks total) →
+                    </a>
+                </div>
+            }
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="row">
+            <!-- Left Column - Pending Transactions -->
+            <div class="col-md-5">
+                <div class="stats-card">
+                    <h5 class="mb-3">
+                        <i class="fas fa-hourglass-half me-2 text-warning"></i>
+                        Pending Transactions
+                        @if (Model.PendingTransactions.Any())
+                        {
+                            <span class="badge bg-warning ms-2">@Model.PendingTransactions.Count</span>
+                        }
+                    </h5>
+
+                    @if (Model.PendingTransactions.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr><th>Type</th><th>Member</th><th>Amount</th><th>Time</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var tx in Model.PendingTransactions)
+                                    {
+                                        <tr class="transaction-row" onclick="viewTransaction('@tx.TransactionId')">
+                                            <td><span class="badge bg-secondary">@tx.TransactionType</span></td>
+                                            <td>@tx.MemberNo</td>
+                                            <td>@tx.FormattedAmount</td>
+                                            <td><small>@GetTimeAgo(tx.Timestamp)</small></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-check-circle fa-2x mb-2 text-success"></i>
+                            <p>No pending transactions</p>
+                        </div>
+                    }
+                </div>
+
+                <!-- Transaction Types Distribution -->
+                <div class="stats-card">
+                    <h5 class="mb-3">
+                        <i class="fas fa-chart-pie me-2"></i>Transaction Types
+                    </h5>
+                    <canvas id="transactionTypeChart" height="200"></canvas>
+                </div>
+            </div>
+
+            <!-- Right Column - Recent Activity -->
+            <div class="col-md-7">
+                <div class="stats-card">
+                    <h5 class="mb-3">
+                        <i class="fas fa-history me-2"></i>Recent Activity
+                    </h5>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr><th>ID</th><th>Type</th><th>Member</th><th>Amount</th><th>Status</th><th>Time</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var tx in Model.RecentActivity.Take(10))
+                                {
+                                    <tr class="transaction-row" onclick="viewTransaction('@tx.TransactionId')">
+                                        <td><code>@(tx.TransactionId?.Length > 12 ? tx.TransactionId.Substring(0, 12) + "..." : tx.TransactionId)</code></td>
+                                        <td><span class="badge bg-info">@tx.TransactionType</span></td>
+                                        <td>@tx.MemberNo</td>
+                                        <td>@tx.FormattedAmount</td>
+                                        <td><span class="status-badge status-confirmed">Confirmed</span></td>
+                                        <td><small>@tx.TimeAgo</small></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Transaction Volume Chart -->
+                <div class="stats-card">
+                    <h5 class="mb-3">
+                        <i class="fas fa-chart-line me-2"></i>30-Day Transaction Activity
+                    </h5>
+                    <canvas id="volumeChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Charts initialization
+        let transactionTypeChart, volumeChart;
+
+        $(document).ready(function() {
+            initTransactionTypeChart();
+            initVolumeChart();
+            startAutoRefresh();
+        });
+
+        function initTransactionTypeChart() {
+            const ctx = document.getElementById('transactionTypeChart').getContext('2d');
+            const typeData = @Html.Raw(Json.Serialize(Model.Charts.TransactionTypes));
+
+            transactionTypeChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: typeData.map(d => d.label),
+                    datasets: [{
+                        data: typeData.map(d => d.value),
+                        backgroundColor: ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        function initVolumeChart() {
+            const ctx = document.getElementById('volumeChart').getContext('2d');
+            const dailyData = @Html.Raw(Json.Serialize(Model.Charts.DailyTransactions));
+
+            volumeChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dailyData.map(d => d.label),
+                    datasets: [{
+                        label: 'Transactions',
+                        data: dailyData.map(d => d.value),
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Number of Transactions' } },
+                        x: { title: { display: true, text: 'Date' } }
+                    }
+                }
+            });
+        }
+
+        function refreshDashboard() {
+            $.get('@Url.Action("GetDashboardData", "Blockchain")', function(response) {
+                if (response.success) {
+                    location.reload();
+                } else {
+                    toastr.error(response.message);
+                }
+            });
+        }
+
+        function viewBlock(blockHash) {
+            window.location.href = '@Url.Action("BlockDetails", "Blockchain")?blockHash=' + blockHash;
+        }
+
+        function viewTransaction(transactionId) {
+            window.location.href = '@Url.Action("TransactionDetails", "Blockchain")?transactionId=' + transactionId;
+        }
+
+        function startAutoRefresh() {
+            setInterval(function() {
+                refreshDashboard();
+            }, 30000); // Refresh every 30 seconds
+        }
+    </script>
+}
+
+@functions {
+    public string GetTimeAgo(DateTime timestamp)
+    {
+        var diff = DateTime.UtcNow - timestamp;
+        if (diff.TotalMinutes < 1) return "Just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        return $"{(int)diff.TotalDays}d ago";
+    }
+}

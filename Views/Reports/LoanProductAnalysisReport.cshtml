@@ -1,0 +1,294 @@
+@model SACCOBlockChainSystem.Models.ViewModels.LoanProductAnalysisIndexViewModel
+@{
+    ViewData["Title"] = "Loan Product Analysis Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0"><i class="bi bi-bar-chart-steps me-2"></i>Loan Product Analysis Report</h4>
+        </div>
+        <div class="card-body">
+            <!-- Filter Form -->
+            <form method="post" class="mb-4">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">As At Date</label>
+                        <input type="date" name="asAtDate" class="form-control" value="@Model.AsAtDate.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-search me-1"></i>Generate Report
+                            </button>
+                            <button type="button" id="exportPdfBtn" class="btn btn-danger">
+                                <i class="bi bi-file-pdf me-1"></i>Export to PDF
+                            </button>
+                            <button type="button" id="exportExcelBtn" class="btn btn-success">
+                                <i class="bi bi-file-excel me-1"></i>Export to Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            @if (Model.HasData)
+            {
+                <!-- Report Header -->
+                <div class="text-center mb-4">
+                    <h4>@Model.CompanyName.ToUpper()</h4>
+                    <h5>LOAN PRODUCTS ANALYSIS</h5>
+                    <p>As At: @Model.AsAtDate.ToString("dd/MM/yyyy HH:mm:ss")</p>
+                    <p>Printed By: @Model.PrintedBy On: @Model.GeneratedOn.ToString("dd-MMM-yyyy HH:mm")</p>
+                </div>
+
+                <!-- Summary Statistics Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-tags"></i> Loan Products</h5>
+                                <h3>@Model.TotalLoanTypes.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-people"></i> Total Loanees</h5>
+                                <h3>@Model.TotalNoOfLoanees.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-currency-dollar"></i> Total Loan Balance</h5>
+                                <h3>@Model.TotalLoanBalance.ToString("N2")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="bi bi-graph-up"></i> Overall PAR</h5>
+                                <h3>@Model.OverallParPercentage.ToString("N2")%</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loan Product Analysis Table -->
+                <div class="table-responsive">
+                    <table id="productTable" class="table table-bordered table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Loan Type</th>
+                                <th class="text-center">No of Loanees</th>
+                                <th class="text-end">Unpaid Interest</th>
+                                <th class="text-end">Loan Issued</th>
+                                <th class="text-end">Loan Balance</th>
+                                <th class="text-end">Arrears</th>
+                                <th class="text-end">PAR %</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var product in Model.LoanProducts)
+                            {
+                                <tr>
+                                    <td> <strong>@product.LoanType</strong> (@product.LoanCode)</td>
+                                    <td class="text-center">@product.NoOfLoanees</td>
+                                    <td class="text-end">@product.TotalUnpaidInterest.ToString("N2")</td>
+                                    <td class="text-end">@product.TotalLoanIssued.ToString("N2")</td>
+                                    <td class="text-end">@product.TotalLoanBalance.ToString("N2")</td>
+                                    <td class="text-end">@product.TotalArrears.ToString("N2")</td>
+                                    <td class="text-end">
+                                        <span class="@(product.ParPercentage > 5 ? "text-danger fw-bold" : "")">
+                                            @product.ParPercentage.ToString("N2")%
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-info view-details-btn" 
+                                                data-loan-type="@product.LoanType"
+                                                data-loans='@Json.Serialize(product.Loans)'>
+                                            <i class="bi bi-eye"></i> View Details
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-secondary fw-bold">
+                            <tr>
+                                <td class="text-end">TOTALS:</td>
+                                <td class="text-center">@Model.TotalNoOfLoanees</td>
+                                <td class="text-end">@Model.TotalUnpaidInterest.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalLoanIssued.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalLoanBalance.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalArrears.ToString("N2")</td>
+                                <td class="text-end">@Model.OverallParPercentage.ToString("N2")%</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- PAR Note -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>PAR Calculation:</strong> PAR % = (Total Arrears / Total Loan Balance) × 100
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info text-center">
+                    <i class="bi bi-info-circle me-2"></i>
+                    @(ViewBag.Message ?? "No active loans found for the selected date. Please select a date and click 'Generate Report'.")
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Viewing Loan Details -->
+<div class="modal fade" id="detailsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="detailsModalTitle">Loan Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped" id="detailsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>MemberNo</th>
+                                <th>Names</th>
+                                <th>LoanNo</th>
+                                <th class="text-end">Unpaid Interest</th>
+                                <th class="text-end">Loan Issued</th>
+                                <th class="text-center">Date Issued</th>
+                                <th class="text-end">Loan Balance</th>
+                                <th class="text-end">Arrears</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+
+    <script>
+        $(document).ready(function() {
+            if ($('#productTable').length && $('#productTable tbody tr').length > 0) {
+                $('#productTable').DataTable({
+                    pageLength: 25,
+                    order: [[0, 'asc']],
+                    language: {
+                        search: "Search:",
+                        lengthMenu: "Show _MENU_ entries per page",
+                        info: "Showing _START_ to _END_ of _TOTAL_ loan products"
+                    },
+                    columnDefs: [
+                        { targets: [1], className: 'text-center' },
+                        { targets: [2, 3, 4, 5, 6], className: 'text-end' },
+                        { orderable: false, targets: 7 }
+                    ]
+                });
+            }
+
+            // View Details Modal
+            $('.view-details-btn').click(function() {
+                var loanType = $(this).data('loan-type');
+                var loans = $(this).data('loans');
+                
+                $('#detailsModalTitle').text('Loan Details - ' + loanType);
+                
+                var tbody = $('#detailsTableBody');
+                tbody.empty();
+                
+                if (loans && loans.length > 0) {
+                    for (var i = 0; i < loans.length; i++) {
+                        var loan = loans[i];
+                        var row = '<tr>' +
+                            '<td>' + (loan.memberNo || '') + '</td>' +
+                            '<td>' + (loan.names || '') + '</td>' +
+                            '<td>' + (loan.loanNo || '') + '</td>' +
+                            '<td class="text-end">' + formatNumber(loan.unpaidInterest) + '</td>' +
+                            '<td class="text-end">' + formatNumber(loan.loanIssued) + '</td>' +
+                            '<td class="text-center">' + (loan.dateIssued ? new Date(loan.dateIssued).toLocaleDateString() : '') + '</td>' +
+                            '<td class="text-end">' + formatNumber(loan.loanBalance) + '</td>' +
+                            '<td class="text-end">' + formatNumber(loan.arrears) + '</td>' +
+                            '</tr>';
+                        tbody.append(row);
+                    }
+                } else {
+                    tbody.append('<tr><td colspan="8" class="text-center">No loans found for this product</td></tr>');
+                }
+                
+                $('#detailsModal').modal('show');
+            });
+
+            function formatNumber(num) {
+                if (num === null || num === undefined) return '0.00';
+                return parseFloat(num).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            // Export to Excel
+            $('#exportExcelBtn').click(function() {
+                var asAtDate = $('input[name="asAtDate"]').val();
+                if (!asAtDate) {
+                    alert('Please select a date first');
+                    return;
+                }
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("ExportLoanProductAnalysisToExcel", "LoanReport")'
+                });
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'asAtDate',
+                    'value': asAtDate
+                }));
+                form.appendTo('body').submit();
+            });
+
+            // Export to PDF
+            $('#exportPdfBtn').click(function() {
+                var asAtDate = $('input[name="asAtDate"]').val();
+                if (!asAtDate) {
+                    alert('Please select a date first');
+                    return;
+                }
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("ExportLoanProductAnalysisToPdf", "LoanReport")'
+                });
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'asAtDate',
+                    'value': asAtDate
+                }));
+                form.appendTo('body').submit();
+            });
+        });
+    </script>
+}
