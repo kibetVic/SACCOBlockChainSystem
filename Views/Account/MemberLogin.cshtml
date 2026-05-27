@@ -309,12 +309,12 @@
                     </div>
                     <input type="hidden" asp-for="MemberLogin" value="true"/>
                     <div class="mb-3" style="display:none;">
-                        <label asp-for="Password" value="123456" class="form-label fw-semibold">Password</label>
+                        <label asp-for="Password" class="form-label fw-semibold">Password</label>
                         <div class="input-group">
                             <span class="input-group-text bg-light border-0">
                                 <i class="fas fa-lock text-muted"></i>
                             </span>
-                            <input asp-for="Password" id="passwordField" type="password" class="form-control" placeholder="Enter your password" required />
+                            <input asp-for="Password" value="12345678" id="passwordField" type="password" class="form-control" placeholder="Enter your password" required />
                             <button class="btn btn-light border-0" type="button" onclick="togglePassword()">
                                 <i class="far fa-eye" id="toggleIcon"></i>
                             </button>
