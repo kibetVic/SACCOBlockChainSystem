@@ -5,6 +5,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
 {
     public class MemberDTO
     {
+        public int Id { get; set; }
         public string MemberNo { get; set; } = null!;
         public string Surname { get; set; } = null!;
         public string OtherNames { get; set; } = null!;

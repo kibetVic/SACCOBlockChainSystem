@@ -81,6 +81,8 @@ builder.Services.AddScoped<IBlockchainService, BlockchainService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ISaccoService, SaccoService>();
 builder.Services.AddScoped<IMemberService, MemberService>();
+
+builder.Services.AddScoped<WalletService, WalletService>();
 builder.Services.AddScoped<IContributionService, ContributionService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<ILoanTypeService, LoanTypeService>();
