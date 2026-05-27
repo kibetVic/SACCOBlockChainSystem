@@ -9,12 +9,11 @@ namespace SACCOBlockChainSystem.Models
     {
         [Key]
         [MaxLength(100)]
-        public string Address { get; set; }
+        public string Address { get; set; } = null!;
 
         [Required]
-        public string PublicKey { get; set; }
+        public string PublicKey { get; set; } = null!;
 
-        // Note: In production, this should be encrypted
         public string? PrivateKeyEncrypted { get; set; }
 
         [Column(TypeName = "decimal(18,8)")]
@@ -24,30 +23,54 @@ namespace SACCOBlockChainSystem.Models
 
         public DateTime? LastActivity { get; set; }
 
-        // We'll remove navigation properties to avoid circular references
-        // Use queries to get transactions instead
+        // ========== LINK TO MEMBER (Using both MemberNo AND CompanyCode) ==========
+        [Required]
+        [MaxLength(50)]
+        public string MemberNo { get; set; } = null!;
 
-        public static Wallet CreateNew()
+        [Required]
+        [MaxLength(50)]
+        public string CompanyCode { get; set; } = null!;
+
+        // Composite foreign key to Member (MemberNo + CompanyCode)
+        [ForeignKey("MemberNo, CompanyCode")]
+        public virtual Member? Member { get; set; }
+
+        // ========== KEY MANAGEMENT ==========
+        public string? KeyVersion { get; set; } = "ECDSA-P256-V1";
+        public bool IsActive { get; set; } = true;
+        public DateTime? LastUsedAt { get; set; }
+
+        // ========== NONCE FOR REPLAY PROTECTION ==========
+        public long TransactionNonce { get; set; } = 0;
+
+        // ========== CREATE NEW WALLET ==========
+        public static Wallet CreateNewWallet(string memberNo, string companyCode)
         {
-            using var rsa = RSA.Create(2048);
+            using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
-            var wallet = new Wallet
-            {
-                PublicKey = Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo()),
-                PrivateKeyEncrypted = Convert.ToBase64String(rsa.ExportRSAPrivateKey())
-            };
+            var publicKeyBytes = ecdsa.ExportSubjectPublicKeyInfo();
+            var privateKeyBytes = ecdsa.ExportECPrivateKey();
 
-            // Generate address from public key hash
+            var publicKey = Convert.ToBase64String(publicKeyBytes);
+            var privateKeyEncrypted = Convert.ToBase64String(privateKeyBytes);
+
             using var sha256 = SHA256.Create();
-            var publicKeyBytes = Encoding.UTF8.GetBytes(wallet.PublicKey);
-            var hash = sha256.ComputeHash(publicKeyBytes);
+            var publicKeyHash = sha256.ComputeHash(publicKeyBytes);
+            var address = "0x" + Convert.ToHexString(publicKeyHash).Substring(0, 40).ToLower();
 
-            // Take first 20 bytes for address (like Ethereum)
-            var addressBytes = new byte[20];
-            Array.Copy(hash, addressBytes, 20);
-            wallet.Address = "0x" + Convert.ToHexString(addressBytes).ToLower();
-
-            return wallet;
+            return new Wallet
+            {
+                Address = address,
+                PublicKey = publicKey,
+                PrivateKeyEncrypted = privateKeyEncrypted,
+                MemberNo = memberNo,
+                CompanyCode = companyCode,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true,
+                TransactionNonce = 0,
+                Balance = 0
+            };
         }
     }
 }

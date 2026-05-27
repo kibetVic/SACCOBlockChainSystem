@@ -140,6 +140,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? RegistrationType { get; set; }
         public bool IsActive { get; set; }
         public string? Employer { get; internal set; }
+        public string? WalletAddress { get; internal set; }
     }
 
     public class MemberUpdateDTO
