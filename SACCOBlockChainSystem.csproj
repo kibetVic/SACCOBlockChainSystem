@@ -29,6 +29,8 @@
     <PackageReference Include="QuestPDF" Version="2026.2.4" />
     <PackageReference Include="Radzen.Blazor" Version="10.2.2" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
+    <PackageReference Include="Syncfusion.EJ2.AspNet.Core" Version="33.2.8" />
+    <PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>

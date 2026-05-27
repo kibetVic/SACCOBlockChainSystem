@@ -1,0 +1,161 @@
+﻿@model SACCOBlockChainSystem.Models.LoanScheduleBlock
+@using Syncfusion.EJ2
+@using Newtonsoft.Json
+
+@{
+    ViewData["Title"] = "Blockchain Loan Schedule";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid mt-3">
+
+    <h4>Blockchain Loan Schedule</h4>
+
+    <form id="scheduleForm">
+
+        <div class="row">
+
+            <div class="col-md-3">
+                <label>Member No</label>
+                <input class="form-control" id="MemberNo" name="MemberNo" required />
+            </div>
+
+            <div class="col-md-3">
+                <label>Member Name</label>
+                <input class="form-control" id="MemberName" readonly />
+            </div>
+
+            <div class="col-md-3">
+                <label>Loan Type</label>
+
+                <select class="form-control" id="LoanCode" name="LoanCode">
+                    <option value="">-- Select Loan Type --</option>
+
+                    @foreach (var item in ViewBag.LoanTypes)
+                    {
+                        <option value="@item.LoanCode"
+                                data-interest="@item.Interest"
+                                data-period="@item.RepayPeriod"
+                                data-repay="@item.Repaymethod">
+                            @item.LoanType1
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label>Repayment Method</label>
+                <input class="form-control" id="RepayMethod" readonly />
+            </div>
+
+        </div>
+
+        <div class="row mt-2">
+
+            <div class="col-md-3">
+                <label>Loan No</label>
+                <input class="form-control" name="LoanNo" required />
+            </div>
+
+            <div class="col-md-3">
+                <label>Loan Amount</label>
+                <input type="number" class="form-control" name="InitialAmount" required />
+            </div>
+
+            <div class="col-md-3">
+                <label>Interest Rate (%)</label>
+                <input type="number" class="form-control" name="InterestRate" required />
+            </div>
+
+            <div class="col-md-3">
+                <label>Period</label>
+                <input type="number" class="form-control" name="Period" required />
+            </div>
+
+        </div>
+
+        <div class="row mt-2">
+            <div class="col-md-3">
+                <label>Start Date</label>
+                <input type="date" class="form-control" name="StartDate" required />
+            </div>
+        </div>
+
+        <br />
+
+        <button class="btn btn-primary">Generate Blockchain Schedule</button>
+
+    </form>
+
+    <hr />
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped" id="scheduleTable">
+            <thead class="table-dark">
+                <tr>
+                    <th>Period</th>
+                    <th>Date</th>
+                    <th>Opening</th>
+                    <th>Principal</th>
+                    <th>Interest</th>
+                    <th>Payment</th>
+                    <th>Closing</th>
+                    <th>Hash</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+
+// MEMBER NAME
+$("#MemberNo").on("blur", function () {
+
+    $.get("/Loanschd/GetMemberName", { memberNo: $(this).val() })
+        .done(function (res) {
+            $("#MemberName").val(res.memberName || "");
+        });
+});
+
+// LOAN TYPE AUTO FILL
+$("#LoanCode").on("change", function () {
+
+    var opt = $(this).find(":selected");
+
+    $("input[name='InterestRate']").val(opt.data("interest"));
+    $("input[name='Period']").val(opt.data("period"));
+    $("#RepayMethod").val(opt.data("repay"));
+});
+
+// GENERATE
+$("#scheduleForm").submit(function (e) {
+    e.preventDefault();
+
+    $.post("/Loanschd/GenerateBlockchainSchedule", $(this).serialize(), function (data) {
+
+        $("#scheduleTable tbody").empty();
+
+        $.each(data, function (i, item) {
+
+            $("#scheduleTable tbody").append(`
+                <tr>
+                    <td>${item.period}</td>
+                    <td>${new Date(item.paymentDate).toLocaleDateString()}</td>
+                    <td>${item.openingBalance.toFixed(2)}</td>
+                    <td>${item.principal.toFixed(2)}</td>
+                    <td>${item.interest.toFixed(2)}</td>
+                    <td>${item.payment.toFixed(2)}</td>
+                    <td>${item.closingBalance.toFixed(2)}</td>
+                    <td style="font-size:10px;">${item.hash}</td>
+                </tr>
+            `);
+        });
+    });
+});
+
+</script>

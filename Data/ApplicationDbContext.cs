@@ -14,6 +14,7 @@ namespace SACCOBlockChainSystem.Data
         }
         public DbSet<UserGroup> UserGroups { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
+        public DbSet<Loanschd> LOANSCHD { get; set; }
         public DbSet<ColloanGuar> ColloanGuars { get; set; }
         public DbSet<Collateral> Collaterals { get; set; }
         public DbSet<Privillage> Privilages { get; set; }
