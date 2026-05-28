@@ -508,12 +508,12 @@
                                             </li>
                                         }                                        
 
-                                        <li class="nav-item">
+                                        @* <li class="nav-item">
                                             <a asp-controller="LoanMvc" asp-action="LoanScheduleCalculator" class="nav-link">
                                                 <i class="nav-icon bi bi-calculator-fill"></i>
                                                 <p>Loan Calculator</p>
                                             </a>
-                                        </li>
+                                        </li> *@
 
                                         <li class="nav-item">
                                             <a class="nav-link" asp-controller="LoanMvc" asp-action="Schedule" class="nav-link">
@@ -564,7 +564,12 @@
                                         <p>Receipt Posting / Shares</p>
                                     </a>
                                 </li>
-
+                                 <li class="nav-item">
+                                    <a class="nav-link" asp-controller="DividendDetails" asp-action="Index">
+                                        <i class="nav-icon bi bi-piggy-bank"></i>
+                                        <p>Dividends Processing</p>
+                                    </a>
+                                </li>
                                 @if (User.IsInRole("Super Admin"))
                                 {
                                     <li class="nav-item">

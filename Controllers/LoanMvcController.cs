@@ -4115,76 +4115,111 @@ namespace SACCOBlockChainSystem.Controllers
 
         #region Loan Schedule
 
+       
         [HttpGet]
+        public IActionResult Schedule()
+        {
+            return View();
+        }
+        [HttpPost]
         public async Task<IActionResult> Schedule(string loanNo)
         {
-            try
+            if (string.IsNullOrEmpty(loanNo))
             {
-                var companyCode = GetUserCompanyCode();
-
-                var loan = await _loanService.GetLoanByNoAsync(loanNo, companyCode);
-                var loanbal = await _loanService.GetLoanBalanceAsync(loanNo);
-
-                // Get member details for name
-                var member = await _context.Members
-                    .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
-
-                // Get the approved amount from Endmain for display
-                var endmain = await _context.Endmain
-                    .FirstOrDefaultAsync(e => e.LoanNo == loanNo && e.CompanyCode == companyCode);
-
-                var schedule = await _loanService.GetLoanScheduleAsync(loanNo);
-                var repayments = await _loanService.GetLoanRepaymentsAsync(loanNo);
-
-                decimal totalPaid = repayments.Sum(r => r.Amount ?? 0);
-                decimal totalPrincipalPaid = repayments.Sum(r => r.Principal ?? 0);
-                decimal totalInterestPaid = repayments.Sum(r => r.Interest ?? 0);
-                decimal totalPenaltyPaid = repayments.Sum(r => r.Penalty ?? 0);
-
-                // Use approved amount from Endmain, fallback to loan.LoanAmt
-                decimal approvedAmount = endmain?.AmtApproved ?? loan?.LoanAmt ?? 0;
-
-                // Calculate totals from schedule correctly
-                decimal totalPrincipalFromSchedule = schedule.Sum(s => s.PrincipalAmount);
-                decimal totalInterestFromSchedule = schedule.Sum(s => s.InterestAmount);
-                decimal totalRepayableFromSchedule = schedule.Sum(s => s.TotalInstallment);
-
-                // Outstanding calculations
-                decimal totalPrincipalOutstanding = approvedAmount - totalPrincipalPaid;
-                decimal totalInterestOutstanding = totalInterestFromSchedule - totalInterestPaid;
-                decimal totalPenaltyOutstanding = (loanbal?.Penalty ?? 0) - totalPenaltyPaid;
-                decimal totalOutstanding = totalPrincipalOutstanding + totalInterestOutstanding + totalPenaltyOutstanding;
-
-                // Ensure no negative values
-                totalPrincipalOutstanding = Math.Max(0, totalPrincipalOutstanding);
-                totalInterestOutstanding = Math.Max(0, totalInterestOutstanding);
-                totalPenaltyOutstanding = Math.Max(0, totalPenaltyOutstanding);
-                totalOutstanding = Math.Max(0, totalOutstanding);
-
-                ViewBag.Loan = loan;
-                ViewBag.Member = member;
-                ViewBag.LoanBalance = loanbal;
-                ViewBag.Endmain = endmain;
-                ViewBag.ApprovedAmount = approvedAmount;
-                ViewBag.Repayments = repayments;
-                ViewBag.TotalPrincipal = approvedAmount;
-                ViewBag.TotalInterest = totalInterestFromSchedule;
-                ViewBag.TotalRepayable = totalRepayableFromSchedule;
-                ViewBag.TotalPaid = totalPaid;
-                ViewBag.TotalPrincipalPaid = totalPrincipalPaid;
-                ViewBag.TotalInterestPaid = totalInterestPaid;
-                ViewBag.TotalPenaltyPaid = totalPenaltyPaid;
-                ViewBag.TotalOutstanding = totalOutstanding;
-                ViewBag.RepaymentMethod = loan?.RepayMethod ?? "AMT";
-
-                return View(schedule);
+                ViewBag.Error = "Please enter Loan Number";
+                return View();
             }
-            catch (Exception ex)
+
+            var companyCode = GetUserCompanyCode();
+
+            var loan = await _loanService.GetLoanByNoAsync(loanNo, companyCode);
+            if (loan == null)
             {
-                _logger.LogError(ex, $"Error loading schedule for {loanNo}");
-                return View("Error");
+                ViewBag.Error = "Loan not found";
+                return View();
             }
+
+            var schedule = await _context.LoanSchedules
+                .Where(s => s.LoanNo == loanNo)
+                .ToListAsync();
+
+            ViewBag.Loan = loan;
+
+            return View(schedule);
         }
+        //    public async Task<IActionResult> Schedule(string? loanNo)
+        //    {
+        //        try
+        //        {
+        //            var companyCode = GetUserCompanyCode();
+
+        //            var loan = await _loanService.GetLoanByNoAsync(loanNo, companyCode);
+        //            var loanbal = await _loanService.GetLoanBalanceAsync(loanNo);
+
+        //            // Get member details for name
+        //            var member = await _context.Members
+        //                .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
+
+        //            // Get the approved amount from Endmain for display
+        //            var endmain = await _context.Endmain
+        //                .FirstOrDefaultAsync(e => e.LoanNo == loanNo && e.CompanyCode == companyCode);
+
+        //            var schedule = await _context.LoanSchedules
+        //.Where(s => s.LoanNo == loanNo)
+        //.ToListAsync() ?? new List<LoanSchedule>();
+        //            var repayments = await _context.Repay
+        //   .Where(r => r.LoanNo == loanNo)
+        //   .ToListAsync() ?? new List<Repay>();
+
+        //            decimal totalPaid = repayments.Sum(r => r.Amount ?? 0);
+        //            decimal totalPrincipalPaid = repayments.Sum(r => r.Principal ?? 0);
+        //            decimal totalInterestPaid = repayments.Sum(r => r.Interest ?? 0);
+        //            decimal totalPenaltyPaid = repayments.Sum(r => r.Penalty ?? 0);
+
+        //            // Use approved amount from Endmain, fallback to loan.LoanAmt
+        //            decimal approvedAmount = endmain?.AmtApproved ?? loan?.LoanAmt ?? 0;
+
+        //            // Calculate totals from schedule correctly
+        //            decimal totalPrincipalFromSchedule = schedule.Sum(s => s.PrincipalAmount);
+        //            decimal totalInterestFromSchedule = schedule.Sum(s => s.InterestAmount);
+        //            decimal totalRepayableFromSchedule = schedule.Sum(s => s.TotalInstallment);
+
+        //            // Outstanding calculations
+        //            decimal totalPrincipalOutstanding = approvedAmount - totalPrincipalPaid;
+        //            decimal totalInterestOutstanding = totalInterestFromSchedule - totalInterestPaid;
+        //            decimal totalPenaltyOutstanding = (loanbal?.Penalty ?? 0) - totalPenaltyPaid;
+        //            decimal totalOutstanding = totalPrincipalOutstanding + totalInterestOutstanding + totalPenaltyOutstanding;
+
+        //            // Ensure no negative values
+        //            totalPrincipalOutstanding = Math.Max(0, totalPrincipalOutstanding);
+        //            totalInterestOutstanding = Math.Max(0, totalInterestOutstanding);
+        //            totalPenaltyOutstanding = Math.Max(0, totalPenaltyOutstanding);
+        //            totalOutstanding = Math.Max(0, totalOutstanding);
+
+        //            ViewBag.Loan = loan;
+        //            ViewBag.Member = member;
+        //            ViewBag.LoanBalance = loanbal;
+        //            ViewBag.Endmain = endmain;
+        //            ViewBag.ApprovedAmount = approvedAmount;
+        //            ViewBag.Repayments = repayments;
+        //            ViewBag.TotalPrincipal = approvedAmount;
+        //            ViewBag.TotalInterest = totalInterestFromSchedule;
+        //            ViewBag.TotalRepayable = totalRepayableFromSchedule;
+        //            ViewBag.TotalPaid = totalPaid;
+        //            ViewBag.TotalPrincipalPaid = totalPrincipalPaid;
+        //            ViewBag.TotalInterestPaid = totalInterestPaid;
+        //            ViewBag.TotalPenaltyPaid = totalPenaltyPaid;
+        //            ViewBag.TotalOutstanding = totalOutstanding;
+        //            ViewBag.RepaymentMethod = loan?.RepayMethod ?? "AMT";
+
+        //            return View(schedule);
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            _logger.LogError(ex, $"Error loading schedule for {loanNo}");
+        //            return View("Error");
+        //        }
+        //    }
 
         [HttpGet]
         public async Task<IActionResult> ExportSchedule(string loanNo)

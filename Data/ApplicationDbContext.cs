@@ -73,6 +73,8 @@ namespace SACCOBlockChainSystem.Data
         public DbSet<ApiTransaction> ApiTransactions { get; set; }
         public DbSet<ApiTable> ApiTables { get; set; }
         public DbSet<PaymentType> PaymentTypes { get; set; }
+        public DbSet<Devidend> Devidends { get; set; }
+        public DbSet<DividendDetails> DividendDetails { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
