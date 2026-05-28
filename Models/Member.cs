@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SACCOBlockChainSystem.Models
@@ -8,6 +9,8 @@ namespace SACCOBlockChainSystem.Models
     {
         [NotMapped]
         public Wallet Wallet { get; set; }
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
         public string MemberNo { get; set; } = null!;
 

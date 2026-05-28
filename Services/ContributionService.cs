@@ -265,9 +265,38 @@ namespace SACCOBlockChainSystem.Services
                     .OrderByDescending(c => c.Id)
                     .FirstOrDefaultAsync();
 
+                // =============================================
+                // FOR FIRST TRANSACTION: Use RAW Wallet Address as Genesis Hash
+                // =============================================
                 if (lastContrib != null)
                 {
+                    // Not the first transaction - link to previous transaction
                     contrib.PreviousTransactionHash = lastContrib.TransactionHash;
+                    _logger.LogDebug($"Member {contributionDto.MemberNo} - Linked to previous transaction: {lastContrib.TransactionHash?.Substring(0, 16)}...");
+                }
+                else
+                {
+                    // FIRST TRANSACTION - Use the RAW wallet address as the genesis anchor
+                    var memberWallet = await _cryptoService.GetWalletByMemberIdAsync(memberRecord.Id);
+
+                    if (memberWallet != null && !string.IsNullOrEmpty(memberWallet.Address))
+                    {
+                        // IMPORTANT: Store the RAW wallet address directly (not hashed)
+                        // This will be a 42-character string starting with "0x"
+                        contrib.PreviousTransactionHash = memberWallet.Address;
+
+                        _logger.LogInformation($"✅ FIRST TRANSACTION: Member {contributionDto.MemberNo}");
+                        _logger.LogInformation($"   Wallet Address: {memberWallet.Address}");
+                        _logger.LogInformation($"   Genesis Hash (Raw Wallet Address): {memberWallet.Address}");
+                    }
+                    else
+                    {
+                        // Fallback - create a deterministic genesis hash from member data
+                        var genesisSource = $"{memberRecord.MemberNo}|{memberRecord.Idno}|{memberRecord.ApplicDate?.ToString("o") ?? DateTime.UtcNow.ToString("o")}";
+                        var genesisHash = _cryptoService.ComputeHash(genesisSource);
+                        contrib.PreviousTransactionHash = genesisHash;
+                        _logger.LogWarning($"Member {contributionDto.MemberNo} - No wallet found, using deterministic genesis hash: {genesisHash}");
+                    }
                 }
 
                 // Add fraud warning to remarks if suspicious
@@ -278,6 +307,7 @@ namespace SACCOBlockChainSystem.Services
 
                 _context.Contribs.Add(contrib);
                 await _context.SaveChangesAsync();
+
 
                 // ============================================================
                 // CREATE A NEW CONTRIB SHARE ROW FOR EACH TRANSACTION
