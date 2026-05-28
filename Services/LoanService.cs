@@ -12341,9 +12341,12 @@ namespace SACCOBlockChainSystem.Services
             await _context.SaveChangesAsync();
         }
 
-        public Task<LoanSchedule> GetCurrentInstallmentAsync(string loanNo)
+        public async Task<LoanSchedule> GetCurrentInstallmentAsync(string loanNo)
         {
-            throw new NotImplementedException();
+            return await _context.LoanSchedules
+       .Where(s => s.LoanNo == loanNo && s.Status != "Paid")
+       .OrderBy(s => s.InstallmentNo)
+       .FirstOrDefaultAsync();
         }
 
         public async Task RecalculateRbalScheduleAsync(string loanNo, decimal newOutstandingBalance)

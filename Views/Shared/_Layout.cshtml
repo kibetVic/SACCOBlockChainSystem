@@ -584,24 +584,29 @@
                                         </a>
                                     </li>
 
+                                <li class="nav-item">
+                                    <a asp-controller="ContributionMvc" asp-action="Index" class="nav-link">
+                                        <i class="nav-icon bi bi-plus-circle-fill"></i>
+                                        <p>Receipt Posting / Shares</p>
+                                    </a>
+                                </li>
+                                 <li class="nav-item">
+                                    <a class="nav-link" asp-controller="DividendDetails" asp-action="Index">
+                                        <i class="nav-icon bi bi-piggy-bank"></i>
+                                        <p>Dividends Processing</p>
+                                    </a>
+                                </li>
+                                @if (User.IsInRole("Super Admin"))
+                                {
                                     <li class="nav-item">
-                                        <a asp-controller="ContributionMvc" asp-action="Index" class="nav-link">
-                                            <i class="nav-icon bi bi-plus-circle-fill"></i>
-                                            <p>Receipt Posting / Shares</p>
+                                        <a asp-controller="ContributionMvc" asp-action="DeleteSearch" class="nav-link">
+                                            <i class="nav-icon bi bi-trash-fill text-danger"></i>
+                                            <p class="text-danger">Delete Transaction</p>
                                         </a>
                                     </li>
-
-                                    @if (User.IsInRole("Super Admin"))
-                                    {
-                                        <li class="nav-item">
-                                            <a asp-controller="ContributionMvc" asp-action="DeleteSearch" class="nav-link">
-                                                <i class="nav-icon bi bi-trash-fill text-danger"></i>
-                                                <p class="text-danger">Delete Transaction</p>
-                                            </a>
-                                        </li>
-                                    }
-                                </ul>
-                            </li>
+                                }
+                            </ul>
+                        </li>
 
                             <!-- Inquiries -->
                             <li class="nav-item">
