@@ -67,18 +67,16 @@ namespace SACCOBlockChainSystem.Controllers
         {
             try
             {
-                Console.WriteLine($"Search called: {term}");
 
-                if (string.IsNullOrWhiteSpace(term) || term.Length < 2)
-                {
-                    return Json(new { success = true, data = new List<object>() });
-                }
 
-                var companyCode = GetUserCompanyCode();
+                 if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
 
+                // Get company code from user claims (assuming it's stored there)
+                var companyCode = User.FindFirst("CompanyCode")?.Value;
                 if (string.IsNullOrEmpty(companyCode))
                 {
-                    return Json(new { success = false, message = "Company code missing" });
+                    return BadRequest(new { Success = false, Message = "Company code not found in user claims" });
                 }
 
                 var members = await _context.Members
@@ -120,55 +118,50 @@ namespace SACCOBlockChainSystem.Controllers
         // =========================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(DividendDetailsDTO model)
+        public async Task<IActionResult> Calculate(DividendDetailsDTO model)
         {
             try
             {
                 if (!ModelState.IsValid)
                 {
-                    TempData["ErrorMessage"] = "Invalid data supplied.";
-                    return RedirectToAction("Index");
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Invalid data supplied."
+                    });
                 }
-
+                var debugMemberNo = model.MemberNo;
+                var debugYear = model.DividendYear;
+             
                 var companyCode = GetUserCompanyCode();
 
-                // =========================================
-                // CHECK MEMBER EXISTS
-                // =========================================
-                var member = await _context.Members
-                    .FirstOrDefaultAsync(x =>
-                        x.MemberNo == model.MemberNo &&
-                        x.CompanyCode == companyCode);
+                //var member = await _context.Members
+                //    .FirstOrDefaultAsync(x =>
+                //        x.MemberNo == model.MemberNo &&
+                //        x.CompanyCode == companyCode);
 
-                if (member == null)
-                {
-                    TempData["ErrorMessage"] = "Member not found.";
-                    return RedirectToAction("Index");
-                }
+                //if (member == null)
+                //{
+                //    return Json(new
+                //    {
+                //        success = false,
+                //        message = "Member not found."
+                //    });
+                //}
 
-                // =========================================
-                // GET TOTAL SAVINGS / CONTRIBUTIONS
-                // =========================================
                 decimal memberSavings = await _context.Contribs
                     .Where(x =>
-                        x.MemberNo == model.MemberNo &&
+                       x.MemberNo.Trim().ToLower() == model.MemberNo.Trim().ToLower() &&
                         x.CompanyCode == companyCode)
                     .SumAsync(x => (decimal?)x.Amount) ?? 0;
 
-                // =========================================
-                // DIVIDEND FORMULAS
-                // =========================================
-
                 decimal weightedSavings = memberSavings;
 
-                // Rates
-                decimal savingsRate = 0.10m;      // 10%
-                decimal shareRate = 0.05m;        // 5%
-                decimal withholdingRate = 0.05m;  // 5%
+                decimal savingsRate = 0.10m;
+                decimal shareRate = 0.05m;
+                decimal withholdingRate = 0.05m;
 
-                // Calculations
                 decimal savingsDividend = weightedSavings * savingsRate;
-
                 decimal shareDividend = weightedSavings * shareRate;
 
                 decimal grossDividend = savingsDividend + shareDividend;
@@ -177,9 +170,6 @@ namespace SACCOBlockChainSystem.Controllers
 
                 decimal netDividend = grossDividend - withholdingTax;
 
-                // =========================================
-                // SAVE
-                // =========================================
                 var entity = new DividendDetails
                 {
                     DividendYear = model.DividendYear,
@@ -196,18 +186,27 @@ namespace SACCOBlockChainSystem.Controllers
                 };
 
                 _context.DividendDetails.Add(entity);
-
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] =
-                    $"Dividend calculated successfully for {member.MemberNo}";
-
-                return RedirectToAction("Index");
+                return Json(new
+                {
+                    success = true,
+                    message = "Dividend calculated successfully",
+                    data = new
+                    {
+                        entity.DividendYear,
+                        entity.MemberNo,
+                        entity.NetDividend
+                    }
+                });
             }
             catch (Exception ex)
             {
-                TempData["ErrorMessage"] = ex.Message;
-                return RedirectToAction("Index");
+                return Json(new
+                {
+                    success = false,
+                    message = ex.ToString()   // 👈 NOT ex.Message
+                });
             }
         }
         // =========================================
