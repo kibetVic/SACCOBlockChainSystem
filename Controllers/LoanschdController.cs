@@ -1,12 +1,13 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
+using System.Threading.Tasks;
 
 namespace SACCOBlockChainSystem.Controllers
 {
@@ -19,151 +20,267 @@ namespace SACCOBlockChainSystem.Controllers
             _context = context;
         }
 
-        // VIEW
+        public async Task<IActionResult> Index()
+        {
+            // utilities.SetUpPrivileges(this);
+            return View(await _context.LOANSCHD.ToListAsync());
+        }
+
+        public async Task<IActionResult> Details(string id)
+        {
+            if (id == null) return NotFound();
+
+            var sched = await _context.LOANSCHD
+                .FirstOrDefaultAsync(m => m.ID.ToString() == id);
+
+            if (sched == null) return NotFound();
+
+            return View(sched);
+        }
+
         public IActionResult Create()
         {
+            // Get CompanyCode from logged-in user claims
             var companyCode = User.FindFirst("CompanyCode")?.Value;
 
-            ViewBag.LoanTypes = _context.Loantypes
+            if (string.IsNullOrEmpty(companyCode))
+                throw new Exception("CompanyCode is missing from user claims");
+
+            // Optional: MemberNo removed as requested
+            ViewBag.memberno = string.Empty;
+
+            var loanTypes = _context.Loantypes
+                .AsNoTracking()
                 .Where(x => x.CompanyCode == companyCode)
+                .Select(x => new
+                {
+                    x.LoanCode,
+                    x.LoanType1
+                })
                 .ToList();
+
+            ViewBag.loantypes = new SelectList(
+                loanTypes,
+                "LoanCode",
+                "LoanType1"
+            );
 
             return View();
         }
 
-        // MEMBER NAME
+        [HttpPost]
+        public IActionResult populateInterestrate(string LoanCode, string MemberNo)
+        {
+            if (string.IsNullOrEmpty(LoanCode) || string.IsNullOrEmpty(MemberNo))
+                return Json(new { error = "LoanCode or MemberNo is missing." });
+
+            int count = _context.Loans
+                .Count(k => k.MemberNo == MemberNo && k.LoanNo == LoanCode);
+
+            string loancount = count > 0
+                ? $"{LoanCode}{MemberNo}-{count + 1}"
+                : $"{LoanCode}{MemberNo}";
+
+            var loanType = _context.Loantypes
+                .FirstOrDefault(k => k.LoanCode == LoanCode);
+
+            if (loanType == null)
+                return Json(new { error = "Loan type not found." });
+
+            return Json(new
+            {
+                loancode = loanType.LoanCode?.Trim(),
+                repaypriod = loanType.RepayPeriod,
+                interestrate = Math.Round(decimal.Parse(loanType.Interest), 2),
+                repaymethod = loanType.Repaymethod?.Trim(),
+                loancount
+            });
+        }
+
+        [HttpPost]
+        [Route("Loanschd/GenerateSchedule")]
+        public IActionResult GenerateSchedule(
+            string MemberNo,
+            decimal InitialAmount,
+            decimal InterestRate,
+            int Period,
+            string RepaymentMethod,
+            DateTime StartDate)
+        {
+            List<Loanschd> schedule = new();
+
+            decimal monthlyRate = InterestRate / 100 / 12;
+            decimal balance = InitialAmount;
+
+            if (RepaymentMethod == "AMRT")
+            {
+                decimal monthlyPayment =
+                    (InitialAmount * monthlyRate) /
+                    (1 - (decimal)Math.Pow(1 + (double)monthlyRate, -Period));
+
+                DateTime date = StartDate;
+
+                for (int i = 1; i <= Period; i++)
+                {
+                    decimal interest = Math.Round(balance * monthlyRate, 2);
+                    decimal principal = Math.Round(monthlyPayment - interest, 2);
+
+                    balance = Math.Round(balance - principal, 2);
+
+                    schedule.Add(new Loanschd
+                    {
+                        MemberNo = MemberNo,
+                        Period = i,
+                        Principal = principal,
+                        Interest = interest,
+                        Balance = balance,
+                        Comments = "Loan Repayment Schedule",
+                        FmtPer = date.ToString("MMM yyyy")
+                    });
+
+                    date = date.AddMonths(1);
+                }
+            }
+            else if (RepaymentMethod == "STL")
+            {
+                DateTime date = StartDate;
+
+                // Fixed monthly principal
+                decimal monthlyPrincipal = Math.Round(InitialAmount / Period, 2);
+
+                for (int i = 1; i <= Period; i++)
+                {
+                    // Flat interest on original amount (common SACCO STL logic)
+                    decimal interest = Math.Round(InitialAmount * monthlyRate, 2);
+
+                    decimal payment = monthlyPrincipal + interest;
+
+                    balance = Math.Round(balance - monthlyPrincipal, 2);
+
+                    // Prevent negative rounding drift on last row
+                    if (i == Period)
+                        balance = 0;
+
+                    schedule.Add(new Loanschd
+                    {
+                        MemberNo = MemberNo,
+                        Period = i,
+                        Principal = monthlyPrincipal,
+                        Interest = interest,
+                        Balance = balance,
+                        Comments = "Straight Line Loan Schedule",
+                        FmtPer = date.ToString("MMM yyyy")
+                    });
+
+                    date = date.AddMonths(1);
+                }
+            }
+            else if (RepaymentMethod == "RBAL")
+            {
+                DateTime date = StartDate;
+
+                for (int i = 1; i <= Period; i++)
+                {
+                    decimal principal = Math.Round(InitialAmount / Period, 2);
+                    decimal interest = Math.Round(balance * monthlyRate, 2);
+
+                    balance = Math.Round(balance - principal, 2);
+
+                    schedule.Add(new Loanschd
+                    {
+                        MemberNo = MemberNo,
+                        Period = i,
+                        Principal = principal,
+                        Interest = interest,
+                        Balance = balance,
+                        Comments = "Loan Repayment Schedule",
+                        FmtPer = date.ToString("MMM yyyy")
+                    });
+
+                    date = date.AddMonths(1);
+                }
+            }
+
+            return Json(schedule);
+        }
         [HttpGet]
-        public JsonResult GetMemberName(string memberNo)
+        public IActionResult GetMemberName(string memberNo)
         {
             var companyCode = User.FindFirst("CompanyCode")?.Value;
-            var member = _context.Members.FirstOrDefault(x => x.MemberNo == memberNo&& x.CompanyCode == companyCode);
 
+            if (string.IsNullOrEmpty(memberNo))
+                return Json(new { error = "MemberNo is required" });
+
+            var member = _context.Members
+                .Where(x => x.MemberNo == memberNo && x.CompanyCode == companyCode)
+                .Select(x => new
+                {
+                    name = (x.Surname + " " + x.OtherNames).Trim()
+                })
+                .FirstOrDefault();
 
             if (member == null)
                 return Json(new { error = "Member not found" });
 
-            return Json(new
-            {
-                memberName = member.Surname + " " + member.OtherNames
-            });
+            return Json(member);
+        }
+        public async Task<IActionResult> Edit(string id)
+        {
+            // utilities.SetUpPrivileges(this);
+
+            if (id == null) return NotFound();
+
+            var schedule = await _context.LOANSCHD.FindAsync(id);
+
+            if (schedule == null) return NotFound();
+
+            return View(schedule);
         }
 
-        // BLOCKCHAIN SCHEDULE
         [HttpPost]
-        [Route("Loanschd/GenerateBlockchainSchedule")]
-        public IActionResult GenerateBlockchainSchedule(
-            string MemberNo,
-            string LoanNo,
-            string LoanCode,
-            decimal InitialAmount,
-            decimal InterestRate,
-            int Period,
-            DateTime StartDate)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(string id, Loanschd loanschd)
         {
-            var companyCode = User.FindFirst("CompanyCode")?.Value;
-            var member = _context.Members.FirstOrDefault(x => x.MemberNo == MemberNo && x.CompanyCode == companyCode);
+            if (id != loanschd.ID.ToString())
+                return NotFound();
 
-            var loanType = _context.Loantypes
-                .FirstOrDefault(x => x.LoanCode == LoanCode && x.CompanyCode == companyCode);
-
-
-            string memberName = member != null
-                ? member.Surname + " " + member.OtherNames
-                : "";
-
-            string repayMethod = loanType?.Repaymethod ?? "AMRT";
-
-            decimal monthlyRate = InterestRate / 100 / 12;
-            decimal balance = InitialAmount;
-            string previousHash = "0";
-
-            var chain = new List<LoanScheduleBlock>();
-
-            for (int i = 1; i <= Period; i++)
+            if (ModelState.IsValid)
             {
-                decimal interest = 0;
-                decimal principal = 0;
-                decimal payment = 0;
-
-                // ===============================
-                // AMORTIZED (FIXED EMI)
-                // ===============================
-                if (repayMethod == "AMRT")
-                {
-                    payment = (InitialAmount * monthlyRate) /
-                              (1 - (decimal)Math.Pow((double)(1 + monthlyRate), -Period));
-
-                    interest = balance * monthlyRate;
-                    principal = payment - interest;
-                }
-
-                // ===============================
-                // STRAIGHT LINE (FIXED PRINCIPAL)
-                // ===============================
-                else if (repayMethod == "STL")
-                {
-                    principal = InitialAmount / Period;
-
-                    // FIXED INTEREST
-                    interest = InitialAmount * monthlyRate;
-
-                    payment = principal + interest;
-                }
-
-                // ===============================
-                // REDUCING BALANCE (DECLINING)
-                // ===============================
-                else if (repayMethod == "RBAL")
-                {
-                    principal = InitialAmount / Period;
-                    interest = balance * monthlyRate;
-                    payment = principal + interest;
-                }
-
-                decimal closing = balance - principal;
-
-                var block = new LoanScheduleBlock
-                {
-                    Index = i,
-                    Timestamp = DateTime.Now,
-                    MemberNo = MemberNo,
-                    MemberName = memberName,
-                    LoanNo = LoanNo,
-                    Period = i,
-                    PaymentDate = StartDate.AddMonths(i),
-
-                    OpeningBalance = balance,
-                    Principal = principal,
-                    Interest = interest,
-                    Payment = payment,
-                    ClosingBalance = closing,
-
-                    PreviousHash = previousHash
-                };
-
-                block.Hash = CalculateHash(block);
-                previousHash = block.Hash;
-
-                chain.Add(block);
-
-                balance = closing;
+                _context.Update(loanschd);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
             }
 
-            return Json(chain);
+            return View(loanschd);
         }
 
-        // HASH
-        private string CalculateHash(LoanScheduleBlock block)
+        public async Task<IActionResult> Delete(string id)
         {
-            var raw = $"{block.Index}{block.MemberNo}{block.LoanNo}{block.Period}" +
-                      $"{block.OpeningBalance}{block.Principal}{block.Interest}" +
-                      $"{block.ClosingBalance}{block.PreviousHash}";
+            if (id == null) return NotFound();
 
-            using (var sha = SHA256.Create())
-            {
-                var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
-                return Convert.ToBase64String(bytes);
-            }
+            var item = await _context.LOANSCHD
+                .FirstOrDefaultAsync(m => m.ID.ToString() == id);
+
+            if (item == null) return NotFound();
+
+            return View(item);
+        }
+
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(string id)
+        {
+            var item = await _context.LOANSCHD.FindAsync(id);
+
+            _context.LOANSCHD.Remove(item);
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        private bool LoanschExists(string id)
+        {
+            return _context.LOANSCHD.Any(e => e.ID.ToString() == id);
         }
     }
 }

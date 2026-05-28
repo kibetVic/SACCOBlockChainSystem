@@ -1,161 +1,237 @@
-﻿@model SACCOBlockChainSystem.Models.LoanScheduleBlock
+﻿@model SACCOBlockChainSystem.Models.Loanschd
 @using Syncfusion.EJ2
 @using Newtonsoft.Json
 
 @{
-    ViewData["Title"] = "Blockchain Loan Schedule";
+    ViewData["Title"] = "Create";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-<div class="container-fluid mt-3">
-
-    <h4>Blockchain Loan Schedule</h4>
-
-    <form id="scheduleForm">
-
-        <div class="row">
-
-            <div class="col-md-3">
-                <label>Member No</label>
-                <input class="form-control" id="MemberNo" name="MemberNo" required />
-            </div>
-
-            <div class="col-md-3">
-                <label>Member Name</label>
-                <input class="form-control" id="MemberName" readonly />
-            </div>
-
-            <div class="col-md-3">
-                <label>Loan Type</label>
-
-                <select class="form-control" id="LoanCode" name="LoanCode">
-                    <option value="">-- Select Loan Type --</option>
-
-                    @foreach (var item in ViewBag.LoanTypes)
-                    {
-                        <option value="@item.LoanCode"
-                                data-interest="@item.Interest"
-                                data-period="@item.RepayPeriod"
-                                data-repay="@item.Repaymethod">
-                            @item.LoanType1
-                        </option>
-                    }
-                </select>
-            </div>
-
-            <div class="col-md-3">
-                <label>Repayment Method</label>
-                <input class="form-control" id="RepayMethod" readonly />
-            </div>
-
+<div class="row" style="background-color:white;box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2)">
+    <div class="col-8">
+        <div style="margin:8px;padding:8px;text-align:left">
+            <div style="color:gray;font-size:small;" class="text-capitalize">LOANS SCHEDULE</div>
         </div>
-
-        <div class="row mt-2">
-
-            <div class="col-md-3">
-                <label>Loan No</label>
-                <input class="form-control" name="LoanNo" required />
-            </div>
-
-            <div class="col-md-3">
-                <label>Loan Amount</label>
-                <input type="number" class="form-control" name="InitialAmount" required />
-            </div>
-
-            <div class="col-md-3">
-                <label>Interest Rate (%)</label>
-                <input type="number" class="form-control" name="InterestRate" required />
-            </div>
-
-            <div class="col-md-3">
-                <label>Period</label>
-                <input type="number" class="form-control" name="Period" required />
-            </div>
-
-        </div>
-
-        <div class="row mt-2">
-            <div class="col-md-3">
-                <label>Start Date</label>
-                <input type="date" class="form-control" name="StartDate" required />
-            </div>
-        </div>
-
-        <br />
-
-        <button class="btn btn-primary">Generate Blockchain Schedule</button>
-
-    </form>
-
-    <hr />
-
-    <div class="table-responsive">
-        <table class="table table-bordered table-striped" id="scheduleTable">
-            <thead class="table-dark">
-                <tr>
-                    <th>Period</th>
-                    <th>Date</th>
-                    <th>Opening</th>
-                    <th>Principal</th>
-                    <th>Interest</th>
-                    <th>Payment</th>
-                    <th>Closing</th>
-                    <th>Hash</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
     </div>
-
 </div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<div class="container-fluid">
+    <div style="padding:8px;margin:8px;border-radius:16px;background-color:white;box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2)">
 
-<script>
+        <form id="generateScheduleForm">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div style="background-color: #f3f3f3; color:#8b8b8b; margin-bottom: 8px; padding:8px; margin-top:8px;">
+                <strong style="color:black">LOAN SCHEDULE</strong>
+            </div>
 
-// MEMBER NAME
-$("#MemberNo").on("blur", function () {
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="MemberNo"><strong style="color:black">Member No</strong></label>
+                        <input type="text" class="form-control" id="MemberNo" value="@ViewBag.memberno" name="MemberNo" required />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="MemberName"><strong style="color:black">Member Name</strong></label>
+                        <input type="text" class="form-control" id="MemberName" readonly />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="InitialAmount"><strong style="color:black">Loan Amount</strong></label>
+                        <input type="number" class="form-control" id="InitialAmount" name="InitialAmount" required />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <lebel class="text-black"><strong>Loan Type</strong></lebel>
+                        <select name="LoanCode" asp-items="@ViewBag.loantypes" readonly required class="form-control" id="loantypeid" onchange="getInterestRate()">
+                            <option>Select Loan Type</option>
+                        </select>
+                    </div>
+                </div>
+                
+            </div>
 
-    $.get("/Loanschd/GetMemberName", { memberNo: $(this).val() })
-        .done(function (res) {
-            $("#MemberName").val(res.memberName || "");
-        });
-});
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="InterestRate"><strong style="color:black">Interest Rate (%)</strong></label>
+                        <input type="number" step="0.01" class="form-control" readonly id="interestrateid" name="InterestRate" required />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="Period"><strong style="color:black">Repay Period(Months)</strong></label>
+                        <input type="number" class="form-control" id="repayperiod" name="Period" required />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="RepaymentMethod"><strong style="color:black">Repayment Method</strong></label>
+                        <select class="form-control" id="repaymethod" name="RepaymentMethod">
+                            <option value=""></option>
+                            <option value="AMRT">AMRT</option>
+                            <option value="STL">STL</option>
+                            <option value="RBAL">RBAL</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="StartDate"><strong style="color:black">Start Date</strong></label>
+                        <input type="date" class="form-control" id="StartDate" name="StartDate" required />
+                    </div>
+                </div>
+            </div>
 
-// LOAN TYPE AUTO FILL
-$("#LoanCode").on("change", function () {
+            <input type="submit" value="Generate/View Schedule" id="generateScheduleBtn" class="btn btn-primary" style="background-color:#0670ba;width:22%" />
+            <div class="d-flex justify-content-end mb-3">
+                <div class="col-auto">
+                    <button type="button" class="btn btn-primary btn-sm me-2" onClick="printCertificate()">
+                        <i class="fa fa-print"></i> Print
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="exportTableToExcel('statement-table')">
+                        <i class="fa fa-file-excel"></i> Export Excel
+                    </button>
+                </div>
+            </div>
+        </form>
+        <br />
+        <div id="statement-table">
+            <div class="table-responsive" id="statement-table">
+                <div id="statement-table" style="overflow-x:auto;">
+                    <div class="table-responsive" id="statement-table">
+                        <table class="table table-striped table-bordered table-sm"
+                               id="scheduleTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Period</th>
+                                    <th>PaymentDate</th>
+                                    <th>Opening Balance</th>
+                                    <th>Principal</th>
+                                    <th>Interest</th>
+                                    <th>Payment</th>
+                                    <th>Closing Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+            <script type="text/javascript">
+                $("#MemberNo").on("blur", function () {
 
-    var opt = $(this).find(":selected");
+                var memberNo = $(this).val();
 
-    $("input[name='InterestRate']").val(opt.data("interest"));
-    $("input[name='Period']").val(opt.data("period"));
-    $("#RepayMethod").val(opt.data("repay"));
-});
+                if (memberNo === "") {
+                $("#MemberName").val("");
+                return;
+                }
 
-// GENERATE
-$("#scheduleForm").submit(function (e) {
-    e.preventDefault();
+                $.ajax({
+                url: "/Loanschd/GetMemberName",
+                type: "GET",
+                data: { memberNo: memberNo },
+                success: function (res) {
 
-    $.post("/Loanschd/GenerateBlockchainSchedule", $(this).serialize(), function (data) {
+                if (res.error) {
+                $("#MemberName").val("");
+                return;
+                }
 
-        $("#scheduleTable tbody").empty();
+                $("#MemberName").val(res.name);
+                }
+                });
+                });
+                function getInterestRate() {
+                var LoanCode = $("#loantypeid").val();
+                var MemberNo = $("#MemberNo").val();
 
-        $.each(data, function (i, item) {
+                $.ajax({
+                url: "../Loanschd/populateInterestrate",
+                type: "POST",
+                data: { LoanCode: LoanCode, MemberNo: MemberNo },
+                dataType: "json",
+                success: function (data) {
+                console.log("Response:", data); // Debugging: Log the response
 
-            $("#scheduleTable tbody").append(`
+                if (data.error) {
+                alert("Error: " + data.error);
+                return;
+                }
+                debugger;
+                // Update fields with received data
+                // $("#loancodeid").val(data.loancode);
+                $("#interestrateid").val(data.interestrate);
+                $("#repayperiod").val(data.repaypriod);
+                $("#repaymethod").val(data.repaymethod);
+                // $("#Loannoid").val(data.loancount);
+                var totaldeposit = parseFloat($("#Deposit").val()) || 0;
+                var loantoshareratio = parseFloat(data.loantoshareratios) || 0;
+                var maxloans = totaldeposit * loantoshareratio;
+                //$("#maxloan").val(maxloans.toFixed(2));
+                },
+                error: function (xhr, status, error) {
+                console.error("AJAX Error:", error);
+                alert("Failed to retrieve interest rate. Please try again.");
+                }
+                });
+                }
+                $(document).ready(function () {
+
+                $("#generateScheduleForm").on("submit", function (event) {
+                event.preventDefault();
+
+                $.ajax({
+                url: "/Loanschd/GenerateSchedule",
+                type: "POST",
+                data: $(this).serialize(),
+                success: function (data) {
+
+                $("#scheduleTable tbody").empty();
+
+                $.each(data, function (index, item) {
+                $("#scheduleTable tbody").append(`
                 <tr>
-                    <td>${item.period}</td>
-                    <td>${new Date(item.paymentDate).toLocaleDateString()}</td>
-                    <td>${item.openingBalance.toFixed(2)}</td>
-                    <td>${item.principal.toFixed(2)}</td>
-                    <td>${item.interest.toFixed(2)}</td>
-                    <td>${item.payment.toFixed(2)}</td>
-                    <td>${item.closingBalance.toFixed(2)}</td>
-                    <td style="font-size:10px;">${item.hash}</td>
+                <td>${item.period}</td>
+                <td>${item.fmtPer}</td>
+                <td>${(item.balance + item.principal).toFixed(2)}</td>
+                <td>${item.principal.toFixed(2)}</td>
+                <td>${item.interest.toFixed(2)}</td>
+                <td>${(item.principal + item.interest).toFixed(2)}</td>
+                <td>${item.balance.toFixed(2)}</td>
                 </tr>
-            `);
-        });
-    });
-});
+                `);
+                });
 
-</script>
+                },
+                error: function (xhr) {
+                console.log(xhr.responseText);
+                alert("Schedule generation failed");
+                }
+                });
+                });
+
+                });
+                function exportTableToExcel(tableId) {
+                var table = document.getElementById(tableId);
+                var html = table.outerHTML;
+                var url = 'data:application/vnd.ms-excel,' + encodeURIComponent(html);
+                var link = document.createElement("a");
+                link.href = url;
+                link.download = 'LoanCalculator.xls';
+                link.click();
+                }
+
+                function printCertificate() {
+                const printContents = document.getElementById('statement-table').innerHTML;
+                const originalContents = document.body.innerHTML;
+                document.body.innerHTML = printContents;
+                window.print();
+                document.body.innerHTML = originalContents;
+                }
+            </script>

@@ -54,7 +54,19 @@
           crossorigin="anonymous" />
 
     <style>
-        /* This styles an on-page image, NOT the browser tab favicon */
+        input:invalid {
+    box-shadow: none;
+}
+
+select:invalid {
+    box-shadow: none;
+}
+
+
+input:invalid:focus {
+    outline: none;
+}
+        
         img.logo-rounded {
             border-radius: 5px;
         }
