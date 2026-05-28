@@ -1,0 +1,103 @@
+﻿@model SACCOBlockChainSystem.ViewModels.WalletPinSetup
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+
+        <div class="col-md-5">
+
+            <div class="card shadow border-0 rounded-4">
+
+                <div class="card-header bg-primary text-white rounded-top-4">
+                    <h4 class="mb-0">
+                        Wallet PIN Setup
+                    </h4>
+                </div>
+
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="fas fa-check-circle me-2"></i>@TempData["SuccessMessage"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                }
+
+                @if (TempData["ErrorMessage"] != null)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-circle me-2"></i>@TempData["ErrorMessage"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                }
+
+                <div class="card-body p-4">
+
+                    <form asp-controller="Home"
+                          asp-action="AccountSetup"
+                          method="post">
+
+                        <input type="hidden"
+                               asp-for="MemberNo" />
+
+                        <div asp-validation-summary="ModelOnly"
+                             class="alert alert-danger">
+                        </div>
+
+                        <div class="mb-4">
+
+                            <label asp-for="Pin"
+                                   class="form-label fw-semibold">
+                            </label>
+
+                            <input asp-for="Pin"
+                                   type="password"
+                                   maxlength="6"
+                                   inputmode="numeric"
+                                   autocomplete="new-password"
+                                   class="form-control form-control-lg text-center" />
+
+                            <span asp-validation-for="Pin"
+                                  class="text-danger">
+                            </span>
+
+                            <small class="text-muted">
+                                Enter a secure 4 to 6 digit PIN.
+                            </small>
+
+                        </div>
+
+                        <div class="mb-4">
+
+                            <label asp-for="ConfirmPin"
+                                   class="form-label fw-semibold">
+                            </label>
+
+                            <input asp-for="ConfirmPin"
+                                   type="password"
+                                   maxlength="6"
+                                   inputmode="numeric"
+                                   autocomplete="new-password"
+                                   class="form-control form-control-lg text-center" />
+
+                            <span asp-validation-for="ConfirmPin"
+                                  class="text-danger">
+                            </span>
+
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit"
+                                    class="btn btn-primary btn-lg rounded-3">
+                                Save PIN
+                            </button>
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
