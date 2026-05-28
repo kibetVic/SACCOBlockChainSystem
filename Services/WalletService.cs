@@ -796,5 +796,38 @@ namespace SACCOBlockChainSystem.Services
         {
             throw new NotImplementedException();
         }
+
+        internal async Task<WalletConfig> GetConfigurations(string companyCode)
+        {
+            WalletConfig wg = await _context.WalletConfigurations.AsNoTracking().OrderByDescending(w => w.Id).FirstOrDefaultAsync(w => w.CompanyCode == companyCode);
+            if (wg == null)
+            {
+                wg = new WalletConfig { CompanyCode = companyCode };
+                await _context.WalletConfigurations.AddAsync(wg);
+                await _context.SaveChangesAsync();
+            }
+            return wg;
+        }
+
+        internal async Task UpdateWalletConfig(WalletConfig walletConfig, string companyCode)
+        {
+            WalletConfig wg = await _context.WalletConfigurations.AsNoTracking().OrderByDescending(w => w.Id).FirstOrDefaultAsync(w => w.CompanyCode == companyCode);
+            if (wg == null)
+            {
+                wg = walletConfig;
+                wg.CompanyCode = companyCode;
+                await _context.WalletConfigurations.AddAsync(wg);
+                await _context.SaveChangesAsync();
+            }
+            {
+                var wid = wg.Id;
+                wg = walletConfig;
+                wg.CompanyCode = companyCode;
+                wg.Id = wid;
+                _context.WalletConfigurations.Update(wg);
+                await _context.SaveChangesAsync();
+            }
+            
+        }
     }
 }

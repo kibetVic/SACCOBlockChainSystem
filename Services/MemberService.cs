@@ -17,6 +17,7 @@ namespace SACCOBlockChainSystem.Services
         private readonly ICompanyContextService _companyContextService;
         private readonly IHttpContextAccessor _httpContextAccesso;
         private readonly AuditTrailService _auditService;
+        private WalletService _walletService;
         // private readonly UserManager<IdentityUser> _userManager;
 
         public MemberService(
@@ -25,6 +26,7 @@ namespace SACCOBlockChainSystem.Services
             ILogger<MemberService> logger,
             IHttpContextAccessor httpContextAccessor,
             AuditTrailService auditService,
+            WalletService walletService,
             //UserManager<IdentityUser> userManager,
             ICompanyContextService companyContextService)
         {
@@ -32,6 +34,7 @@ namespace SACCOBlockChainSystem.Services
             _blockchainService = blockchainService;
             _httpContextAccessor = httpContextAccessor;
             _auditService = auditService;
+            _walletService = walletService;
             _logger = logger;
             //_userManager = userManager;
             _companyContextService = companyContextService;
@@ -327,6 +330,14 @@ namespace SACCOBlockChainSystem.Services
                         member.BlockchainTxId = blockchainTx.TransactionId;
                         await _context.SaveChangesAsync();
                         _logger.LogInformation($"Blockchain transaction ID saved: {blockchainTx.TransactionId}");
+                    }
+                    WalletConfig walletConfig = await _walletService.GetConfigurations(company.CompanyCode);
+                    if (walletConfig.EnableWallets == true)
+                    {
+                        if(walletConfig.AutoAssignWalletOnRegistration == true)
+                        {
+                            await _walletService.RegisterMemberAsync(member);
+                        }
                     }
 
                     await transaction.CommitAsync();

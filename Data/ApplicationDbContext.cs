@@ -15,6 +15,8 @@ namespace SACCOBlockChainSystem.Data
         //public virtual DbSet<Usergroup> Usergroups { get; set; }
         public virtual DbSet<Usergrp> GroupRights { get; set; }
 
+        public virtual DbSet<WalletConfig> WalletConfigurations { get; set; }
+
         public DbSet<UserGroup> UserGroups { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
         public DbSet<ColloanGuar> ColloanGuars { get; set; }

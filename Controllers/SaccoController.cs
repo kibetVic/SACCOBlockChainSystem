@@ -11,15 +11,18 @@ namespace SACCOBlockChainSystem.Controllers
     public class SaccoController : Controller
     {
         private readonly ISaccoService _saccoService;
+        private WalletService _walletService;
         private readonly ICompanyContextService _companyContextService;
         private readonly ILogger<SaccoController> _logger;
 
         public SaccoController(
             ISaccoService saccoService,
+            WalletService walletService,
             ICompanyContextService companyContextService,
             ILogger<SaccoController> logger)
         {
             _saccoService = saccoService;
+            _walletService = walletService;
             _companyContextService = companyContextService;
             _logger = logger;
         }
@@ -34,13 +37,15 @@ namespace SACCOBlockChainSystem.Controllers
 
                 // Check if there's an existing parameter for this company
                 var existingParam = await _saccoService.GetSaccoParametersAsync(companyCode);
-
+                var walletsParam = await _walletService.GetConfigurations(companyCode);
                 ViewBag.ParametersList = parametersList;
                 ViewBag.GlAccounts = glAccounts;
                 ViewBag.IsEdit = false;
 
+
                 var model = new SaccoParramDTO
                 {
+                    WalletConfig = walletsParam,
                     CompanyCode = companyCode,
                     MembershipMaturityMonths = existingParam?.MembershipMaturityMonths ?? 3,
                     WithdrawalNoticeDays = existingParam?.WithdrawalNoticeDays ?? 30,
@@ -157,6 +162,8 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     await _saccoService.UpdateSaccoParametersAsync(model, User.Identity?.Name ?? "SYSTEM");
                     TempData["SuccessMessage"] = $"SACCO parameters for {model.SaccoName} updated successfully!";
+                    var companyCode = _companyContextService.GetCurrentCompanyCode();
+                    await _walletService.UpdateWalletConfig(model.WalletConfig, companyCode);
                 }
                 else
                 {

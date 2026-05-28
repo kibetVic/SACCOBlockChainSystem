@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
+using SACCOBlockChainSystem.Models.ViewModels;
 using SACCOBlockChainSystem.Services;
 
 namespace SACCOBlockChainSystem.Controllers
@@ -14,11 +15,12 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly IMemberService _memberService;
         private readonly IContributionService _contributionService;
         private readonly ILogger<MemberController> _logger;
-
-        public MemberController(IMemberService memberService, IContributionService contributionService, ILogger<MemberController> logger)
+        private WalletService _walletService;
+        public MemberController(IMemberService memberService, IContributionService contributionService,WalletService walletService, ILogger<MemberController> logger)
         {
             _memberService = memberService;
             _contributionService = contributionService;
+            _walletService = walletService;
             _logger = logger;
         }
 
@@ -29,7 +31,8 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
-
+                var companyCode = User.FindFirst("CompanyCode")?.Value;
+                
                 var result = await _memberService.RegisterMemberAsync(registration);
 
                 return Ok(new
