@@ -1848,9 +1848,9 @@ namespace SACCOBlockChainSystem.Controllers
                             else
                             {
                                 TempData["ErrorMessage"] = "Invalid pin for verification.";
-
-                                ViewBag.RequestPin = true;
-                                return View(model);
+                                return Redirect("/Account/VerifyMember?requestpin=true&user=" + EncryptionHelper.Encrypt(member.MemberNo));
+                                //ViewBag.RequestPin = true;
+                                //return View(model);
                             }
                         }
                     }
