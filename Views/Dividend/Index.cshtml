@@ -1,0 +1,250 @@
+﻿
+@model IEnumerable<SACCOBlockChainSystem.Models.Dividend>
+
+@{
+    ViewData["Title"] = "Dividend Dashboard";
+}
+
+<div class="container-fluid">
+
+    <div class="row mb-4">
+
+        <div class="col-md-4">
+
+            <div class="card shadow border-0">
+
+                <div class="card-body">
+
+                    <h6 class="text-muted">
+                        TOTAL DIVIDENDS
+                    </h6>
+
+                    <h2 class="fw-bold text-success">
+                        KES @ViewBag.TotalDividends
+                    </h2>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-4">
+
+            <div class="card shadow border-0">
+
+                <div class="card-body">
+
+                    <h6 class="text-muted">
+                        BLOCKCHAIN STATUS
+                    </h6>
+
+                    <h5 class="fw-bold text-success">
+                        VERIFIED
+                    </h5>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="card shadow">
+
+        <div class="card-header bg-warning">
+
+            <h4 class="mb-0">
+                DIVIDEND CALCULATOR
+            </h4>
+
+        </div>
+
+        <div class="card-body">
+
+            <div class="row">
+
+                <div class="col-md-4">
+
+                    <label>
+                        Total Dividend Amount
+                    </label>
+
+                    <input type="number"
+                           class="form-control"
+                           id="totalDividend" />
+
+                </div>
+
+                <div class="col-md-4">
+
+                    <label>
+                        Dividend Type
+                    </label>
+
+                    <select class="form-control"
+                            id="dividendType">
+
+                        <option value="PRORATE">
+                            PRORATED
+                        </option>
+
+                        <option value="FLAT">
+                            FLAT RATE
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div class="col-md-4 d-flex align-items-end">
+
+                    <button class="btn btn-primary w-100"
+                            id="btnCalculate">
+
+                        CALCULATE DIVIDENDS
+
+                    </button>
+
+                </div>
+
+            </div>
+
+            <hr />
+
+            <button class="btn btn-success mb-3"
+                    id="btnPay">
+
+                PAY DIVIDENDS
+
+            </button>
+
+            <table class="table table-bordered"
+                   id="dividendTable">
+
+                <thead>
+
+                    <tr>
+
+                        <th>Member No</th>
+                        <th>Savings</th>
+                        <th>Dividend</th>
+                        <th>Type</th>
+                        <th>Blockchain</th>
+                        <th>Status</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    @foreach (var item in Model)
+                    {
+                        <tr>
+
+                            <td>@item.MemberNo</td>
+
+                            <td>
+                                KES @item.SavingsAmount.ToString("N2")
+                            </td>
+
+                            <td>
+                                KES @item.DividendAmount.ToString("N2")
+                            </td>
+
+                            <td>
+                                @item.DividendType
+                            </td>
+
+                            <td>
+
+                                @if (!string.IsNullOrEmpty(item.BlockchainTxId))
+                                {
+                                    <span class="badge bg-success">
+                                        VERIFIED
+                                    </span>
+                                }
+
+                            </td>
+
+                            <td>
+
+                                @if (item.Paid)
+                                {
+                                    <span class="badge bg-success">
+                                        PAID
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning">
+                                        PENDING
+                                    </span>
+                                }
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+
+    $("#btnCalculate").click(function () {
+
+    $.ajax({
+
+    url: "/Dividend/CalculateDividends",
+
+    type: "POST",
+
+    contentType: "application/json",
+
+    data: JSON.stringify({
+
+    totalDividend:
+    parseFloat($("#totalDividend").val()),
+
+    dividendType:
+    $("#dividendType").val()
+
+    }),
+
+    success: function () {
+
+    location.reload();
+
+    }
+
+    });
+
+    });
+
+    $("#btnPay").click(function () {
+
+    $.post("/Dividend/PayDividend",
+
+    function () {
+
+    alert("Dividends paid successfully");
+
+    location.reload();
+
+    });
+
+    });
+
+</script>

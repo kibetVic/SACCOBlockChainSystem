@@ -1,0 +1,110 @@
+﻿@{
+    ViewData["Title"] = "Loan Calculator";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container mt-4">
+
+    <div class="card p-4 shadow-sm">
+
+        <h3 class="mb-2">LOAN CALCULATOR</h3>
+
+        <p class="text-muted" style="font-weight:bold;">
+            Enter the loan amount and interest rate then drag the slider to select repayment period
+            to see your estimated monthly repayment and total interest.
+        </p>
+
+        <!-- INPUTS -->
+        <div class="row">
+
+            <div class="col-md-4">
+                <label>Loan Amount: Ksh <span id="loanVal">0</span></label>
+                <input type="number" id="loanAmount" class="form-control" value="0" />
+            </div>
+
+            <div class="col-md-4">
+                <label>Interest Amount: % <span id="interestVal">0</span></label>
+                <input type="number" id="interestRate" class="form-control" value="0" />
+            </div>
+
+            <div class="col-md-4">
+                <label>
+                    Repayment period: <span id="periodVal">12</span> months
+                </label>
+
+                <input type="range" id="period" min="1" max="360" value="12" class="form-range" />
+            </div>
+
+        </div>
+
+        <hr />
+
+        <!-- RESULTS -->
+        <div class="row">
+
+            <div class="col-md-4">
+                <h6>Total Repayment</h6>
+                <h4>Ksh <span id="totalRepayment">0</span></h4>
+            </div>
+
+            <div class="col-md-4">
+                <h6>Total Interest</h6>
+                <h4>Ksh <span id="totalInterest">0</span></h4>
+            </div>
+
+            <div class="col-md-4">
+                <h6>Estimated Monthly Repayment</h6>
+                <h4>Ksh <span id="monthlyRepayment">0</span></h4>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+    function calculateLoan() {
+
+    let principal = parseFloat($("#loanAmount").val()) || 0;
+    let rate = parseFloat($("#interestRate").val()) || 0;
+    let months = parseInt($("#period").val()) || 0;
+
+    let monthlyRate = rate / 100 / 12;
+
+    let monthly = 0;
+
+    if (monthlyRate === 0) {
+    monthly = principal / months;
+    } else {
+    let pow = Math.pow(1 + monthlyRate, months);
+
+    monthly = principal * (monthlyRate * pow) / (pow - 1);
+    }
+
+    let totalRepayment = monthly * months;
+    let totalInterest = totalRepayment - principal;
+
+    $("#periodVal").text(months);
+
+    $("#monthlyRepayment").text(monthly.toFixed(2));
+    $("#totalRepayment").text(totalRepayment.toFixed(2));
+    $("#totalInterest").text(totalInterest.toFixed(2));
+    }
+
+    // EVENTS
+    $("#loanAmount, #interestRate").on("input", calculateLoan);
+    $("#period").on("input", calculateLoan);
+
+    // INIT
+    calculateLoan();
+
+    // LIVE EVENTS
+    $("#loanAmount, #interestRate").on("input", calculateLoan);
+    $("#period").on("input", calculateLoan);
+
+    // INIT
+    calculateLoan();
+</script>

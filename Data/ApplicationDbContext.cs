@@ -17,6 +17,7 @@ namespace SACCOBlockChainSystem.Data
 
         public virtual DbSet<WalletConfig> WalletConfigurations { get; set; }
 
+        public DbSet<Dividend> Dividends { get; set; }
         public DbSet<UserGroup> UserGroups { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
         public DbSet<Loanschd> LOANSCHD { get; set; }
