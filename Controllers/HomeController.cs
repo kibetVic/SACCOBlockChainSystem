@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿//using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,7 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly ILogger<HomeController> _logger;
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _webHostEnvironment;
+        private readonly IDashboardCacheService _dashboardCacheService;
         private WalletService _walletService;
 
         public HomeController(
@@ -28,7 +30,7 @@ namespace SACCOBlockChainSystem.Controllers
             IBlockchainService blockchainService,
             ILogger<HomeController> logger,
             ApplicationDbContext context,WalletService walletService,
-            IWebHostEnvironment webHostEnvironment)
+            IWebHostEnvironment webHostEnvironment, IDashboardCacheService dashboardCacheService)
         {
             _dashboardService = dashboardService;
             _blockchainService = blockchainService;
@@ -36,6 +38,7 @@ namespace SACCOBlockChainSystem.Controllers
             _context = context;
             _walletService = walletService;
             _webHostEnvironment = webHostEnvironment;
+            _dashboardCacheService = dashboardCacheService;
         }
 
         public async Task<IActionResult> AccountSetup()
@@ -118,16 +121,13 @@ namespace SACCOBlockChainSystem.Controllers
         {
             try
             {
-                // Get the logged-in user's role and company code from claims
                 var userRole = User.FindFirstValue(ClaimTypes.Role);
                 var isSuperAdmin = userRole == "Super Admin" || userRole == "SuperAdmin";
-                var userCompanyCode = User.FindFirst("CompanyCode")?.Value ??
-                                      User.FindFirst("SaccoCode")?.Value ??
-                                      User.FindFirst("Company")?.Value;
+                var userCompanyCode = User.FindFirst("CompanyCode")?.Value;
 
-                if(userRole.ToUpper() == "MEMBER")
+                // Handle Member role - redirect to MemberIndex
+                if (userRole?.ToUpper() == "MEMBER")
                 {
-                   // var companyCode = User.FindFirst("CompanyCode")?.Value;
                     var uid = User.FindFirst("UserId")?.Value;
                     
                     var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
@@ -135,12 +135,16 @@ namespace SACCOBlockChainSystem.Controllers
 
                     if (wallet == null)
                     {
-                        wallet = await _walletService.RegisterMemberAsync(member );
-                        if (wallet == null || wallet.MemberId == 0)
-                        {
-                            ModelState.AddModelError(string.Empty, "Invalid no wallet associated with member.");
-                            return RedirectToAction("MemberLogin", "Account");
-                        }
+                        //var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == memberId);
+                        //if (wallet == null)
+                        //{
+                        //    var member = await _context.Members.AsNoTracking()
+                        //        .FirstOrDefaultAsync(m => m.Id == memberId);
+                        //    if (member != null)
+                        //        wallet = await _walletService.RegisterMemberAsync(member);
+                        //}
+                        if (member != null)
+                            wallet = await _walletService.RegisterMemberAsync(member);
                     }
                     var wg = await _context.WalletConfigurations.AsNoTracking().FirstOrDefaultAsync(w => w.CompanyCode == wallet.CompanyCode);
                     if(wg != null && wg.EnableWallets == true)
@@ -162,256 +166,328 @@ namespace SACCOBlockChainSystem.Controllers
                     };
                     return View("MemberIndex",memberView);
                 }
-                
-                // Determine the effective company code for filtering
+
+                // Determine effective company code
                 string effectiveCompanyCode = null;
-
-                if (isSuperAdmin)
+                if (!isSuperAdmin)
                 {
-                    // Super Admin: Use selected company code if provided, otherwise null (show all)
-                    effectiveCompanyCode = string.IsNullOrEmpty(companyCode) ? null : companyCode;
-                    ViewBag.ShowCompanyFilter = true;
-                }
-                else
-                {
-                    // Non-SuperAdmin: Always limited to their own company
                     effectiveCompanyCode = userCompanyCode;
-                    companyCode = userCompanyCode; // Override any passed company code
-                    ViewBag.ShowCompanyFilter = false;
+                    companyCode = userCompanyCode;
+                }
+                else if (!string.IsNullOrEmpty(companyCode))
+                {
+                    effectiveCompanyCode = companyCode;
                 }
 
-                var userCompanyName = User.FindFirst("CompanyName")?.Value ??
-                                      User.FindFirst("SaccoName")?.Value;
-
-                DashboardVM dashboard = await GetUniversalDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
-
-                var cutoffDate = DateTime.Now.AddMonths(-6);
-
-                // Build member query with role-based filtering
-                var membersQuery = _context.Members.AsQueryable();
-
-                // Apply filtering based on role and effective company code
-                if (!isSuperAdmin && !string.IsNullOrEmpty(effectiveCompanyCode))
-                {
-                    // Non-SuperAdmin: Filter by their company
-                    membersQuery = membersQuery.Where(m => m.CompanyCode == effectiveCompanyCode);
-                    dashboard.SelectedCompanyCode = effectiveCompanyCode;
-                    dashboard.SelectedCompanyName = userCompanyName ?? effectiveCompanyCode;
-                }
-                else if (isSuperAdmin && !string.IsNullOrEmpty(effectiveCompanyCode))
-                {
-                    // SuperAdmin: Filter by selected company
-                    membersQuery = membersQuery.Where(m => m.CompanyCode == effectiveCompanyCode);
-                    dashboard.SelectedCompanyCode = effectiveCompanyCode;
-                    dashboard.SelectedCompanyName = effectiveCompanyCode;
-                }
-                else if (isSuperAdmin && string.IsNullOrEmpty(effectiveCompanyCode))
-                {
-                    // SuperAdmin: No company filter - show ALL companies
-                    dashboard.SelectedCompanyName = "All Companies";
-                    dashboard.SelectedCompanyCode = "ALL";
-                    // Don't apply any company filter to membersQuery
-                }
-
-                // Get all members (filtered appropriately)
-                var members = await membersQuery
-                    .Where(m => m.Dob.HasValue || m.Status.HasValue)
-                    .Select(m => new
-                    {
-                        m.MemberNo,
-                        m.Sex,
-                        m.Dob,
-                        m.Status,
-                        m.EffectDate,
-                        m.Withdrawn,
-                        m.Dormant,
-                        m.CompanyCode
-                    })
-                    .ToListAsync();
-
-                // ==========================
-                // MEMBER STATISTICS
-                // ==========================
-                dashboard.TotalWomen = members.Count(m =>
-                    !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "FEMALE");
-
-                dashboard.TotalMen = members.Count(m =>
-                    !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "MALE");
-
-                dashboard.TotalOthers = members.Count(m =>
-                    string.IsNullOrEmpty(m.Sex) ||
-                    (m.Sex.ToUpper() != "MALE" && m.Sex.ToUpper() != "FEMALE"));
-
-                dashboard.TotalMembers = members.Count;
-
-                // ACTIVE & DORMANT MEMBERS
-                var activeMemberNos = await GetActiveMemberNumbersAsync(cutoffDate, effectiveCompanyCode, isSuperAdmin);
-                var activeFromStatus = members.Where(m => m.Status == 1).Select(m => m.MemberNo).ToHashSet();
-
-                var allActiveMembers = new HashSet<string>(activeMemberNos);
-                allActiveMembers.UnionWith(activeFromStatus);
-
-                dashboard.ActiveMembers = allActiveMembers.Count;
-                dashboard.DormantMembers = dashboard.TotalMembers - dashboard.ActiveMembers;
-
-                // ACTIVE/DORMANT BY GENDER
-                dashboard.ActiveWomen = members.Count(m =>
-                    !string.IsNullOrEmpty(m.Sex) &&
-                    m.Sex.ToUpper() == "FEMALE" &&
-                    allActiveMembers.Contains(m.MemberNo));
-
-                dashboard.DormantWomen = dashboard.TotalWomen - dashboard.ActiveWomen;
-
-                dashboard.ActiveMen = members.Count(m =>
-                    !string.IsNullOrEmpty(m.Sex) &&
-                    m.Sex.ToUpper() == "MALE" &&
-                    allActiveMembers.Contains(m.MemberNo));
-
-                dashboard.DormantMen = dashboard.TotalMen - dashboard.ActiveMen;
-
-                // YOUTH CALCULATION (<= 35 years)
-                var membersWithAge = members.Where(m => m.Dob.HasValue).ToList();
-
-                dashboard.YouthTotal = membersWithAge.Count(m =>
-                {
-                    var age = CalculateAgeSafe(m.Dob.Value);
-                    return age <= 35;
-                });
-
-                dashboard.YouthMale = membersWithAge.Count(m =>
-                {
-                    var age = CalculateAgeSafe(m.Dob.Value);
-                    return age <= 35 && !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "MALE";
-                });
-
-                dashboard.YouthFemale = membersWithAge.Count(m =>
-                {
-                    var age = CalculateAgeSafe(m.Dob.Value);
-                    return age <= 35 && !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "FEMALE";
-                });
-
-                // ==========================
-                // FINANCIAL DATA FROM TABLES
-                // ==========================
-
-                // Get Member Contributions from ContribShares table
-                var contributionsData = await GetContributionsDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalContributions = contributionsData.Total;
-                dashboard.WomenContributions = contributionsData.Women;
-                dashboard.MenContributions = contributionsData.Men;
-                dashboard.OthersContributions = contributionsData.Others;
-
-                // Get Share Capital from Shares table
-                var shareCapitalData = await GetShareCapitalDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalShareCapital = shareCapitalData.Total;
-                dashboard.WomenShareCapital = shareCapitalData.Women;
-                dashboard.MenShareCapital = shareCapitalData.Men;
-                dashboard.OthersShareCapital = shareCapitalData.Others;
-
-                // Get Non-Withdrawable Deposits from ContribShares (DepositsAmount)
-                var depositsData = await GetDepositsDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalDeposits = depositsData.Total;
-                dashboard.WomenDeposits = depositsData.Women;
-                dashboard.MenDeposits = depositsData.Men;
-                dashboard.OthersDeposits = depositsData.Others;
-
-                // Get Registration Fees from Members table (RegFee)
-                var registrationData = await GetRegistrationFeesDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalRegistrationFees = registrationData.Total;
-                dashboard.WomenRegistrationFees = registrationData.Women;
-                dashboard.MenRegistrationFees = registrationData.Men;
-                dashboard.OthersRegistrationFees = registrationData.Others;
-
-                // Get Loans Taken from Loans table
-                var loansTakenData = await GetLoansTakenDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalLoansTaken = loansTakenData.Total;
-                dashboard.WomenLoansTaken = loansTakenData.Women;
-                dashboard.MenLoansTaken = loansTakenData.Men;
-                dashboard.OthersLoansTaken = loansTakenData.Others;
-
-                // Get Loan Balances from Loans table (outstanding)
-                var loanBalancesData = await GetLoanBalancesDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalLoanBalances = loanBalancesData.Total;
-                dashboard.WomenLoanBalances = loanBalancesData.Women;
-                dashboard.MenLoanBalances = loanBalancesData.Men;
-                dashboard.OthersLoanBalances = loanBalancesData.Others;
-
-                // Get Loans Paid from Loanbals table (Cleared)
-                var loansPaidData = await GetLoansPaidDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalLoansPaid = loansPaidData.Total;
-                dashboard.WomenLoansPaid = loansPaidData.Women;
-                dashboard.MenLoansPaid = loansPaidData.Men;
-                dashboard.OthersLoansPaid = loansPaidData.Others;
-
-                // Get Total Loanees from Loans table (distinct members with loans)
-                var loaneesData = await GetLoaneesDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalLoanees = loaneesData.Total;
-                dashboard.WomenLoanees = loaneesData.Women;
-                dashboard.MenLoanees = loaneesData.Men;
-                dashboard.OthersLoanees = loaneesData.Others;
-
-                dashboard.RepaymentRate = await CalculateRepaymentRateAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.PARPercent = await CalculatePARPercentAsync(effectiveCompanyCode, isSuperAdmin);
-                //dashboard.AmountPastDueRate = await CalculatePenaltyInterestRateAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.AmountPastDueRate = await CalculateAmountPastDueRateAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.AmountPastDueRate = dashboard.PARPercent;
-                dashboard.OutstandingLoanPortfolio = await CalculateOutstandingLoanPortfolioAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.ArrearsBalance = await CalculateArrearsBalanceAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalArrears = dashboard.ArrearsBalance;
-                dashboard.WomenParticipationRate = await CalculateWomenParticipationRateAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.LoanPortfolioHealth = GetLoanPortfolioHealth(dashboard.PARPercent);
-
-                // Get grants data - SuperAdmin sees all, others see filtered
-                dashboard.InclusionGrantTotal = await GetGrantTotalAsync("inclusion grant", effectiveCompanyCode, isSuperAdmin);
-                dashboard.MatchingGrantTotal = await GetGrantTotalAsync("matching grant", effectiveCompanyCode, isSuperAdmin);
-
-                // Load chart data
-                dashboard.MonthlyTransactions = await GetMonthlyTransactionsDataAsync(6, effectiveCompanyCode, isSuperAdmin);
-                dashboard.MemberGrowth = await GetMemberGrowthDataAsync(12, effectiveCompanyCode, isSuperAdmin);
+                // ✅ Get cached dashboard data - MUCH FASTER!
+                var dashboard = await _dashboardCacheService.GetDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
 
                 // Get companies for filter dropdown (only for Super Admin)
                 if (isSuperAdmin)
                 {
                     dashboard.Companies = await _context.Companies
                         .Where(c => c.Project == true)
-                        .Select(c => new CompanyInfo
-                        {
-                            Code = c.CompanyCode,
-                            Name = c.CompanyName ?? c.CompanyCode
-                        })
+                        .Select(c => new CompanyInfo { Code = c.CompanyCode, Name = c.CompanyName ?? c.CompanyCode })
                         .OrderBy(c => c.Name)
                         .ToListAsync();
                 }
-                else
-                {
-                    dashboard.Companies = new List<CompanyInfo>();
-                }
 
-                // Get user info
+                // Set UI properties
+                dashboard.SelectedCompanyCode = effectiveCompanyCode ?? (isSuperAdmin ? "ALL" : userCompanyCode);
+                dashboard.SelectedCompanyName = isSuperAdmin && string.IsNullOrEmpty(effectiveCompanyCode)
+                    ? "All Companies"
+                    : dashboard.SelectedCompanyName;
                 dashboard.UserGroup = GetUserGroup();
-                dashboard.UserRoles = User.Claims
-                    .Where(c => c.Type == ClaimTypes.Role)
-                    .Select(c => c.Value)
-                    .ToList();
-
-                ViewData["Title"] = $"{dashboard.UserGroup} Dashboard";
-                ViewData["Subtitle"] = $"SACCO Blockchain System - {dashboard.SelectedCompanyName}";
+                dashboard.UserRoles = User.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
 
                 return View(dashboard);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error loading dashboard: {Message}", ex.Message);
-                _logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
-
-                if (_webHostEnvironment.IsDevelopment())
-                {
-                    return Content($"Error: {ex.Message}\n\nStack Trace: {ex.StackTrace}");
-                }
-
+                _logger.LogError(ex, "Error loading dashboard");
                 return View("Error");
             }
         }
+
+        //public async Task<IActionResult> Index(string? companyCode)
+        //{
+        //    try
+        //    {
+        //        // Get the logged-in user's role and company code from claims
+        //        var userRole = User.FindFirstValue(ClaimTypes.Role);
+        //        var isSuperAdmin = userRole == "Super Admin" || userRole == "SuperAdmin";
+        //        var userCompanyCode = User.FindFirst("CompanyCode")?.Value ??
+        //                              User.FindFirst("SaccoCode")?.Value ??
+        //                              User.FindFirst("Company")?.Value;
+
+        //        if(userRole.ToUpper() == "MEMBER")
+        //        {
+        //           // var companyCode = User.FindFirst("CompanyCode")?.Value;
+        //            var uid = User.FindFirst("UserId")?.Value;
+
+        //            var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
+        //            if(wallet == null)
+        //            {
+        //                var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
+        //                wallet = await _walletService.RegisterMemberAsync(member );
+        //                if (wallet == null || wallet.MemberId == 0)
+        //                {
+        //                    ModelState.AddModelError(string.Empty, "Invalid no wallet associated with member.");
+        //                    return RedirectToAction("MemberLogin", "Account");
+        //                }
+        //            }
+        //            return View("MemberIndex");
+        //        }
+
+        //        // Determine the effective company code for filtering
+        //        string effectiveCompanyCode = null;
+
+        //        if (isSuperAdmin)
+        //        {
+        //            // Super Admin: Use selected company code if provided, otherwise null (show all)
+        //            effectiveCompanyCode = string.IsNullOrEmpty(companyCode) ? null : companyCode;
+        //            ViewBag.ShowCompanyFilter = true;
+        //        }
+        //        else
+        //        {
+        //            // Non-SuperAdmin: Always limited to their own company
+        //            effectiveCompanyCode = userCompanyCode;
+        //            companyCode = userCompanyCode; // Override any passed company code
+        //            ViewBag.ShowCompanyFilter = false;
+        //        }
+
+        //        var userCompanyName = User.FindFirst("CompanyName")?.Value ??
+        //                              User.FindFirst("SaccoName")?.Value;
+
+        //        DashboardVM dashboard = await GetUniversalDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
+
+        //        var cutoffDate = DateTime.Now.AddMonths(-6);
+
+        //        // Build member query with role-based filtering
+        //        var membersQuery = _context.Members.AsQueryable();
+
+        //        // Apply filtering based on role and effective company code
+        //        if (!isSuperAdmin && !string.IsNullOrEmpty(effectiveCompanyCode))
+        //        {
+        //            // Non-SuperAdmin: Filter by their company
+        //            membersQuery = membersQuery.Where(m => m.CompanyCode == effectiveCompanyCode);
+        //            dashboard.SelectedCompanyCode = effectiveCompanyCode;
+        //            dashboard.SelectedCompanyName = userCompanyName ?? effectiveCompanyCode;
+        //        }
+        //        else if (isSuperAdmin && !string.IsNullOrEmpty(effectiveCompanyCode))
+        //        {
+        //            // SuperAdmin: Filter by selected company
+        //            membersQuery = membersQuery.Where(m => m.CompanyCode == effectiveCompanyCode);
+        //            dashboard.SelectedCompanyCode = effectiveCompanyCode;
+        //            dashboard.SelectedCompanyName = effectiveCompanyCode;
+        //        }
+        //        else if (isSuperAdmin && string.IsNullOrEmpty(effectiveCompanyCode))
+        //        {
+        //            // SuperAdmin: No company filter - show ALL companies
+        //            dashboard.SelectedCompanyName = "All Companies";
+        //            dashboard.SelectedCompanyCode = "ALL";
+        //            // Don't apply any company filter to membersQuery
+        //        }
+
+        //        // Get all members (filtered appropriately)
+        //        var members = await membersQuery
+        //            .Where(m => m.Dob.HasValue || m.Status.HasValue)
+        //            .Select(m => new
+        //            {
+        //                m.MemberNo,
+        //                m.Sex,
+        //                m.Dob,
+        //                m.Status,
+        //                m.EffectDate,
+        //                m.Withdrawn,
+        //                m.Dormant,
+        //                m.CompanyCode
+        //            })
+        //            .ToListAsync();
+
+        //        // ==========================
+        //        // MEMBER STATISTICS
+        //        // ==========================
+        //        dashboard.TotalWomen = members.Count(m =>
+        //            !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "FEMALE");
+
+        //        dashboard.TotalMen = members.Count(m =>
+        //            !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "MALE");
+
+        //        dashboard.TotalOthers = members.Count(m =>
+        //            string.IsNullOrEmpty(m.Sex) ||
+        //            (m.Sex.ToUpper() != "MALE" && m.Sex.ToUpper() != "FEMALE"));
+
+        //        dashboard.TotalMembers = members.Count;
+
+        //        // ACTIVE & DORMANT MEMBERS
+        //        var activeMemberNos = await GetActiveMemberNumbersAsync(cutoffDate, effectiveCompanyCode, isSuperAdmin);
+        //        var activeFromStatus = members.Where(m => m.Status == 1).Select(m => m.MemberNo).ToHashSet();
+
+        //        var allActiveMembers = new HashSet<string>(activeMemberNos);
+        //        allActiveMembers.UnionWith(activeFromStatus);
+
+        //        dashboard.ActiveMembers = allActiveMembers.Count;
+        //        dashboard.DormantMembers = dashboard.TotalMembers - dashboard.ActiveMembers;
+
+        //        // ACTIVE/DORMANT BY GENDER
+        //        dashboard.ActiveWomen = members.Count(m =>
+        //            !string.IsNullOrEmpty(m.Sex) &&
+        //            m.Sex.ToUpper() == "FEMALE" &&
+        //            allActiveMembers.Contains(m.MemberNo));
+
+        //        dashboard.DormantWomen = dashboard.TotalWomen - dashboard.ActiveWomen;
+
+        //        dashboard.ActiveMen = members.Count(m =>
+        //            !string.IsNullOrEmpty(m.Sex) &&
+        //            m.Sex.ToUpper() == "MALE" &&
+        //            allActiveMembers.Contains(m.MemberNo));
+
+        //        dashboard.DormantMen = dashboard.TotalMen - dashboard.ActiveMen;
+
+        //        // YOUTH CALCULATION (<= 35 years)
+        //        var membersWithAge = members.Where(m => m.Dob.HasValue).ToList();
+
+        //        dashboard.YouthTotal = membersWithAge.Count(m =>
+        //        {
+        //            var age = CalculateAgeSafe(m.Dob.Value);
+        //            return age <= 35;
+        //        });
+
+        //        dashboard.YouthMale = membersWithAge.Count(m =>
+        //        {
+        //            var age = CalculateAgeSafe(m.Dob.Value);
+        //            return age <= 35 && !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "MALE";
+        //        });
+
+        //        dashboard.YouthFemale = membersWithAge.Count(m =>
+        //        {
+        //            var age = CalculateAgeSafe(m.Dob.Value);
+        //            return age <= 35 && !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "FEMALE";
+        //        });
+
+        //        // ==========================
+        //        // FINANCIAL DATA FROM TABLES
+        //        // ==========================
+
+        //        // Get Member Contributions from ContribShares table
+        //        var contributionsData = await GetContributionsDataAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.TotalContributions = contributionsData.Total;
+        //        dashboard.WomenContributions = contributionsData.Women;
+        //        dashboard.MenContributions = contributionsData.Men;
+        //        dashboard.OthersContributions = contributionsData.Others;
+
+        //        // Get Share Capital from Shares table
+        //        var shareCapitalData = await GetShareCapitalDataAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.TotalShareCapital = shareCapitalData.Total;
+        //        dashboard.WomenShareCapital = shareCapitalData.Women;
+        //        dashboard.MenShareCapital = shareCapitalData.Men;
+        //        dashboard.OthersShareCapital = shareCapitalData.Others;
+
+        //        // Get Non-Withdrawable Deposits from ContribShares (DepositsAmount)
+        //        var depositsData = await GetDepositsDataAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.TotalDeposits = depositsData.Total;
+        //        dashboard.WomenDeposits = depositsData.Women;
+        //        dashboard.MenDeposits = depositsData.Men;
+        //        dashboard.OthersDeposits = depositsData.Others;
+
+        //        // Get Registration Fees from Members table (RegFee)
+        //        var registrationData = await GetRegistrationFeesDataAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.TotalRegistrationFees = registrationData.Total;
+        //        dashboard.WomenRegistrationFees = registrationData.Women;
+        //        dashboard.MenRegistrationFees = registrationData.Men;
+        //        dashboard.OthersRegistrationFees = registrationData.Others;
+
+        //        // Get Loans Taken from Loans table
+        //        var loansTakenData = await GetLoansTakenDataAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.TotalLoansTaken = loansTakenData.Total;
+        //        dashboard.WomenLoansTaken = loansTakenData.Women;
+        //        dashboard.MenLoansTaken = loansTakenData.Men;
+        //        dashboard.OthersLoansTaken = loansTakenData.Others;
+
+        //        // Get Loan Balances from Loans table (outstanding)
+        //        var loanBalancesData = await GetLoanBalancesDataAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.TotalLoanBalances = loanBalancesData.Total;
+        //        dashboard.WomenLoanBalances = loanBalancesData.Women;
+        //        dashboard.MenLoanBalances = loanBalancesData.Men;
+        //        dashboard.OthersLoanBalances = loanBalancesData.Others;
+
+        //        // Get Loans Paid from Loanbals table (Cleared)
+        //        var loansPaidData = await GetLoansPaidDataAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.TotalLoansPaid = loansPaidData.Total;
+        //        dashboard.WomenLoansPaid = loansPaidData.Women;
+        //        dashboard.MenLoansPaid = loansPaidData.Men;
+        //        dashboard.OthersLoansPaid = loansPaidData.Others;
+
+        //        // Get Total Loanees from Loans table (distinct members with loans)
+        //        var loaneesData = await GetLoaneesDataAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.TotalLoanees = loaneesData.Total;
+        //        dashboard.WomenLoanees = loaneesData.Women;
+        //        dashboard.MenLoanees = loaneesData.Men;
+        //        dashboard.OthersLoanees = loaneesData.Others;
+
+        //        dashboard.RepaymentRate = await CalculateRepaymentRateAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.PARPercent = await CalculatePARPercentAsync(effectiveCompanyCode, isSuperAdmin);
+        //        //dashboard.AmountPastDueRate = await CalculatePenaltyInterestRateAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.AmountPastDueRate = await CalculateAmountPastDueRateAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.AmountPastDueRate = dashboard.PARPercent;
+        //        dashboard.OutstandingLoanPortfolio = await CalculateOutstandingLoanPortfolioAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.ArrearsBalance = await CalculateArrearsBalanceAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.TotalArrears = dashboard.ArrearsBalance;
+        //        dashboard.WomenParticipationRate = await CalculateWomenParticipationRateAsync(effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.LoanPortfolioHealth = GetLoanPortfolioHealth(dashboard.PARPercent);
+
+        //        // Get grants data - SuperAdmin sees all, others see filtered
+        //        dashboard.InclusionGrantTotal = await GetGrantTotalAsync("inclusion grant", effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.MatchingGrantTotal = await GetGrantTotalAsync("matching grant", effectiveCompanyCode, isSuperAdmin);
+
+        //        // Load chart data
+        //        dashboard.MonthlyTransactions = await GetMonthlyTransactionsDataAsync(6, effectiveCompanyCode, isSuperAdmin);
+        //        dashboard.MemberGrowth = await GetMemberGrowthDataAsync(12, effectiveCompanyCode, isSuperAdmin);
+
+        //        // Get companies for filter dropdown (only for Super Admin)
+        //        if (isSuperAdmin)
+        //        {
+        //            dashboard.Companies = await _context.Companies
+        //                .Where(c => c.Project == true)
+        //                .Select(c => new CompanyInfo
+        //                {
+        //                    Code = c.CompanyCode,
+        //                    Name = c.CompanyName ?? c.CompanyCode
+        //                })
+        //                .OrderBy(c => c.Name)
+        //                .ToListAsync();
+        //        }
+        //        else
+        //        {
+        //            dashboard.Companies = new List<CompanyInfo>();
+        //        }
+
+        //        // Get user info
+        //        dashboard.UserGroup = GetUserGroup();
+        //        dashboard.UserRoles = User.Claims
+        //            .Where(c => c.Type == ClaimTypes.Role)
+        //            .Select(c => c.Value)
+        //            .ToList();
+
+        //        ViewData["Title"] = $"{dashboard.UserGroup} Dashboard";
+        //        ViewData["Subtitle"] = $"SACCO Blockchain System - {dashboard.SelectedCompanyName}";
+
+        //        return View(dashboard);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error loading dashboard: {Message}", ex.Message);
+        //        _logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
+
+        //        if (_webHostEnvironment.IsDevelopment())
+        //        {
+        //            return Content($"Error: {ex.Message}\n\nStack Trace: {ex.StackTrace}");
+        //        }
+
+        //        return View("Error");
+        //    }
+        //}
 
 
         #region Financial Data Methods
