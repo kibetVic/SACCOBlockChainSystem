@@ -85,6 +85,18 @@ namespace SACCOBlockChainSystem.Data
         {
             base.OnModelCreating(modelBuilder);
 
+            // Index for faster pending transaction queries
+            modelBuilder.Entity<Transactions2>()
+                .HasIndex(t => new { t.BlockchainTxId, t.Status })
+                .HasFilter("[BlockchainTxId] IS NULL AND [Status] = 'COMPLETED'");
+
+            modelBuilder.Entity<Contrib>()
+                .HasIndex(c => new { c.BlockchainTxId, c.Amount })
+                .HasFilter("[BlockchainTxId] IS NULL AND [Amount] IS NOT NULL");
+
+            modelBuilder.Entity<BlockchainTransaction>()
+                .HasIndex(b => new { b.Status, b.Timestamp });
+
             // Configure primary keys for tables without explicit [Key] attribute
             modelBuilder.Entity<Loantype>().HasKey(l => l.Id);
             modelBuilder.Entity<Share>().HasKey(s => new { s.MemberNo, s.Sharescode });

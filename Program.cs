@@ -97,7 +97,6 @@ builder.Services.AddScoped<IBlockchainService, BlockchainService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ISaccoService, SaccoService>();
 builder.Services.AddScoped<IMemberService, MemberService>();
-
 builder.Services.AddScoped<WalletService, WalletService>();
 builder.Services.AddScoped<ICryptoService, CryptoService>();
 builder.Services.AddScoped<IContributionService, ContributionService>();
@@ -126,13 +125,24 @@ builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<IEmployeePaymentService, EmployeePaymentService>();
 builder.Services.AddScoped<IPaymentTypeService, PaymentTypeService>();
-
-builder.Services.AddHostedService<BlockchainSyncService>();
-builder.Services.AddHostedService<TransactionProcessorService>();
-builder.Services.AddHostedService<LoanOverdueUpdateService>();
-
-// email service
+//builder.Services.AddHostedService<BlockchainSyncService>();
+//builder.Services.AddHostedService<TransactionProcessorService>();
+//builder.Services.AddHostedService<LoanOverdueUpdateService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IDashboardCacheService, DashboardCacheService>();
+
+var backgroundServicesEnabled = builder.Configuration.GetValue<bool>("BackgroundServices:Enabled", true);
+var transactionInterval = builder.Configuration.GetValue<int>("BackgroundServices:TransactionProcessorIntervalSeconds", 60);
+var syncInterval = builder.Configuration.GetValue<int>("BackgroundServices:BlockchainSyncIntervalMinutes", 10);
+
+if (backgroundServicesEnabled && !builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<TransactionProcessorService>();
+    builder.Services.AddHostedService<BlockchainSyncService>();
+    builder.Services.AddHostedService<LoanOverdueUpdateService>();
+}
 
 // Caching
 builder.Services.AddMemoryCache();

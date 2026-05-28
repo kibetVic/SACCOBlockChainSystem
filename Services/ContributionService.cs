@@ -353,6 +353,91 @@ namespace SACCOBlockChainSystem.Services
                         contributionDto.CompanyCode);
                 }
 
+                // =============================================
+                // STEP: UPDATE WALLET BALANCE AFTER SUCCESSFUL CONTRIBUTION
+                // =============================================
+                // Get or create wallet for the member
+                var wallet = await _cryptoService.GetWalletByMemberIdAsync(memberRecord.Id);
+                if (wallet == null)
+                {
+                    // Create wallet if it doesn't exist
+                    var walletResult = await _cryptoService.CreateWalletForMemberAsync(memberRecord.Id, memberRecord.MemberNo, contributionDto.CompanyCode);
+                    if (!walletResult.Success)
+                    {
+                        _logger.LogWarning($"Failed to create wallet for balance update: {walletResult.Message}");
+                    }
+                    else
+                    {
+                        wallet = await _cryptoService.GetWalletByMemberIdAsync(memberRecord.Id);
+                    }
+                }
+
+                // Update wallet balances based on contribution category
+                if (wallet != null)
+                {
+                    // Update last activity
+                    wallet.LastActivity = DateTime.UtcNow;
+
+                    // Update specific balances based on contribution type
+                    switch (contributionCategory)
+                    {
+                        case "SHARE_CAPITAL":
+                            // Update Capital Balance (for shares)
+                            wallet.CapitalBalance += contributionDto.Amount;
+                            wallet.Balance += contributionDto.Amount; // Also update total balance
+                            _logger.LogInformation($"Updated CapitalBalance for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}, New: {wallet.CapitalBalance:C}");
+                            break;
+
+                        case "DEPOSIT":
+                            // Update Deposit Balance (savings/deposits)
+                            wallet.DepositBalance += contributionDto.Amount;
+                            wallet.Balance += contributionDto.Amount; // Also update total balance
+                            _logger.LogInformation($"Updated DepositBalance for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}, New: {wallet.DepositBalance:C}");
+                            break;
+
+                        case "PASSBOOK":
+                            // For PASSBOOK, update CapitalBalance if Issharecapital=1, otherwise Balance
+                            if (shareType.Issharecapital == 1)
+                            {
+                                wallet.CapitalBalance += contributionDto.Amount;
+                                _logger.LogInformation($"Updated CapitalBalance (PASSBOOK) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
+                            }
+                            else
+                            {
+                                wallet.Balance += contributionDto.Amount;
+                                _logger.LogInformation($"Updated Balance (PASSBOOK) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
+                            }
+                            break;
+
+                        case "LOAN_REPAYMENT":
+                            // For loan repayment, update Balance (could be separate loan tracking)
+                            wallet.Balance += contributionDto.Amount;
+                            _logger.LogInformation($"Updated Balance (LOAN_REPAYMENT) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
+                            break;
+
+                        case "DONOR":
+                            // For donor contributions, update Balance
+                            wallet.Balance += contributionDto.Amount;
+                            _logger.LogInformation($"Updated Balance (DONOR) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
+                            break;
+
+                        case "REGISTRATION_FEE":
+                            // Registration fees don't add to balance (they're fees)
+                            _logger.LogInformation($"Registration fee of {contributionDto.Amount:C} collected from member {memberRecord.MemberNo} (no balance update)");
+                            break;
+
+                        default:
+                            // Default - update general balance
+                            wallet.Balance += contributionDto.Amount;
+                            _logger.LogInformation($"Updated Balance for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}, New: {wallet.Balance:C}");
+                            break;
+                    }
+
+                    // Save wallet changes
+                    await _context.SaveChangesAsync();
+                }
+
+
                 // ============================================================
                 // GET GL ACCOUNTS
                 // ============================================================
@@ -693,33 +778,68 @@ namespace SACCOBlockChainSystem.Services
 
         public async Task<List<ContributionResponseDTO>> GetMemberContributionsAsync(string memberNo)
         {
+            // ✅ FIX: Single query with includes
+            var member = await _context.Members
+                .Where(m => m.MemberNo == memberNo)
+                .Select(m => new { m.Surname, m.OtherNames })
+                .FirstOrDefaultAsync();
+
+            var memberName = member != null ? $"{member.Surname} {member.OtherNames}".Trim() : memberNo;
+
             var contributions = await _context.Contribs
-                .Include(c => c.SharescodeNavigation)
                 .Where(c => c.MemberNo == memberNo)
                 .OrderByDescending(c => c.ContrDate)
                 .Take(100)
+                .Select(c => new ContributionResponseDTO
+                {
+                    Id = c.Id,
+                    MemberNo = c.MemberNo ?? string.Empty,
+                    MemberName = memberName,
+                    TransactionDate = c.ContrDate ?? DateTime.MinValue,
+                    SharesCode = c.Sharescode ?? string.Empty,
+                    ShareTypeName = c.SharescodeNavigation != null ? c.SharescodeNavigation.SharesType : c.Sharescode ?? "Unknown",
+                    Amount = c.Amount ?? 0,
+                    ReceiptNo = c.ReceiptNo ?? string.Empty,
+                    Remarks = c.Remarks ?? string.Empty,
+                    BlockchainTxId = c.BlockchainTxId ?? string.Empty,
+                    CreatedAt = c.AuditTime,
+                    CreatedBy = c.AuditId ?? string.Empty,
+                    CompanyCode = c.CompanyCode ?? string.Empty
+                })
                 .ToListAsync();
 
-            var member = await _context.Members
-                .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
-
-            return contributions.Select(c => new ContributionResponseDTO
-            {
-                Id = c.Id,
-                MemberNo = c.MemberNo,
-                MemberName = member != null ? $"{member.Surname} {member.OtherNames}" : c.MemberNo,
-                TransactionDate = c.ContrDate ?? DateTime.MinValue,
-                SharesCode = c.Sharescode ?? string.Empty,
-                ShareTypeName = c.SharescodeNavigation?.SharesType ?? c.Sharescode ?? "Unknown",
-                Amount = c.Amount ?? 0,
-                ReceiptNo = c.ReceiptNo ?? string.Empty,
-                Remarks = c.Remarks ?? string.Empty,
-                BlockchainTxId = c.BlockchainTxId ?? string.Empty,
-                CreatedAt = c.AuditTime,
-                CreatedBy = c.AuditId ?? string.Empty,
-                CompanyCode = c.CompanyCode ?? string.Empty
-            }).ToList();
+            return contributions;
         }
+
+        //public async Task<List<ContributionResponseDTO>> GetMemberContributionsAsync(string memberNo)
+        //{
+        //    var contributions = await _context.Contribs
+        //        .Include(c => c.SharescodeNavigation)
+        //        .Where(c => c.MemberNo == memberNo)
+        //        .OrderByDescending(c => c.ContrDate)
+        //        .Take(100)
+        //        .ToListAsync();
+
+        //    var member = await _context.Members
+        //        .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
+
+        //    return contributions.Select(c => new ContributionResponseDTO
+        //    {
+        //        Id = c.Id,
+        //        MemberNo = c.MemberNo,
+        //        MemberName = member != null ? $"{member.Surname} {member.OtherNames}" : c.MemberNo,
+        //        TransactionDate = c.ContrDate ?? DateTime.MinValue,
+        //        SharesCode = c.Sharescode ?? string.Empty,
+        //        ShareTypeName = c.SharescodeNavigation?.SharesType ?? c.Sharescode ?? "Unknown",
+        //        Amount = c.Amount ?? 0,
+        //        ReceiptNo = c.ReceiptNo ?? string.Empty,
+        //        Remarks = c.Remarks ?? string.Empty,
+        //        BlockchainTxId = c.BlockchainTxId ?? string.Empty,
+        //        CreatedAt = c.AuditTime,
+        //        CreatedBy = c.AuditId ?? string.Empty,
+        //        CompanyCode = c.CompanyCode ?? string.Empty
+        //    }).ToList();
+        //}
 
         public async Task<List<ShareTypeDTO>> GetShareTypesAsync(string companyCode)
         {
@@ -792,7 +912,7 @@ namespace SACCOBlockChainSystem.Services
 
             if (!string.IsNullOrEmpty(memberNo))
             {
-                query = query.Where(c => c.MemberNo.Contains(memberNo));
+                query = query.Where(c => c.MemberNo != null && c.MemberNo.Contains(memberNo));
             }
 
             if (!string.IsNullOrEmpty(shareType))
@@ -800,30 +920,26 @@ namespace SACCOBlockChainSystem.Services
                 query = query.Where(c => c.Sharescode == shareType);
             }
 
-            // Execute query
-            var contributions = await query
-                .OrderByDescending(c => c.ContrDate)
-                .Take(200)
-                .ToListAsync();
-
-            // Manually get member names for each contribution
-            var result = new List<ContributionResponseDTO>();
-            foreach (var c in contributions)
-            {
-                var member = await _context.Members
-                    .FirstOrDefaultAsync(m => m.MemberNo == c.MemberNo && m.CompanyCode == c.CompanyCode);
-
-                var shareTypeObj = await _context.Sharetypes
-                    .FirstOrDefaultAsync(s => s.SharesCode == c.Sharescode && s.CompanyCode == c.CompanyCode);
-
-                result.Add(new ContributionResponseDTO
+            // ✅ FIX: Use LEFT JOIN with GroupJoin (works with EF Core)
+            var result = await (
+                from c in query
+                join m in _context.Members
+                    on new { c.MemberNo, c.CompanyCode }
+                    equals new { MemberNo = m.MemberNo, CompanyCode = m.CompanyCode } into memberJoin
+                from m in memberJoin.DefaultIfEmpty()
+                join s in _context.Sharetypes
+                    on new { SharesCode = c.Sharescode, c.CompanyCode }
+                    equals new { s.SharesCode, s.CompanyCode } into shareJoin
+                from s in shareJoin.DefaultIfEmpty()
+                orderby c.ContrDate descending
+                select new ContributionResponseDTO
                 {
                     Id = c.Id,
                     MemberNo = c.MemberNo ?? string.Empty,
-                    MemberName = member != null ? $"{member.Surname} {member.OtherNames}".Trim() : c.MemberNo ?? "Unknown",
+                    MemberName = (m != null ? (m.Surname + " " + m.OtherNames).Trim() : c.MemberNo ?? "Unknown"),
                     TransactionDate = c.ContrDate ?? DateTime.MinValue,
                     SharesCode = c.Sharescode ?? string.Empty,
-                    ShareTypeName = shareTypeObj?.SharesType ?? c.Sharescode ?? "Unknown",
+                    ShareTypeName = (s != null ? s.SharesType : c.Sharescode) ?? "Unknown",
                     Amount = c.Amount ?? 0,
                     ReceiptNo = c.ReceiptNo ?? string.Empty,
                     Remarks = c.Remarks ?? string.Empty,
@@ -831,11 +947,74 @@ namespace SACCOBlockChainSystem.Services
                     CreatedAt = c.AuditTime,
                     CreatedBy = c.AuditId ?? string.Empty,
                     CompanyCode = c.CompanyCode ?? string.Empty
-                });
-            }
+                })
+                .Take(200)
+                .ToListAsync();
 
             return result;
         }
+
+        //public async Task<List<ContributionResponseDTO>> SearchContributionsAsync(DateTime? fromDate, DateTime? toDate, string? memberNo = null, string? shareType = null)
+        //{
+        //    var query = _context.Contribs.AsQueryable();
+
+        //    // Apply filters
+        //    if (fromDate.HasValue)
+        //    {
+        //        query = query.Where(c => c.ContrDate >= fromDate);
+        //    }
+
+        //    if (toDate.HasValue)
+        //    {
+        //        query = query.Where(c => c.ContrDate <= toDate);
+        //    }
+
+        //    if (!string.IsNullOrEmpty(memberNo))
+        //    {
+        //        query = query.Where(c => c.MemberNo.Contains(memberNo));
+        //    }
+
+        //    if (!string.IsNullOrEmpty(shareType))
+        //    {
+        //        query = query.Where(c => c.Sharescode == shareType);
+        //    }
+
+        //    // Execute query
+        //    var contributions = await query
+        //        .OrderByDescending(c => c.ContrDate)
+        //        .Take(200)
+        //        .ToListAsync();
+
+        //    // Manually get member names for each contribution
+        //    var result = new List<ContributionResponseDTO>();
+        //    foreach (var c in contributions)
+        //    {
+        //        var member = await _context.Members
+        //            .FirstOrDefaultAsync(m => m.MemberNo == c.MemberNo && m.CompanyCode == c.CompanyCode);
+
+        //        var shareTypeObj = await _context.Sharetypes
+        //            .FirstOrDefaultAsync(s => s.SharesCode == c.Sharescode && s.CompanyCode == c.CompanyCode);
+
+        //        result.Add(new ContributionResponseDTO
+        //        {
+        //            Id = c.Id,
+        //            MemberNo = c.MemberNo ?? string.Empty,
+        //            MemberName = member != null ? $"{member.Surname} {member.OtherNames}".Trim() : c.MemberNo ?? "Unknown",
+        //            TransactionDate = c.ContrDate ?? DateTime.MinValue,
+        //            SharesCode = c.Sharescode ?? string.Empty,
+        //            ShareTypeName = shareTypeObj?.SharesType ?? c.Sharescode ?? "Unknown",
+        //            Amount = c.Amount ?? 0,
+        //            ReceiptNo = c.ReceiptNo ?? string.Empty,
+        //            Remarks = c.Remarks ?? string.Empty,
+        //            BlockchainTxId = c.BlockchainTxId ?? string.Empty,
+        //            CreatedAt = c.AuditTime,
+        //            CreatedBy = c.AuditId ?? string.Empty,
+        //            CompanyCode = c.CompanyCode ?? string.Empty
+        //        });
+        //    }
+
+        //    return result;
+        //}
 
         public async Task<ContributionDeleteResultDTO> DeleteContributionAsync(int contributionId, string deleteReason, string deletedBy)
         {
