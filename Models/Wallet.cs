@@ -10,7 +10,7 @@ namespace SACCOBlockChainSystem.Models
     {
         [NotMapped]
         public Member Member { get; set; }
-        public string MemberNo { get; set; }
+        //public string MemberNo { get; set; }
         public int MemberId { get; set; }
         public string memberNo { get; set; }
         public decimal CapitalBalance { get; set; }
@@ -53,7 +53,8 @@ namespace SACCOBlockChainSystem.Models
 
             using var sha256 = SHA256.Create();
             var publicKeyHash = sha256.ComputeHash(publicKeyBytes);
-            var address = "0x" + Convert.ToHexString(publicKeyHash).Substring(0, 40).ToLower();
+            //var address = "0x" + Convert.ToHexString(publicKeyHash).Substring(0, 40).ToLower();
+            var address =  Convert.ToHexString(publicKeyHash).Substring(0, 40).ToLower();
 
             return new Wallet
             {
