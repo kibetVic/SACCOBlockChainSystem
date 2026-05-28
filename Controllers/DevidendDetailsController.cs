@@ -135,19 +135,19 @@ namespace SACCOBlockChainSystem.Controllers
              
                 var companyCode = GetUserCompanyCode();
 
-                //var member = await _context.Members
-                //    .FirstOrDefaultAsync(x =>
-                //        x.MemberNo == model.MemberNo &&
-                //        x.CompanyCode == companyCode);
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(x =>
+                        x.MemberNo == model.MemberNo &&
+                        x.CompanyCode == companyCode);
 
-                //if (member == null)
-                //{
-                //    return Json(new
-                //    {
-                //        success = false,
-                //        message = "Member not found."
-                //    });
-                //}
+                if (member == null)
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Member not found."
+                    });
+                }
 
                 decimal memberSavings = await _context.Contribs
                     .Where(x =>

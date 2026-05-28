@@ -119,7 +119,16 @@
                         <tr>
                             <td>@item.DividendYear</td>
                             <td>@item.MemberNo</td>
-                            <td>@ViewBag.MemberNames?[item.MemberNo]</td>
+                            <td>
+                                @if (ViewBag.MemberNames != null && ViewBag.MemberNames.ContainsKey(item.MemberNo))
+                                {
+                                    @ViewBag.MemberNames[item.MemberNo]
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Unknown</span>
+                                }
+                            </td>
                             <td>@item.WeightedSavings.ToString("N2")</td>
                             <td>@item.SavingsDividend.ToString("N2")</td>
                             <td>@item.ShareDividend.ToString("N2")</td>
@@ -214,7 +223,7 @@
         }
 
         $.ajax({
-            url: '@Url.Action("Calculate", "DividendDetails")',
+            url: '@Url.Action("Create", "DividendDetails")',
             type: 'POST',
 
             data: {
