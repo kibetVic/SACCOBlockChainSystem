@@ -1,4 +1,7 @@
 .vs/
 bin/
 obj/
+*.user
+*.suo
+block
 .config/

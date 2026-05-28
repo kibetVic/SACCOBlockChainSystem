@@ -39,7 +39,7 @@ namespace SACCOBlockChainSystem.Controllers
             var wallets = _context.Wallets.AsNoTracking().Where(c=>c.CompanyCode == companyCode).ToList();
             var members = await _memberService.GetAllMembersAsync();
             foreach (var wallet in wallets) {
-                wallet.Member = members.FirstOrDefault(m => m.Id == wallet.MemberId) ?? new Models.Member();
+                wallet.Member = members.FirstOrDefault(m => m.MemberNo == wallet.memberNo) ?? new Models.Member();
             }
             return View(wallets);
         }
@@ -57,7 +57,7 @@ namespace SACCOBlockChainSystem.Controllers
             var walletMemberIds = await _context.Wallets
                 .AsNoTracking()
                 .Where(w => w.CompanyCode == companyCode)
-                .Select(w => w.MemberId)
+                .Select(w => w.memberNo)
                 .ToListAsync();
 
             // Get all members
@@ -65,7 +65,7 @@ namespace SACCOBlockChainSystem.Controllers
 
             // Filter members not in wallets
             var membersWithoutWallets = members
-                .Where(m => !walletMemberIds.Contains(m.Id))
+                .Where(m => !walletMemberIds.Contains(m.MemberNo))
                 .ToList();
 
             return View(membersWithoutWallets);
@@ -84,7 +84,7 @@ namespace SACCOBlockChainSystem.Controllers
             var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m=>m.MemberNo == mno && m.CompanyCode == companyCode);
             if (member == null)
                 return NotFound();
-            var wallet = await _context.Wallets.AsNoTracking().FirstOrDefaultAsync(w => w.MemberId == member.Id && w.CompanyCode == member.CompanyCode);
+            var wallet = await _context.Wallets.AsNoTracking().FirstOrDefaultAsync(w => w.memberNo == member.MemberNo && w.CompanyCode == member.CompanyCode);
             member.Wallet = wallet;
             return View(member);
         }
@@ -102,7 +102,7 @@ namespace SACCOBlockChainSystem.Controllers
             var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == mno && m.CompanyCode == companyCode);
             if (member == null)
                 return NotFound();
-            var wallet = await _context.Wallets.AsNoTracking().FirstOrDefaultAsync(w => w.MemberId == member.Id && w.CompanyCode == member.CompanyCode);
+            var wallet = await _context.Wallets.AsNoTracking().FirstOrDefaultAsync(w => w.memberNo == member.MemberNo && w.CompanyCode == member.CompanyCode);
             if(wallet == null)
             {
                 return NotFound();

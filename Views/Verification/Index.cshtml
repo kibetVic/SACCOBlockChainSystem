@@ -1,0 +1,313 @@
+﻿﻿@{
+ViewData["Title"] = "Verify Transactions";
+Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container py-4">
+    <div class="text-center mb-5">
+        <i class="fas fa-shield-alt fa-4x text-primary mb-3"></i>
+        <h1 class="display-5 fw-bold">Transaction Verification</h1>
+        <p class="lead text-muted">Cryptographically verify the authenticity of any transaction</p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-search"></i> Search Transaction
+                    </h5>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text"><i class="fas fa-receipt"></i></span>
+                        <input type="text" id="searchInput" class="form-control form-control-lg"
+                               placeholder="Enter Receipt Number, Transaction Number, or Member Number..."
+                               autocomplete="off">
+                        <button class="btn btn-primary btn-lg" id="searchBtn">
+                            <i class="fas fa-search"></i> Verify
+                        </button>
+                    </div>
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i>
+                        Example: "REC15013001", "M26050600443", or any transaction reference
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="row justify-content-center mt-4" style="display: none;">
+        <div class="col-md-6 text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Searching for transactions...</p>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    <div id="searchResults" class="row justify-content-center mt-4" style="display: none;">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> Search Results
+                        <span id="resultCount" class="badge bg-secondary ms-2"></span>
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Receipt No</th>
+                                    <th>Date</th>
+                                    <th>Member No</th>
+                                    <th>Member Name</th>
+                                    <th>Amount</th>
+                                    <th>Share Type</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsTableBody">
+                                <tr id="noResultsRow">
+                                    <td colspan="8" class="text-center text-muted py-4">
+                                        <i class="fas fa-search fa-2x mb-2 d-block"></i>
+                                        Enter a search term above to find transactions
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .verification-badge {
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+
+        .verification-badge:hover {
+            transform: scale(1.05);
+        }
+
+    .transaction-row {
+        cursor: pointer;
+    }
+
+        .transaction-row:hover {
+            background-color: #f8f9fa;
+        }
+</style>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let searchTimeout;
+        let currentSearchTerm = '';
+
+        $(document).ready(function() {
+            $('#searchBtn').click(performSearch);
+            $('#searchInput').on('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+            });
+
+            $('#searchInput').on('input', function() {
+                clearTimeout(searchTimeout);
+                const term = $(this).val().trim();
+                if (term.length >= 3) {
+                    searchTimeout = setTimeout(performSearch, 500);
+                }
+            });
+        });
+
+        async function performSearch() {
+            const searchTerm = $('#searchInput').val().trim();
+
+            if (!searchTerm) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Search Term Required',
+                    text: 'Please enter a Receipt Number, Transaction Number, or Member Number'
+                });
+                return;
+            }
+
+            if (searchTerm.length < 3) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Search Term Too Short',
+                    text: 'Please enter at least 3 characters to search'
+                });
+                return;
+            }
+
+            currentSearchTerm = searchTerm;
+
+            $('#searchBtn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Searching...');
+            $('#loadingIndicator').show();
+            $('#searchResults').hide();
+
+            try {
+                const response = await fetch(`/Verification/Search?searchTerm=${encodeURIComponent(searchTerm)}`);
+                const data = await response.json();
+
+                console.log('Search response:', data);
+
+                if (data.success) {
+                    displaySearchResults(data);
+                } else {
+                    showNoResults(data.message || 'Search failed');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Search Failed',
+                        text: data.message || 'An error occurred while searching'
+                    });
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showNoResults('An error occurred while searching');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Search Failed',
+                    text: error.message || 'Please try again'
+                });
+            } finally {
+                $('#searchBtn').prop('disabled', false).html('<i class="fas fa-search"></i> Verify');
+                $('#loadingIndicator').hide();
+            }
+        }
+
+        function displaySearchResults(data) {
+            const tbody = $('#resultsTableBody');
+            tbody.empty();
+
+            if (!data.data || data.data.length === 0) {
+                showNoResults(`No transactions found for "${escapeHtml(currentSearchTerm)}"`);
+                return;
+            }
+
+            $('#resultCount').text(data.data.length);
+
+            data.data.forEach(tx => {
+                const row = `
+                    <tr class="transaction-row" data-memberno="${escapeHtml(tx.memberNo)}">
+                        <td>
+                            <strong>${escapeHtml(tx.receiptNo)}</strong>
+                            ${tx.blockchainTxId ? '<i class="fas fa-link text-success ms-1" title="On Blockchain"></i>' : ''}
+                        </td>
+                        <td>${escapeHtml(tx.transactionDate)}</td>
+                        <td><strong>${escapeHtml(tx.memberNo)}</strong></td>
+                        <td>${escapeHtml(tx.memberName)}</td>
+                        <td class="text-success fw-bold">KES ${formatCurrency(tx.amount)}</td>
+                        <td>${escapeHtml(tx.shareType)}</td>
+                        <td>
+                            <span class="badge bg-${tx.statusClass}">
+                                ${tx.isSignatureVerified ? '<i class="fas fa-check-circle"></i> Verified' : '<i class="fas fa-clock"></i> Pending'}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-primary verify-btn" data-id="${tx.transactionId}">
+                                <i class="fas fa-shield-alt"></i> Verify
+                            </button>
+                            <button class="btn btn-sm btn-outline-info chain-btn" data-memberno="${escapeHtml(tx.memberNo)}">
+                                <i class="fas fa-link"></i> Chain
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            // Attach click handlers to buttons (to avoid event propagation issues)
+            $('.verify-btn').click(function(e) {
+                e.stopPropagation();
+                const id = $(this).data('id');
+                viewTransaction(id);
+            });
+
+            $('.chain-btn').click(function(e) {
+                e.stopPropagation();
+                const memberNo = $(this).data('memberno');
+                viewMemberChain(memberNo);
+            });
+
+            // Row click handler
+            $('.transaction-row').click(function() {
+                const verifyBtn = $(this).find('.verify-btn');
+                if (verifyBtn.length) {
+                    const id = verifyBtn.data('id');
+                    viewTransaction(id);
+                }
+            });
+        }
+
+        function showNoResults(message) {
+            const tbody = $('#resultsTableBody');
+            tbody.empty();
+            tbody.html(`
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">
+                        <i class="fas fa-exclamation-circle fa-2x mb-2 d-block text-warning"></i>
+                        ${escapeHtml(message)}
+                        <br>
+                        <small>Try a different receipt number, member number, or transaction number</small>
+                    </td>
+                </tr>
+            `);
+            $('#resultCount').text('0');
+            $('#searchResults').show();
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-KE', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(amount);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function viewTransaction(id) {
+            console.log('Navigating to transaction:', id);
+            if (!id) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Invalid transaction ID' });
+                return;
+            }
+            window.location.href = `/Verification/Transaction/${id}`;
+        }
+
+        function viewMemberChain(memberNo) {
+            console.log('Navigating to member chain for:', memberNo);
+
+            if (!memberNo || memberNo === 'undefined' || memberNo === 'null' || memberNo === '') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Invalid member number. Cannot view chain.'
+                });
+                return;
+            }
+
+            // Try path parameter first
+            const url = `/Verification/MemberChain/${encodeURIComponent(memberNo)}`;
+            console.log('Navigating to URL:', url);
+            window.location.href = url;
+        }
+
+        // Debug: Log when page loads
+        console.log('Index page loaded. Verification functions ready.');
+    </script>
+}
