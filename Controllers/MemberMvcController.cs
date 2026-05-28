@@ -1142,7 +1142,7 @@ namespace SACCOBlockChainSystem.Controllers
         // POST: /MemberMvc/MyProfile
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> MyProfile(MemberUpdateDTO model)
+        public async Task<IActionResult> MyProfile([FromBody] MemberUpdateDTO model)
         {
             try
             {
@@ -1150,43 +1150,36 @@ namespace SACCOBlockChainSystem.Controllers
 
                 if (string.IsNullOrEmpty(memberNo))
                 {
-                    TempData["ErrorMessage"] = "Member not found. Please login again.";
-                    return RedirectToAction("MemberLogin", "Account");
+                    return Json(new { success = false, message = "Member not found. Please login again." });
                 }
 
-                if (!ModelState.IsValid)
+                // Validate required fields
+                if (string.IsNullOrEmpty(model.Surname))
                 {
-                    var companyCode = GetUserCompanyCode();
-
-                    // Reload stats
-                    var totalContributions = await _context.Contribs
-                        .Where(c => c.MemberNo == memberNo && c.CompanyCode == companyCode)
-                        .SumAsync(c => c.Amount ?? 0);
-
-                    var shareBalance = await _context.Shares
-                        .Where(s => s.MemberNo == memberNo && s.CompanyCode == companyCode)
-                        .SumAsync(s => s.TotalShares ?? 0);
-
-                    ViewBag.TotalContributions = totalContributions;
-                    ViewBag.ShareBalance = shareBalance;
-                    ViewBag.MemberName = $"{model.Surname} {model.OtherNames}";
-                    ViewBag.MemberNo = memberNo;
-
-                    return View(model);
+                    return Json(new { success = false, message = "Surname is required" });
+                }
+                if (string.IsNullOrEmpty(model.OtherNames))
+                {
+                    return Json(new { success = false, message = "Other Names are required" });
+                }
+                if (string.IsNullOrEmpty(model.IdNo))
+                {
+                    return Json(new { success = false, message = "ID Number is required" });
+                }
+                if (string.IsNullOrEmpty(model.PhoneNo))
+                {
+                    return Json(new { success = false, message = "Phone Number is required" });
                 }
 
                 // Update member using service
                 var result = await _memberService.UpdateMemberAsync(memberNo, model);
 
-                TempData["SuccessMessage"] = "Your profile has been updated successfully!";
-
-                return RedirectToAction("MyProfile");
+                return Json(new { success = true, message = "Your profile has been updated successfully!" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating member profile");
-                TempData["ErrorMessage"] = $"Error updating profile: {ex.Message}";
-                return RedirectToAction("MyProfile");
+                return Json(new { success = false, message = ex.Message });
             }
         }
 

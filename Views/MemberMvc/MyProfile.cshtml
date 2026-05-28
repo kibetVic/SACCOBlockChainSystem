@@ -111,10 +111,14 @@
         <div class="card-body">
             <form id="profileForm" method="post" asp-action="MyProfile">
                 @Html.AntiForgeryToken()
-                <input type="hidden" asp-for="MemberNo" />
-                <input type="hidden" asp-for="RegistrationDate" />
-                <input type="hidden" asp-for="Status" />
-                <input type="hidden" asp-for="CreatedBy" value="@User.Identity?.Name" />
+                
+                <!-- Hidden fields - Make sure they have values -->
+                <input type="hidden" id="MemberNo" name="MemberNo" value="@Model.MemberNo" />
+                <input type="hidden" id="RegistrationDate" name="RegistrationDate" value="@Model.RegistrationDate.ToString("yyyy-MM-dd")" />
+                <input type="hidden" id="Status" name="Status" value="@Model.Status" />
+                <input type="hidden" id="MembershipType" name="MembershipType" value="@Model.MembershipType" />
+                <input type="hidden" id="RegistrationType" name="RegistrationType" value="@Model.RegistrationType" />
+                <input type="hidden" name="CreatedBy" value="@User.Identity?.Name" />
 
                 <div class="row">
                     <!-- LEFT SIDE - Form Fields -->
@@ -128,8 +132,8 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="required">ID Number *</label>
-                                <input type="text" asp-for="IdNo" class="form-control" maxlength="20" />
-                                <span asp-validation-for="IdNo" class="text-danger"></span>
+                                <input type="text" id="IdNo" name="IdNo" value="@Model.IdNo" class="form-control" maxlength="20" />
+                                <span class="text-danger" id="IdNoError"></span>
                             </div>
                         </div>
 
@@ -137,13 +141,13 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="required">Surname *</label>
-                                <input type="text" asp-for="Surname" class="form-control" />
-                                <span asp-validation-for="Surname" class="text-danger"></span>
+                                <input type="text" id="Surname" name="Surname" value="@Model.Surname" class="form-control" />
+                                <span class="text-danger" id="SurnameError"></span>
                             </div>
                             <div class="col-md-6">
                                 <label class="required">Other Names *</label>
-                                <input type="text" asp-for="OtherNames" class="form-control" />
-                                <span asp-validation-for="OtherNames" class="text-danger"></span>
+                                <input type="text" id="OtherNames" name="OtherNames" value="@Model.OtherNames" class="form-control" />
+                                <span class="text-danger" id="OtherNamesError"></span>
                             </div>
                         </div>
 
@@ -151,17 +155,17 @@
                         <div class="row mb-3">
                             <div class="col-md-4">
                                 <label class="required">Phone Number *</label>
-                                <input type="tel" asp-for="PhoneNo" class="form-control" placeholder="0712345678" />
-                                <span asp-validation-for="PhoneNo" class="text-danger"></span>
+                                <input type="tel" id="PhoneNo" name="PhoneNo" value="@Model.PhoneNo" class="form-control" placeholder="0712345678" />
+                                <span class="text-danger" id="PhoneNoError"></span>
                             </div>
                             <div class="col-md-4">
                                 <label>Landline</label>
-                                <input type="tel" asp-for="LandLine" class="form-control" placeholder="0201234567" />
+                                <input type="tel" id="LandLine" name="LandLine" value="@Model.LandLine" class="form-control" placeholder="0201234567" />
                             </div>
                             <div class="col-md-4">
                                 <label>Email</label>
-                                <input type="email" asp-for="Email" class="form-control" placeholder="member@example.com" />
-                                <span asp-validation-for="Email" class="text-danger"></span>
+                                <input type="email" id="Email" name="Email" value="@Model.Email" class="form-control" placeholder="member@example.com" />
+                                <span class="text-danger" id="EmailError"></span>
                             </div>
                         </div>
 
@@ -169,7 +173,7 @@
                         <div class="row mb-3">
                             <div class="col-md-3">
                                 <label>Gender</label>
-                                <select asp-for="Gender" class="form-control">
+                                <select id="Gender" name="Gender" class="form-control" asp-for="Gender">
                                     <option value="">Select</option>
                                     <option value="Male">Male</option>
                                     <option value="Female">Female</option>
@@ -178,16 +182,16 @@
                             </div>
                             <div class="col-md-3">
                                 <label>Date of Birth</label>
-                                <input type="date" asp-for="DateOfBirth" class="form-control" />
+                                <input type="date" id="DateOfBirth" name="DateOfBirth" value="@(Model.DateOfBirth?.ToString("yyyy-MM-dd"))" class="form-control" />
                                 <span id="ageWarning" class="text-danger"></span>
                             </div>
                             <div class="col-md-2">
                                 <label>Age</label>
-                                <input type="number" id="Age" class="form-control" readonly />
+                                <input type="number" id="Age" name="Age" value="@Model.Age" class="form-control" readonly />
                             </div>
                             <div class="col-md-4">
                                 <label>Marital Status</label>
-                                <select asp-for="MaritalStatus" class="form-control">
+                                <select id="MaritalStatus" name="MaritalStatus" class="form-control" asp-for="MaritalStatus">
                                     <option value="">Select</option>
                                     <option value="Single">Single</option>
                                     <option value="Married">Married</option>
@@ -201,15 +205,15 @@
                         <div class="row mb-3">
                             <div class="col-md-4">
                                 <label>Employer</label>
-                                <input type="text" asp-for="Employer" class="form-control" />
+                                <input type="text" id="Employer" name="Employer" value="@Model.Employer" class="form-control" />
                             </div>
                             <div class="col-md-4">
                                 <label>Department</label>
-                                <input type="text" asp-for="Department" class="form-control" />
+                                <input type="text" id="Department" name="Department" value="@Model.Department" class="form-control" />
                             </div>
                             <div class="col-md-4">
                                 <label>Station/County</label>
-                                <input type="text" asp-for="Station" class="form-control" />
+                                <input type="text" id="Station" name="Station" value="@Model.Station" class="form-control" />
                             </div>
                         </div>
 
@@ -217,11 +221,11 @@
                         <div class="row mb-3">
                             <div class="col-md-12">
                                 <label>Present Address</label>
-                                <textarea asp-for="PresentAddress" class="form-control" rows="2"></textarea>
+                                <textarea id="PresentAddress" name="PresentAddress" class="form-control" rows="2">@Model.PresentAddress</textarea>
                             </div>
                         </div>
 
-                        <!-- Membership Information (Read-only) -->
+                        <!-- Membership Information (Read-only display) -->
                         <div class="row mb-3">
                             <div class="col-md-4">
                                 <label>Membership Type</label>
@@ -345,7 +349,6 @@
             transform: translateY(-100%);
             opacity: 0;
         }
-
         to {
             transform: translateY(0);
             opacity: 1;
@@ -391,14 +394,6 @@
                     age--;
                 }
                 $('#Age').val(age);
-
-                // Check if under 18 for individual membership
-                const membershipType = $('#MembershipType').val();
-                if (membershipType === 'Individual' && age < 18) {
-                    $('#ageWarning').text('Individual members must be 18 years or older.');
-                } else {
-                    $('#ageWarning').text('');
-                }
             } else {
                 $('#Age').val('');
             }
@@ -464,56 +459,77 @@
         }
 
         async function updateProfile() {
+            // Clear previous errors
+            $('#SurnameError').text('');
+            $('#OtherNamesError').text('');
+            $('#IdNoError').text('');
+            $('#PhoneNoError').text('');
+            $('#EmailError').text('');
+
+            // Get values from form fields
+            const surname = $('#Surname').val();
+            const otherNames = $('#OtherNames').val();
+            const idNo = $('#IdNo').val();
+            const phoneNo = $('#PhoneNo').val();
+
             // Validate required fields
-            if (!$('#Surname').val().trim()) {
-                Swal.fire('Error', 'Surname is required', 'error');
+            let hasError = false;
+
+            if (!surname || !surname.trim()) {
+                $('#SurnameError').text('Surname is required');
+                hasError = true;
+            }
+
+            if (!otherNames || !otherNames.trim()) {
+                $('#OtherNamesError').text('Other Names are required');
+                hasError = true;
+            }
+
+            if (!idNo || !idNo.trim()) {
+                $('#IdNoError').text('ID Number is required');
+                hasError = true;
+            }
+
+            if (!phoneNo || !phoneNo.trim()) {
+                $('#PhoneNoError').text('Phone Number is required');
+                hasError = true;
+            }
+
+            const email = $('#Email').val();
+            if (email && email.trim() && !/^[^\s@@]+@@[^\s@@]+\.[^\s@@]+$/.test(email.trim())) {
+                $('#EmailError').text('Please enter a valid email address');
+                hasError = true;
+            }
+
+            if (hasError) {
+                Swal.fire('Error', 'Please fill in all required fields', 'error');
                 return;
             }
 
-            if (!$('#OtherNames').val().trim()) {
-                Swal.fire('Error', 'Other Names are required', 'error');
-                return;
-            }
-
-            if (!$('#IdNo').val().trim()) {
-                Swal.fire('Error', 'ID Number is required', 'error');
-                return;
-            }
-
-            if (!$('#PhoneNo').val().trim()) {
-                Swal.fire('Error', 'Phone Number is required', 'error');
-                return;
-            }
-
-            // Validate age for individual members
-            const membershipType = $('#MembershipType').val();
-            const age = parseInt($('#Age').val());
-            if (membershipType === 'Individual' && age < 18) {
-                Swal.fire('Error', 'Individual members must be 18 years or older', 'error');
-                return;
-            }
-
+            // Build formData with EXACT property names matching MemberUpdateDTO
             const formData = {
-                MemberNo: $('#MemberNo').val(),
-                Surname: $('#Surname').val(),
-                OtherNames: $('#OtherNames').val(),
-                IdNo: $('#IdNo').val(),
-                PhoneNo: $('#PhoneNo').val(),
-                LandLine: $('#LandLine').val(),
-                Email: $('#Email').val(),
-                Gender: $('#Gender').val(),
-                DateOfBirth: $('#DateOfBirth').val() || null,
-                Age: $('#Age').val(),
-                MaritalStatus: $('#MaritalStatus').val(),
-                Employer: $('#Employer').val(),
-                Department: $('#Department').val(),
-                Station: $('#Station').val(),
-                PresentAddress: $('#PresentAddress').val(),
-                RegistrationDate: $('#RegistrationDate').val(),
-                Status: $('#Status').val(),
-                MembershipType: $('#MembershipType').val(),
-                RegistrationType: $('#RegistrationType').val()
+                memberNo: $('#MemberNo').val(),
+                surname: $('#Surname').val(),
+                otherNames: $('#OtherNames').val(),
+                idNo: $('#IdNo').val(),
+                phoneNo: $('#PhoneNo').val(),
+                landLine: $('#LandLine').val(),
+                email: $('#Email').val(),
+                gender: $('#Gender').val(),
+                dateOfBirth: $('#DateOfBirth').val() || null,
+                age: $('#Age').val(),
+                maritalStatus: $('#MaritalStatus').val(),
+                employer: $('#Employer').val(),
+                department: $('#Department').val(),
+                station: $('#Station').val(),
+                presentAddress: $('#PresentAddress').val(),
+                registrationDate: $('#RegistrationDate').val(),
+                status: $('#Status').val(),
+                membershipType: $('#MembershipType').val(),
+                registrationType: $('#RegistrationType').val()
             };
+
+            console.log('Sending data:', formData); // Debug log
 
             $('#loadingOverlay').fadeIn(200);
 
@@ -544,6 +560,7 @@
                 }
             } catch (error) {
                 $('#loadingOverlay').fadeOut(200);
+                console.error('Error:', error);
                 Swal.fire('Error', 'An error occurred while updating profile', 'error');
             }
         }
