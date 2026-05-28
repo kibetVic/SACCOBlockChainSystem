@@ -3638,6 +3638,40 @@ namespace SACCOBlockChainSystem.Controllers
 		#region Shares and Loans Report
 
 		[HttpGet]
+		public IActionResult SharesLoansMember()
+		{
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+            var reportDate = DateTime.Now;
+
+            var viewModel = new SharesAndLoansIndexViewModel
+            {
+                Members = new List<SharesAndLoansReportViewModel>(),
+                ReportDate = reportDate,
+                HasData = false,
+                UserCompanyCode = companyCode,
+                CompanyName = companyName,
+                TotalMembers = 0,
+                MaleCount = 0,
+                FemaleCount = 0,
+                OtherCount = 0,
+                YouthCount = 0,
+                TotalShareCapital = 0,
+                TotalDeposits = 0,
+                TotalRegFee = 0,
+                TotalPassbook = 0,
+                TotalLoans = 0,
+                TotalOutstandingBalance = 0
+            };
+
+            ViewBag.ReportDate = reportDate;
+            ViewBag.CompanyName = companyName;
+            ViewBag.HasData = false;
+            // return RedirectToAction("SharesLoansPERSacco", "MemberReport");
+
+            return View( viewModel);
+        }
+		[HttpGet]
 		public IActionResult SharesLoansPERSacco()
 		{
 			var companyCode = User.FindFirstValue("CompanyCode");
@@ -3672,7 +3706,206 @@ namespace SACCOBlockChainSystem.Controllers
             return View("~/Views/Reports/SharesLoansPERSacco.cshtml", viewModel);
 		}
 
-		[HttpPost]
+        [HttpPost]
+        public async Task<IActionResult> SharesLoansMember(DateTime reportDate)
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+			var mno = User.FindFirstValue("MemberNo");
+            // Get all active members
+            var members = await _context.Members
+                .Where(m => m.CompanyCode == companyCode && m.MemberNo == mno
+                    && (m.Withdrawn == false || m.Withdrawn == null)
+                    && (m.Archived == false || m.Archived == null))
+                .OrderBy(m => m.MemberNo)
+                .ToListAsync();
+
+            var memberNos = members.Select(m => m.MemberNo).ToList();
+
+            // Get SHARE CAPITAL from Shares table (sum of TotalShares for each member)
+            var shares = await _context.Shares
+                .Where(s => memberNos.Contains(s.MemberNo) && s.CompanyCode == companyCode)
+                .GroupBy(s => s.MemberNo)
+                .Select(g => new
+                {
+                    MemberNo = g.Key,
+                    TotalShareCapital = g.Sum(s => s.TotalShares ?? 0)
+                })
+                .ToDictionaryAsync(s => s.MemberNo, s => s.TotalShareCapital);
+
+            // Get DEPOSITS/SAVINGS from Contribs table
+            var savings = await _context.ContribShares
+                .Where(c => memberNos.Contains(c.MemberNo) && c.CompanyCode == companyCode)
+                .GroupBy(c => c.MemberNo)
+                .Select(g => new
+                {
+                    MemberNo = g.Key,
+                    TotalCapital = g.Sum(c => c.ShareCapitalAmount ?? 0),
+                    TotalDeposits = g.Sum(c => c.DepositsAmount ?? 0)
+                })
+                .ToDictionaryAsync(c => c.MemberNo, c => c.TotalCapital+c.TotalDeposits);
+
+            // Get REGISTRATION FEE from ContribShares and Member table
+            var regFees = await _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo) && cs.CompanyCode == companyCode)
+                .GroupBy(cs => cs.MemberNo)
+                .Select(g => new
+                {
+                    MemberNo = g.Key,
+                    TotalRegFee = g.Sum(cs => cs.RegFeeAmount ?? 0)
+                })
+                .ToDictionaryAsync(cs => cs.MemberNo, cs => cs.TotalRegFee);
+
+            // Get LOANS (total disbursed loan amount) from Loans table
+            var loans = await _context.Loans
+                .Where(l => memberNos.Contains(l.MemberNo)
+                    && l.CompanyCode == companyCode
+                    && l.Status == (int)Status.Disbursed)
+                .GroupBy(l => l.MemberNo)
+                .Select(g => new
+                {
+                    MemberNo = g.Key,
+                    TotalLoans = g.Sum(l => l.LoanAmt ?? 0)
+                })
+                .ToDictionaryAsync(l => l.MemberNo, l => l.TotalLoans);
+
+            // Get PASSBOOK amount (if you have a passbook table, otherwise use 0)
+            // Passbook typically represents statement balance or special savings
+            var passbook = await _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo) && cs.CompanyCode == companyCode)
+                .GroupBy(cs => cs.MemberNo)
+                .Select(g => new
+                {
+                    MemberNo = g.Key,
+                    TotalPassbook = g.Sum(cs => cs.PassBookAmount ?? 0)
+                })
+                .ToDictionaryAsync(cs => cs.MemberNo, cs => cs.TotalPassbook);
+
+            // Get CIG/GIG names from Member's Cigcode
+            var gigCodes = members.Where(m => !string.IsNullOrEmpty(m.Cigcode))
+                .Select(m => m.Cigcode)
+                .Distinct()
+                .ToList();
+
+            var gigDetails = await _context.CIGs
+                .Where(g => gigCodes.Contains(g.GigCode) && g.CompanyCode == companyCode)
+                .ToDictionaryAsync(g => g.GigCode, g => g.GigName);
+
+            var reportData = new List<SharesAndLoansReportViewModel>();
+            int maleCount = 0, femaleCount = 0, otherCount = 0, youthCount = 0;
+            decimal totalShareCapital = 0, totalDeposits = 0, totalRegFee = 0, totalPassbook = 0, totalLoans = 0;
+
+            foreach (var member in members)
+            {
+                // Calculate age
+                int? age = null;
+                if (member.Dob.HasValue)
+                {
+                    age = DateTime.Now.Year - member.Dob.Value.Year;
+                    if (DateTime.Now < member.Dob.Value.AddYears(age.Value)) age--;
+                    if (age >= 18 && age <= 35) youthCount++;
+                }
+
+                // Build full name
+                string fullName = "N/A";
+                if (!string.IsNullOrWhiteSpace(member.Surname) || !string.IsNullOrWhiteSpace(member.OtherNames))
+                {
+                    fullName = $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim();
+                    if (string.IsNullOrWhiteSpace(fullName))
+                        fullName = "N/A";
+                }
+
+                // Get GIG Name
+                string gigName = "UNASSIGNED";
+                if (!string.IsNullOrEmpty(member.Cigcode) && gigDetails.ContainsKey(member.Cigcode))
+                {
+                    gigName = gigDetails[member.Cigcode];
+                }
+                else if (!string.IsNullOrEmpty(member.Cigcode))
+                {
+                    gigName = member.Cigcode;
+                }
+
+                // Count gender
+                if (member.Sex?.ToUpper() == "MALE" || member.Sex?.ToUpper() == "M")
+                {
+                    maleCount++;
+                }
+                else if (member.Sex?.ToUpper() == "FEMALE" || member.Sex?.ToUpper() == "F")
+                {
+                    femaleCount++;
+                }
+                else
+                {
+                    otherCount++;
+                }
+
+                // Get financial values
+                decimal shareCapital = shares.ContainsKey(member.MemberNo) ? shares[member.MemberNo] : (member.ShareCap ?? 0);
+                decimal deposits = savings.ContainsKey(member.MemberNo) ? savings[member.MemberNo] : 0;
+                decimal regFee = regFees.ContainsKey(member.MemberNo) ? regFees[member.MemberNo] : (member.RegFee ?? 0);
+                decimal passbookAmount = passbook.ContainsKey(member.MemberNo) ? passbook[member.MemberNo] : 0;
+                decimal loanAmount = loans.ContainsKey(member.MemberNo) ? loans[member.MemberNo] : 0;
+
+                totalShareCapital += shareCapital;
+                totalDeposits += deposits;
+                totalRegFee += regFee;
+                totalPassbook += passbookAmount;
+                totalLoans += loanAmount;
+
+                reportData.Add(new SharesAndLoansReportViewModel
+                {
+                    MemberNo = member.MemberNo,
+                    FullName = fullName,
+                    Age = age,
+                    CIGName = gigName,
+                    ShareCapital = shareCapital,
+                    Deposits = deposits,
+                    RegFee = regFee,
+                    Passbook = passbookAmount,
+                    TotalLoans = loanAmount,
+                    DateRegistered = member.ApplicDate,
+                    Sex = member.Sex ?? "Not Specified"
+                });
+            }
+
+            var viewModel = new SharesAndLoansIndexViewModel
+            {
+                Members = reportData.OrderBy(m => m.MemberNo).ToList(),
+                TotalMembers = reportData.Count,
+                MaleCount = maleCount,
+                FemaleCount = femaleCount,
+                OtherCount = otherCount,
+                YouthCount = youthCount,
+                TotalShareCapital = totalShareCapital,
+                TotalDeposits = totalDeposits,
+                TotalRegFee = totalRegFee,
+                TotalPassbook = totalPassbook,
+                TotalLoans = totalLoans,
+                ReportDate = reportDate,
+                HasData = reportData.Any(),
+                UserCompanyCode = companyCode,
+                CompanyName = companyName
+            };
+
+            ViewBag.ReportDate = reportDate;
+            ViewBag.CompanyName = companyName;
+            ViewBag.TotalMembers = reportData.Count;
+            ViewBag.TotalShareCapital = totalShareCapital;
+            ViewBag.TotalDeposits = totalDeposits;
+            ViewBag.TotalRegFee = totalRegFee;
+            ViewBag.TotalPassbook = totalPassbook;
+            ViewBag.TotalLoans = totalLoans;
+            ViewBag.MaleCount = maleCount;
+            ViewBag.FemaleCount = femaleCount;
+            ViewBag.YouthCount = youthCount;
+            ViewBag.HasData = reportData.Any();
+
+            return View("~/Views/Reports/SharesLoansPERSacco.cshtml", viewModel);
+        }
+
+
+        [HttpPost]
 		public async Task<IActionResult> SharesLoansPERSacco(DateTime reportDate)
 		{
 			var companyCode = User.FindFirstValue("CompanyCode");
@@ -4216,10 +4449,378 @@ namespace SACCOBlockChainSystem.Controllers
 			var content = stream.ToArray();
 			return File(content, "application/pdf", $"SharesAndLoansReport_{reportDate:yyyyMMdd}.pdf");
 		}
+        [HttpPost]
+        public async Task<IActionResult> ExportSharesAndLoansMemberToExcel(DateTime reportDate)
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+			var mno = User.FindFirstValue("MemberNo") ?? "";
+            var members = await _context.Members
+                .Where(m => m.CompanyCode == companyCode && m.MemberNo == mno
+                    && (m.Withdrawn == false || m.Withdrawn == null)
+                    && (m.Archived == false || m.Archived == null))
+                .OrderBy(m => m.MemberNo)
+                .ToListAsync();
 
-		#endregion
+            var memberNos = members.Select(m => m.MemberNo).ToList();
+
+            var shares = await _context.Shares
+                .Where(s => memberNos.Contains(s.MemberNo) && s.CompanyCode == companyCode)
+                .GroupBy(s => s.MemberNo)
+                .Select(g => new { MemberNo = g.Key, TotalShareCapital = g.Sum(s => s.TotalShares ?? 0) })
+                .ToDictionaryAsync(s => s.MemberNo, s => s.TotalShareCapital);
+
+            //var savings = await _context.Contribs
+            //    .Where(c => memberNos.Contains(c.MemberNo) && c.CompanyCode == companyCode)
+            //    .GroupBy(c => c.MemberNo)
+            //    .Select(g => new { MemberNo = g.Key, TotalSavings = g.Sum(c => c.Amount ?? 0) })
+            //    .ToDictionaryAsync(c => c.MemberNo, c => c.TotalSavings);
+            var savings = await _context.ContribShares
+                .Where(c => memberNos.Contains(c.MemberNo) && c.CompanyCode == companyCode)
+                .GroupBy(c => c.MemberNo)
+                .Select(g => new
+                {
+                    MemberNo = g.Key,
+                    TotalCapital = g.Sum(c => c.ShareCapitalAmount ?? 0),
+                    TotalDeposits = g.Sum(c => c.DepositsAmount ?? 0)
+                })
+                .ToDictionaryAsync(c => c.MemberNo, c => c.TotalCapital + c.TotalDeposits);
+
+            var regFees = await _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo) && cs.CompanyCode == companyCode)
+                .GroupBy(cs => cs.MemberNo)
+                .Select(g => new { MemberNo = g.Key, TotalRegFee = g.Sum(cs => cs.RegFeeAmount ?? 0) })
+                .ToDictionaryAsync(cs => cs.MemberNo, cs => cs.TotalRegFee);
+
+            var loans = await _context.Loans
+                .Where(l => memberNos.Contains(l.MemberNo) && l.CompanyCode == companyCode && l.Status == (int)Status.Disbursed)
+                .GroupBy(l => l.MemberNo)
+                .Select(g => new { MemberNo = g.Key, TotalLoans = g.Sum(l => l.LoanAmt ?? 0) })
+                .ToDictionaryAsync(l => l.MemberNo, l => l.TotalLoans);
+
+            var passbook = await _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo) && cs.CompanyCode == companyCode)
+                .GroupBy(cs => cs.MemberNo)
+                .Select(g => new { MemberNo = g.Key, TotalPassbook = g.Sum(cs => cs.PassBookAmount ?? 0) })
+                .ToDictionaryAsync(cs => cs.MemberNo, cs => cs.TotalPassbook);
+
+            var gigCodes = members.Where(m => !string.IsNullOrEmpty(m.Cigcode)).Select(m => m.Cigcode).Distinct().ToList();
+            var gigDetails = await _context.CIGs
+                .Where(g => gigCodes.Contains(g.GigCode) && g.CompanyCode == companyCode)
+                .ToDictionaryAsync(g => g.GigCode, g => g.GigName);
+
+            var reportData = new List<dynamic>();
+
+            foreach (var member in members)
+            {
+                string fullName = $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim();
+                if (string.IsNullOrWhiteSpace(fullName)) fullName = "N/A";
+
+                int? age = null;
+                if (member.Dob.HasValue)
+                {
+                    age = DateTime.Now.Year - member.Dob.Value.Year;
+                    if (DateTime.Now < member.Dob.Value.AddYears(age.Value)) age--;
+                }
+
+                string gigName = "UNASSIGNED";
+                if (!string.IsNullOrEmpty(member.Cigcode) && gigDetails.ContainsKey(member.Cigcode))
+                    gigName = gigDetails[member.Cigcode];
+                else if (!string.IsNullOrEmpty(member.Cigcode))
+                    gigName = member.Cigcode;
+
+                string sex = "NOT SPECIFIED";
+                if (!string.IsNullOrEmpty(member.Sex))
+                {
+                    string sexUpper = member.Sex.ToUpper();
+                    if (sexUpper == "M" || sexUpper == "MALE")
+                        sex = "MALE";
+                    else if (sexUpper == "F" || sexUpper == "FEMALE")
+                        sex = "FEMALE";
+                    else
+                        sex = sexUpper;
+                }
+
+                reportData.Add(new
+                {
+                    member.MemberNo,
+                    Names = fullName,
+                    Age = age,
+                    CIGName = gigName,
+                    ShareCapital = shares.ContainsKey(member.MemberNo) ? shares[member.MemberNo] : (member.ShareCap ?? 0),
+                    Deposits = savings.ContainsKey(member.MemberNo) ? savings[member.MemberNo] : 0,
+                    RegFee = regFees.ContainsKey(member.MemberNo) ? regFees[member.MemberNo] : (member.RegFee ?? 0),
+                    Passbook = passbook.ContainsKey(member.MemberNo) ? passbook[member.MemberNo] : 0,
+                    Loans = loans.ContainsKey(member.MemberNo) ? loans[member.MemberNo] : 0,
+                    DateRegistered = member.ApplicDate?.ToString("dd/MM/yyyy") ?? "-",
+                    Sex = sex
+                });
+            }
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Shares and Loans Report");
+            int currentRow = 1;
+
+            worksheet.Cell(currentRow, 1).Value = companyName.ToUpper();
+            worksheet.Range(currentRow, 1, currentRow, 11).Merge();
+            worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(18);
+            worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+            currentRow += 2;
+
+            worksheet.Cell(currentRow, 1).Value = $"SHARES AND LOANS REPORT AS AT {reportDate:dd/MM/yyyy}";
+            worksheet.Range(currentRow, 1, currentRow, 11).Merge();
+            worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+            worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+            currentRow += 2;
+
+            string[] headers = { "MemberNo", "Names", "Age", "CIGName", "Sex", "Share Capital", "Deposits", "Reg Fee", "Passbook", "Loans", "Date Registered" };
+            for (int i = 0; i < headers.Length; i++)
+            {
+                worksheet.Cell(currentRow, i + 1).Value = headers[i];
+                worksheet.Cell(currentRow, i + 1).Style.Font.SetBold();
+                worksheet.Cell(currentRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                worksheet.Cell(currentRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                worksheet.Cell(currentRow, i + 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+            }
+            currentRow++;
+
+            foreach (var member in reportData)
+            {
+                worksheet.Cell(currentRow, 1).Value = member.MemberNo;
+                worksheet.Cell(currentRow, 2).Value = member.Names;
+                worksheet.Cell(currentRow, 3).Value = member.Age;
+                worksheet.Cell(currentRow, 4).Value = member.CIGName;
+                worksheet.Cell(currentRow, 5).Value = member.Sex;
+                worksheet.Cell(currentRow, 6).Value = member.ShareCapital;
+                worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 7).Value = member.Deposits;
+                worksheet.Cell(currentRow, 7).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 8).Value = member.RegFee;
+                worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 9).Value = member.Passbook;
+                worksheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 10).Value = member.Loans;
+                worksheet.Cell(currentRow, 10).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 11).Value = member.DateRegistered;
+                currentRow++;
+            }
+
+            currentRow++;
+            worksheet.Cell(currentRow, 5).Value = "GRAND TOTAL:";
+            worksheet.Cell(currentRow, 5).Style.Font.SetBold();
+            worksheet.Cell(currentRow, 6).Value = reportData.Sum(m => (decimal)m.ShareCapital);
+            worksheet.Cell(currentRow, 6).Style.Font.SetBold();
+            worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
+            worksheet.Cell(currentRow, 7).Value = reportData.Sum(m => (decimal)m.Deposits);
+            worksheet.Cell(currentRow, 7).Style.Font.SetBold();
+            worksheet.Cell(currentRow, 7).Style.NumberFormat.Format = "#,##0.00";
+            worksheet.Cell(currentRow, 8).Value = reportData.Sum(m => (decimal)m.RegFee);
+            worksheet.Cell(currentRow, 8).Style.Font.SetBold();
+            worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+            worksheet.Cell(currentRow, 9).Value = reportData.Sum(m => (decimal)m.Passbook);
+            worksheet.Cell(currentRow, 9).Style.Font.SetBold();
+            worksheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
+            worksheet.Cell(currentRow, 10).Value = reportData.Sum(m => (decimal)m.Loans);
+            worksheet.Cell(currentRow, 10).Style.Font.SetBold();
+            worksheet.Cell(currentRow, 10).Style.NumberFormat.Format = "#,##0.00";
+
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            return File(stream.ToArray(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"SharesAndLoansReport_{reportDate:yyyyMMdd}.xlsx");
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ExportSharesAndLoansMemberToPdf(DateTime reportDate)
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+			var mno = User.FindFirstValue("MemberNo") ?? "";
+            var members = await _context.Members
+                .Where(m => m.CompanyCode == companyCode && m.MemberNo == mno
+                    && (m.Withdrawn == false || m.Withdrawn == null)
+                    && (m.Archived == false || m.Archived == null))
+                .OrderBy(m => m.MemberNo)
+                .ToListAsync();
+
+            var memberNos = members.Select(m => m.MemberNo).ToList();
+
+            var shares = await _context.Shares
+                .Where(s => memberNos.Contains(s.MemberNo) && s.CompanyCode == companyCode)
+                .GroupBy(s => s.MemberNo)
+                .Select(g => new { MemberNo = g.Key, TotalShareCapital = g.Sum(s => s.TotalShares ?? 0) })
+                .ToDictionaryAsync(s => s.MemberNo, s => s.TotalShareCapital);
+
+            //var savings = await _context.Contribs
+            //    .Where(c => memberNos.Contains(c.MemberNo) && c.CompanyCode == companyCode)
+            //    .GroupBy(c => c.MemberNo)
+            //    .Select(g => new { MemberNo = g.Key, TotalSavings = g.Sum(c => c.Amount ?? 0) })
+            //    .ToDictionaryAsync(c => c.MemberNo, c => c.TotalSavings);
+
+            var savings = await _context.ContribShares
+                .Where(c => memberNos.Contains(c.MemberNo) && c.CompanyCode == companyCode)
+                .GroupBy(c => c.MemberNo)
+                .Select(g => new
+                {
+                    MemberNo = g.Key,
+                    TotalCapital = g.Sum(c => c.ShareCapitalAmount ?? 0),
+                    TotalDeposits = g.Sum(c => c.DepositsAmount ?? 0)
+                })
+                .ToDictionaryAsync(c => c.MemberNo, c => c.TotalCapital + c.TotalDeposits);
+
+            var regFees = await _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo) && cs.CompanyCode == companyCode)
+                .GroupBy(cs => cs.MemberNo)
+                .Select(g => new { MemberNo = g.Key, TotalRegFee = g.Sum(cs => cs.RegFeeAmount ?? 0) })
+                .ToDictionaryAsync(cs => cs.MemberNo, cs => cs.TotalRegFee);
+
+            var loans = await _context.Loans
+                .Where(l => memberNos.Contains(l.MemberNo) && l.CompanyCode == companyCode && l.Status == (int)Status.Disbursed)
+                .GroupBy(l => l.MemberNo)
+                .Select(g => new { MemberNo = g.Key, TotalLoans = g.Sum(l => l.LoanAmt ?? 0) })
+                .ToDictionaryAsync(l => l.MemberNo, l => l.TotalLoans);
+
+            var passbook = await _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo) && cs.CompanyCode == companyCode)
+                .GroupBy(cs => cs.MemberNo)
+                .Select(g => new { MemberNo = g.Key, TotalPassbook = g.Sum(cs => cs.PassBookAmount ?? 0) })
+                .ToDictionaryAsync(cs => cs.MemberNo, cs => cs.TotalPassbook);
+
+            var gigCodes = members.Where(m => !string.IsNullOrEmpty(m.Cigcode)).Select(m => m.Cigcode).Distinct().ToList();
+            var gigDetails = await _context.CIGs
+                .Where(g => gigCodes.Contains(g.GigCode) && g.CompanyCode == companyCode)
+                .ToDictionaryAsync(g => g.GigCode, g => g.GigName);
+
+            var reportData = new List<SharesAndLoansReportViewModel>();
+
+            foreach (var member in members)
+            {
+                string fullName = $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim();
+                if (string.IsNullOrWhiteSpace(fullName)) fullName = "N/A";
+
+                int? age = null;
+                if (member.Dob.HasValue)
+                {
+                    age = DateTime.Now.Year - member.Dob.Value.Year;
+                    if (DateTime.Now < member.Dob.Value.AddYears(age.Value)) age--;
+                }
+
+                string gigName = "UNASSIGNED";
+                if (!string.IsNullOrEmpty(member.Cigcode) && gigDetails.ContainsKey(member.Cigcode))
+                    gigName = gigDetails[member.Cigcode];
+                else if (!string.IsNullOrEmpty(member.Cigcode))
+                    gigName = member.Cigcode;
+
+                reportData.Add(new SharesAndLoansReportViewModel
+                {
+                    MemberNo = member.MemberNo,
+                    FullName = fullName,
+                    Age = age,
+                    CIGName = gigName,
+                    Sex = member.Sex ?? "Not Specified",
+                    ShareCapital = shares.ContainsKey(member.MemberNo) ? shares[member.MemberNo] : (member.ShareCap ?? 0),
+                    Deposits = savings.ContainsKey(member.MemberNo) ? savings[member.MemberNo] : 0,
+                    RegFee = regFees.ContainsKey(member.MemberNo) ? regFees[member.MemberNo] : (member.RegFee ?? 0),
+                    Passbook = passbook.ContainsKey(member.MemberNo) ? passbook[member.MemberNo] : 0,
+                    TotalLoans = loans.ContainsKey(member.MemberNo) ? loans[member.MemberNo] : 0,
+                    DateRegistered = member.ApplicDate
+                });
+            }
+
+            using var stream = new MemoryStream();
+
+            QuestPDF.Fluent.Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4.Landscape());
+                    page.MarginTop(1.5f, Unit.Centimetre);
+                    page.MarginBottom(1.5f, Unit.Centimetre);
+                    page.MarginLeft(1.2f, Unit.Centimetre);
+                    page.MarginRight(1.2f, Unit.Centimetre);
+                    page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
+
+                    page.Header().Column(header =>
+                    {
+                        header.Item().AlignCenter().Text(companyName.ToUpper()).FontSize(16).Bold();
+                        header.Item().AlignCenter().Text($"SHARES AND LOANS REPORT AS AT {reportDate:dd/MM/yyyy}").FontSize(12).Bold();
+                        header.Item().AlignCenter().Text($"Generated By: {User.Identity?.Name ?? "System"} On: {DateTime.Now:dd-MMM-yyyy HH:mm}").FontSize(9).Italic();
+                        header.Item().PaddingTop(0.3f, Unit.Centimetre).LineHorizontal(0.5f);
+                        header.Item().PaddingBottom(0.5f, Unit.Centimetre);
+                    });
+
+                    page.Content().Table(table =>
+                    {
+                        table.ColumnsDefinition(cols =>
+                        {
+                            cols.RelativeColumn(1.0f);
+                            cols.RelativeColumn(1.5f);
+                            cols.RelativeColumn(0.5f);
+                            cols.RelativeColumn(1.2f);
+                            cols.RelativeColumn(0.8f);
+                            cols.RelativeColumn(1.0f);
+                            cols.RelativeColumn(1.0f);
+                            cols.RelativeColumn(1.0f);
+                            cols.RelativeColumn(1.0f);
+                            cols.RelativeColumn(1.0f);
+                            cols.RelativeColumn(1.0f);
+                        });
+
+                        table.Header(header =>
+                        {
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("MemberNo").Bold().FontSize(8);
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Names").Bold().FontSize(8);
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Age").Bold().FontSize(8);
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("CIGName").Bold().FontSize(8);
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Sex").Bold().FontSize(8);
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Share Capital").Bold().FontSize(7);
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Deposits").Bold().FontSize(7);
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Reg Fee").Bold().FontSize(7);
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Passbook").Bold().FontSize(7);
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Loans").Bold().FontSize(7);
+                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Date Registered").Bold().FontSize(7);
+                        });
+
+                        foreach (var member in reportData)
+                        {
+                            table.Cell().Border(0.2f).Padding(4).Text(member.MemberNo ?? "").FontSize(7);
+                            table.Cell().Border(0.2f).Padding(4).Text(member.FullName ?? "N/A").FontSize(7);
+                            table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(member.Age?.ToString() ?? "-").FontSize(7);
+                            table.Cell().Border(0.2f).Padding(4).Text(member.CIGName ?? "Unassigned").FontSize(7);
+                            table.Cell().Border(0.2f).Padding(4).Text(member.Sex ?? "-").FontSize(7);
+                            table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{member.ShareCapital:N0}").FontSize(7);
+                            table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{member.Deposits:N0}").FontSize(7);
+                            table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{member.RegFee:N0}").FontSize(7);
+                            table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{member.Passbook:N0}").FontSize(7);
+                            table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{member.TotalLoans:N0}").FontSize(7);
+                            table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(member.DateRegistered?.ToString("dd/MM/yyyy") ?? "-").FontSize(7);
+                        }
+                    });
+
+                    page.Footer()
+                        .AlignCenter()
+                        .Text(x =>
+                        {
+                            x.DefaultTextStyle(t => t.FontSize(8));
+                            x.Span("Page ");
+                            x.CurrentPageNumber();
+                            x.Span(" of ");
+                            x.TotalPages();
+                            x.Span($" | Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+                        });
+                });
+            }).GeneratePdf(stream);
+
+            var content = stream.ToArray();
+            return File(content, "application/pdf", $"SharesAndLoansReport_{reportDate:yyyyMMdd}.pdf");
+        }
+
+        #endregion
 
 
 
-	}
+    }
 }
