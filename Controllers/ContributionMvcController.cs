@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SACCOBlockChainSystem.Data;
+using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
 using SACCOBlockChainSystem.Models.ViewModels;
 using SACCOBlockChainSystem.Services;
@@ -769,6 +770,265 @@ namespace SACCOBlockChainSystem.Controllers
             // You can store payment method in your Contrib table
             // For now, return a default or try to deduce from remarks/reference
             return "CASH";
+        }
+
+
+        // GET: /ContributionMvc/MemberContribute
+        [Authorize]
+        public async Task<IActionResult> MemberContribute()
+        {
+            try
+            {
+                // Get the logged-in member's number from claims
+                var memberNo = GetLoggedInMemberNumber();
+
+                if (string.IsNullOrEmpty(memberNo))
+                {
+                    TempData["ErrorMessage"] = "Member not found. Please login again.";
+                    return RedirectToAction("MemberLogin", "Account");
+                }
+
+                // Verify member exists and is active
+                var member = await _contributionService.GetMemberByMemberNoAsync(memberNo);
+                if (member == null || member.Status != 1)
+                {
+                    TempData["ErrorMessage"] = "Your account is not active. Please contact administrator.";
+                    return RedirectToAction("MemberLogin", "Account");
+                }
+
+                var companyCode = GetUserCompanyCode();
+                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                var memberContributions = await _contributionService.GetMemberContributionsAsync(memberNo);
+                var currentShareBalance = await _contributionService.GetMemberShareBalanceAsync(memberNo);
+
+                ViewBag.ShareTypes = shareTypes;
+                ViewBag.CompanyCode = companyCode;
+                ViewBag.MemberName = $"{member.Surname} {member.OtherNames}";
+                ViewBag.MemberNo = memberNo;
+                ViewBag.CurrentShareBalance = currentShareBalance;
+
+                // Create DTO with member already pre-filled
+                var contributionDto = new ContributionDTO
+                {
+                    MemberNo = memberNo,
+                    TransactionDate = DateTime.Now,
+                    CreatedBy = member.MemberNo,
+                    CompanyCode = companyCode
+                };
+
+                // Get recent contributions for this member only
+                var recentContributions = await _contributionService.GetMemberContributionsAsync(memberNo);
+
+                var viewModel = new
+                {
+                    ContributionDto = contributionDto,
+                    RecentContributions = recentContributions,
+                    ShareTypes = shareTypes,
+                    MemberName = $"{member.Surname} {member.OtherNames}",
+                    MemberNo = memberNo,
+                    ShareBalance = currentShareBalance
+                };
+
+                return View(viewModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading member contribution form");
+                TempData["ErrorMessage"] = "Error loading contribution form";
+                return RedirectToAction("MemberLogin", "Account");
+            }
+        }
+
+        // POST: /ContributionMvc/MemberContribute
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> MemberContribute(ContributionDTO contributionDto, bool printReceipt = true)
+        {
+            // Declare these outside try block so they're accessible in catch
+            string loggedInMemberNo = null;
+            Member member = null;
+
+            try
+            {
+                _logger.LogInformation("Member contribution POST action called");
+
+                // Get logged-in member number - CRITICAL: Override any submitted MemberNo
+                loggedInMemberNo = GetLoggedInMemberNumber();
+
+                if (string.IsNullOrEmpty(loggedInMemberNo))
+                {
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return BadRequest(new { Success = false, Message = "Member session expired. Please login again." });
+                    }
+                    TempData["ErrorMessage"] = "Session expired. Please login again.";
+                    return RedirectToAction("MemberLogin", "Account");
+                }
+
+                // FORCE the MemberNo to be the logged-in member - PREVENT spoofing
+                contributionDto.MemberNo = loggedInMemberNo;
+
+                if (!ModelState.IsValid)
+                {
+                    _logger.LogWarning("Model state is invalid for member contribution");
+
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return BadRequest(new { Success = false, Message = "Invalid form data", Errors = ModelState.Values.SelectMany(v => v.Errors.Select(e => e.ErrorMessage)) });
+                    }
+
+                    var companyCode = GetUserCompanyCode();
+                    var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                    ViewBag.ShareTypes = shareTypes;
+                    return View(contributionDto);
+                }
+
+                // Verify member exists and is active
+                member = await _contributionService.GetMemberByMemberNoAsync(loggedInMemberNo);
+                if (member == null || member.Status != 1)
+                {
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return BadRequest(new { Success = false, Message = "Member account is not active." });
+                    }
+                    TempData["ErrorMessage"] = "Your account is not active.";
+                    return RedirectToAction("MemberLogin", "Account");
+                }
+
+                contributionDto.CompanyCode = GetUserCompanyCode();
+                contributionDto.CreatedBy = member.MemberNo; // Use MemberNo as CreatedBy
+
+                if (contributionDto.TransactionDate == default)
+                {
+                    contributionDto.TransactionDate = DateTime.Now;
+                }
+
+                _logger.LogInformation($"Member {loggedInMemberNo} adding contribution of {contributionDto.Amount:C}");
+
+                var result = await _contributionService.AddContributionAsync(contributionDto);
+
+                TempData["SuccessMessage"] = $"Contribution of {contributionDto.Amount:C} added successfully! Receipt: {result.ReceiptNo}";
+
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Ok(new
+                    {
+                        Success = true,
+                        Message = "Contribution saved successfully",
+                        ReceiptNo = result.ReceiptNo,
+                        RedirectUrl = printReceipt ? Url.Action("PrintReceipt", new { receiptNo = result.ReceiptNo }) : null
+                    });
+                }
+
+                if (printReceipt)
+                {
+                    return RedirectToAction("PrintReceipt", new { receiptNo = result.ReceiptNo });
+                }
+
+                return RedirectToAction("MemberContribute");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding member contribution");
+
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return StatusCode(500, new { Success = false, Message = ex.Message });
+                }
+
+                if (ex.Message.Contains("not found in GL Setup"))
+                {
+                    ModelState.AddModelError("", ex.Message + " Please contact the administrator.");
+                }
+                else if (ex.Message.Contains("Validation error"))
+                {
+                    ModelState.AddModelError("", ex.Message.Replace("Validation error: ", ""));
+                }
+                else if (ex.Message.Contains("cannot be less than minimum") || ex.Message.Contains("cannot exceed maximum"))
+                {
+                    ModelState.AddModelError("Amount", ex.Message);
+                }
+                else
+                {
+                    ModelState.AddModelError("", $"An error occurred: {ex.Message}");
+                }
+
+                var companyCode = GetUserCompanyCode();
+                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                ViewBag.ShareTypes = shareTypes;
+
+                // Reload member contributions - use loggedInMemberNo if available, otherwise try to get it again
+                var memberNoForReload = loggedInMemberNo ?? GetLoggedInMemberNumber();
+                var recentContributions = await _contributionService.GetMemberContributionsAsync(memberNoForReload);
+                var currentShareBalance = await _contributionService.GetMemberShareBalanceAsync(memberNoForReload);
+
+                // Get member details if member is null (from catch block)
+                if (member == null && !string.IsNullOrEmpty(memberNoForReload))
+                {
+                    member = await _contributionService.GetMemberByMemberNoAsync(memberNoForReload);
+                }
+
+                var memberName = member != null ? $"{member.Surname} {member.OtherNames}" : "Member";
+
+                ViewBag.MemberName = memberName;
+                ViewBag.MemberNo = memberNoForReload;
+                ViewBag.CurrentShareBalance = currentShareBalance;
+
+                var viewModel = new
+                {
+                    ContributionDto = contributionDto,
+                    RecentContributions = recentContributions,
+                    ShareTypes = shareTypes,
+                    MemberName = memberName,
+                    MemberNo = memberNoForReload,
+                    ShareBalance = currentShareBalance
+                };
+
+                return View(viewModel);
+            }
+        }
+
+        private string GetLoggedInMemberNumber()
+        {
+            try
+            {
+                // First try to get from claims
+                var memberNoClaim = User.FindFirst("MemberNo")?.Value;
+                if (!string.IsNullOrEmpty(memberNoClaim))
+                {
+                    _logger.LogDebug($"Found MemberNo in claims: {memberNoClaim}");
+                    return memberNoClaim;
+                }
+
+                // Try from Name claim (for member login)
+                var nameClaim = User.Identity?.Name;
+                if (!string.IsNullOrEmpty(nameClaim))
+                {
+                    // Check if this username exists in Members table
+                    var member = _context.Members.FirstOrDefault(m => m.MemberNo == nameClaim || m.UserName == nameClaim);
+                    if (member != null)
+                    {
+                        _logger.LogDebug($"Found MemberNo from Name claim: {member.MemberNo}");
+                        return member.MemberNo;
+                    }
+                }
+
+                // Try from session
+                var sessionMemberNo = HttpContext.Session.GetString("MemberNo");
+                if (!string.IsNullOrEmpty(sessionMemberNo))
+                {
+                    _logger.LogDebug($"Found MemberNo in session: {sessionMemberNo}");
+                    return sessionMemberNo;
+                }
+
+                _logger.LogWarning("Could not retrieve logged-in member number");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting logged-in member number");
+                return null;
+            }
         }
     }
 }
