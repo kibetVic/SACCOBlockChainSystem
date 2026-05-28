@@ -292,19 +292,27 @@ namespace SACCOBlockChainSystem.Services
                 // Create wallet for the new member (ONLY ONCE)
                 try
                 {
-                    _logger.LogInformation($"Creating wallet for member ID={member.Id}, MemberNo={member.MemberNo}");
-                    var walletResult = await _cryptoService.CreateWalletForMemberAsync(member.Id, member.MemberNo, currentCompanyCode);
+                    WalletConfig walletConfig = await _walletService.GetConfigurations(company.CompanyCode);
+                    if (walletConfig.EnableWallets == true)
+                    {
+                        if (walletConfig.AutoAssignWalletOnRegistration == true)
+                        {
+                            _logger.LogInformation($"Creating wallet for member ID={member.Id}, MemberNo={member.MemberNo}");
+                            var walletResult = await _cryptoService.CreateWalletForMemberAsync(member.Id, member.MemberNo, currentCompanyCode);
 
-                    if (walletResult.Success)
-                    {
-                        _logger.LogInformation($"Wallet created for new member {memberNo}: {walletResult.WalletAddress}");
-                        // Refresh member to get updated WalletAddress
-                        await _context.Entry(member).ReloadAsync();
+                            if (walletResult.Success)
+                            {
+                                _logger.LogInformation($"Wallet created for new member {memberNo}: {walletResult.WalletAddress}");
+                                // Refresh member to get updated WalletAddress
+                                await _context.Entry(member).ReloadAsync();
+                            }
+                            else
+                            {
+                                _logger.LogWarning($"Failed to create wallet for member {memberNo}: {walletResult.Message}");
+                            }
+                        }
                     }
-                    else
-                    {
-                        _logger.LogWarning($"Failed to create wallet for member {memberNo}: {walletResult.Message}");
-                    }
+                    
                 }
                 catch (Exception walletEx)
                 {
@@ -362,14 +370,7 @@ namespace SACCOBlockChainSystem.Services
                         await _context.SaveChangesAsync();
                         _logger.LogInformation($"Blockchain transaction ID saved: {blockchainTx.TransactionId}");
                     }
-                    WalletConfig walletConfig = await _walletService.GetConfigurations(company.CompanyCode);
-                    if (walletConfig.EnableWallets == true)
-                    {
-                        if(walletConfig.AutoAssignWalletOnRegistration == true)
-                        {
-                            await _walletService.RegisterMemberAsync(member);
-                        }
-                    }
+                    
 
                     await transaction.CommitAsync();
                     _logger.LogInformation($"Transaction committed successfully for member: {memberNo}");

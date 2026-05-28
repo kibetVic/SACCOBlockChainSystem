@@ -36,13 +36,13 @@ namespace SACCOBlockChainSystem.Controllers
             var claims = new List<Claim>
                     {
                         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                        new Claim(ClaimTypes.Name, user.UserName),
-                        new Claim("FullName", user.UserName ?? string.Empty),
-                        new Claim("Email", user.Email ?? string.Empty),
-                        new Claim("UserId", user.Id.ToString()),
+                        new Claim(ClaimTypes.Name, user?.UserName ?? ""),
+                        new Claim("FullName", user?.UserName ?? string.Empty),
+                        new Claim("Email", user?.Email ?? string.Empty),
+                        new Claim("UserId", user?.Id.ToString()),
                         new Claim("CompanyCode", user.CompanyCode ?? "000"),
-                        new Claim("CompanyName", user.Employer),
-                        new Claim("UserLoginId", user.MemberNo ?? string.Empty)
+                        new Claim("CompanyName", user?.Employer ?? ""),
+                        new Claim("UserLoginId", user?.MemberNo ?? string.Empty)
                     };
 
             claims.Add(new Claim("UserGroup", "Member"));

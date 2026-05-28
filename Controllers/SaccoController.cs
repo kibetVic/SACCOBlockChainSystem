@@ -158,7 +158,11 @@ namespace SACCOBlockChainSystem.Controllers
                     return View("Index", model);
                 }
 
-                if (model.Id > 0)
+                var companyCod = _companyContextService.GetCurrentCompanyCode();
+                var existing = await _saccoService.GetSaccoParametersAsync(companyCod);
+
+
+                if (existing != null && existing.Id > 0)
                 {
                     await _saccoService.UpdateSaccoParametersAsync(model, User.Identity?.Name ?? "SYSTEM");
                     TempData["SuccessMessage"] = $"SACCO parameters for {model.SaccoName} updated successfully!";
@@ -167,14 +171,14 @@ namespace SACCOBlockChainSystem.Controllers
                 }
                 else
                 {
-                    var companyCode = _companyContextService.GetCurrentCompanyCode();
-                    var existing = await _saccoService.GetSaccoParametersAsync(companyCode);
+                    //var companyCode = _companyContextService.GetCurrentCompanyCode();
+                    //var existing = await _saccoService.GetSaccoParametersAsync(companyCode);
 
-                    if (existing != null && existing.Id > 0)
-                    {
-                        TempData["ErrorMessage"] = $"SACCO parameters already exist for company {companyCode}. Please edit existing record.";
-                        return RedirectToAction("Index");
-                    }
+                    //if (existing != null && existing.Id > 0)
+                    //{
+                    //    TempData["ErrorMessage"] = $"SACCO parameters already exist for company {companyCode}. Please edit existing record.";
+                    //    return RedirectToAction("Index");
+                    //}
 
                     await _saccoService.CreateSaccoParametersAsync(model, User.Identity?.Name ?? "SYSTEM");
                     TempData["SuccessMessage"] = $"SACCO parameters for {model.SaccoName} created successfully!";

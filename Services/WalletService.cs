@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
@@ -162,15 +163,20 @@ namespace SACCOBlockChainSystem.Services
                         Convert.ToHexString(hash)
                         .Substring(0, 40);
 
-                    var wallet = new Wallet();
-                    wallet.CompanyCode = currentCompanyCode;
-                    wallet.memberNo = registration.MobileNo;
-                    wallet.CreatedAt = DateTime.Now;
-                    wallet.PrivateKeyEncrypted = EncryptionHelper.Encrypt(privateKey);
-                    wallet.PublicKey = publicKey;
-                    wallet.Address = walletAddress;
-                    wallet.MemberNo = registration.MemberNo;
+                    //var wallet = new Wallet();
+                    //wallet.CompanyCode = currentCompanyCode;
+                    //wallet.memberNo = registration.MobileNo;
+                    //wallet.CreatedAt = DateTime.Now;
+                    //wallet.PrivateKeyEncrypted = EncryptionHelper.Encrypt(privateKey);
+                    //wallet.PublicKey = publicKey;
+                    //wallet.Address = walletAddress;
+                    //wallet.IsActive = true;
+
+                    //wallet.MemberNo = registration.MemberNo;
+                    var wallet = Wallet.CreateNewWallet(registration.Id, registration.MemberNo, company.CompanyCode);
+
                     _context.Wallets.Add(wallet);
+                    //_context.Wallets.Add(wallet);
 
 
                     // _logger.LogInformation($"Creating blockchain transaction for member: {memberNo}");
