@@ -36,11 +36,13 @@ namespace SACCOBlockChainSystem.Controllers
             var claims = new List<Claim>
                     {
                         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                         new Claim(ClaimTypes.Name, user.MemberNo),
                         new Claim(ClaimTypes.Name, user?.UserName ?? ""),
                         new Claim("FullName", user?.UserName ?? string.Empty),
                         new Claim("Email", user?.Email ?? string.Empty),
                         new Claim("UserId", user?.Id.ToString()),
                         new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                        new Claim("MemberNo", user.MemberNo),
                         new Claim("CompanyName", user?.Employer ?? ""),
                         new Claim("UserLoginId", user?.MemberNo ?? string.Empty)
                     };
@@ -84,6 +86,9 @@ namespace SACCOBlockChainSystem.Controllers
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(claimsIdentity),
                 authProperties);
+
+            HttpContext.Session.SetString("MemberNo", user.MemberNo);
+            HttpContext.Session.SetString("MemberName", $"{user.Surname} {user.OtherNames}");
 
             _logger.LogInformation($"User {user.UserName} (Company: {user.Employer} - {user.CompanyCode}) logged in successfully.");
 

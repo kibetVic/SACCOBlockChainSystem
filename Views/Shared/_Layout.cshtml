@@ -81,20 +81,36 @@
 
                     <li class="nav-item">
                         @using System.Security.Claims
-@using Radzen.Blazor
+                        @using Radzen.Blazor
+
+                        @{
+                            var userGroupClaim = User.FindFirst("UserGroup")?.Value;
+
+                            var isMember = userGroupClaim == "MEMBER" || userGroupClaim == "Member" || userGroupClaim == "member";
+
+                        }
+
                         @if (User.Identity.IsAuthenticated)
                         {
                             var userGroupClaims = User.FindFirstValue(ClaimTypes.Role);
                             var isSuperAdmin = userGroupClaims == "Super Admin" || userGroupClaims == "SuperAdmin";
                             //var isMember = userGroupClaim == "MEMBER" || userGroupClaim == "Member" || userGroupClaim == "member";
+
                             <div class="company-info">
                                 <small>
                                     @if (isSuperAdmin)
                                     {
-                                        <strong>@User.FindFirstValue("CompanyName")-System SACCOs</strong>
+                                        <strong>@User.FindFirstValue("CompanyName") - System SACCOs</strong>
+                                    }
+                                    else if (isMember)
+                                    {
+                                        // For members, show the Employer field from Members table
+                                        var memberEmployer = User.FindFirstValue("CompanyName") ?? "SACCO Member";
+                                        <strong><i class="fas fa-building"></i> @memberEmployer</strong>
                                     }
                                     else
                                     {
+                                        // For staff/admin users
                                         <strong>@User.FindFirstValue("CompanyName")</strong>
                                     }
                                 </small>
@@ -239,12 +255,21 @@
                                 <p><b>Dashboard</b></p>
                             </a>
                         </li>
-                        @{
-                            var userGroupClaim = User.FindFirst("UserGroup")?.Value;
 
-                            var isMember = userGroupClaim == "MEMBER" || userGroupClaim == "Member" || userGroupClaim == "member";
-
+                        @if (isMember)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="ContributionMvc" asp-action="MemberContribute">
+                                    <i class="fas fa-receipt"></i> Receipt posting / Shares
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="MemberMvc" asp-action="MyProfile">
+                                    <i class="fas fa-user-circle"></i> My Profile
+                                </a>
+                            </li>
                         }
+
                         @if (!isMember)
                         {
                             <!-- System Setups -->

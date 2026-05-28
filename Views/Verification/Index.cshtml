@@ -119,6 +119,7 @@ Layout = "~/Views/Shared/_Layout.cshtml";
                 }
             });
 
+            // Optional: Search as you type (with debounce)
             $('#searchInput').on('input', function() {
                 clearTimeout(searchTimeout);
                 const term = $(this).val().trim();
@@ -151,6 +152,7 @@ Layout = "~/Views/Shared/_Layout.cshtml";
 
             currentSearchTerm = searchTerm;
 
+            // Show loading
             $('#searchBtn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Searching...');
             $('#loadingIndicator').show();
             $('#searchResults').hide();
@@ -198,7 +200,7 @@ Layout = "~/Views/Shared/_Layout.cshtml";
 
             data.data.forEach(tx => {
                 const row = `
-                    <tr class="transaction-row" data-memberno="${escapeHtml(tx.memberNo)}">
+                    <tr class="transaction-row" onclick="viewTransaction(${tx.transactionId})">
                         <td>
                             <strong>${escapeHtml(tx.receiptNo)}</strong>
                             ${tx.blockchainTxId ? '<i class="fas fa-link text-success ms-1" title="On Blockchain"></i>' : ''}
@@ -214,10 +216,10 @@ Layout = "~/Views/Shared/_Layout.cshtml";
                             </span>
                         </td>
                         <td>
-                            <button class="btn btn-sm btn-primary verify-btn" data-id="${tx.transactionId}">
+                            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); viewTransaction(${tx.transactionId})">
                                 <i class="fas fa-shield-alt"></i> Verify
                             </button>
-                            <button class="btn btn-sm btn-outline-info chain-btn" data-memberno="${escapeHtml(tx.memberNo)}">
+                            <button class="btn btn-sm btn-outline-info" onclick="event.stopPropagation(); viewMemberChain('${escapeHtml(tx.memberNo)}')">
                                 <i class="fas fa-link"></i> Chain
                             </button>
                         </td>
@@ -226,27 +228,7 @@ Layout = "~/Views/Shared/_Layout.cshtml";
                 tbody.append(row);
             });
 
-            // Attach click handlers to buttons (to avoid event propagation issues)
-            $('.verify-btn').click(function(e) {
-                e.stopPropagation();
-                const id = $(this).data('id');
-                viewTransaction(id);
-            });
-
-            $('.chain-btn').click(function(e) {
-                e.stopPropagation();
-                const memberNo = $(this).data('memberno');
-                viewMemberChain(memberNo);
-            });
-
-            // Row click handler
-            $('.transaction-row').click(function() {
-                const verifyBtn = $(this).find('.verify-btn');
-                if (verifyBtn.length) {
-                    const id = verifyBtn.data('id');
-                    viewTransaction(id);
-                }
-            });
+            $('#searchResults').show();
         }
 
         function showNoResults(message) {
@@ -281,33 +263,11 @@ Layout = "~/Views/Shared/_Layout.cshtml";
         }
 
         function viewTransaction(id) {
-            console.log('Navigating to transaction:', id);
-            if (!id) {
-                Swal.fire({ icon: 'error', title: 'Error', text: 'Invalid transaction ID' });
-                return;
-            }
             window.location.href = `/Verification/Transaction/${id}`;
         }
 
         function viewMemberChain(memberNo) {
-            console.log('Navigating to member chain for:', memberNo);
-
-            if (!memberNo || memberNo === 'undefined' || memberNo === 'null' || memberNo === '') {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'Invalid member number. Cannot view chain.'
-                });
-                return;
-            }
-
-            // Try path parameter first
-            const url = `/Verification/MemberChain/${encodeURIComponent(memberNo)}`;
-            console.log('Navigating to URL:', url);
-            window.location.href = url;
+            window.location.href = `/Verification/MemberChain/${memberNo}`;
         }
-
-        // Debug: Log when page loads
-        console.log('Index page loaded. Verification functions ready.');
     </script>
 }
