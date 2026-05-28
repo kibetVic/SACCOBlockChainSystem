@@ -40,6 +40,8 @@ namespace SACCOBlockChainSystem.Controllers
                         new Claim(ClaimTypes.Name, user?.UserName ?? ""),
                         new Claim("FullName", user?.UserName ?? string.Empty),
                         new Claim("Email", user?.Email ?? string.Empty),
+                        new Claim("CompanyName", user?.Employer ?? "SACCO Member"),
+                        new Claim("Employer", user?.Employer ?? "SACCO Member"),
                         new Claim("UserId", user?.Id.ToString()),
                         new Claim("CompanyCode", user.CompanyCode ?? "000"),
                         new Claim("MemberNo", user.MemberNo),
@@ -89,6 +91,7 @@ namespace SACCOBlockChainSystem.Controllers
 
             HttpContext.Session.SetString("MemberNo", user.MemberNo);
             HttpContext.Session.SetString("MemberName", $"{user.Surname} {user.OtherNames}");
+            HttpContext.Session.SetString("CompanyName", user?.Employer ?? "SACCO Member");
 
             _logger.LogInformation($"User {user.UserName} (Company: {user.Employer} - {user.CompanyCode}) logged in successfully.");
 
