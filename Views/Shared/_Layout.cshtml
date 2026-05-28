@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/AdminLte/dist/assets/img/LoginPG.png" />
     <title>@ViewData["Title"] - EasySacco </title>
-
+    <link href="~/Syncfusion/styles/material.css" rel="stylesheet" />
+    <script src="~/Syncfusion/scripts/ej2.min.js"></script>
     <link rel="stylesheet" href="~/AdminLte/dist/css/adminlte.css" />
     <!-- Radzen CSS - Make sure these come after Bootstrap -->
     <link rel="stylesheet" href="/blazorcss/material-base.css" />
@@ -53,7 +54,19 @@
           crossorigin="anonymous" />
 
     <style>
-        /* This styles an on-page image, NOT the browser tab favicon */
+        input:invalid {
+    box-shadow: none;
+}
+
+select:invalid {
+    box-shadow: none;
+}
+
+
+input:invalid:focus {
+    outline: none;
+}
+        
         img.logo-rounded {
             border-radius: 5px;
         }
@@ -566,14 +579,14 @@
                                                 </a>
                                             </li>
 
-                                            <li class="nav-item">
-                                                <a class="nav-link" asp-controller="LoanMvc" asp-action="Schedule" class="nav-link">
-                                                    <i class="nav-icon bi bi-calculator-fill"></i>
-                                                    <span>Loan Schedule</span>
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" asp-controller="Loanschd" asp-action="Create" class="nav-link">
+                                                <i class="nav-icon bi bi-calculator-fill"></i>
+                                                <span>Loan Schedule</span>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </li>
 
                                     <!-- Direct Transaction Items -->
                                     <li class="nav-item">
