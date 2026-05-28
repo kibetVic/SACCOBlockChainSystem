@@ -95,12 +95,14 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
         [HttpGet]
-        public IActionResult VerifyMember(string? user = null)
+        public IActionResult VerifyMember(string? user = null,bool requestpin=false)
         {
             if(user == null)
             {
                 return NotFound();
             }
+            ViewBag.RequestPin = requestpin;
+            
             user = EncryptionHelper.Decrypt(user);
             var member = _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == user);
             if(member == null)
@@ -290,7 +292,16 @@ namespace SACCOBlockChainSystem.Controllers
                         ModelState.AddModelError(string.Empty, "Invalid username or member.");
                         return View(model);
                     }
-                    return await SendCode(user);
+                    if (!string.IsNullOrEmpty(user.Pin))
+                    {
+                        HttpContext.Session.SetString($"PinSetFor_{model.Username}", "false");
+                        return Redirect("/Account/VerifyMember?requestpin=true&user=" + EncryptionHelper.Encrypt(user.MemberNo));
+                    }
+                    else
+                    {
+                        return await SendCode(user);
+                    }
+                        
                     //return Redirect("/Account/VerifyMember?user="+EncryptionHelper.Encrypt(user.MemberNo));
                     //var claims = new List<Claim>
                     //{
@@ -344,7 +355,7 @@ namespace SACCOBlockChainSystem.Controllers
                     if (emailSent)
                     {
                         TempData["SuccessMessage"] = $"Verification code sent to {MaskEmail(user.Email)}. Please check your email.";
-                        return RedirectToAction("VerifyMember", new { user = EncryptionHelper.Encrypt(user.MemberNo) });
+                        return RedirectToAction("VerifyMember", new { requestpin=false,user = EncryptionHelper.Encrypt(user.MemberNo) });
                     }
                     else
                     {
@@ -357,7 +368,7 @@ namespace SACCOBlockChainSystem.Controllers
                     // For development/testing - show code on screen
                     _logger.LogWarning($"Email service not configured. Verification code for {user.MemberNo}: {verificationCode}");
                     TempData["SuccessMessage"] = $"[DEV MODE] Verification code: {verificationCode}";
-                    return RedirectToAction("VerifyMember", new { user = EncryptionHelper.Encrypt(user.MemberNo) });
+                    return RedirectToAction("VerifyMember", new { requestpin=false,user = EncryptionHelper.Encrypt(user.MemberNo) });
                 }
         }
 
@@ -1815,6 +1826,37 @@ namespace SACCOBlockChainSystem.Controllers
 
             try
             {
+                ViewBag.RequestPin = false;
+                var reqpin = HttpContext.Session.GetString($"PinSetFor_{model.Username}");
+                if(string.IsNullOrEmpty(reqpin) || reqpin == "false")
+                {
+                    if(model.SetPin.ToLower() == "true")
+                    {
+                        var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == model.Username);
+                        if(member != null)
+                        {
+                            if(EncryptionHelper.Decrypt(member.Pin) == model.Code)
+                            {
+                                HttpContext.Session.SetString($"PinSetFor_{model.Username}", "true");
+                                return await SendCode(member);
+                            }
+                            else
+                            {
+                                TempData["ErrorMessage"] = "Invalid pin for verification.";
+
+                                ViewBag.RequestPin = true;
+                                return View(model);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        ViewBag.RequestPin = true;
+                        return View(model);
+                    }
+                    //HttpContext.Session.SetString($"PinSetFor_{model.Username}", "true");
+                        
+                }
                 // Retrieve stored code and expiry
                 var storedCode = HttpContext.Session.GetString($"ResetCode_{model.Username}");
                 var expiryStr = HttpContext.Session.GetString($"ResetCodeExpiry_{model.Username}");
@@ -1844,6 +1886,7 @@ namespace SACCOBlockChainSystem.Controllers
 
                 // Code is valid - clear it from session
                 HttpContext.Session.Remove($"ResetCode_{model.Username}");
+                HttpContext.Session.Remove($"PinSetFor_{model.Username}");
                 HttpContext.Session.Remove($"ResetCodeExpiry_{model.Username}");
 
                 // Store that user is verified for password reset

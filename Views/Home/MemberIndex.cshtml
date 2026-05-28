@@ -1,7 +1,169 @@
 ﻿@*
     For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 *@
+@model MemberViewModel
 @{
 }
 
-Member Dashboard data
+<link rel="stylesheet" href="~/css/wallet.css">
+<div class="wallet-box-scroll">
+    <div class="wallet-bradcrumb">
+        <h2><i class="fas fa-wallet"></i> My Wallet</h2>
+    </div>
+    <div class="wallet-balance-area clearfix">
+        @foreach(var wallet in Model.Wallets)
+        {
+            <div class="wallet-balance-box wallet-@wallet.MemberId">
+                <div class="wallet-balance-ico">
+                    <svg width="70" height="70" viewBox="0 0 70 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+                        <!-- Background Circle -->
+                        <circle cx="110" cy="110" r="100" fill="#F4F7FB" />
+
+                        <!-- Wallet Body -->
+                        <rect x="45" y="75" width="70" height="70" rx="18"
+                              fill="#2563EB" />
+
+                        <!-- Wallet Flap -->
+                        <path d="M45 95
+                 L145 95
+                 C155 95 165 88 170 80
+                 L170 70
+                 C170 60 162 52 152 52
+                 L65 52
+                 C53 52 45 60 45 72Z"
+                              fill="#1D4ED8" />
+                        <rect x="125" y="102"
+                              width="42"
+                              height="28"
+                              rx="10"
+                              fill="#E5E7EB" />
+                        <circle cx="138" cy="116"
+                                r="4"
+                                fill="#2563EB" />
+
+                        <!-- Shield -->
+                        <path d="M110 88
+                 L140 100
+                 V122
+                 C140 141 127 156 110 162
+                 C93 156 80 141 80 122
+                 V100Z"
+                              fill="#10B981" />
+
+                        <!-- Lock -->
+                        <rect x="98" y="114"
+                              width="24"
+                              height="20"
+                              rx="4"
+                              fill="white" />
+
+                        <path d="M103 114
+                 V107
+                 C103 100 107 96 110 96
+                 C113 96 117 100 117 107
+                 V114"
+                              stroke="white"
+                              stroke-width="5"
+                              stroke-linecap="round" />
+
+                    </svg>
+                </div>
+                <h3>@wallet.memberNo</h3>
+                <h4>@wallet.Balance</h4>
+                <div class="my-wallet-address">
+                    <span>@Html.Raw(wallet.Address)</span>
+                    <i class="far fa-copy"></i>
+                </div>
+            </div>
+        }
+        
+        
+    </div>
+
+    
+    
+    @* <div class="wallet-transaction clearfix">
+        <h2 class="dashboard-title">Last Transaction</h2>
+        @foreach(var trans in Model.MemberTransactions)
+        {
+            <div class="wallet-transaction-box clearfix">
+                <div class="wallet-transaction-ico"><i class="fas fa-arrow-right"></i></div>
+                <div class="wallet-transaction-name">
+                    <h3>@trans.TransactionType</h3>
+                    <span>@trans.Status | @trans.TransactionId</span>
+                </div>
+                <div class="wallet-transaction-balance">
+                    <h3>@trans.Amount</h3>
+                    <span>@trans.CreatedAt</span>
+                </div>
+            </div>
+            
+        }
+       
+    </div> *@
+</div>
+<div class="wallet-box-main clearfix">
+    <div class="wallet-box-left">
+        <div class="wallet-balance">
+            <h2 class="dashboard-title">Coin Balance</h2>
+            <div class="wallet-balance-box clearfix">
+                <div class="wallet-balance-ico">
+                </div>
+                <div class="wallet-balance-name">
+                    <h3>Deposit </h3>
+                    <span>DEP</span>
+                </div>
+                <div class="wallet-balance-amount">
+                    <h3>@Model.Wallets.FirstOrDefault().DepositBalance</h3>
+                </div>
+            </div>
+
+            <div class="wallet-balance-box clearfix">
+                <div class="wallet-balance-ico">
+                </div>
+                <div class="wallet-balance-name">
+                    <h3>CAPITAL</h3>
+                    <span>CAP</span>
+                </div>
+                <div class="wallet-balance-amount">
+                    <h3>@Model.Wallets.FirstOrDefault().CapitalBalance</h3>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <div class="wallet-box-right">
+        <div class="wallet-transaction">
+            <h2 class="dashboard-title">Last Transaction</h2>
+            @foreach (var trans in Model.MemberTransactions)
+            {
+                <div class="wallet-transaction-box clearfix">
+                    <div class="wallet-transaction-ico"><i class="fas fa-arrow-right"></i></div>
+                    <div class="wallet-transaction-name">
+                        <h3>@trans.TransactionType</h3>
+                        <span>@trans.Status | @trans.TransactionId</span>
+                    </div>
+                    <div class="wallet-transaction-balance">
+                        <h3>@trans.Amount</h3>
+                        <span>@trans.CreatedAt</span>
+                    </div>
+                </div>
+
+            }
+
+            @* <div class="wallet-transaction-box clearfix">
+                    <div class="wallet-transaction-ico"><i class="fas fa-arrow-right"></i></div>
+                    <div class="wallet-transaction-name">
+                        <h3>Deposite</h3>
+                        <span>Litecoin Wallet | Bank Transfer</span>
+                    </div>
+                    <div class="wallet-transaction-balance">
+                        <h3>$ 405.34</h3>
+                        <span>20 Jan 2020</span>
+                    </div>
+                </div>
+                 *@
+        </div>
+    </div>
+</div>

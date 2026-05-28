@@ -46,6 +46,7 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("Index", "Home");
             }
             var wp = new WalletPinSetup();
+            ViewBag.MemberNo = User.FindFirst("MemberNo")?.Value;
             return View(wp);
         }
 
@@ -57,6 +58,7 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 return RedirectToAction("Index", "Home");
             }
+            ViewBag.MemberNo = User.FindFirst("MemberNo")?.Value;
             if (!ModelState.IsValid)
             {
                 TempData["ErrorMessage"] = "Invalid try again.";
@@ -79,11 +81,11 @@ namespace SACCOBlockChainSystem.Controllers
             }
 
             member.Pin = EncryptionHelper.Encrypt(model.Pin);
-            _context.Members.Update(member);
+            //_context.Members.Update(member);
             await _context.SaveChangesAsync();
             TempData["SuccessMessage"] = "Pin set successfully. Proceed.";
-
-            return View(model);
+            return RedirectToAction("Index", "Home");
+            //return View(model);
 
 
         }
@@ -126,7 +128,14 @@ namespace SACCOBlockChainSystem.Controllers
                             }
                         }
                     }
-                    return View("MemberIndex");
+                    var trs = await _context.BlockchainTransactions.AsNoTracking().OrderByDescending(t => t.CreatedAt).Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo).Take(20).ToListAsync();
+                    var memberView = new MemberViewModel {
+                        Member = member,
+                        Wallets = new List<Wallet> { wallet },
+                        MemberTransactions = trs,
+                        UserCompanyCode = member.CompanyCode,
+                    };
+                    return View("MemberIndex",memberView);
                 }
                 
                 // Determine the effective company code for filtering

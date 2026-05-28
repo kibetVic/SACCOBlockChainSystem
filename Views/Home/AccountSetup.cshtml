@@ -35,7 +35,7 @@
                           asp-action="AccountSetup"
                           method="post">
 
-                        <input type="hidden"
+                        <input type="hidden" value="@ViewBag.MemberNo"
                                asp-for="MemberNo" />
 
                         <div asp-validation-summary="ModelOnly"
