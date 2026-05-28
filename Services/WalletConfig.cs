@@ -8,38 +8,38 @@
         public string CompanyCode { get; set; } = string.Empty;
 
         // Wallet Creation Settings
-        public bool EnableWallets { get; set; } = true;
+        public bool EnableWallets { get; set; } = false;
 
         // Automatically create wallet during member registration
-        public bool AutoAssignWalletOnRegistration { get; set; } = true;
+        public bool AutoAssignWalletOnRegistration { get; set; } = false;
 
         // Allow members to access wallets from mobile/web
-        public bool AllowMemberWalletAccess { get; set; } = true;
+        public bool AllowMemberWalletAccess { get; set; } = false;
 
         // Allow wallet-to-wallet transfers
-        public bool AllowInternalTransfers { get; set; } = true;
+        public bool AllowInternalTransfers { get; set; } = false;
 
         // Allow deposits into wallet
-        public bool AllowDeposits { get; set; } = true;
+        public bool AllowDeposits { get; set; } = false;
 
         // Allow withdrawals from wallet
-        public bool AllowWithdrawals { get; set; } = true;
+        public bool AllowWithdrawals { get; set; } = false;
 
         // Allow loan disbursement into wallet
-        public bool AllowLoanDisbursementToWallet { get; set; } = true;
+        public bool AllowLoanDisbursementToWallet { get; set; } = false;
 
         // Allow loan repayments from wallet balance
-        public bool AllowLoanRepaymentFromWallet { get; set; } = true;
+        public bool AllowLoanRepaymentFromWallet { get; set; } = false;
 
         // Require PIN before transaction signing
-        public bool RequireTransactionPin { get; set; } = true;
+        public bool RequireTransactionPin { get; set; } = false;
 
         // Require OTP/MFA for sensitive operations
-        public bool RequireOtpVerification { get; set; } = true;
+        public bool RequireOtpVerification { get; set; } = false;
 
       
         // Whether system stores private keys (custodial mode)
-        public bool CustodialWallets { get; set; } = true;
+        public bool CustodialWallets { get; set; } = false;
 
         // Allow members to reset wallets
         public bool AllowWalletReset { get; set; } = false;
@@ -56,7 +56,7 @@
        
         
         // Enable SMS notifications
-        public bool EnableSmsNotifications { get; set; } = true;
+        public bool EnableSmsNotifications { get; set; } = false;
 
         // Enable email notifications
         public bool EnableEmailNotifications { get; set; } = true;
