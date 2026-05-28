@@ -40,8 +40,6 @@ namespace SACCOBlockChainSystem.Controllers
             _dashboardCacheService = dashboardCacheService;
         }
 
-        // In HomeController.cs - Simplified Index method
-
         [Authorize]
         public async Task<IActionResult> Index(string? companyCode)
         {

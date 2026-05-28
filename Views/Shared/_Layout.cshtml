@@ -624,9 +624,9 @@
                                 @if (User.IsInRole("Super Admin"))
                                 {
                                     <li class="nav-item">
-                                        <a asp-controller="ContributionMvc" asp-action="DeleteSearch" class="nav-link">
+                                            <a asp-controller="ContributionMvc" asp-action="ReverseSearch" class="nav-link">
                                             <i class="nav-icon bi bi-trash-fill text-danger"></i>
-                                            <p class="text-danger">Delete Transaction</p>
+                                              <p class="text-danger">Reverse Transaction</p>
                                         </a>
                                     </li>
                                 }

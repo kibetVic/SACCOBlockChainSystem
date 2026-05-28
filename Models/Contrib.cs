@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SACCOBlockChainSystem.Models;
 
@@ -89,4 +90,6 @@ public partial class Contrib
 
     public virtual Sharetype? SharescodeNavigation { get; set; }
     public virtual Member? MemberNoNavigation { get; set; }
+    [NotMapped]
+    public string? Status { get;set; }
 }

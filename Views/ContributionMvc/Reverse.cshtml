@@ -1,0 +1,153 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.ContributionReverseDTO
+
+@{
+    ViewData["Title"] = "Reverse Transaction - Confirmation";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card card-danger">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-undo-alt me-2"></i>
+                        Confirm Transaction Reversal
+                    </h3>
+                    <div class="card-tools">
+                        <span class="badge bg-danger">Super Admin Only</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This action will create a reversal transaction with NEGATIVE amount.
+                        The original transaction will be marked as reversed but NOT deleted.
+                    </div>
+
+                    <!-- Transaction Details Card -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-secondary">
+                            <h5 class="mb-0">Transaction Details</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <td><strong>Receipt No:</strong></td>
+                                            <td>@Model.ReceiptNo</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Member No:</strong></td>
+                                            <td>@Model.MemberNo</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Member Name:</strong></td>
+                                            <td>@Model.MemberName</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Share Type:</strong></td>
+                                            <td>@Model.ShareTypeName</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <td><strong>Amount:</strong></td>
+                                            <td class="text-danger fw-bold">@Model.Amount?.ToString("2N")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Transaction Date:</strong></td>
+                                            <td>@Model.TransactionDate?.ToString("dd-MMM-yyyy HH:mm")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Created By:</strong></td>
+                                            <td>@Model.CreatedBy</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Blockchain Tx:</strong></td>
+                                            <td><small class="text-muted">@(Model.BlockchainTxId?.Substring(0, Math.Min(20, Model.BlockchainTxId?.Length ?? 0)) ?? "N/A")...</small></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Reversal Details -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Reversal Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>What will happen:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>A new reversal transaction with <strong>NEGATIVE @Model.Amount?.ToString("2N")</strong> will be created</li>
+                                    <li>The original transaction will be marked as "REVERSED"</li>
+                                    <li>Member's wallet balance will be reduced by @Model.Amount?.ToString("2N")</li>
+                                    <li>Share balance will be decreased accordingly</li>
+                                    <li>GL reversal entry will be created (swapped DR/CR)</li>
+                                    <li>Blockchain reversal record will be added</li>
+                                </ul>
+                            </div>
+
+                            <form asp-action="Reverse" method="post" id="reverseForm">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" asp-for="ContributionId" />
+                                <input type="hidden" asp-for="ReceiptNo" />
+                                <input type="hidden" asp-for="MemberNo" />
+                                <input type="hidden" asp-for="MemberName" />
+                                <input type="hidden" asp-for="Amount" />
+                                <input type="hidden" asp-for="ShareTypeName" />
+                                <input type="hidden" asp-for="TransactionDate" />
+                                <input type="hidden" asp-for="CreatedBy" />
+                                <input type="hidden" asp-for="BlockchainTxId" />
+
+                                <div class="form-group mb-3">
+                                    <label asp-for="ReverseReason" class="control-label fw-bold">
+                                        <i class="fas fa-pen me-1"></i> Reason for Reversal <span class="text-danger">*</span>
+                                    </label>
+                                    <textarea asp-for="ReverseReason" class="form-control" rows="3"
+                                              placeholder="Please provide a detailed reason for reversing this transaction..."></textarea>
+                                    <span asp-validation-for="ReverseReason" class="text-danger"></span>
+                                    <small class="form-text text-muted">This reason will be recorded in the audit trail and reversal remarks.</small>
+                                </div>
+
+                                <div class="form-group mb-3">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="confirmReverse" required />
+                                        <label class="form-check-label" for="confirmReverse">
+                                            I confirm that I want to reverse this transaction. This action cannot be undone.
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="form-group text-center">
+                                    <a asp-action="ReverseSearch" class="btn btn-secondary">
+                                        <i class="fas fa-arrow-left me-1"></i> Back to Search
+                                    </a>
+                                    <button type="submit" class="btn btn-danger" id="submitBtn" disabled>
+                                        <i class="fas fa-undo-alt me-1"></i> Confirm Reversal
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#confirmReverse').change(function() {
+                $('#submitBtn').prop('disabled', !$(this).is(':checked'));
+            });
+        });
+    </script>
+}
