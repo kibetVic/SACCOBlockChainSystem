@@ -12,6 +12,7 @@ namespace SACCOBlockChainSystem.Data
             : base(options)
         {
         }
+        public DbSet<Dividend> Dividends { get; set; }
         public DbSet<UserGroup> UserGroups { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
         public DbSet<Loanschd> LOANSCHD { get; set; }

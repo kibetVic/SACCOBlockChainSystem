@@ -1,0 +1,127 @@
+﻿@model IEnumerable<SACCOBlockChainSystem.Models.Contrib>
+
+@{
+    ViewData["Title"] = "Savings Dashboard";
+}
+
+<div class="container-fluid">
+
+    <div class="row mb-4">
+
+        <div class="col-md-4">
+
+            <div class="card shadow border-0">
+
+                <div class="card-body">
+
+                    <h6 class="text-muted">
+                        TOTAL SAVINGS
+                    </h6>
+
+                    <h2 class="fw-bold text-success">
+                        KES @ViewBag.TotalSavings
+                    </h2>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-4">
+
+            <div class="card shadow border-0">
+
+                <div class="card-body">
+
+                    <h6 class="text-muted">
+                        BLOCKCHAIN STATUS
+                    </h6>
+
+                    <h5 class="text-success fw-bold">
+                        VERIFIED
+                    </h5>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="card shadow">
+
+        <div class="card-header bg-success text-white">
+
+            <h4>
+                SAVINGS TRANSACTION HISTORY
+            </h4>
+
+        </div>
+
+        <div class="card-body">
+
+            <table class="table table-bordered table-striped">
+
+                <thead>
+
+                    <tr>
+                        <th>Member No</th>
+                        <th>Amount</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Blockchain</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    @foreach (var item in Model)
+                    {
+                        <tr>
+
+                            <td>@item.MemberNo</td>
+
+                            <td>
+                                KES @(item.Amount ?? 0)
+                            </td>
+
+                            <td>
+                                @item.Remarks
+                            </td>
+
+                            <td>
+                                @(item.ContrDate?.ToString("dd MMM yyyy"))
+                            </td>
+
+                            <td>
+
+                                @if (!string.IsNullOrEmpty(item.BlockchainTxId))
+                                {
+                                    <span class="badge bg-success">
+                                        VERIFIED
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">
+                                        PENDING
+                                    </span>
+                                }
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
