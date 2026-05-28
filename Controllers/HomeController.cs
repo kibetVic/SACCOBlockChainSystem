@@ -46,8 +46,19 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("Index", "Home");
             }
             var wp = new WalletPinSetup();
-            ViewBag.MemberNo = User.FindFirst("MemberNo")?.Value;
-            return View(wp);
+            var mno = User.FindFirst("MemberNo")?.Value;
+            var companyCode = User.FindFirst("CompanyCode")?.Value;
+            ViewBag.MemberNo = mno;
+            var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == mno && m.CompanyCode == companyCode);
+            if (!string.IsNullOrEmpty(member.Pin))
+            {
+                ViewBag.Reset = true;
+            }
+            else
+            {
+                ViewBag.Reset = false;
+            }
+             return View(wp);
         }
 
         [HttpPost]
@@ -79,7 +90,21 @@ namespace SACCOBlockChainSystem.Controllers
 
                 return View(model);
             }
+            if (!string.IsNullOrEmpty(member.Pin))
+            {
+                if (string.IsNullOrEmpty(model.UserPin))
+                {
+                    TempData["ErrorMessage"] = "Old pin is required";
 
+                    return View(model);
+                }
+                if(EncryptionHelper.Encrypt(member.Pin) != model.UserPin)
+                {
+                    TempData["ErrorMessage"] = "Old pin is invalid. Try again.";
+
+                    return View(model);
+                }
+            }
             member.Pin = EncryptionHelper.Encrypt(model.Pin);
             //_context.Members.Update(member);
             await _context.SaveChangesAsync();

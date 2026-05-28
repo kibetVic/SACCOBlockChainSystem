@@ -41,6 +41,25 @@
                         <div asp-validation-summary="ModelOnly"
                              class="alert alert-danger">
                         </div>
+                        @if(ViewBag.Reset == true)
+                        {
+                            <label asp-for="UserPin"
+                                   class="form-label fw-semibold">
+                            </label>
+
+                            <input asp-for="UserPin"
+                                   type="password"
+                                   maxlength="6"
+                                   inputmode="numeric"
+                                   autocomplete="old-password"
+                                   class="form-control form-control-lg text-center" />
+
+                            <span asp-validation-for="UserPin"
+                                  class="text-danger">
+                            </span>
+
+                        }
+                        
 
                         <div class="mb-4">
 

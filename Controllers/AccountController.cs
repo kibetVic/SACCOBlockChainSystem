@@ -96,7 +96,7 @@ namespace SACCOBlockChainSystem.Controllers
             //{
             //    return Redirect(returnUrl);
             //}
-            TempData["ErrorMessage"] = ""; TempData["SuccessMessage"] = "";
+            TempData["ErrorMessage"] = null; TempData["SuccessMessage"] = null;
             return RedirectToAction("Index", "Home");
         }
 
