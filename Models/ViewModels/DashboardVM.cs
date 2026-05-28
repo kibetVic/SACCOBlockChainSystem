@@ -404,6 +404,9 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public decimal Balance { get; set; }
         public DateTime LastActivity { get; set; }
         public bool IsActive { get; set; }
+        public string WalletAddress { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public long TransactionNonce { get; set; }
     }
 
     public class BlockchainChain

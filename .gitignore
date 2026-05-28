@@ -1,3 +1,7 @@
 .vs/
-bin
+bin/
 obj/
+*.user
+*.suo
+block
+.config/

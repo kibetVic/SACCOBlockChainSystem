@@ -5,6 +5,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
 {
     public class MemberDTO
     {
+        public int Id { get; set; }
         public string MemberNo { get; set; } = null!;
         public string Surname { get; set; } = null!;
         public string OtherNames { get; set; } = null!;
@@ -140,6 +141,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? RegistrationType { get; set; }
         public bool IsActive { get; set; }
         public string? Employer { get; internal set; }
+        public string? WalletAddress { get; internal set; }
     }
 
     public class MemberUpdateDTO

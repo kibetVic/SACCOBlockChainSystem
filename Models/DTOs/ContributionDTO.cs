@@ -55,6 +55,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? ReferenceNo { get; set; }
         public DateTime DepositedDate { get; set; }
         public DateTime ReceiptDate { get; set; }
+        public string TransactionSignature { get; internal set; }
+        public string TransactionHash { get; internal set; }
+        public bool IsSignatureVerified { get; internal set; }
     }
 
     public class ShareTypeDTO

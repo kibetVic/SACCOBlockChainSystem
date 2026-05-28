@@ -12,12 +12,18 @@ namespace SACCOBlockChainSystem.Data
             : base(options)
         {
         }
+        //public virtual DbSet<Usergroup> Usergroups { get; set; }
+        public virtual DbSet<Usergrp> GroupRights { get; set; }
+
+        public virtual DbSet<WalletConfig> WalletConfigurations { get; set; }
+
         public DbSet<UserGroup> UserGroups { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
+        public DbSet<Loanschd> LOANSCHD { get; set; }
         public DbSet<ColloanGuar> ColloanGuars { get; set; }
         public DbSet<Collateral> Collaterals { get; set; }
         public DbSet<Privillage> Privilages { get; set; }
-        public DbSet<RolePrivilage> RolePrivileges { get; set; }
+        public DbSet<RolePrivilege> RolePrivileges { get; set; }
         public DbSet<Client> Clients { get; set; }
         public DbSet<Company> Companies { get; set; }
         public DbSet<SaccoParram> SaccoParram { get; set; }
@@ -87,6 +93,16 @@ namespace SACCOBlockChainSystem.Data
             modelBuilder.Entity<TransactionDetail>().HasKey(t => t.Id);
             modelBuilder.Entity<Transactions2>().HasKey(t => t.Id);
 
+            modelBuilder.Entity<UserGroup>(entity =>
+            {
+                entity.HasKey(e => e.UserGroupId);
+                entity.ToTable("UserGroups");
+            });
+
+            modelBuilder.Entity<Usergrp>(entity =>
+            {
+                entity.HasKey(e => e.RightId);
+            });
             // Configure Contrib to Member relationship
             modelBuilder.Entity<Contrib>(entity =>
             {
@@ -247,7 +263,7 @@ namespace SACCOBlockChainSystem.Data
                     .HasPrincipalKey(l => l.LoanCode);
             });
 
-            modelBuilder.Entity<Member>().Ignore(m => m.Id);
+            //modelBuilder.Entity<Member>().Ignore(m => m.Id);
 
             // Explicitly configure Company entity
             modelBuilder.Entity<Company>(entity =>
@@ -296,8 +312,10 @@ namespace SACCOBlockChainSystem.Data
                     .HasColumnName("BlockchainTxId");
             });
 
-            modelBuilder.Entity<RolePrivilage>()
-  .HasKey(rp => new { rp.UserGroupId, rp.PrivilageId });
+  //          modelBuilder.Entity<RolePrivilage>()
+  //.HasKey(rp => new { rp.UserGroupId, rp.PrivilageId });
+            modelBuilder.Entity<RolePrivilege>()
+               .HasKey(rp => new { rp.GroupId, rp.RightId });
 
             modelBuilder.Entity<Loan>()
                 .ToTable(tb => tb.UseSqlOutputClause(false));

@@ -6,6 +6,7 @@ using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.ViewModels;
 using SACCOBlockChainSystem.Services;
+using SACCOBlockChainSystem.ViewModels;
 using System.Diagnostics;
 using System.Globalization;
 using System.Security.Claims;
@@ -20,21 +21,74 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly ILogger<HomeController> _logger;
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _webHostEnvironment;
+        private WalletService _walletService;
 
         public HomeController(
             IDashboardService dashboardService,
             IBlockchainService blockchainService,
             ILogger<HomeController> logger,
-            ApplicationDbContext context,
+            ApplicationDbContext context,WalletService walletService,
             IWebHostEnvironment webHostEnvironment)
         {
             _dashboardService = dashboardService;
             _blockchainService = blockchainService;
             _logger = logger;
             _context = context;
+            _walletService = walletService;
             _webHostEnvironment = webHostEnvironment;
         }
 
+        public async Task<IActionResult> AccountSetup()
+        {
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            if (userRole.ToUpper() != "MEMBER")
+            {
+                return RedirectToAction("Index", "Home");
+            }
+            var wp = new WalletPinSetup();
+            ViewBag.MemberNo = User.FindFirst("MemberNo")?.Value;
+            return View(wp);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AccountSetup(WalletPinSetup model)
+        {
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            if (userRole.ToUpper() != "MEMBER")
+            {
+                return RedirectToAction("Index", "Home");
+            }
+            ViewBag.MemberNo = User.FindFirst("MemberNo")?.Value;
+            if (!ModelState.IsValid)
+            {
+                TempData["ErrorMessage"] = "Invalid try again.";
+                return View(model);
+            }
+            var userCompanyCode = User.FindFirst("CompanyCode")?.Value;
+            var memberNo = User.FindFirst("MemberNo")?.Value;
+            var member = await _context.Members.FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == userCompanyCode);
+            if(member == null)
+            {
+                TempData["ErrorMessage"] = "Your account is not active. Please contact administrator.";
+
+                return View(model);
+            }
+            if(model.ConfirmPin != model.Pin)
+            {
+                TempData["ErrorMessage"] = "Confirmation and pin do not match";
+
+                return View(model);
+            }
+
+            member.Pin = EncryptionHelper.Encrypt(model.Pin);
+            //_context.Members.Update(member);
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "Pin set successfully. Proceed.";
+            return RedirectToAction("Index", "Home");
+            //return View(model);
+
+
+        }
         public async Task<IActionResult> Index(string? companyCode)
         {
             try
@@ -46,6 +100,44 @@ namespace SACCOBlockChainSystem.Controllers
                                       User.FindFirst("SaccoCode")?.Value ??
                                       User.FindFirst("Company")?.Value;
 
+                if(userRole.ToUpper() == "MEMBER")
+                {
+                   // var companyCode = User.FindFirst("CompanyCode")?.Value;
+                    var uid = User.FindFirst("UserId")?.Value;
+                    
+                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
+                    var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
+
+                    if (wallet == null)
+                    {
+                        wallet = await _walletService.RegisterMemberAsync(member );
+                        if (wallet == null || wallet.MemberId == 0)
+                        {
+                            ModelState.AddModelError(string.Empty, "Invalid no wallet associated with member.");
+                            return RedirectToAction("MemberLogin", "Account");
+                        }
+                    }
+                    var wg = await _context.WalletConfigurations.AsNoTracking().FirstOrDefaultAsync(w => w.CompanyCode == wallet.CompanyCode);
+                    if(wg != null && wg.EnableWallets == true)
+                    {
+                        if(wg.RequireTransactionPin == true)
+                        {
+                            if (string.IsNullOrEmpty(member.Pin))
+                            {
+                                return RedirectToAction("AccountSetup", "Home");
+                            }
+                        }
+                    }
+                    var trs = await _context.BlockchainTransactions.AsNoTracking().OrderByDescending(t => t.CreatedAt).Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo).Take(20).ToListAsync();
+                    var memberView = new MemberViewModel {
+                        Member = member,
+                        Wallets = new List<Wallet> { wallet },
+                        MemberTransactions = trs,
+                        UserCompanyCode = member.CompanyCode,
+                    };
+                    return View("MemberIndex",memberView);
+                }
+                
                 // Determine the effective company code for filtering
                 string effectiveCompanyCode = null;
 

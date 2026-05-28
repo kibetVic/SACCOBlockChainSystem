@@ -14,7 +14,23 @@ var builder = WebApplication.CreateBuilder(args);
 QuestPDF.Settings.License = LicenseType.Community;
 
 // Add services
+
+// Add services to the container.
 builder.Services.AddControllersWithViews();
+
+builder.Services.AddRazorPages();
+builder.Services.AddRadzenComponents();
+
+builder.Services.AddServerSideBlazor();
+
+builder.Services.AddScoped<DialogService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<TooltipService>();
+builder.Services.AddScoped<ContextMenuService>();
+builder.Services.AddScoped<RoleService>();
+builder.Services.AddScoped<PrivilegeService>();
+
+
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddServerSideBlazor();
@@ -81,6 +97,9 @@ builder.Services.AddScoped<IBlockchainService, BlockchainService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ISaccoService, SaccoService>();
 builder.Services.AddScoped<IMemberService, MemberService>();
+
+builder.Services.AddScoped<WalletService, WalletService>();
+builder.Services.AddScoped<ICryptoService, CryptoService>();
 builder.Services.AddScoped<IContributionService, ContributionService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<ILoanTypeService, LoanTypeService>();

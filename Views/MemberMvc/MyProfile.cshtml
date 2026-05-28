@@ -1,0 +1,603 @@
+﻿@using SACCOBlockChainSystem.Models.DTOs
+@model MemberUpdateDTO
+@{
+    ViewData["Title"] = "My Profile";
+    var totalContributions = ViewBag.TotalContributions as decimal? ?? 0;
+    var shareBalance = ViewBag.ShareBalance as decimal? ?? 0;
+    var lastTransactionDate = ViewBag.LastTransactionDate as DateTime?;
+    var lastTransactionAmount = ViewBag.LastTransactionAmount as decimal?;
+    var memberName = ViewBag.MemberName as string;
+    var memberNo = ViewBag.MemberNo as string;
+}
+
+<div class="container-fluid">
+    <!-- Success/Error Messages -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Welcome Banner with Time Greeting -->
+    <div class="alert alert-info mb-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-1">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="timeBasedGreeting"></span>, @memberName!
+                </h5>
+                <small style="opacity: 0.9;">
+                    <i class="fas fa-id-card"></i> Member No: @memberNo
+                </small>
+            </div>
+            <div class="text-end">
+                <div id="currentTimeDisplay" style="font-size: 1rem; font-weight: bold;"></div>
+                <span id="greetingBadge" class="badge" style="background: rgba(255,255,255,0.2);"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Total Contributions</h6>
+                            <h3 class="mb-0">@totalContributions.ToString("N0")</h3>
+                        </div>
+                        <i class="fas fa-hand-holding-usd fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Share Balance</h6>
+                            <h3 class="mb-0">@shareBalance.ToString("N0")</h3>
+                        </div>
+                        <i class="fas fa-chart-line fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Last Transaction</h6>
+                            <h6 class="mb-0">@(lastTransactionDate?.ToString("dd/MM/yyyy") ?? "N/A")</h6>
+                            <small>@(lastTransactionAmount?.ToString("N0") ?? "0")</small>
+                        </div>
+                        <i class="fas fa-receipt fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Member Since</h6>
+                            <h6 class="mb-0">@(Model.RegistrationDate.ToString("dd/MM/yyyy"))</h6>
+                        </div>
+                        <i class="fas fa-calendar-alt fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Update Form -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h4><i class="fas fa-user-edit"></i> Edit Profile</h4>
+        </div>
+        <div class="card-body">
+            <form id="profileForm" method="post" asp-action="MyProfile">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="MemberNo" />
+                <input type="hidden" asp-for="RegistrationDate" />
+                <input type="hidden" asp-for="Status" />
+                <input type="hidden" asp-for="CreatedBy" value="@User.Identity?.Name" />
+
+                <div class="row">
+                    <!-- LEFT SIDE - Form Fields -->
+                    <div class="col-md-8">
+                        <!-- Basic Information Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="required">Member Number</label>
+                                <input type="text" class="form-control" value="@Model.MemberNo" disabled />
+                                <small class="text-muted">Member number cannot be changed</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="required">ID Number *</label>
+                                <input type="text" asp-for="IdNo" class="form-control" maxlength="20" />
+                                <span asp-validation-for="IdNo" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Name Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="required">Surname *</label>
+                                <input type="text" asp-for="Surname" class="form-control" />
+                                <span asp-validation-for="Surname" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="required">Other Names *</label>
+                                <input type="text" asp-for="OtherNames" class="form-control" />
+                                <span asp-validation-for="OtherNames" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Contact Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="required">Phone Number *</label>
+                                <input type="tel" asp-for="PhoneNo" class="form-control" placeholder="0712345678" />
+                                <span asp-validation-for="PhoneNo" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Landline</label>
+                                <input type="tel" asp-for="LandLine" class="form-control" placeholder="0201234567" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Email</label>
+                                <input type="email" asp-for="Email" class="form-control" placeholder="member@example.com" />
+                                <span asp-validation-for="Email" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Personal Details Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label>Gender</label>
+                                <select asp-for="Gender" class="form-control">
+                                    <option value="">Select</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Date of Birth</label>
+                                <input type="date" asp-for="DateOfBirth" class="form-control" />
+                                <span id="ageWarning" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-2">
+                                <label>Age</label>
+                                <input type="number" id="Age" class="form-control" readonly />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Marital Status</label>
+                                <select asp-for="MaritalStatus" class="form-control">
+                                    <option value="">Select</option>
+                                    <option value="Single">Single</option>
+                                    <option value="Married">Married</option>
+                                    <option value="Divorced">Divorced</option>
+                                    <option value="Widowed">Widowed</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Employment & Location Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Employer</label>
+                                <input type="text" asp-for="Employer" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Department</label>
+                                <input type="text" asp-for="Department" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Station/County</label>
+                                <input type="text" asp-for="Station" class="form-control" />
+                            </div>
+                        </div>
+
+                        <!-- Address Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label>Present Address</label>
+                                <textarea asp-for="PresentAddress" class="form-control" rows="2"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Membership Information (Read-only) -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Membership Type</label>
+                                <input type="text" class="form-control" value="@Model.MembershipType" disabled />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Registration Type</label>
+                                <input type="text" class="form-control" value="@Model.RegistrationType" disabled />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Status</label>
+                                <input type="text" class="form-control" value="@Model.Status" disabled />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT SIDE - Profile Info & Security -->
+                    <div class="col-md-4">
+                        <div class="card bg-light mb-3">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="mb-0"><i class="fas fa-shield-alt"></i> Account Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label>Wallet Address</label>
+                                    <div class="input-group">
+                                        <input type="text" id="WalletAddress" class="form-control font-monospace small"
+                                               value="Loading..." readonly />
+                                        <button type="button" class="btn btn-outline-secondary" onclick="copyWalletAddress()">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Blockchain Status</label>
+                                    <div id="blockchainStatus" class="mt-2">
+                                        <span class="badge bg-warning">Checking...</span>
+                                    </div>
+                                </div>
+
+                                <hr />
+
+                                <div class="mb-3">
+                                    <label>Change Pin</label>
+                                    <a asp-action="AccountSetup" asp-controller="Home" class="btn btn-outline-primary btn-sm w-100">
+                                        <i class="fas fa-key"></i> Change Password
+                                    </a>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>2-Factor Authentication</label>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                        <i class="fas fa-mobile-alt"></i> Coming Soon
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BUTTONS -->
+                <div class="mt-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg" id="btnSave">
+                        <i class="fas fa-save"></i> Update Profile
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-lg" onclick="resetForm()">
+                        <i class="fas fa-undo"></i> Reset
+                    </button>
+                    <a asp-action="MemberContribute" asp-controller="ContributionMvc" class="btn btn-info btn-lg">
+                        <i class="fas fa-hand-holding-usd"></i> Make Contribution
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; text-align:center; padding-top:20%;">
+    <div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="text-light mt-2">Updating Profile...</div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: red;
+    }
+
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+    .opacity-50 {
+        opacity: 0.5;
+    }
+
+    .font-monospace {
+        font-family: monospace;
+        font-size: 12px;
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+
+    .alert {
+        animation: slideDown 0.5s ease;
+    }
+
+    @@keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+</style>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        $(document).ready(function() {
+            // Calculate age when DOB changes
+            $('#DateOfBirth').on('change', function() {
+                calculateAge();
+            });
+
+            // Initialize age on page load
+            if ($('#DateOfBirth').val()) {
+                calculateAge();
+            }
+
+            // Load wallet address
+            loadWalletAddress();
+
+            // Load blockchain status
+            loadBlockchainStatus();
+
+            // Form submit
+            $('#profileForm').on('submit', function(e) {
+                e.preventDefault();
+                updateProfile();
+            });
+        });
+
+        function calculateAge() {
+            const dob = $('#DateOfBirth').val();
+            if (dob) {
+                const birthDate = new Date(dob);
+                const today = new Date();
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const monthDiff = today.getMonth() - birthDate.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                $('#Age').val(age);
+
+                // Check if under 18 for individual membership
+                const membershipType = $('#MembershipType').val();
+                if (membershipType === 'Individual' && age < 18) {
+                    $('#ageWarning').text('Individual members must be 18 years or older.');
+                } else {
+                    $('#ageWarning').text('');
+                }
+            } else {
+                $('#Age').val('');
+            }
+        }
+
+        async function loadWalletAddress() {
+            try {
+                const response = await fetch('/api/Member/wallet');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.walletAddress) {
+                        $('#WalletAddress').val(data.walletAddress);
+                    } else {
+                        $('#WalletAddress').val('No wallet created yet');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading wallet:', error);
+                $('#WalletAddress').val('Error loading wallet');
+            }
+        }
+
+        async function loadBlockchainStatus() {
+            try {
+                const response = await fetch('/api/Member/blockchain-status');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        const statusHtml = `
+                            <span class="badge bg-success">Verified on Blockchain</span>
+                            <small class="d-block text-muted mt-1">Tx: ${data.transactionCount} transactions</small>
+                        `;
+                        $('#blockchainStatus').html(statusHtml);
+                    } else {
+                        $('#blockchainStatus').html('<span class="badge bg-secondary">Not on Blockchain</span>');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading blockchain status:', error);
+                $('#blockchainStatus').html('<span class="badge bg-danger">Error checking status</span>');
+            }
+        }
+
+        function copyWalletAddress() {
+            const walletAddress = $('#WalletAddress').val();
+            if (walletAddress && walletAddress !== 'No wallet created yet' && walletAddress !== 'Error loading wallet') {
+                navigator.clipboard.writeText(walletAddress).then(() => {
+                    Swal.fire({
+                        title: 'Copied!',
+                        text: 'Wallet address copied to clipboard',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                });
+            } else {
+                Swal.fire('Info', 'No wallet address available to copy', 'info');
+            }
+        }
+
+        function resetForm() {
+            location.reload();
+        }
+
+        async function updateProfile() {
+            // Validate required fields
+            if (!$('#Surname').val().trim()) {
+                Swal.fire('Error', 'Surname is required', 'error');
+                return;
+            }
+
+            if (!$('#OtherNames').val().trim()) {
+                Swal.fire('Error', 'Other Names are required', 'error');
+                return;
+            }
+
+            if (!$('#IdNo').val().trim()) {
+                Swal.fire('Error', 'ID Number is required', 'error');
+                return;
+            }
+
+            if (!$('#PhoneNo').val().trim()) {
+                Swal.fire('Error', 'Phone Number is required', 'error');
+                return;
+            }
+
+            // Validate age for individual members
+            const membershipType = $('#MembershipType').val();
+            const age = parseInt($('#Age').val());
+            if (membershipType === 'Individual' && age < 18) {
+                Swal.fire('Error', 'Individual members must be 18 years or older', 'error');
+                return;
+            }
+
+            const formData = {
+                MemberNo: $('#MemberNo').val(),
+                Surname: $('#Surname').val(),
+                OtherNames: $('#OtherNames').val(),
+                IdNo: $('#IdNo').val(),
+                PhoneNo: $('#PhoneNo').val(),
+                LandLine: $('#LandLine').val(),
+                Email: $('#Email').val(),
+                Gender: $('#Gender').val(),
+                DateOfBirth: $('#DateOfBirth').val() || null,
+                Age: $('#Age').val(),
+                MaritalStatus: $('#MaritalStatus').val(),
+                Employer: $('#Employer').val(),
+                Department: $('#Department').val(),
+                Station: $('#Station').val(),
+                PresentAddress: $('#PresentAddress').val(),
+                RegistrationDate: $('#RegistrationDate').val(),
+                Status: $('#Status').val(),
+                MembershipType: $('#MembershipType').val(),
+                RegistrationType: $('#RegistrationType').val()
+            };
+
+            $('#loadingOverlay').fadeIn(200);
+
+            try {
+                const response = await fetch('/MemberMvc/MyProfile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+                $('#loadingOverlay').fadeOut(200);
+
+                if (data.success) {
+                    Swal.fire({
+                        title: 'Success!',
+                        text: data.message,
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            } catch (error) {
+                $('#loadingOverlay').fadeOut(200);
+                Swal.fire('Error', 'An error occurred while updating profile', 'error');
+            }
+        }
+
+        // Time-based greeting function
+        function updateTimeBasedGreeting() {
+            const now = new Date();
+            const hour = now.getHours();
+            const greetingElement = document.getElementById('timeBasedGreeting');
+            const badgeElement = document.getElementById('greetingBadge');
+            const timeDisplayElement = document.getElementById('currentTimeDisplay');
+
+            const formattedTime = now.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+
+            if (timeDisplayElement) {
+                timeDisplayElement.innerHTML = `<i class="fas fa-clock"></i> ${formattedTime}`;
+            }
+
+            let greeting = '';
+            let emoji = '';
+            let badgeText = '';
+
+            if (hour >= 5 && hour < 12) {
+                greeting = 'Good Morning';
+                emoji = '🌅';
+                badgeText = 'Morning';
+            } else if (hour >= 12 && hour < 17) {
+                greeting = 'Good Afternoon';
+                emoji = '☀️';
+                badgeText = 'Afternoon';
+            } else if (hour >= 17 && hour < 21) {
+                greeting = 'Good Evening';
+                emoji = '🌆';
+                badgeText = 'Evening';
+            } else {
+                greeting = 'Good Night';
+                emoji = '🌙';
+                badgeText = 'Night';
+            }
+
+            if (greetingElement) {
+                greetingElement.innerHTML = `${greeting} ${emoji}`;
+            }
+
+            if (badgeElement) {
+                badgeElement.innerHTML = `${emoji} ${badgeText}`;
+            }
+        }
+
+        updateTimeBasedGreeting();
+        setInterval(updateTimeBasedGreeting, 60000);
+    </script>
+}

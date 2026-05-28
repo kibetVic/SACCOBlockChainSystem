@@ -29,6 +29,113 @@ namespace SACCOBlockChainSystem.Controllers
             _logger = logger;
         }
 
+        private async Task<IActionResult> setMemberSession(string? username)
+        {
+            var user = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == username);
+            // throw new NotImplementedException();
+            var claims = new List<Claim>
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                         new Claim(ClaimTypes.Name, user.MemberNo),
+                        new Claim(ClaimTypes.Name, user?.UserName ?? ""),
+                        new Claim("FullName", user?.UserName ?? string.Empty),
+                        new Claim("Email", user?.Email ?? string.Empty),
+                        new Claim("UserId", user?.Id.ToString()),
+                        new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                        new Claim("MemberNo", user.MemberNo),
+                        new Claim("CompanyName", user?.Employer ?? ""),
+                        new Claim("UserLoginId", user?.MemberNo ?? string.Empty)
+                    };
+
+            claims.Add(new Claim("UserGroup", "Member"));
+            claims.Add(new Claim(ClaimTypes.Role, "Member"));
+
+            // Add additional user info claims
+            //if (!string.IsNullOrEmpty(user.Department))
+            //{
+            //    claims.Add(new Claim("Department", user.Department));
+            //}
+
+            if (!string.IsNullOrEmpty(user.MemberNo))
+            {
+                claims.Add(new Claim("MemberNo", user.MemberNo));
+            }
+
+            //CompanyCode claim
+            if (!string.IsNullOrEmpty(user.CompanyCode))
+            {
+                claims.Add(new Claim("CompanyCode", user.CompanyCode));
+            }
+
+            // Branch code Claims
+            //if (!string.IsNullOrEmpty(user.Branchcode))
+            //{
+            //    claims.Add(new Claim("BranchCode", user.Branchcode));
+            //}
+
+            var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+            var authProperties = new AuthenticationProperties
+            {
+                IsPersistent = false,
+                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(2),
+                RedirectUri = "/Home/Index"
+            };
+
+            await HttpContext.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                new ClaimsPrincipal(claimsIdentity),
+                authProperties);
+
+            HttpContext.Session.SetString("MemberNo", user.MemberNo);
+            HttpContext.Session.SetString("MemberName", $"{user.Surname} {user.OtherNames}");
+
+            _logger.LogInformation($"User {user.UserName} (Company: {user.Employer} - {user.CompanyCode}) logged in successfully.");
+
+            //if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            //{
+            //    return Redirect(returnUrl);
+            //}
+            TempData["ErrorMessage"] = ""; TempData["SuccessMessage"] = "";
+            return RedirectToAction("Index", "Home");
+        }
+
+        [HttpGet]
+        public IActionResult VerifyMember(string? user = null,bool requestpin=false)
+        {
+            if(user == null)
+            {
+                return NotFound();
+            }
+            ViewBag.RequestPin = requestpin;
+            
+            user = EncryptionHelper.Decrypt(user);
+            var member = _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == user);
+            if(member == null)
+            {
+                return NotFound();
+            }
+            var model = new VerifyCodeVm
+            {
+                Username = user
+            };
+
+            return View(model);
+            ///return View();
+        }
+
+        [HttpGet]
+        public IActionResult MemberLogin(string? returnUrl = null)
+        {
+            if (User.Identity.IsAuthenticated)
+            {
+                return RedirectToAction("Index", "Blockchain");
+            }
+
+            ViewData["ReturnUrl"] = returnUrl;
+            return View();
+        }
+
 
         // GET: /Account/Login
         [HttpGet]
@@ -55,131 +162,167 @@ namespace SACCOBlockChainSystem.Controllers
 
             try
             {
-                // Hash the password for comparison
-                var hashedPassword = HashPassword(model.Password);
-
-                // Find user by Username and password
-                var user = await _context.UserAccounts1
-                    .FirstOrDefaultAsync(u => u.UserName == model.Username && u.Password == hashedPassword);
-
-                if (user == null)
+                if(model.MemberLogin == "false")
                 {
-                    // Update failed attempts for the username
-                    var failedUser = await _context.UserAccounts1
-                        .FirstOrDefaultAsync(u => u.UserName == model.Username);
+                    var hashedPassword = HashPassword(model.Password);
 
-                    if (failedUser != null)
+                    // Find user by Username and password
+                    var user = await _context.UserAccounts1
+                        .FirstOrDefaultAsync(u => u.UserName == model.Username && u.Password == hashedPassword);
+
+                    if (user == null)
                     {
-                        failedUser.FailedAttempts = (failedUser.FailedAttempts ?? 0) + 1;
+                        // Update failed attempts for the username
+                        var failedUser = await _context.UserAccounts1
+                            .FirstOrDefaultAsync(u => u.UserName == model.Username);
 
-                        // Lock account after 5 failed attempts
-                        if (failedUser.FailedAttempts >= 5)
+                        if (failedUser != null)
                         {
-                            failedUser.IsLocked = true;
-                            _logger.LogWarning($"Account locked for username: {model.Username}");
+                            failedUser.FailedAttempts = (failedUser.FailedAttempts ?? 0) + 1;
+
+                            // Lock account after 5 failed attempts
+                            if (failedUser.FailedAttempts >= 5)
+                            {
+                                failedUser.IsLocked = true;
+                                _logger.LogWarning($"Account locked for username: {model.Username}");
+                            }
+
+                            await _context.SaveChangesAsync();
                         }
 
-                        await _context.SaveChangesAsync();
+                        ModelState.AddModelError(string.Empty, "Invalid username or password.");
+                        return View(model);
                     }
 
-                    ModelState.AddModelError(string.Empty, "Invalid username or password.");
-                    return View(model);
+                    // Check if account is locked
+                    if (user.IsLocked == true)
+                    {
+                        ModelState.AddModelError(string.Empty, "Account is locked. Please contact administrator.");
+                        return View(model);
+                    }
+
+                    // Check if account is active
+                    if (user.Status?.ToLower() != "active" && user.Userstatus?.ToLower() != "active")
+                    {
+                        ModelState.AddModelError(string.Empty, "Account is not active. Please contact administrator.");
+                        return View(model);
+                    }
+
+                    // Check if user has a company code
+                    if (string.IsNullOrEmpty(user.CompanyCode))
+                    {
+                        ModelState.AddModelError(string.Empty, "User account is not associated with any company. Please contact administrator.");
+                        return View(model);
+                    }
+
+                    // Get company name for the user's company code
+                    var company = await _context.Companies
+                        .FirstOrDefaultAsync(c => c.CompanyCode == user.CompanyCode);
+
+                    var companyName = company?.CompanyName ?? "Unknown Company";
+
+                    // Reset failed attempts on successful login
+                    user.FailedAttempts = 0;
+                    await _context.SaveChangesAsync();
+
+                    var claims = new List<Claim>
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+                        new Claim(ClaimTypes.Name, user.UserName),
+                        new Claim("FullName", user.UserName ?? string.Empty),
+                        new Claim("Email", user.Email ?? string.Empty),
+                        new Claim("UserId", user.UserId.ToString()),
+                        new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                        new Claim("CompanyName", companyName),
+                        new Claim("UserLoginId", user.UserLoginId ?? string.Empty)
+                    };
+
+                    // Add UserGroup as a separate claim - THIS IS IMPORTANT
+                    if (!string.IsNullOrEmpty(user.UserGroup))
+                    {
+                        claims.Add(new Claim("UserGroup", user.UserGroup));
+                        claims.Add(new Claim(ClaimTypes.Role, user.UserGroup));
+                    }
+
+                    // Add additional user info claims
+                    if (!string.IsNullOrEmpty(user.Department))
+                    {
+                        claims.Add(new Claim("Department", user.Department));
+                    }
+
+                    if (!string.IsNullOrEmpty(user.MemberNo))
+                    {
+                        claims.Add(new Claim("MemberNo", user.MemberNo));
+                    }
+
+                    //CompanyCode claim
+                    if (!string.IsNullOrEmpty(user.CompanyCode))
+                    {
+                        claims.Add(new Claim("CompanyCode", user.CompanyCode));
+                    }
+
+                    // Branch code Claims
+                    if (!string.IsNullOrEmpty(user.Branchcode))
+                    {
+                        claims.Add(new Claim("BranchCode", user.Branchcode));
+                    }
+
+                    var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+                    var authProperties = new AuthenticationProperties
+                    {
+                        IsPersistent = model.RememberMe,
+                        ExpiresUtc = model.RememberMe ? DateTimeOffset.UtcNow.AddDays(30) : DateTimeOffset.UtcNow.AddHours(2),
+                        RedirectUri = returnUrl ?? "/MembersMVC/Index"
+                    };
+
+                    await HttpContext.SignInAsync(
+                        CookieAuthenticationDefaults.AuthenticationScheme,
+                        new ClaimsPrincipal(claimsIdentity),
+                        authProperties);
+
+                    _logger.LogInformation($"User {user.UserName} (Company: {companyName} - {user.CompanyCode}) logged in successfully.");
+
+                    if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                    {
+                        return Redirect(returnUrl);
+                    }
+                    return RedirectToAction("Index", "Home");
                 }
-
-                // Check if account is locked
-                if (user.IsLocked == true)
+                else
                 {
-                    ModelState.AddModelError(string.Empty, "Account is locked. Please contact administrator.");
-                    return View(model);
+                    var user = await _context.Members
+                        .FirstOrDefaultAsync(u => u.Idno == model.Username || u.MemberNo == model.Username);
+                    if(user == null)
+                    {
+                        ModelState.AddModelError(string.Empty, "Invalid username or member.");
+                        return View(model);
+                    }
+                    if (!string.IsNullOrEmpty(user.Pin))
+                    {
+                        HttpContext.Session.SetString($"PinSetFor_{model.Username}", "false");
+                        return Redirect("/Account/VerifyMember?requestpin=true&user=" + EncryptionHelper.Encrypt(user.MemberNo));
+                    }
+                    else
+                    {
+                        return await SendCode(user);
+                    }
+                        
+                    //return Redirect("/Account/VerifyMember?user="+EncryptionHelper.Encrypt(user.MemberNo));
+                    //var claims = new List<Claim>
+                    //{
+                    //    new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+                    //    new Claim(ClaimTypes.Name, user.UserName),
+                    //    new Claim("FullName", user.UserName ?? string.Empty),
+                    //    new Claim("Email", user.Email ?? string.Empty),
+                    //    new Claim("UserId", user.UserId.ToString()),
+                    //    new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                    //    new Claim("CompanyName", companyName),
+                    //    new Claim("UserLoginId", user.UserLoginId ?? string.Empty)
+                    //};
                 }
+                // Hash the password for comparison
 
-                // Check if account is active
-                if (user.Status?.ToLower() != "active" && user.Userstatus?.ToLower() != "active")
-                {
-                    ModelState.AddModelError(string.Empty, "Account is not active. Please contact administrator.");
-                    return View(model);
-                }
-
-                // Check if user has a company code
-                if (string.IsNullOrEmpty(user.CompanyCode))
-                {
-                    ModelState.AddModelError(string.Empty, "User account is not associated with any company. Please contact administrator.");
-                    return View(model);
-                }
-
-                // Get company name for the user's company code
-                var company = await _context.Companies
-                    .FirstOrDefaultAsync(c => c.CompanyCode == user.CompanyCode);
-
-                var companyName = company?.CompanyName ?? "Unknown Company";
-
-                // Reset failed attempts on successful login
-                user.FailedAttempts = 0;
-                await _context.SaveChangesAsync();
-
-                var claims = new List<Claim>
-                {
-                    new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                    new Claim(ClaimTypes.Name, user.UserName),
-                    new Claim("FullName", user.UserName ?? string.Empty),
-                    new Claim("Email", user.Email ?? string.Empty),
-                    new Claim("UserId", user.UserId.ToString()),
-                    new Claim("CompanyCode", user.CompanyCode ?? "000"),
-                    new Claim("CompanyName", companyName),
-                    new Claim("UserLoginId", user.UserLoginId ?? string.Empty)
-                };
-
-                // Add UserGroup as a separate claim - THIS IS IMPORTANT
-                if (!string.IsNullOrEmpty(user.UserGroup))
-                {
-                    claims.Add(new Claim("UserGroup", user.UserGroup));
-                    claims.Add(new Claim(ClaimTypes.Role, user.UserGroup));
-                }
-
-                // Add additional user info claims
-                if (!string.IsNullOrEmpty(user.Department))
-                {
-                    claims.Add(new Claim("Department", user.Department));
-                }
-
-                if (!string.IsNullOrEmpty(user.MemberNo))
-                {
-                    claims.Add(new Claim("MemberNo", user.MemberNo));
-                }
-
-                //CompanyCode claim
-                if (!string.IsNullOrEmpty(user.CompanyCode))
-                {
-                    claims.Add(new Claim("CompanyCode", user.CompanyCode));
-                }
-
-                // Branch code Claims
-                if (!string.IsNullOrEmpty(user.Branchcode))
-                {
-                    claims.Add(new Claim("BranchCode", user.Branchcode));
-                }
-
-                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-
-                var authProperties = new AuthenticationProperties
-                {
-                    IsPersistent = model.RememberMe,
-                    ExpiresUtc = model.RememberMe ? DateTimeOffset.UtcNow.AddDays(30) : DateTimeOffset.UtcNow.AddHours(2),
-                    RedirectUri = returnUrl ?? "/Home/Index"
-                };
-
-                await HttpContext.SignInAsync(
-                    CookieAuthenticationDefaults.AuthenticationScheme,
-                    new ClaimsPrincipal(claimsIdentity),
-                    authProperties);
-
-                _logger.LogInformation($"User {user.UserName} (Company: {companyName} - {user.CompanyCode}) logged in successfully.");
-
-                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
-                {
-                    return Redirect(returnUrl);
-                }
-                return RedirectToAction("Index", "Home");
             }
             catch (Exception ex)
             {
@@ -187,6 +330,52 @@ namespace SACCOBlockChainSystem.Controllers
                 ModelState.AddModelError(string.Empty, "An error occurred during login. Please try again.");
                 return View(model);
             }
+        }
+
+        private async Task<RedirectToActionResult> SendCode(Member user)
+        {
+            if (user.Status?.ToString() != "1" )
+            {
+                TempData["ErrorMessage"] = "Your account is not active. Please contact administrator.";
+                return RedirectToAction("MemberLogin");
+            }
+
+            // Generate 6-digit verification code
+            var verificationCode = GenerateVerificationCode();
+
+            // Store code with expiration (10 minutes from now)
+            var codeExpiry = DateTime.Now.AddMinutes(10);
+
+            // Store in TempData or Session (TempData is short-lived, use Session for better persistence)
+            HttpContext.Session.SetString($"ResetCode_{user.MemberNo}", verificationCode);
+            HttpContext.Session.SetString($"ResetCodeExpiry_{user.MemberNo}", codeExpiry.ToString("O"));
+
+            // Store username for next steps
+            TempData["ResetUsername"] = user.MemberNo;
+
+            var emailService = HttpContext.RequestServices.GetService<IEmailService>();
+                if (emailService != null)
+                {
+                    var emailSent = await emailService.SendVerificationCodeAsync(user.Email, user.UserName, verificationCode);
+
+                    if (emailSent)
+                    {
+                        TempData["SuccessMessage"] = $"Verification code sent to {MaskEmail(user.Email)}. Please check your email.";
+                        return RedirectToAction("VerifyMember", new { requestpin=false,user = EncryptionHelper.Encrypt(user.MemberNo) });
+                    }
+                    else
+                    {
+                        TempData["ErrorMessage"] = "Failed to send verification email. Please try again later.";
+                        return RedirectToAction("MemberLogin");
+                    }
+                }
+                else
+                {
+                    // For development/testing - show code on screen
+                    _logger.LogWarning($"Email service not configured. Verification code for {user.MemberNo}: {verificationCode}");
+                    TempData["SuccessMessage"] = $"[DEV MODE] Verification code: {verificationCode}";
+                    return RedirectToAction("VerifyMember", new { requestpin=false,user = EncryptionHelper.Encrypt(user.MemberNo) });
+                }
         }
 
         // GET: /Account/Signup
@@ -778,6 +967,33 @@ namespace SACCOBlockChainSystem.Controllers
                 return View(new UserManagementViewModel { Users = new List<SACCOBlockChainSystem.Models.ViewModels.UserListDTO>() });
             }
         }
+
+        [HttpGet]
+        [Authorize]
+        public async Task<IActionResult> UserGroups(string searchTerm)
+        {
+            try
+            {
+                ViewBag.SearchTerm = searchTerm;
+
+                var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
+                var currentUserCompanyCode = User.FindFirstValue("CompanyCode");
+
+                List<SACCOBlockChainSystem.Models.DTOs.UserListDTO> users;
+
+                var groups = await _context.UserGroups.AsNoTracking().ToListAsync();
+                
+
+                return View();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading user management page");
+                TempData["ErrorMessage"] = "Error loading users list";
+                return View(new UserManagementViewModel { Users = new List<SACCOBlockChainSystem.Models.ViewModels.UserListDTO>() });
+            }
+        }
+
 
         public async Task<IActionResult> Index(string searchTerm)
         {
@@ -1547,7 +1763,6 @@ namespace SACCOBlockChainSystem.Controllers
             return View(model);
         }
 
-        // POST: /Account/VerifyCode
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> VerifyCode(VerifyCodeVm model)
@@ -1603,6 +1818,99 @@ namespace SACCOBlockChainSystem.Controllers
                 return View(model);
             }
         }
+
+
+        // POST: /Account/VerifyMember
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> VerifyMember(VerifyCodeVm model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            try
+            {
+                ViewBag.RequestPin = false;
+                var reqpin = HttpContext.Session.GetString($"PinSetFor_{model.Username}");
+                if(string.IsNullOrEmpty(reqpin) || reqpin == "false")
+                {
+                    if(model.SetPin.ToLower() == "true")
+                    {
+                        var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == model.Username);
+                        if(member != null)
+                        {
+                            if(EncryptionHelper.Decrypt(member.Pin) == model.Code)
+                            {
+                                HttpContext.Session.SetString($"PinSetFor_{model.Username}", "true");
+                                return await SendCode(member);
+                            }
+                            else
+                            {
+                                TempData["ErrorMessage"] = "Invalid pin for verification.";
+                                return Redirect("/Account/VerifyMember?requestpin=true&user=" + EncryptionHelper.Encrypt(member.MemberNo));
+                                //ViewBag.RequestPin = true;
+                                //return View(model);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        ViewBag.RequestPin = true;
+                        return View(model);
+                    }
+                    //HttpContext.Session.SetString($"PinSetFor_{model.Username}", "true");
+                        
+                }
+                // Retrieve stored code and expiry
+                var storedCode = HttpContext.Session.GetString($"ResetCode_{model.Username}");
+                var expiryStr = HttpContext.Session.GetString($"ResetCodeExpiry_{model.Username}");
+
+                if (string.IsNullOrEmpty(storedCode) || string.IsNullOrEmpty(expiryStr))
+                {
+                    TempData["ErrorMessage"] = "No verification code found. Please request a new code.";
+                    return RedirectToAction("MemberLogin");
+                }
+
+                // Check if code has expired
+                if (DateTime.TryParse(expiryStr, out var expiry) && expiry < DateTime.Now)
+                {
+                    // Clear expired code
+                    HttpContext.Session.Remove($"ResetCode_{model.Username}");
+                    HttpContext.Session.Remove($"ResetCodeExpiry_{model.Username}");
+                    TempData["ErrorMessage"] = "Verification code has expired. Please request a new code.";
+                    return RedirectToAction("MemberLogin");
+                }
+
+                // Verify code
+                if (storedCode != model.Code)
+                {
+                    ModelState.AddModelError("Code", "Invalid verification code. Please try again.");
+                    return View(model);
+                }
+
+                // Code is valid - clear it from session
+                HttpContext.Session.Remove($"ResetCode_{model.Username}");
+                HttpContext.Session.Remove($"PinSetFor_{model.Username}");
+                HttpContext.Session.Remove($"ResetCodeExpiry_{model.Username}");
+
+                // Store that user is verified for password reset
+                HttpContext.Session.SetString($"VerifiedForReset_{model.Username}", "true");
+
+                TempData["SuccessMessage"] = "Code verified successfully. Please enter your new password.";
+                return await setMemberSession(model.Username);
+                //return RedirectToAction("ResetPassword", new { username = model.Username });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in VerifyCode");
+                TempData["ErrorMessage"] = "An error occurred. Please try again.";
+                return View(model);
+            }
+        }
+
+        
 
         // GET: /Account/ResetPassword
         [HttpGet]

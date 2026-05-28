@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/AdminLte/dist/assets/img/LoginPG.png" />
     <title>@ViewData["Title"] - EasySacco </title>
-
+    <link href="~/Syncfusion/styles/material.css" rel="stylesheet" />
+    <script src="~/Syncfusion/scripts/ej2.min.js"></script>
     <link rel="stylesheet" href="~/AdminLte/dist/css/adminlte.css" />
     <!-- Radzen CSS - Make sure these come after Bootstrap -->
     <link rel="stylesheet" href="/blazorcss/material-base.css" />
@@ -53,11 +54,25 @@
           crossorigin="anonymous" />
 
     <style>
-        /* This styles an on-page image, NOT the browser tab favicon */
+        input:invalid {
+    box-shadow: none;
+}
+
+select:invalid {
+    box-shadow: none;
+}
+
+
+input:invalid:focus {
+    outline: none;
+}
+        
         img.logo-rounded {
             border-radius: 5px;
         }
     </style>
+    <base href="~/" />
+    <component type="typeof(RadzenTheme)" render-mode="ServerPrerendered" param-Theme="@("material")" />
 
     @RenderSection("Styles", required: false)
 
@@ -79,19 +94,36 @@
 
                     <li class="nav-item">
                         @using System.Security.Claims
+                        @using Radzen.Blazor
+
+                        @{
+                            var userGroupClaim = User.FindFirst("UserGroup")?.Value;
+
+                            var isMember = userGroupClaim == "MEMBER" || userGroupClaim == "Member" || userGroupClaim == "member";
+
+                        }
+
                         @if (User.Identity.IsAuthenticated)
                         {
-                            var userGroupClaim = User.FindFirstValue(ClaimTypes.Role);
-                            var isSuperAdmin = userGroupClaim == "Super Admin" || userGroupClaim == "SuperAdmin";
+                            var userGroupClaims = User.FindFirstValue(ClaimTypes.Role);
+                            var isSuperAdmin = userGroupClaims == "Super Admin" || userGroupClaims == "SuperAdmin";
+                            //var isMember = userGroupClaim == "MEMBER" || userGroupClaim == "Member" || userGroupClaim == "member";
 
                             <div class="company-info">
                                 <small>
                                     @if (isSuperAdmin)
                                     {
-                                        <strong>@User.FindFirstValue("CompanyName")-System SACCOs</strong>
+                                        <strong>@User.FindFirstValue("CompanyName") - System SACCOs</strong>
+                                    }
+                                    else if (isMember)
+                                    {
+                                        // For members, show the Employer field from Members table
+                                        var memberEmployer = User.FindFirstValue("CompanyName") ?? "SACCO Member";
+                                        <strong><i class="fas fa-building"></i> @memberEmployer</strong>
                                     }
                                     else
                                     {
+                                        // For staff/admin users
                                         <strong>@User.FindFirstValue("CompanyName")</strong>
                                     }
                                 </small>
@@ -197,7 +229,7 @@
                                     var userGroupClaim = User.FindFirst("UserGroup")?.Value;
                                     var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
                                     var userName = User.Identity?.Name;
-
+                                    
                                     if (!string.IsNullOrEmpty(userGroupClaim))
                                     {
                                         @userGroupClaim
@@ -237,286 +269,318 @@
                             </a>
                         </li>
 
-                        <!-- System Setups -->
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon bi bi-gear-fill"></i>
-                                <p>
-                                    <b>System Setups</b>
-                                    <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                </p>
-                            </a>
+                        @if (isMember)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="ContributionMvc" asp-action="MemberContribute">
+                                    <i class="fas fa-receipt"></i> Contributions / Shares
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="MemberMvc" asp-action="MyProfile">
+                                    <i class="fas fa-user-circle"></i> My Profile
+                                </a>
+                            </li>
+                        }
 
-                            <ul class="nav nav-treeview ms-4 border-start border-primary border-opacity-25 ps-2">
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Sacco" asp-action="Index">
-                                        <i class="bi bi-building me-2"></i>
-                                        <span>System Parameters</span>
-                                    </a>
-                                </li>
+                        @if (!isMember)
+                        {
+                            <!-- System Setups -->
+                            <li class="nav-item">
+                                <a href="#" class="nav-link">
+                                    <i class="nav-icon bi bi-gear-fill"></i>
+                                    <p>
+                                        <b>System Setups</b>
+                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                    </p>
+                                </a>
 
-                                <li class="nav-item">
-                                    <a asp-controller="ShareTypeMvc" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-stack"></i>
-                                        <p>Share Types</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a asp-controller="LoanTypeMvc" asp-action="LoanTypeManagement" class="nav-link">
-                                        <i class="nav-icon bi bi-cash-stack"></i>
-                                        <p>Loan Type</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Bank" asp-action="Index">
-                                        <i class="bi bi-bank me-2"></i>
-                                        <p>Banks</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Sms" asp-action="Settings">
-                                        <i class="bi bi-gear me-2"></i>
-                                        <span>Eneble SMS</span>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="CIGs" asp-action="Index">
-                                        <i class="bi bi-people-fill me-2"></i>
-                                        <p>CIG</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Location" asp-action="Counties">
-                                        <i class="bi bi-geo-alt-fill me-2"></i>
-                                        <p>Counties</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Location" asp-action="SubCounties">
-                                        <i class="bi bi-map-fill me-2"></i>
-                                        <p>Sub Counties</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Location" asp-action="Wards">
-                                        <i class="bi bi-pin-map-fill me-2"></i>
-                                        <p>Wards</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a asp-controller="Collateral" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-bank2"></i>
-                                        <p>Collaterals</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Account" asp-action="Index">
-                                        <i class="bi bi-people-fill me-2"></i>
-                                        <span>System Users</span>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="PaymentType" asp-action="Index">
-                                        <i class="nav-icon bi bi-gear-fill"></i> Set Payments
-                                    </a>
-                                </li>
-
-                                @if (User.IsInRole("Super Admin") || User.HasClaim("UserGroup", "Super Admin"))
-                                {
+                                <ul class="nav nav-treeview ms-4 border-start border-primary border-opacity-25 ps-2">
                                     <li class="nav-item">
-                                        <a class="nav-link" asp-controller="Account" asp-action="PendingApprovals">
-                                            <i class="bi bi-person-check-fill me-2"></i>
-                                            <span>Pending Approvals</span>
-                                            @if (ViewBag.PendingCount > 0)
-                                            {
-                                                <span class="badge bg-warning ms-2">@ViewBag.PendingCount</span>
-                                            }
+                                        <a class="nav-link" asp-controller="Sacco" asp-action="Index">
+                                            <i class="bi bi-building me-2"></i>
+                                            <span>System Parameters</span>
                                         </a>
                                     </li>
 
                                     <li class="nav-item">
-                                        <a class="nav-link" asp-controller="Account" asp-action="LockedUsers">
-                                            <i class="bi bi-lock-fill me-2"></i>
-                                            <span>Locked Users</span>
-                                            @if (ViewBag.LockedCount > 0)
-                                            {
-                                                <span class="badge bg-danger ms-2">@ViewBag.LockedCount</span>
-                                            }
+                                        <a asp-controller="ShareTypeMvc" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-stack"></i>
+                                            <p>Share Types</p>
                                         </a>
                                     </li>
 
                                     <li class="nav-item">
-                                        <a class="nav-link" asp-controller="Account" asp-action="UserManagement">
-                                            <i class="bi bi-people"></i> User Management
+                                        <a asp-controller="LoanTypeMvc" asp-action="LoanTypeManagement" class="nav-link">
+                                            <i class="nav-icon bi bi-cash-stack"></i>
+                                            <p>Loan Type</p>
                                         </a>
                                     </li>
-                                }
 
-                                <!-- For Super Admin, Admin, and System Administrator only -->
-                                @{
-                                    var userRole = User.FindFirstValue(ClaimTypes.Role);
-                                    var userGroup = User.FindFirstValue("UserGroup");
-                                    var canManageUsers = userRole == "Super Admin" ||
-                                    userRole == "Admin" ||
-                                    userRole == "System Administrator" ||
-                                    userGroup == "Super Admin" ||
-                                    userGroup == "Admin" ||
-                                    userGroup == "System Administrator";
-                                }
-
-                                @if (canManageUsers)
-                                {
                                     <li class="nav-item">
-                                        <a class="nav-link" asp-controller="Account" asp-action="CompanySwitch">
-                                            <i class="bi bi-arrow-left-right"></i> Switch Company
+                                        <a class="nav-link" asp-controller="Bank" asp-action="Index">
+                                            <i class="bi bi-bank me-2"></i>
+                                            <p>Banks</p>
                                         </a>
                                     </li>
-                                }
-                            </ul>
-                        </li>
 
-                        <!-- MEMBER MANAGEMENT / RECORDS -->
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon bi bi-people-fill"></i>
-                                <p>
-                                    <b>Records</b>
-                                    <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                </p>
-                            </a>
-                            <ul class="nav nav-treeview ms-4 border-start border-primary border-opacity-25 ps-2">
-                                <li class="nav-item">
-                                    <a asp-controller="MemberMvc" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-person-lines-fill"></i>
-                                        <p>Members</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="NextOfKeen" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-person-plus-fill"></i>
-                                        <p>Beneficiaries</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="Withdrawal" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-person-x-fill"></i>
-                                        <p>Member Withdrawals</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Sms" asp-action="Settings">
+                                            <i class="bi bi-gear me-2"></i>
+                                            <span>Eneble SMS</span>
+                                        </a>
+                                    </li>
 
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="CIGs" asp-action="Index">
+                                            <i class="bi bi-people-fill me-2"></i>
+                                            <p>CIG</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Company" asp-action="Index">
-                                        <i class="bi bi-building me-2"></i>
-                                        <p>Company Registration</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Location" asp-action="Counties">
+                                            <i class="bi bi-geo-alt-fill me-2"></i>
+                                            <p>Counties</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Agent" asp-action="Index">
-                                        <i class="nav-icon bi bi-people"></i>Recruit Agents
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Location" asp-action="SubCounties">
+                                            <i class="bi bi-map-fill me-2"></i>
+                                            <p>Sub Counties</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Sms" asp-action="Templates">
-                                        <i class="bi bi-file-text me-2"></i>
-                                        <span>Generate SMS</span>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Location" asp-action="Wards">
+                                            <i class="bi bi-pin-map-fill me-2"></i>
+                                            <p>Wards</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Sms" asp-action="Index">
-                                        <i class="bi bi-envelope-paper me-2"></i>
-                                        <span>Send SMS</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="Collateral" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-bank2"></i>
+                                            <p>Collaterals</p>
+                                        </a>
+                                    </li>
 
-                        <!-- TRANSACTIONS (formerly LOAN MANAGEMENT) -->
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon bi bi-bank2"></i>
-                                <p>
-                                    <b>Transactions</b>
-                                    <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                </p>
-                            </a>
-                            <ul class="nav nav-treeview ms-2">
-                                <!-- Loan Application - Nested Submenu -->
-                                <li class="nav-item">
-                                    <a href="#" class="nav-link fw-bold">
-                                        <i class="nav-icon bi bi-file-text"></i>
-                                        <p>
-                                            <b>Loan Application</b>
-                                            <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                        </p>
-                                    </a>
-                                    <ul class="nav nav-treeview ms-4 border-start border-primary border-opacity-25 ps-2">
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Account" asp-action="Index">
+                                            <i class="bi bi-people-fill me-2"></i>
+                                            <span>System Users</span>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="PaymentType" asp-action="Index">
+                                            <i class="nav-icon bi bi-gear-fill"></i> Set Payments
+                                        </a>
+                                    </li>
+
+                                    @if (User.IsInRole("Super Admin") || User.HasClaim("UserGroup", "Super Admin"))
+                                    {
                                         <li class="nav-item">
-                                            <a asp-controller="LoanMvc" asp-action="AllLoans" class="nav-link">
-                                                <i class="nav-icon bi bi-files ms-1"></i>
-                                                <p>Loans Dashboard</p>
+                                            <a class="nav-link" asp-controller="Account" asp-action="PendingApprovals">
+                                                <i class="bi bi-person-check-fill me-2"></i>
+                                                <span>Pending Approvals</span>
+                                                @if (ViewBag.PendingCount > 0)
+                                                {
+                                                    <span class="badge bg-warning ms-2">@ViewBag.PendingCount</span>
+                                                }
                                             </a>
                                         </li>
+
                                         <li class="nav-item">
-                                            <a asp-controller="LoanMvc" asp-action="Apply" class="nav-link">
-                                                <i class="nav-icon bi bi-file-earmark-plus-fill"></i>
-                                                <p>Application</p>
+                                            <a class="nav-link" asp-controller="Account" asp-action="LockedUsers">
+                                                <i class="bi bi-lock-fill me-2"></i>
+                                                <span>Locked Users</span>
+                                                @if (ViewBag.LockedCount > 0)
+                                                {
+                                                    <span class="badge bg-danger ms-2">@ViewBag.LockedCount</span>
+                                                }
                                             </a>
                                         </li>
+
                                         <li class="nav-item">
-                                            <a asp-controller="LoanMvc" asp-action="LoansNeedingGuarantors" class="nav-link">
-                                                <i class="nav-icon bi bi-people-fill"></i>
-                                                <p>Guarantorship</p>
+                                            <a class="nav-link" asp-controller="Account" asp-action="UserManagement">
+                                                <i class="bi bi-people"></i> User Management
                                             </a>
                                         </li>
+                                    }
+
+                                    <!-- For Super Admin, Admin, and System Administrator only -->
+                                    @{
+                                        var userRole = User.FindFirstValue(ClaimTypes.Role);
+                                        var userGroup = User.FindFirstValue("UserGroup");
+                                        var Company = User.FindFirstValue("CompanyCode");
+                                        var canManageUsers = userRole == "Super Admin" ||
+                                        userRole == "Admin" ||
+                                        userRole == "System Administrator" ||
+                                        userGroup == "Super Admin" ||
+                                        userGroup == "Admin" ||
+                                        userGroup == "System Administrator";
+                                    }
+
+                                    @if (Company == "SACCO145111624-001")
+                                    {
                                         <li class="nav-item">
-                                            <a asp-controller="LoanMvc" asp-action="PendingAppraisal" class="nav-link">
-                                                <i class="nav-icon bi bi-clipboard-check"></i>
-                                                <p>Appraisal</p>
+                                            <a class="nav-link" asp-controller="Account" asp-action="UserGroups">
+                                                <i class="bi bi-arrow-left-right"></i> UserGroups
                                             </a>
                                         </li>
+                                    }
+
+                                    @if (canManageUsers)
+                                    {
                                         <li class="nav-item">
-                                            <a asp-controller="LoanMvc" asp-action="PendingEndorsement" class="nav-link">
-                                                <i class="nav-icon bi bi-calculator"></i>
-                                                <p>Endorsement</p>
+                                            <a class="nav-link" asp-controller="Account" asp-action="CompanySwitch">
+                                                <i class="bi bi-arrow-left-right"></i> Switch Company
                                             </a>
                                         </li>
-                                        @{
-                                            //var userRole = User.FindFirstValue(ClaimTypes.Role);
-                                            var isBookKeeper = userRole == "Book Keeper";
-                                        }
-                                        @if (!isBookKeeper)
-                                        {
+                                    }
+
+                                </ul>
+                            </li>
+                            <!-- MEMBER MANAGEMENT / RECORDS -->
+                            <li class="nav-item">
+                                <a href="#" class="nav-link">
+                                    <i class="nav-icon bi bi-people-fill"></i>
+                                    <p>
+                                        <b>Records</b>
+                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview ms-4 border-start border-primary border-opacity-25 ps-2">
+                                    <li class="nav-item">
+                                        <a asp-controller="MemberMvc" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-person-lines-fill"></i>
+                                            <p>Members</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="Wallet" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-person-lines-fill"></i>
+                                            <p>Wallets</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="NextOfKeen" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-person-plus-fill"></i>
+                                            <p>Beneficiaries</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="Withdrawal" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-person-x-fill"></i>
+                                            <p>Member Withdrawals</p>
+                                        </a>
+                                    </li>
+
+
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Company" asp-action="Index">
+                                            <i class="bi bi-building me-2"></i>
+                                            <p>Company Registration</p>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Agent" asp-action="Index">
+                                            <i class="nav-icon bi bi-people"></i>Recruit Agents
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Sms" asp-action="Templates">
+                                            <i class="bi bi-file-text me-2"></i>
+                                            <span>Generate SMS</span>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Sms" asp-action="Index">
+                                            <i class="bi bi-envelope-paper me-2"></i>
+                                            <span>Send SMS</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+
+                            <!-- TRANSACTIONS (formerly LOAN MANAGEMENT) -->
+                            <li class="nav-item">
+                                <a href="#" class="nav-link">
+                                    <i class="nav-icon bi bi-bank2"></i>
+                                    <p>
+                                        <b>Transactions</b>
+                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview ms-2">
+                                    <!-- Loan Application - Nested Submenu -->
+                                    <li class="nav-item">
+                                        <a href="#" class="nav-link fw-bold">
+                                            <i class="nav-icon bi bi-file-text"></i>
+                                            <p>
+                                                <b>Loan Application</b>
+                                                <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                            </p>
+                                        </a>
+                                        <ul class="nav nav-treeview ms-4 border-start border-primary border-opacity-25 ps-2">
                                             <li class="nav-item">
-                                                <a asp-controller="LoanMvc" asp-action="PendingDisbursement" class="nav-link">
-                                                    <i class="nav-icon bi bi-cash-stack"></i>
-                                                    <p>Disbursement</p>
+                                                <a asp-controller="LoanMvc" asp-action="AllLoans" class="nav-link">
+                                                    <i class="nav-icon bi bi-files ms-1"></i>
+                                                    <p>Loans Dashboard</p>
                                                 </a>
                                             </li>
-                                        }                                        
+                                            <li class="nav-item">
+                                                <a asp-controller="LoanMvc" asp-action="Apply" class="nav-link">
+                                                    <i class="nav-icon bi bi-file-earmark-plus-fill"></i>
+                                                    <p>Application</p>
+                                                </a>
+                                            </li>
+                                            <li class="nav-item">
+                                                <a asp-controller="LoanMvc" asp-action="LoansNeedingGuarantors" class="nav-link">
+                                                    <i class="nav-icon bi bi-people-fill"></i>
+                                                    <p>Guarantorship</p>
+                                                </a>
+                                            </li>
+                                            <li class="nav-item">
+                                                <a asp-controller="LoanMvc" asp-action="PendingAppraisal" class="nav-link">
+                                                    <i class="nav-icon bi bi-clipboard-check"></i>
+                                                    <p>Appraisal</p>
+                                                </a>
+                                            </li>
+                                            <li class="nav-item">
+                                                <a asp-controller="LoanMvc" asp-action="PendingEndorsement" class="nav-link">
+                                                    <i class="nav-icon bi bi-calculator"></i>
+                                                    <p>Endorsement</p>
+                                                </a>
+                                            </li>
+                                            @{
+                                                //var userRole = User.FindFirstValue(ClaimTypes.Role);
+                                                var isBookKeeper = userRole == "Book Keeper";
+                                            }
+                                            @if (!isBookKeeper)
+                                            {
+                                                <li class="nav-item">
+                                                    <a asp-controller="LoanMvc" asp-action="PendingDisbursement" class="nav-link">
+                                                        <i class="nav-icon bi bi-cash-stack"></i>
+                                                        <p>Disbursement</p>
+                                                    </a>
+                                                </li>
+                                            }
 
-                                        @* <li class="nav-item">
-                                            <a asp-controller="LoanMvc" asp-action="LoanScheduleCalculator" class="nav-link">
-                                                <i class="nav-icon bi bi-calculator-fill"></i>
-                                                <p>Loan Calculator</p>
-                                            </a>
-                                        </li> *@
+                                            <li class="nav-item">
+                                                <a asp-controller="LoanMvc" asp-action="LoanScheduleCalculator" class="nav-link">
+                                                    <i class="nav-icon bi bi-calculator-fill"></i>
+                                                    <p>Loan Calculator</p>
+                                                </a>
+                                            </li>
 
                                         <li class="nav-item">
-                                            <a class="nav-link" asp-controller="LoanMvc" asp-action="Schedule" class="nav-link">
+                                            <a class="nav-link" asp-controller="Loanschd" asp-action="Create" class="nav-link">
                                                 <i class="nav-icon bi bi-calculator-fill"></i>
                                                 <span>Loan Schedule</span>
                                             </a>
@@ -524,39 +588,39 @@
                                     </ul>
                                 </li>
 
-                                <!-- Direct Transaction Items -->
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanMvc" asp-action="Repay">
-                                        <i class="nav-icon bi bi-cash-stack"></i>
-                                        <p>Receipt Posting / Loan</p>
-                                    </a>
-                                </li>
+                                    <!-- Direct Transaction Items -->
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanMvc" asp-action="Repay">
+                                            <i class="nav-icon bi bi-cash-stack"></i>
+                                            <p>Receipt Posting / Loan</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanMvc" asp-action="OffsetLoan">
-                                        <i class="nav-icon bi bi-piggy-bank"></i>
-                                        <p>Offset Loan</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanMvc" asp-action="OffsetLoan">
+                                            <i class="nav-icon bi bi-piggy-bank"></i>
+                                            <p>Offset Loan</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a asp-controller="ShareTransfer" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-arrow-left-right"></i>
-                                        <p>Share Transfers</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="ShareTransfer" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-arrow-left-right"></i>
+                                            <p>Share Transfers</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a asp-controller="LoanMvc" asp-action="DeleteLoanIndex" class="nav-link">
-                                        <i class="nav-icon bi bi-trash"></i> Delete Loan
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanMvc" asp-action="DeleteLoanIndex" class="nav-link">
+                                            <i class="nav-icon bi bi-trash"></i> Delete Loan
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="EmployeePayment" asp-action="Index">
-                                        <i class="nav-icon bi bi-cash-stack"></i> Payments
-                                    </a>
-                                </li>                                
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="EmployeePayment" asp-action="Index">
+                                            <i class="nav-icon bi bi-cash-stack"></i> Payments
+                                        </a>
+                                    </li>
 
                                 <li class="nav-item">
                                     <a asp-controller="ContributionMvc" asp-action="Index" class="nav-link">
@@ -582,111 +646,117 @@
                             </ul>
                         </li>
 
-                        <!-- Inquiries -->
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon bi bi-search"></i>
-                                <p>
-                                    <b>Inquiries</b>
-                                    <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                </p>
-                            </a>
+                            <!-- Inquiries -->
+                            <li class="nav-item">
+                                <a href="#" class="nav-link">
+                                    <i class="nav-icon bi bi-search"></i>
+                                    <p>
+                                        <b>Inquiries</b>
+                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                    </p>
+                                </a>
 
-                            <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
-                                <!-- Member Search -->
-                                <li class="nav-item">
-                                    <a asp-controller="Inquiry" asp-action="MemberInquiry" class="nav-link">
-                                        <i class="nav-icon bi bi-people-fill"></i>
-                                        <p>Member Search</p>
-                                    </a>
-                                </li>
+                                <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
+                                    <!-- Member Search -->
+                                    <li class="nav-item">
+                                        <a asp-controller="Inquiry" asp-action="MemberInquiry" class="nav-link">
+                                            <i class="nav-icon bi bi-people-fill"></i>
+                                            <p>Member Search</p>
+                                        </a>
+                                    </li>
 
-                                <!-- Share Inquiry -->
-                                <li class="nav-item">
-                                    <a asp-controller="Inquiry" asp-action="ShareInquiry" class="nav-link">
-                                        <i class="nav-icon bi bi-pie-chart-fill"></i>
-                                        <p>Share Inquiry</p>
-                                    </a>
-                                </li>
+                                    <!-- Share Inquiry -->
+                                    <li class="nav-item">
+                                        <a asp-controller="Inquiry" asp-action="ShareInquiry" class="nav-link">
+                                            <i class="nav-icon bi bi-pie-chart-fill"></i>
+                                            <p>Share Inquiry</p>
+                                        </a>
+                                    </li>
 
-                                <!-- Loan Inquiry -->
-                                <li class="nav-item">
-                                    <a asp-controller="Inquiry" asp-action="LoanInquiry" class="nav-link">
-                                        <i class="nav-icon bi bi-cash-stack"></i>
-                                        <p>Loan Inquiry</p>
-                                    </a>
-                                </li>
+                                    <!-- Loan Inquiry -->
+                                    <li class="nav-item">
+                                        <a asp-controller="Inquiry" asp-action="LoanInquiry" class="nav-link">
+                                            <i class="nav-icon bi bi-cash-stack"></i>
+                                            <p>Loan Inquiry</p>
+                                        </a>
+                                    </li>
 
-                                <!-- Transaction Inquiry -->
-                                <li class="nav-item">
-                                    <a asp-controller="Inquiry" asp-action="TransactionInquiry" class="nav-link">
-                                        <i class="nav-icon bi bi-receipt"></i>
-                                        <p>Transaction History</p>
-                                    </a>
-                                </li>
+                                    <!-- Transaction Inquiry -->
+                                    <li class="nav-item">
+                                        <a asp-controller="Inquiry" asp-action="TransactionInquiry" class="nav-link">
+                                            <i class="nav-icon bi bi-receipt"></i>
+                                            <p>Transaction History</p>
+                                        </a>
+                                    </li>
 
-                                <!-- Member Details (Direct Search) -->
-                                <li class="nav-item">
-                                    <a asp-controller="Inquiry" asp-action="MemberDetails" asp-route-memberNo="" class="nav-link" onclick="return promptMemberNo(this.href)">
-                                        <i class="nav-icon bi bi-person-badge"></i>
-                                        <p>Member Details</p>
-                                    </a>
-                                </li>
+                                    <!-- Member Details (Direct Search) -->
+                                    <li class="nav-item">
+                                        <a asp-controller="Inquiry" asp-action="MemberDetails" asp-route-memberNo="" class="nav-link" onclick="return promptMemberNo(this.href)">
+                                            <i class="nav-icon bi bi-person-badge"></i>
+                                            <p>Member Details</p>
+                                        </a>
+                                    </li>
 
-                                <!-- Share Variations -->
-                                <li class="nav-item">
-                                    <a asp-controller="Inquiry" asp-action="ShareInquiry" class="nav-link">
-                                        <i class="nav-icon bi bi-bar-chart-line-fill"></i>
-                                        <p>Share Variations</p>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
+                                    <!-- Share Variations -->
+                                    <li class="nav-item">
+                                        <a asp-controller="Inquiry" asp-action="ShareInquiry" class="nav-link">
+                                            <i class="nav-icon bi bi-bar-chart-line-fill"></i>
+                                            <p>Share Variations</p>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
 
-                        <!-- GENERAL LEDGER -->
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon bi bi-journal-bookmark-fill"></i>
-                                <p>
-                                    <b>General Ledger</b>
-                                    <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                </p>
-                            </a>
-                            <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
-                                <li class="nav-item">
-                                    <a asp-controller="GlSetup" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-sliders"></i>
-                                        <p>Account Setup</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="JournalPosting" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-journal-plus"></i>
-                                        <p>Journal Posting</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="GLInquiry" asp-action="Index" class="nav-link" data-no-toggle="true">
+                            <!-- GENERAL LEDGER -->
+                            <li class="nav-item">
+                                <a href="#" class="nav-link">
+                                    <i class="nav-icon bi bi-journal-bookmark-fill"></i>
+                                    <p>
+                                        <b>General Ledger</b>
+                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
+                                    <li class="nav-item">
+                                        <a asp-controller="GlSetup" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-sliders"></i>
+                                            <p>Account Setup</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="JournalPosting" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-journal-plus"></i>
+                                            <p>Journal Posting</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="GLInquiry" asp-action="Index" class="nav-link" data-no-toggle="true">
+                                            <i class="nav-icon bi bi-search"></i>
+                                            <p>GL Inquiry</p>
+                                        </a>
+                                    </li>
+
+                                    @* <li class="nav-item">
+                                    <a asp-controller="Varification" asp-action="Index" class="nav-link">
                                         <i class="nav-icon bi bi-search"></i>
-                                        <p>GL Inquiry</p>
-                                    </a>
-                                </li>
-
-                                @* <li class="nav-item">
-                                    <a asp-controller="GLInquiry" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-search"></i>
-                                        <p>GL Inquiry</p>
+                                        <p>Varify transaction</p>
                                     </a>
                                 </li> *@
-                                <li class="nav-item">
-                                    <a asp-controller="Reports" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-file-earmark-bar-graph"></i>
-                                        <p>Financial Reports</p>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
 
+                                    <li class="nav-item">
+                                        <a asp-controller="Reports" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-file-earmark-bar-graph"></i>
+                                            <p>Financial Reports</p>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+
+                        }
+
+                            
+
+                        
                         <!-- BLOCKCHAIN -->
                         <li class="nav-item">
                             <a href="#" class="nav-link">
@@ -703,30 +773,34 @@
                                         <p>Blockchain Dashboard</p>
                                     </a>
                                 </li>
+
                                 <li class="nav-item">
                                     <a asp-controller="Blockchain" asp-action="Explorer" class="nav-link">
                                         <i class="nav-icon bi bi-journal-check"></i>
                                         <p>Blocks Overview</p>
                                     </a>
                                 </li>
+
                                 <li class="nav-item">
                                     <a asp-controller="Blockchain" asp-action="Blocks" class="nav-link">
                                         <i class="nav-icon bi bi-list-ul"></i>
                                         <p>All Blocks</p>
                                     </a>
                                 </li>
+
                                 <li class="nav-item">
                                     <a asp-controller="Blockchain" asp-action="Verify" class="nav-link">
                                         <i class="nav-icon bi bi-search"></i>
                                         <p>Verify by ID</p>
                                     </a>
                                 </li>
-                               @*  <li class="nav-item">
-                                    <a asp-controller="Blockchain" asp-action="QuickVerify" class="nav-link">
-                                        <i class="nav-icon bi bi-lightning"></i>
-                                        <p>Quick Verify</p>
+
+                                <li class="nav-item">
+                                    <a asp-controller="Verification" asp-action="Index" class="nav-link">
+                                        <i class="nav-icon bi bi-search"></i>
+                                        <p>Varify transaction</p>
                                     </a>
-                                </li> *@
+                                </li>
                             </ul>
                         </li>
 

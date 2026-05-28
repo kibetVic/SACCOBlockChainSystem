@@ -1,0 +1,308 @@
+﻿@model SACCOBlockChainSystem.ViewModels.ChainVerificationSummaryViewModel
+
+@{
+    ViewData["Title"] = $"Transaction Chain - {@Model.MemberName}";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2">
+                <i class="fas fa-link text-primary"></i> Transaction Chain
+            </h1>
+            <p class="text-muted mb-0">
+                Member: <strong>@Model.MemberName</strong> (@Model.MemberNo)
+            </p>
+        </div>
+        <div>
+            <a href="@Url.Action("Index", "Verification")" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h2 class="mb-0">@Model.TotalTransactions</h2>
+                    <p class="mb-0">Total Transactions</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h2 class="mb-0" id="validCount">-</h2>
+                    <p class="mb-0">Valid Signatures</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h2 class="mb-0" id="invalidCount">-</h2>
+                    <p class="mb-0">Invalid Signatures</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <i class="fas fa-wallet fa-2x mb-2 d-block"></i>
+                    <p class="mb-0 small" id="walletPreview">@(Model.WalletAddress?.Length > 20 ? Model.WalletAddress.Substring(0, 20) + "..." : Model.WalletAddress)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wallet & Genesis Info -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                <i class="fas fa-info-circle text-primary"></i> Chain Information
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="text-muted small">Wallet Address (Genesis Anchor)</label>
+                    <div class="bg-light p-2 rounded font-monospace small">
+                        @Model.WalletAddress
+                        <button class="btn btn-sm btn-link p-0 ms-2" onclick="copyToClipboard('@Model.WalletAddress')">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="text-muted small">Genesis Hash (First Transaction)</label>
+                    <div class="bg-light p-2 rounded font-monospace small">
+                        @if (!string.IsNullOrEmpty(Model.GenesisHash) && Model.GenesisHash != "No transactions")
+                        {
+                            @Model.GenesisHash
+                        }
+                        else
+                        {
+                            <span class="text-muted">@Model.GenesisHash</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Verification Button -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body text-center">
+            <div id="verificationResult" class="mb-3">
+                <div class="spinner-border text-primary" role="status" style="width: 40px; height: 40px;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">Click below to verify all transactions</p>
+            </div>
+            <button id="verifyChainBtn" class="btn btn-primary btn-lg px-5">
+                <i class="fas fa-shield-alt"></i> Verify Entire Chain
+            </button>
+        </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                <i class="fas fa-list"></i> Transactions
+                <span class="badge bg-secondary ms-2">@Model.TotalTransactions records</span>
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Receipt No</th>
+                            <th>Date</th>
+                            <th>Amount</th>
+                            <th>Share Type</th>
+                            <th>Signature</th>
+                            <th>Chain Link</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionsTable">
+                        @foreach (var tx in Model.Transactions)
+                        {
+                            <tr id="tx-@tx.Id">
+                                <td class="fw-bold">@tx.Id</td>
+                                <td>@tx.ReceiptNo</td>
+                                <td>@tx.TransactionDate.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-success fw-bold">KES @tx.Amount.ToString("N2")</td>
+                                <td>@tx.ShareType</td>
+                                <td id="sig-@tx.Id" class="text-center">
+                                    <i class="fas fa-spinner fa-spin text-secondary"></i>
+                                </td>
+                                <td id="chain-@tx.Id" class="text-center">
+                                    <i class="fas fa-spinner fa-spin text-secondary"></i>
+                                </td>
+                                <td id="status-@tx.Id">
+                                    <span class="badge bg-secondary">Pending</span>
+                                </td>
+                                <td>
+                                    <a href="@Url.Action("Transaction", "Verification", new { id = tx.Id })"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-shield-alt"></i> Verify
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let memberNo = '@Model.MemberNo';
+
+        $(document).ready(function() {
+            $('#verifyChainBtn').click(verifyChain);
+        });
+
+        async function verifyChain() {
+            const btn = $('#verifyChainBtn');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Verifying...');
+
+            try {
+                const response = await fetch('/Verification/VerifyMemberChain', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify({ memberNo: memberNo })
+                });
+
+                const data = await response.json();
+                console.log('Verification response:', data);
+
+                if (data.success) {
+                    updateUI(data);
+
+                    if (data.isValid) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '✅ Chain Verified!',
+                            html: `<strong>${data.validSignatures}/${data.totalTransactions}</strong> signatures valid<br>
+                                   <strong>Message:</strong> ${data.message}`,
+                            timer: 3000
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '❌ Verification Failed',
+                            html: `<strong>Valid:</strong> ${data.validSignatures}/${data.totalTransactions}<br>
+                                   <strong>Failed IDs:</strong> ${data.failedTransactionIds.join(', ') || 'None'}<br>
+                                   <strong>Message:</strong> ${data.message}`,
+                            confirmButtonColor: '#dc3545'
+                        });
+                    }
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message
+                    });
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to verify chain'
+                });
+            } finally {
+                btn.prop('disabled', false).html('<i class="fas fa-shield-alt"></i> Verify Entire Chain');
+            }
+        }
+
+        function updateUI(data) {
+            // Update summary stats
+            $('#validCount').text(data.validSignatures);
+            $('#invalidCount').text(data.totalTransactions - data.validSignatures);
+
+            // Update header result
+            if (data.isValid) {
+                $('#verificationResult').html(`
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle fa-2x me-2"></i>
+                        <strong>CHAIN VERIFIED!</strong> All ${data.totalTransactions} transactions are valid.
+                    </div>
+                `);
+            } else {
+                $('#verificationResult').html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle fa-2x me-2"></i>
+                        <strong>VERIFICATION FAILED!</strong> ${data.message}
+                        ${data.failedTransactionIds.length > 0 ? `<br>Failed at IDs: ${data.failedTransactionIds.join(', ')}` : ''}
+                    </div>
+                `);
+            }
+
+            // Update each transaction row
+            if (data.transactions && data.transactions.length) {
+                data.transactions.forEach(tx => {
+                    const sigCell = $(`#sig-${tx.id}`);
+                    const chainCell = $(`#chain-${tx.id}`);
+                    const statusCell = $(`#status-${tx.id}`);
+                    const row = $(`#tx-${tx.id}`);
+
+                    // Signature status
+                    if (tx.isSignatureValid) {
+                        sigCell.html('<i class="fas fa-check-circle text-success fa-lg" title="Valid Signature"></i>');
+                    } else {
+                        sigCell.html('<i class="fas fa-times-circle text-danger fa-lg" title="Invalid Signature"></i>');
+                        row.addClass('table-danger');
+                    }
+
+                    // Chain link status
+                    if (tx.isChainLinked) {
+                        chainCell.html('<i class="fas fa-link text-success fa-lg" title="Chain Valid"></i>');
+                    } else {
+                        chainCell.html('<i class="fas fa-unlink text-danger fa-lg" title="Chain Broken"></i>');
+                        row.addClass('table-danger');
+                    }
+
+                    // Overall status
+                    let statusClass = 'secondary';
+                    let statusText = 'Pending';
+                    if (tx.isSignatureValid && tx.isChainLinked) {
+                        statusClass = 'success';
+                        statusText = '✅ Valid';
+                        row.addClass('table-success');
+                    } else if (tx.isSignatureValid && !tx.isChainLinked) {
+                        statusClass = 'warning';
+                        statusText = '⚠️ Chain Broken';
+                    } else if (!tx.isSignatureValid) {
+                        statusClass = 'danger';
+                        statusText = '❌ Invalid';
+                    }
+
+                    statusCell.html(`<span class="badge bg-${statusClass}">${statusText}</span>`);
+                });
+            }
+        }
+
+        function copyToClipboard(text) {
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                Swal.fire({ icon: 'success', title: 'Copied!', timer: 1500, showConfirmButton: false });
+            });
+        }
+    </script>
+}

@@ -1,11 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SACCOBlockChainSystem.Models
 {
     public partial class Member
     {
+        [NotMapped]
+        public Wallet Wallet { get; set; }
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
         public string MemberNo { get; set; } = null!;
 
@@ -139,8 +144,18 @@ namespace SACCOBlockChainSystem.Models
 
         [NotMapped]
         public string? FullName { get; set; }
+
+        public string? WalletAddress { get; set; }
+        public long TransactionNonce { get; set; } = 0;
+        public string? LastTransactionHash { get; set; }
+        public string? LastTransactionSignature { get; set; }
+        public bool IsWalletActive { get; set; } = true;
+        public DateTime? LastSignatureAt { get; set; }
+        public int FraudRiskScore { get; set; } = 0;
+        public DateTime? LastFraudAssessmentAt { get; set; }
+        public string? SuspiciousFlags { get; set; }
+
         public virtual ICollection<NextOfKeen> NextOfKeens { get; set; } = new List<NextOfKeen>();
-        //public virtual ICollection<Endmain> Endmain { get; set; } = new List<Endmain>();
     }
 }
 

@@ -1,11 +1,13 @@
 ﻿// Models/DTOs/SaccoParramDTO.cs
-using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SACCOBlockChainSystem.Models.DTOs
 {
     public class SaccoParramDTO
     {
+        [NotMapped]
+        public WalletConfig WalletConfig { get; set; }
         public int Id { get; set; }
 
         [Required]
