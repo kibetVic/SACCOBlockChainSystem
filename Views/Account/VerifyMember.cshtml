@@ -273,7 +273,7 @@
                     </div>
                 }
 
-                <form asp-action="VerifyCode" method="post">
+                <form asp-action="VerifyMember" method="post">
                     @Html.AntiForgeryToken()
 
                     <input type="hidden" asp-for="Username" />
