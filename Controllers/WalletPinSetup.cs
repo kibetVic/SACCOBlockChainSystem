@@ -7,6 +7,8 @@
         [Required]
         public string MemberNo { get; set; } = string.Empty;
 
+        public string? UserPin { get; set; }
+
         [Required]
         [Display(Name = "PIN")]
         [StringLength(6, MinimumLength = 4,

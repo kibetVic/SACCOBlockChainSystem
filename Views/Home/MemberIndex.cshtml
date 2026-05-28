@@ -11,6 +11,7 @@
         <h2><i class="fas fa-wallet"></i> My Wallet</h2>
     </div>
     <div class="wallet-balance-area clearfix">
+        
         @foreach(var wallet in Model.Wallets)
         {
             <div class="wallet-balance-box wallet-@wallet.MemberId">
@@ -78,7 +79,48 @@
             </div>
         }
         
-        
+        <div class="wallet-box profile-page-area-main">
+            <div class="profile-information">
+                <div class="editprofile-images">
+                    <div class="edit-images">
+                        <img src="" alt="Profile">
+                        <span class="edit-label"><i class="fas fa-camera"></i></span>
+                    </div>
+                </div>
+            </div>
+            <div class="profile-information-right">
+                <div class="profile-information-box">
+                    <div class="theme-input-box">
+                        <label>First Name</label>
+                        <input type="text" name="" value="@Model.Member.Surname" readonly class="theme-input">
+                    </div>
+                    <div class="theme-input-box">
+                        <label>Last Name</label>
+                        <input type="text" name="" readonly value="@Model.Member.OtherNames" class="theme-input">
+                    </div>
+                    <div class="theme-input-box">
+                        <label>Email</label>
+                        <input type="email" name="" value="@Model.Member.Email" readonly class="theme-input">
+                    </div>
+                    <div class="theme-input-box">
+                        <label>Phone</label>
+                        <input  value="@Model.Member.PhoneNo" readonly class="theme-input">
+                    </div>
+                    <div class="theme-input-box">
+                        <label>Sacco</label>
+                        <input value="@Model.Member.Employer" readonly class="form-control theme-input">
+                    </div>
+                    <div class="theme-input-box">
+                        <label>Member No</label>
+                        <input value="@Model.Member.MemberNo" readonly class="theme-input">
+                    </div>
+                    <br/>
+                    <div class="profile-btn">
+                        <a class="theme-btn" href="/MemberMvc/MyProfile">Edit</a>
+                    </div>
+                </div>
+            </div>
+        </div><br/>
     </div>
 
     
@@ -106,7 +148,7 @@
 <div class="wallet-box-main clearfix">
     <div class="wallet-box-left">
         <div class="wallet-balance">
-            <h2 class="dashboard-title">Coin Balance</h2>
+            <h2 class="dashboard-title">Wallet Balance(s)</h2>
             <div class="wallet-balance-box clearfix">
                 <div class="wallet-balance-ico">
                 </div>

@@ -278,7 +278,7 @@ input:invalid:focus {
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="MemberMvc" asp-action="MyProfile">
-                                    <i class="fas fa-user-circle"></i> My Profile
+                                    <i class="nav-icon bi bi-person-circle"></i> My Profile
                                 </a>
                             </li>
                         }
@@ -804,254 +804,278 @@ input:invalid:focus {
                             </ul>
                         </li>
 
-                        <!-- REPORTS -->
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon bi bi-bar-chart-fill"></i>
-                                <p>
-                                    <b>Reports</b>
-                                    <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                </p>
-                            </a>
-                            <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
-                                <!-- Loan Reports -->
-                                <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="LoansPerSacco" class="nav-link">
-                                        <i class="nav-icon bi bi-file-earmark-diff"></i>
-                                        <p>Loans Per Sacco</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="LoansIssued" class="nav-link">
-                                        <i class="nav-icon bi bi-file-earmark-text"></i>
-                                        <p>Loans Issued</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="LoansIssuedPerProduct" class="nav-link">
-                                        <i class="nav-icon bi bi-tags"></i>
-                                        <p>Loans Issued Per Product</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="LoanApplicationDisbursementReport" class="nav-link">
-                                        <i class="nav-icon bi bi-file-earmark-spreadsheet"></i>
-                                        <p>Loan App & Disbursement</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="LoanAppraisalReport" class="nav-link">
-                                        <i class="nav-icon bi bi-clipboard-check"></i>
-                                        <p>Loan Appraisal Report</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="LoanBalanceReport" class="nav-link">
-                                        <i class="nav-icon bi bi-calculator"></i>
-                                        <p>Loan Balance Report</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="LoansIssuedPerProduct" class="nav-link">
-                                        <i class="nav-icon bi bi-tags"></i>
-                                        <p>Loans Issued Per Product</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="GIGReport" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-x-circle"></i>
-                                        <p>CIGs/VMGS Reports</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="LoanReport" asp-action="AgingAnalysis" class="nav-link">
-                                        <i class="nav-icon bi bi-graph-up-arrow"></i>
-                                        <p>Aging Analysis</p>
-                                    </a>
-                                </li>
+                        @if(!isMember)
+                        {
+                            <!-- REPORTS -->
+                            <li class="nav-item">
+                                <a href="#" class="nav-link">
+                                    <i class="nav-icon bi bi-bar-chart-fill"></i>
+                                    <p>
+                                        <b>Reports</b>
+                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
+                                    <!-- Loan Reports -->
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanReport" asp-action="LoansPerSacco" class="nav-link">
+                                            <i class="nav-icon bi bi-file-earmark-diff"></i>
+                                            <p>Loans Per Sacco</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanReport" asp-action="LoansIssued" class="nav-link">
+                                            <i class="nav-icon bi bi-file-earmark-text"></i>
+                                            <p>Loans Issued</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanReport" asp-action="LoansIssuedPerProduct" class="nav-link">
+                                            <i class="nav-icon bi bi-tags"></i>
+                                            <p>Loans Issued Per Product</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanReport" asp-action="LoanApplicationDisbursementReport" class="nav-link">
+                                            <i class="nav-icon bi bi-file-earmark-spreadsheet"></i>
+                                            <p>Loan App & Disbursement</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanReport" asp-action="LoanAppraisalReport" class="nav-link">
+                                            <i class="nav-icon bi bi-clipboard-check"></i>
+                                            <p>Loan Appraisal Report</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanReport" asp-action="LoanBalanceReport" class="nav-link">
+                                            <i class="nav-icon bi bi-calculator"></i>
+                                            <p>Loan Balance Report</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanReport" asp-action="LoansIssuedPerProduct" class="nav-link">
+                                            <i class="nav-icon bi bi-tags"></i>
+                                            <p>Loans Issued Per Product</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="GIGReport" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-x-circle"></i>
+                                            <p>CIGs/VMGS Reports</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanReport" asp-action="AgingAnalysis" class="nav-link">
+                                            <i class="nav-icon bi bi-graph-up-arrow"></i>
+                                            <p>Aging Analysis</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="LoanBalancePerLoanReport">
-                                        <i class="nav-icon bi bi-graph-up"></i>
-                                        <p>Loan Balance Per Loan</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="LoanBalancePerLoanReport">
+                                            <i class="nav-icon bi bi-graph-up"></i>
+                                            <p>Loan Balance Per Loan</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="LoanBalancePerMemberReport">
-                                        <i class="nav-icon bi bi-people"></i>
-                                        <p>Loan Balance Per Member</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="LoanBalancePerMemberReport">
+                                            <i class="nav-icon bi bi-people"></i>
+                                            <p>Loan Balance Per Member</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="RejectedLoansReport">
-                                        <i class="nav-icon bi bi-x-circle"></i>
-                                        <p>Rejected Loans</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="RejectedLoansReport">
+                                            <i class="nav-icon bi bi-x-circle"></i>
+                                            <p>Rejected Loans</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="LoansDueReport">
-                                        <i class="nav-icon bi bi-calendar-x"></i>
-                                        <p>Loans Due Report</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="LoansDueReport">
+                                            <i class="nav-icon bi bi-calendar-x"></i>
+                                            <p>Loans Due Report</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="InterestListingReport">
-                                        <i class="nav-icon bi bi-percent"></i>
-                                        <p>Interest Control Listings</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="InterestListingReport">
+                                            <i class="nav-icon bi bi-percent"></i>
+                                            <p>Interest Control Listings</p>
+                                        </a>
+                                    </li>
 
-                                <!-- GIG Report -->
-                                <li class="nav-item">
-                                    <a asp-controller="GIGReport" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-people-fill"></i>
-                                        <p>CIG Per Sacco</p>
-                                    </a>
-                                </li>
+                                    <!-- GIG Report -->
+                                    <li class="nav-item">
+                                        <a asp-controller="GIGReport" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-people-fill"></i>
+                                            <p>CIG Per Sacco</p>
+                                        </a>
+                                    </li>
 
-                                <!-- Member Reports -->
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="FullyPaidShares" class="nav-link">
-                                        <i class="nav-icon bi bi-check-circle-fill"></i>
-                                        <p>Fully Paid Shares</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="PartiallyPaidShares" class="nav-link">
-                                        <i class="nav-icon bi bi-exclamation-triangle-fill"></i>
-                                        <p>Partially Paid Shares</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="MembersPerSacco" class="nav-link">
-                                        <i class="nav-icon bi bi-building"></i>
-                                        <p>Members Per SACCO</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="WithdrawnMembers" class="nav-link">
-                                        <i class="nav-icon bi bi-person-x-fill"></i>
-                                        <p>Withdrawn Members</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="PeriodicRegisteredMembers" class="nav-link">
-                                        <i class="nav-icon bi bi-calendar-range"></i>
-                                        <p>Periodic Registered Members</p>
-                                    </a>
-                                </li>
+                                    <!-- Member Reports -->
+                                    <li class="nav-item">
+                                        <a asp-controller="MemberReport" asp-action="FullyPaidShares" class="nav-link">
+                                            <i class="nav-icon bi bi-check-circle-fill"></i>
+                                            <p>Fully Paid Shares</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="MemberReport" asp-action="PartiallyPaidShares" class="nav-link">
+                                            <i class="nav-icon bi bi-exclamation-triangle-fill"></i>
+                                            <p>Partially Paid Shares</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="MemberReport" asp-action="MembersPerSacco" class="nav-link">
+                                            <i class="nav-icon bi bi-building"></i>
+                                            <p>Members Per SACCO</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="MemberReport" asp-action="WithdrawnMembers" class="nav-link">
+                                            <i class="nav-icon bi bi-person-x-fill"></i>
+                                            <p>Withdrawn Members</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="MemberReport" asp-action="PeriodicRegisteredMembers" class="nav-link">
+                                            <i class="nav-icon bi bi-calendar-range"></i>
+                                            <p>Periodic Registered Members</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="SharesLoansPERSacco" class="nav-link">
-                                        <i class="nav-icon bi bi-pie-chart-fill"></i>
-                                        <p>Shares/Loans Report</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="MemberReport" asp-action="SharesLoansPERSacco" class="nav-link">
+                                            <i class="nav-icon bi bi-pie-chart-fill"></i>
+                                            <p>Shares/Loans Report</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="ActiveMembers" class="nav-link">
-                                        <i class="nav-icon bi bi-people-fill"></i>
-                                        <p>Active Members</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="MemberReport" asp-action="ActiveMembers" class="nav-link">
+                                            <i class="nav-icon bi bi-people-fill"></i>
+                                            <p>Active Members</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a asp-controller="NextOfKeenReport" asp-action="Index" class="nav-link">
-                                        <i class="bi bi-file-text me-2"></i>Next of keen Report
-                                    </a>
-                                </li>                                
+                                    <li class="nav-item">
+                                        <a asp-controller="NextOfKeenReport" asp-action="Index" class="nav-link">
+                                            <i class="bi bi-file-text me-2"></i>Next of keen Report
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a asp-controller="MemberReport" asp-action="InactiveMembers" class="nav-link">
-                                        <i class="nav-icon bi bi-person-dash"></i>
-                                        <p>Inactive Members</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="ChequeReceivedReport" asp-action="Index">
-                                        <i class="bi bi-cash-stack me-1"></i> Cheques Received
-                                    </a>
-                                </li>                                
-                                <li class="nav-item">
-                                    <a asp-controller="Collateral" asp-action="Report" class="nav-link">
-                                        <i class="nav-icon bi bi-bank2"></i>
-                                        <p>Collaterals</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="LoanMvc" asp-action="GuarantorsPerLoanReport" class="nav-link">
-                                        <i class="nav-icon bi bi-people-fill"></i>
-                                        <span>Guarantors Per Loan</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a asp-controller="LoanMvc" asp-action="AllGuarantorsReport" class="nav-link">
-                                        <i class="nav-icon bi bi-person-lines-fill"></i>
-                                        <span>All Guarantors Report</span>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="MemberReport" asp-action="InactiveMembers" class="nav-link">
+                                            <i class="nav-icon bi bi-person-dash"></i>
+                                            <p>Inactive Members</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="ChequeReceivedReport" asp-action="Index">
+                                            <i class="bi bi-cash-stack me-1"></i> Cheques Received
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="Collateral" asp-action="Report" class="nav-link">
+                                            <i class="nav-icon bi bi-bank2"></i>
+                                            <p>Collaterals</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanMvc" asp-action="GuarantorsPerLoanReport" class="nav-link">
+                                            <i class="nav-icon bi bi-people-fill"></i>
+                                            <span>Guarantors Per Loan</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a asp-controller="LoanMvc" asp-action="AllGuarantorsReport" class="nav-link">
+                                            <i class="nav-icon bi bi-person-lines-fill"></i>
+                                            <span>All Guarantors Report</span>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="GeneralLedgerReport" class="nav-link">
-                                        <i class="nav-icon bi bi-journal-bookmark-fill"></i>
-                                        <p>General Ledger</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="GeneralLedgerReport" class="nav-link">
+                                            <i class="nav-icon bi bi-journal-bookmark-fill"></i>
+                                            <p>General Ledger</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="LoanRecoveryReport" class="nav-link">
-                                        <i class="nav-icon bi bi-cash-stack"></i>
-                                        <p>Loan Recovery</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="DelinquentLoansReport" class="nav-link">
-                                        <i class="nav-icon bi bi-exclamation-triangle-fill"></i>
-                                        <p>Loans Collection Summary</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="LoanRecoveryReport" class="nav-link">
+                                            <i class="nav-icon bi bi-cash-stack"></i>
+                                            <p>Loan Recovery</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="DelinquentLoansReport" class="nav-link">
+                                            <i class="nav-icon bi bi-exclamation-triangle-fill"></i>
+                                            <p>Loans Collection Summary</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="PeriodicLoanDefaulters" class="nav-link">
-                                        <i class="nav-icon bi bi-exclamation-triangle-fill"></i>
-                                        <p>Periodic Defaulters</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="LoanProductAnalysisReport" class="nav-link">
-                                        <i class="nav-icon bi bi-bar-chart-steps"></i>
-                                        <p>Loan Product Analysis</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="LoanProvisionReport" classs="nav-link">
-                                        <i class="nav-icon bi bi-calculator-fill"></i>
-                                        <p>Loan Provision</p>
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="PeriodicLoanDefaulters" class="nav-link">
+                                            <i class="nav-icon bi bi-exclamation-triangle-fill"></i>
+                                            <p>Periodic Defaulters</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="LoanProductAnalysisReport" class="nav-link">
+                                            <i class="nav-icon bi bi-bar-chart-steps"></i>
+                                            <p>Loan Product Analysis</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="LoanProvisionReport" classs="nav-link">
+                                            <i class="nav-icon bi bi-calculator-fill"></i>
+                                            <p>Loan Provision</p>
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="PortfolioAtRiskReport">
-                                        <i class="bi bi-graph-up me-1"></i> Portfolio at Risk
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="LoanReport" asp-action="LoanTypePerformanceReport">
-                                        <i class="bi bi-bar-chart-steps me-1"></i> Loan Types Performance
-                                    </a>
-                                </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="PortfolioAtRiskReport">
+                                            <i class="bi bi-graph-up me-1"></i> Portfolio at Risk
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="LoanTypePerformanceReport">
+                                            <i class="bi bi-bar-chart-steps me-1"></i> Loan Types Performance
+                                        </a>
+                                    </li>
 
-                                <li class="nav-item">
-                                    <a class="nav-link" asp-controller="AuditTrailReport" asp-action="Index">
-                                        <i class="bi bi-file-earmark-text me-1"></i> Audit Trail Report
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="AuditTrailReport" asp-action="Index">
+                                            <i class="bi bi-file-earmark-text me-1"></i> Audit Trail Report
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                        }
+                        else
+                        {
+                           <li class="nav-item">
+                                <a href="#" class="nav-link">
+                                    <i class="nav-icon bi bi-bar-chart-fill"></i>
+                                    <p>
+                                        <b>Reports</b>
+                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-teeview ms-2 border-start border-primary border-opacity-25 ps-2">
+                                    <li class="nav-item">
+                                        <a asp-controller="MemberReport" asp-action="SharesLoansMember" class="nav-link">
+                                            <i class="nav-icon bi bi-pie-chart-fill"></i>
+                                            <p>Shares/Loans Report</p>
+                                        </a>
+                                    </li>
+                                </ul>
+                           </li> 
+                        }
+
                     </ul>
                 </nav>
 
