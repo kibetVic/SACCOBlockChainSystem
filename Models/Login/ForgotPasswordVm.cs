@@ -16,8 +16,11 @@ namespace SACCOBlockChainSystem.Models.ViewModels
 
         [Required(ErrorMessage = "Verification code is required")]
         [Display(Name = "Verification Code")]
-        [StringLength(6, MinimumLength = 6, ErrorMessage = "Code must be 6 digits")]
+        [StringLength(6, MinimumLength = 4, ErrorMessage = "Code must be 4 to 6 digits")]
         public string? Code { get; set; }
+
+        public string? SetPin { get; set; }
+        //public string? Code { get; set; }
     }
 
     public class ResetPasswordVm

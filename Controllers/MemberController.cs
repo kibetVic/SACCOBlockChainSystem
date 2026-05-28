@@ -246,12 +246,12 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     return NotFound(new { success = false, message = "Member not found" });
                 }
-
+                var wallet =await _context.Wallets.AsNoTracking().FirstOrDefaultAsync(w => w.memberNo == member.MemberNo && w.CompanyCode == member.CompanyCode);
                 return Ok(new
                 {
                     success = true,
-                    walletAddress = member.WalletAddress ?? "Not created",
-                    hasWallet = !string.IsNullOrEmpty(member.WalletAddress)
+                    walletAddress = wallet?.Address ?? "Not created",
+                    hasWallet = !string.IsNullOrEmpty(wallet.Address)
                 });
             }
             catch (Exception ex)

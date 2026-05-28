@@ -277,26 +277,43 @@
                     @Html.AntiForgeryToken()
 
                     <input type="hidden" asp-for="Username" />
+                    @if(!ViewBag.RequestPin)
+                    {
+                        <div class="mb-4 text-center">
+                            <i class="fas fa-envelope fa-3x" style="color: #00AEEF;"></i>
+                            <p class="text-muted mt-2 small">
+                                We've sent a 6-digit verification code to your email address.<br />
+                                Please enter it below to continue.
+                            </p>
+                        </div>
 
-                    <div class="mb-4 text-center">
-                        <i class="fas fa-envelope fa-3x" style="color: #00AEEF;"></i>
-                        <p class="text-muted mt-2 small">
-                            We've sent a 6-digit verification code to your email address.<br />
-                            Please enter it below to continue.
-                        </p>
-                    </div>
+                        <div class="mb-3">
+                            <label asp-for="Code" class="form-label fw-semibold text-center d-block">Verification Code</label>
+                            <input asp-for="Code" class="form-control code-input"
+                                   placeholder="------" maxlength="6"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6)" />
+                            <span asp-validation-for="Code" class="text-danger small d-block text-center"></span>
+                        </div>
+                        <input type="hidden" asp-for="SetPin" value="false">
+                        <button type="submit" class="btn-login">
+                            <i class="fas fa-check-circle me-2"></i>Verify Code
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <input type="hidden" asp-for="SetPin" value="true">
+                            <label class="form-label fw-semibold text-center d-block">Enter Pin</label>
+                            <input asp-for="Code" class="form-control" type="password"/>
+                            <span asp-validation-for="Code" class="text-danger small d-block text-center"></span>
+                        </div>
+                        <button type="submit" class="btn-login">
+                            <i class="fas fa-check-circle me-2"></i>Verify Pin
+                        </button>
+                    }
 
-                    <div class="mb-3">
-                        <label asp-for="Code" class="form-label fw-semibold text-center d-block">Verification Code</label>
-                        <input asp-for="Code" class="form-control code-input"
-                               placeholder="------" maxlength="6"
-                               oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6)" />
-                        <span asp-validation-for="Code" class="text-danger small d-block text-center"></span>
-                    </div>
 
-                    <button type="submit" class="btn-login">
-                        <i class="fas fa-check-circle me-2"></i>Verify Code
-                    </button>
+                    
 
                     <div class="text-center mt-3">
                         <a asp-action="MemberLogin" class="text-decoration-none">
