@@ -18,7 +18,7 @@
 
             <div class="input-group mb-3">
                 <input type="text" id="searchInput" class="form-control"
-                       placeholder="Search member..." />
+                       placeholder="Search member by name or member number..." />
 
                 <button type="button" class="btn btn-primary" onclick="searchMembers()">
                     Search
@@ -29,17 +29,24 @@
                 </button>
             </div>
 
-            <table class="table table-bordered">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Member No</th>
-                        <th>Name</th>
-                        <th>ID No</th>
-                        <th>Phone</th>
-                    </tr>
-                </thead>
-                <tbody id="membersResult"></tbody>
-            </table>
+            <div id="searchResults" style="display:none;">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Member No</th>
+                            <th>Name</th>
+                            <th>ID No</th>
+                            <th>Phone</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="membersResult"></tbody>
+                </table>
+            </div>
+
+            <div id="noResultsMessage" class="alert alert-warning" style="display:none;">
+                No members found
+            </div>
 
         </div>
     </div>
@@ -51,38 +58,57 @@
         </div>
 
         <div class="card-body">
-            <form asp-action="Create" method="post">
 
-                <div class="row">
-                    <div class="col-md-3">
-                        <label>Year</label>
-                        <input name="DividendYear" class="form-control" />
-                    </div>
+            @Html.AntiForgeryToken()
 
-                    <div class="col-md-3">
-                        <label>Member No</label>
-                        <input name="MemberNo" class="form-control" />
-                    </div>
+            <div class="row">
+
+                <div class="col-md-3">
+                    <label>Year</label>
+                    <input id="DividendYear" class="form-control" />
                 </div>
 
-                <button class="btn btn-success mt-3">Save</button>
+                <div class="col-md-3">
+                    <label>Member No</label>
+                    <input id="MemberNo" class="form-control" readonly />
+                </div>
 
-            </form>
+                <div class="col-md-4">
+                    <label>Member Name</label>
+                    <input id="MemberName" class="form-control" readonly />
+                </div>
+
+            </div>
+
+            <button type="button"
+                    class="btn btn-success mt-3"
+                    onclick="saveDividend()">
+                Calculate & Save Dividend
+            </button>
+
         </div>
     </div>
 
     <!-- LIST -->
     <div class="card">
         <div class="card-header bg-dark text-white">
-            Records
+            <h5>Dividend Records</h5>
         </div>
 
         <div class="card-body">
-            <table class="table table-striped">
+
+            <table class="table table-striped table-hover" id="dividendTable">
+
                 <thead>
                     <tr>
                         <th>Year</th>
-                        <th>Member</th>
+                        <th>Member No</th>
+                        <th>Member Name</th>
+                        <th>Weighted Savings</th>
+                        <th>Savings Dividend</th>
+                        <th>Share Dividend</th>
+                        <th>Gross Dividend</th>
+                        <th>Tax</th>
                         <th>Net</th>
                     </tr>
                 </thead>
@@ -93,72 +119,150 @@
                         <tr>
                             <td>@item.DividendYear</td>
                             <td>@item.MemberNo</td>
-                            <td>@item.NetDividend</td>
+                            <td>
+                                @if (ViewBag.MemberNames != null && ViewBag.MemberNames.ContainsKey(item.MemberNo))
+                                {
+                                    @ViewBag.MemberNames[item.MemberNo]
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Unknown</span>
+                                }
+                            </td>
+                            <td>@item.WeightedSavings.ToString("N2")</td>
+                            <td>@item.SavingsDividend.ToString("N2")</td>
+                            <td>@item.ShareDividend.ToString("N2")</td>
+                            <td>@item.GrossDividend.ToString("N2")</td>
+                            <td>@item.WithholdingTax.ToString("N2")</td>
+                            <td class="fw-bold">@item.NetDividend.ToString("N2")</td>
                         </tr>
                     }
                 </tbody>
+
             </table>
+
         </div>
     </div>
 
 </div>
-@section Scripts {
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-    <script>
-        function searchMembers() {
+<script>
 
-            let term = $("#searchInput").val();
+    function searchMembers() {
 
-            if (!term || term.length < 2) {
-                alert("Enter at least 2 characters");
-                return;
-            }
+        let term = $("#searchInput").val().trim();
 
-            $.ajax({
-                 $.ajax({
-        url: '@Url.Action("SearchMembers", "DividendDetails")',
-        type: 'GET',
-        data: { term: term },
-              
-                success: function (res) {
+        if (term.length < 2) {
+            alert("Enter at least 2 characters");
+            return;
+        }
 
-                    console.log(res);
+        $("#searchResults").show();
 
-                    if (res.success) {
+        $.ajax({
+            url: '@Url.Action("SearchMembers", "DividendDetails")',
+            type: 'GET',
+            data: { term: term },
 
-                        let html = "";
+            success: function (response) {
 
-                        res.data.forEach(m => {
-                            html += `
-                                <tr onclick="selectMember('${m.memberNo}', '${m.name}')">
-                                    <td>${m.memberNo}</td>
-                                    <td>${m.name}</td>
-                                    <td>${m.idno}</td>
-                                    <td>${m.phoneNo}</td>
-                                </tr>
-                            `;
-                        });
+                let html = "";
 
-                        $("#membersResult").html(html);
-                    }
-                },
-                error: function (err) {
-                    console.log(err);
-                    alert("Search failed");
+                if (response.success && response.data.length > 0) {
+
+                    response.data.forEach(m => {
+
+                        html += `
+                            <tr>
+                                <td>${m.memberNo}</td>
+                                <td>${m.name}</td>
+                                <td>${m.idno}</td>
+                                <td>${m.phoneNo}</td>
+                                <td>
+                                    <button type="button"
+                                        class="btn btn-sm btn-success"
+                                        onclick="selectMember('${m.memberNo}','${m.name.replace(/'/g,"\\'")}')">
+                                        Select
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+
+                    $("#membersResult").html(html);
                 }
-            });
+            },
+
+            error: function (xhr) {
+                console.log(xhr.responseText);
+            }
+        });
+    }
+
+    function selectMember(memberNo, name) {
+
+        console.log("Selected MemberNo:", memberNo); // DEBUG
+
+        $("#MemberNo").val(memberNo);
+        $("#MemberName").val(name);
+
+        $("#searchResults").hide();
+    }
+
+    function saveDividend() {
+
+        let year = $("#DividendYear").val();
+        let memberNo = $("#MemberNo").val();
+
+        console.log("Year:", year);
+        console.log("MemberNo:", memberNo);
+
+        if (!year || !memberNo) {
+            alert("Select member and year");
+            return;
         }
 
-        function selectMember(memberNo, name) {
-            $("input[name='MemberNo']").val(memberNo);
-            $("#searchInput").val(name);
-            $("#membersResult").html("");
-        }
+        $.ajax({
+            url: '@Url.Action("Create", "DividendDetails")',
+            type: 'POST',
 
-        function clearSearch() {
-            $("#searchInput").val("");
-            $("#membersResult").html("");
-        }
-    </script>
-}
+            data: {
+                DividendYear: year,
+                MemberNo: memberNo,
+                __RequestVerificationToken:
+                    $('input[name="__RequestVerificationToken"]').val()
+            },
+
+            success: function (response) {
+
+                console.log("RESPONSE:", response);
+
+                if (response.success) {
+
+                    alert(response.message);
+                    location.reload();
+                }
+                else {
+                    alert(response.message);
+                }
+            },
+
+            error: function (xhr, status, error) {
+
+                console.log("STATUS:", status);
+                console.log("ERROR:", error);
+                console.log("RESPONSE:", xhr.responseText);
+
+                alert("Error saving dividend. Check console.");
+            }
+        });
+    }
+
+    function clearSearch() {
+
+        $("#searchInput").val("");
+        $("#membersResult").html("");
+        $("#searchResults").hide();
+    }
+
+</script>

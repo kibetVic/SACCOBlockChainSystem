@@ -4,20 +4,26 @@ using Microsoft.EntityFrameworkCore;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
+using SACCOBlockChainSystem.Services;
 
 namespace SACCOBlockChainSystem.Controllers
 {
     public class DividendDetailsController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly IContributionService _contributionService;
 
         public DividendDetailsController(ApplicationDbContext context)
         {
             _context = context;
+            IContributionService contributionService;
         }
 
         // =========================================
         // INDEX
+        // =========================================
+        // =========================================
+        // INDEX - Updated to include member names
         // =========================================
         [HttpGet]
         public async Task<IActionResult> Index()
@@ -42,38 +48,49 @@ namespace SACCOBlockChainSystem.Controllers
                 })
                 .ToListAsync();
 
+            // Get member names for display
+            var memberNumbers = data.Select(x => x.MemberNo).Distinct().ToList();
+            var members = await _context.Members
+                .Where(m => memberNumbers.Contains(m.MemberNo) && m.CompanyCode == companyCode)
+                .ToDictionaryAsync(m => m.MemberNo, m => (m.Surname ?? "") + " " + (m.OtherNames ?? ""));
+
+            ViewBag.MemberNames = members;
+
             return View(data);
         }
 
-
         // =========================================
-        // SEARCH MEMBERS (BY NAME OR MEMBER NO)
+        // SEARCH MEMBERS - Fixed version
         // =========================================
         [HttpGet]
         public async Task<IActionResult> SearchMembers(string term)
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(term))
+
+
+                 if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                // Get company code from user claims (assuming it's stored there)
+                var companyCode = User.FindFirst("CompanyCode")?.Value;
+                if (string.IsNullOrEmpty(companyCode))
                 {
-                    return Json(new { success = false, data = new List<object>() });
+                    return BadRequest(new { Success = false, Message = "Company code not found in user claims" });
                 }
 
-                var companyCode = GetUserCompanyCode();
-
-                var data = await _context.Members
-                    .Where(m => m.CompanyCode == companyCode &&
-                           (
-                               m.MemberNo.Contains(term) ||
-                               (m.Surname ?? "").Contains(term) ||
-                               (m.OtherNames ?? "").Contains(term)
-                           ))
+                var members = await _context.Members
+                    .Where(m => m.CompanyCode == companyCode)
+                    .Where(m =>
+                        (m.MemberNo ?? "").Contains(term) ||
+                        (m.Surname ?? "").Contains(term) ||
+                        (m.OtherNames ?? "").Contains(term))
                     .Select(m => new
                     {
                         memberNo = m.MemberNo,
                         name = (m.Surname ?? "") + " " + (m.OtherNames ?? ""),
-                        idno = m.Idno,
-                        phoneNo = m.PhoneNo
+                        idno = m.Idno ?? "",
+                        phoneNo = m.PhoneNo ?? ""
                     })
                     .Take(20)
                     .ToListAsync();
@@ -81,7 +98,7 @@ namespace SACCOBlockChainSystem.Controllers
                 return Json(new
                 {
                     success = true,
-                    data = data
+                    data = members
                 });
             }
             catch (Exception ex)
@@ -101,21 +118,23 @@ namespace SACCOBlockChainSystem.Controllers
         // =========================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(DividendDetailsDTO model)
+        public async Task<IActionResult> Calculate(DividendDetailsDTO model)
         {
             try
             {
                 if (!ModelState.IsValid)
                 {
-                    TempData["ErrorMessage"] = "Invalid data supplied.";
-                    return RedirectToAction("Index");
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Invalid data supplied."
+                    });
                 }
-
+                var debugMemberNo = model.MemberNo;
+                var debugYear = model.DividendYear;
+             
                 var companyCode = GetUserCompanyCode();
 
-                // =========================================
-                // CHECK MEMBER EXISTS
-                // =========================================
                 var member = await _context.Members
                     .FirstOrDefaultAsync(x =>
                         x.MemberNo == model.MemberNo &&
@@ -123,33 +142,26 @@ namespace SACCOBlockChainSystem.Controllers
 
                 if (member == null)
                 {
-                    TempData["ErrorMessage"] = "Member not found.";
-                    return RedirectToAction("Index");
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Member not found."
+                    });
                 }
 
-                // =========================================
-                // GET TOTAL SAVINGS / CONTRIBUTIONS
-                // =========================================
                 decimal memberSavings = await _context.Contribs
                     .Where(x =>
-                        x.MemberNo == model.MemberNo &&
+                       x.MemberNo.Trim().ToLower() == model.MemberNo.Trim().ToLower() &&
                         x.CompanyCode == companyCode)
                     .SumAsync(x => (decimal?)x.Amount) ?? 0;
 
-                // =========================================
-                // DIVIDEND FORMULAS
-                // =========================================
-
                 decimal weightedSavings = memberSavings;
 
-                // Rates
-                decimal savingsRate = 0.10m;      // 10%
-                decimal shareRate = 0.05m;        // 5%
-                decimal withholdingRate = 0.05m;  // 5%
+                decimal savingsRate = 0.10m;
+                decimal shareRate = 0.05m;
+                decimal withholdingRate = 0.05m;
 
-                // Calculations
                 decimal savingsDividend = weightedSavings * savingsRate;
-
                 decimal shareDividend = weightedSavings * shareRate;
 
                 decimal grossDividend = savingsDividend + shareDividend;
@@ -158,9 +170,6 @@ namespace SACCOBlockChainSystem.Controllers
 
                 decimal netDividend = grossDividend - withholdingTax;
 
-                // =========================================
-                // SAVE
-                // =========================================
                 var entity = new DividendDetails
                 {
                     DividendYear = model.DividendYear,
@@ -177,18 +186,27 @@ namespace SACCOBlockChainSystem.Controllers
                 };
 
                 _context.DividendDetails.Add(entity);
-
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] =
-                    $"Dividend calculated successfully for {member.MemberNo}";
-
-                return RedirectToAction("Index");
+                return Json(new
+                {
+                    success = true,
+                    message = "Dividend calculated successfully",
+                    data = new
+                    {
+                        entity.DividendYear,
+                        entity.MemberNo,
+                        entity.NetDividend
+                    }
+                });
             }
             catch (Exception ex)
             {
-                TempData["ErrorMessage"] = ex.Message;
-                return RedirectToAction("Index");
+                return Json(new
+                {
+                    success = false,
+                    message = ex.ToString()   // 👈 NOT ex.Message
+                });
             }
         }
         // =========================================
