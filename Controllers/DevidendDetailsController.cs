@@ -4,20 +4,26 @@ using Microsoft.EntityFrameworkCore;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
+using SACCOBlockChainSystem.Services;
 
 namespace SACCOBlockChainSystem.Controllers
 {
     public class DividendDetailsController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly IContributionService _contributionService;
 
         public DividendDetailsController(ApplicationDbContext context)
         {
             _context = context;
+            IContributionService contributionService;
         }
 
         // =========================================
         // INDEX
+        // =========================================
+        // =========================================
+        // INDEX - Updated to include member names
         // =========================================
         [HttpGet]
         public async Task<IActionResult> Index()
@@ -42,38 +48,51 @@ namespace SACCOBlockChainSystem.Controllers
                 })
                 .ToListAsync();
 
+            // Get member names for display
+            var memberNumbers = data.Select(x => x.MemberNo).Distinct().ToList();
+            var members = await _context.Members
+                .Where(m => memberNumbers.Contains(m.MemberNo) && m.CompanyCode == companyCode)
+                .ToDictionaryAsync(m => m.MemberNo, m => (m.Surname ?? "") + " " + (m.OtherNames ?? ""));
+
+            ViewBag.MemberNames = members;
+
             return View(data);
         }
 
-
         // =========================================
-        // SEARCH MEMBERS (BY NAME OR MEMBER NO)
+        // SEARCH MEMBERS - Fixed version
         // =========================================
         [HttpGet]
         public async Task<IActionResult> SearchMembers(string term)
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(term))
+                Console.WriteLine($"Search called: {term}");
+
+                if (string.IsNullOrWhiteSpace(term) || term.Length < 2)
                 {
-                    return Json(new { success = false, data = new List<object>() });
+                    return Json(new { success = true, data = new List<object>() });
                 }
 
                 var companyCode = GetUserCompanyCode();
 
-                var data = await _context.Members
-                    .Where(m => m.CompanyCode == companyCode &&
-                           (
-                               m.MemberNo.Contains(term) ||
-                               (m.Surname ?? "").Contains(term) ||
-                               (m.OtherNames ?? "").Contains(term)
-                           ))
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    return Json(new { success = false, message = "Company code missing" });
+                }
+
+                var members = await _context.Members
+                    .Where(m => m.CompanyCode == companyCode)
+                    .Where(m =>
+                        (m.MemberNo ?? "").Contains(term) ||
+                        (m.Surname ?? "").Contains(term) ||
+                        (m.OtherNames ?? "").Contains(term))
                     .Select(m => new
                     {
                         memberNo = m.MemberNo,
                         name = (m.Surname ?? "") + " " + (m.OtherNames ?? ""),
-                        idno = m.Idno,
-                        phoneNo = m.PhoneNo
+                        idno = m.Idno ?? "",
+                        phoneNo = m.PhoneNo ?? ""
                     })
                     .Take(20)
                     .ToListAsync();
@@ -81,7 +100,7 @@ namespace SACCOBlockChainSystem.Controllers
                 return Json(new
                 {
                     success = true,
-                    data = data
+                    data = members
                 });
             }
             catch (Exception ex)

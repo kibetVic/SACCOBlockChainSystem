@@ -18,28 +18,34 @@
 
             <div class="input-group mb-3">
                 <input type="text" id="searchInput" class="form-control"
-                       placeholder="Search member..." />
+                       placeholder="Search member by name or member number..." />
 
                 <button type="button" class="btn btn-primary" onclick="searchMembers()">
-                    Search
+                    <i class="fas fa-search"></i> Search
                 </button>
 
                 <button type="button" class="btn btn-secondary" onclick="clearSearch()">
-                    Clear
+                    <i class="fas fa-times"></i> Clear
                 </button>
             </div>
 
-            <table class="table table-bordered">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Member No</th>
-                        <th>Name</th>
-                        <th>ID No</th>
-                        <th>Phone</th>
-                    </tr>
-                </thead>
-                <tbody id="membersResult"></tbody>
-            </table>
+            <div id="searchResults" style="display: none;">
+                <table class="table table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Member No</th>
+                            <th>Name</th>
+                            <th>ID No</th>
+                            <th>Phone</th>
+                        </tr>
+                    </thead>
+                    <tbody id="membersResult"></tbody>
+                </table>
+            </div>
+
+            <div id="noResultsMessage" class="alert alert-warning" style="display: none;">
+                No members found. Please try a different search term.
+            </div>
 
         </div>
     </div>
@@ -51,21 +57,29 @@
         </div>
 
         <div class="card-body">
-            <form asp-action="Create" method="post">
+            <form asp-action="Create" method="post" id="dividendForm">
+                @Html.AntiForgeryToken()
 
                 <div class="row">
                     <div class="col-md-3">
                         <label>Year</label>
-                        <input name="DividendYear" class="form-control" />
+                        <input name="DividendYear" id="DividendYear" class="form-control" required />
                     </div>
 
                     <div class="col-md-3">
                         <label>Member No</label>
-                        <input name="MemberNo" class="form-control" />
+                        <input name="MemberNo" id="MemberNo" class="form-control" readonly style="background-color: #f0f0f0;" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label>Member Name</label>
+                        <input type="text" id="MemberName" class="form-control" readonly disabled />
                     </div>
                 </div>
 
-                <button class="btn btn-success mt-3">Save</button>
+                <button type="submit" class="btn btn-success mt-3">
+                    <i class="fas fa-calculator"></i> Calculate & Save Dividend
+                </button>
 
             </form>
         </div>
@@ -74,91 +88,175 @@
     <!-- LIST -->
     <div class="card">
         <div class="card-header bg-dark text-white">
-            Records
+            <h5>Dividend Records</h5>
         </div>
 
         <div class="card-body">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Year</th>
-                        <th>Member</th>
-                        <th>Net</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    @foreach (var item in Model)
-                    {
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
                         <tr>
-                            <td>@item.DividendYear</td>
-                            <td>@item.MemberNo</td>
-                            <td>@item.NetDividend</td>
+                            <th>Year</th>
+                            <th>Member No</th>
+                            <th>Member Name</th>
+                            <th>Weighted Savings</th>
+                            <th>Savings Dividend</th>
+                            <th>Share Dividend</th>
+                            <th>Gross Dividend</th>
+                            <th>Withholding Tax (5%)</th>
+                            <th>Net Dividend</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model)
+                        {
+                            <tr>
+                                <td>@item.DividendYear</td>
+                                <td>@item.MemberNo</td>
+                                <td>@ViewBag.MemberNames?[item.MemberNo]</td>
+                                <td class="text-end">@item.WeightedSavings.ToString("N2")</td>
+                                <td class="text-end">@item.SavingsDividend.ToString("N2")</td>
+                                <td class="text-end">@item.ShareDividend.ToString("N2")</td>
+                                <td class="text-end">@item.GrossDividend.ToString("N2")</td>
+                                <td class="text-end">@item.WithholdingTax.ToString("N2")</td>
+                                <td class="text-end fw-bold">@item.NetDividend.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
 </div>
+
 @section Scripts {
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
     <script>
-        function searchMembers() {
+        // Make sure jQuery is loaded
+        if (typeof jQuery === 'undefined') {
+            console.error('jQuery not loaded');
+        }
 
-            let term = $("#searchInput").val();
+        function searchMembers() {
+            let term = $("#searchInput").val().trim();
 
             if (!term || term.length < 2) {
-                alert("Enter at least 2 characters");
+                alert("Please enter at least 2 characters to search");
                 return;
             }
 
+            console.log("Searching for:", term);
+
+            // Show loading indicator
+            $("#membersResult").html('<tr><td colspan="4" class="text-center">Searching...</td></tr>');
+            $("#searchResults").show();
+            $("#noResultsMessage").hide();
+
             $.ajax({
-                 $.ajax({
-        url: '@Url.Action("SearchMembers", "DividendDetails")',
-        type: 'GET',
-        data: { term: term },
-              
-                success: function (res) {
+                url: '@Url.Action("SearchMembers", "DividendDetails")',
+                type: 'GET',
+                data: { term: term },
+                dataType: 'json',
+                success: function (response) {
+                    console.log("Response received:", response);
 
-                    console.log(res);
-
-                    if (res.success) {
-
+                    if (response.success) {
                         let html = "";
 
-                        res.data.forEach(m => {
-                            html += `
-                                <tr onclick="selectMember('${m.memberNo}', '${m.name}')">
-                                    <td>${m.memberNo}</td>
-                                    <td>${m.name}</td>
-                                    <td>${m.idno}</td>
-                                    <td>${m.phoneNo}</td>
-                                </tr>
-                            `;
-                        });
-
-                        $("#membersResult").html(html);
+                        if (response.data && response.data.length > 0) {
+                            response.data.forEach(function(m) {
+                                html += '<tr style="cursor: pointer;" onclick="selectMember(\'' + m.memberNo + '\', \'' + m.name.replace(/'/g, "\\'") + '\')">';
+                                html += '<td>' + (m.memberNo || '') + '</td>';
+                                html += '<td>' + (m.name || '') + '</td>';
+                                html += '<td>' + (m.idno || '') + '</td>';
+                                html += '<td>' + (m.phoneNo || '') + '</td>';
+                                html += '</tr>';
+                            });
+                            $("#membersResult").html(html);
+                            $("#searchResults").show();
+                            $("#noResultsMessage").hide();
+                        } else {
+                            $("#membersResult").html('');
+                            $("#searchResults").hide();
+                            $("#noResultsMessage").show();
+                        }
+                    } else {
+                        alert("Search failed: " + (response.message || "Unknown error"));
+                        $("#searchResults").hide();
+                        $("#noResultsMessage").show();
                     }
                 },
-                error: function (err) {
-                    console.log(err);
-                    alert("Search failed");
+                error: function (xhr, status, error) {
+                    console.error("AJAX Error:", status, error);
+                    console.error("Response text:", xhr.responseText);
+                    alert("Search failed. Please check the console for details.");
+                    $("#searchResults").hide();
                 }
             });
         }
 
         function selectMember(memberNo, name) {
-            $("input[name='MemberNo']").val(memberNo);
+            console.log("Selecting member:", memberNo, name);
+
+            // Set the values in the form
+            $("#MemberNo").val(memberNo);
+            $("#MemberName").val(name);
+
+            // Optional: Also set in the search input for visual feedback
             $("#searchInput").val(name);
+
+            // Hide the search results
+            $("#searchResults").hide();
             $("#membersResult").html("");
+            $("#noResultsMessage").hide();
+
+            // Optional: Show success message
+            $("#MemberNo").css("background-color", "#e8f5e9");
+            setTimeout(function() {
+                $("#MemberNo").css("background-color", "#f0f0f0");
+            }, 500);
         }
 
         function clearSearch() {
             $("#searchInput").val("");
             $("#membersResult").html("");
+            $("#searchResults").hide();
+            $("#noResultsMessage").hide();
+
+            // Optionally clear the selected member
+            // $("#MemberNo").val("");
+            // $("#MemberName").val("");
         }
+
+        // Optional: Add enter key support
+        $(document).ready(function() {
+            $("#searchInput").keypress(function(e) {
+                if (e.which == 13) { // Enter key
+                    e.preventDefault();
+                    searchMembers();
+                }
+            });
+
+            // Form validation before submit
+            $("#dividendForm").on("submit", function(e) {
+                var year = $("#DividendYear").val();
+                var memberNo = $("#MemberNo").val();
+
+                if (!year) {
+                    alert("Please enter the dividend year");
+                    e.preventDefault();
+                    return false;
+                }
+
+                if (!memberNo) {
+                    alert("Please search and select a member first");
+                    e.preventDefault();
+                    return false;
+                }
+
+                return true;
+            });
+        });
     </script>
 }
