@@ -133,24 +133,8 @@ namespace SACCOBlockChainSystem.Controllers
                     var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
                     if (wallet == null)
                     {
-                        var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
-                        wallet = await _walletService.RegisterMemberAsync(member);
-                        if (wallet == null || wallet.MemberId == 0)
-                        {
-                            ModelState.AddModelError(string.Empty, "Invalid no wallet associated with member.");
-                            return RedirectToAction("MemberLogin", "Account");
-                        }
-                    }
-                    var trs = await _context.BlockchainTransactions.AsNoTracking().OrderByDescending(t => t.CreatedAt).Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo).Take(20).ToListAsync();
-                    var memberView = new MemberViewModel {
-                        Member = member,
-                        Wallets = new List<Wallet> { wallet },
-                        MemberTransactions = trs,
-                        UserCompanyCode = member.CompanyCode,
-                    };
 
-                    //check this is pushed
-                    return View("MemberIndex",memberView);
+                    }
                 }
 
                 // Determine effective company code
