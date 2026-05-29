@@ -44,7 +44,6 @@ namespace SACCOBlockChainSystem.Controllers
                     GrossDividend = x.GrossDividend,
                     WithholdingTax = x.WithholdingTax,
                     NetDividend = x.NetDividend,
-                    CompanyCode = x.CompanyCode,
                     Status = x.Status
 
                 })
