@@ -128,6 +128,7 @@ namespace SACCOBlockChainSystem.Controllers
                 // Handle Member role - redirect to MemberIndex
                 if (userRole?.ToUpper() == "MEMBER")
                 {
+                    //ensure here to final
                     var uid = User.FindFirst("UserId")?.Value;
                     
                     var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
@@ -157,6 +158,7 @@ namespace SACCOBlockChainSystem.Controllers
                             }
                         }
                     }
+                    //to here
                     var trs = await _context.BlockchainTransactions.AsNoTracking().OrderByDescending(t => t.CreatedAt).Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo).Take(20).ToListAsync();
                     var memberView = new MemberViewModel {
                         Member = member,
