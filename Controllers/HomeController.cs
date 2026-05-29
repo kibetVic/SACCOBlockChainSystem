@@ -164,6 +164,8 @@ namespace SACCOBlockChainSystem.Controllers
                         MemberTransactions = trs,
                         UserCompanyCode = member.CompanyCode,
                     };
+
+                    //check this is pushed
                     return View("MemberIndex",memberView);
                 }
 
