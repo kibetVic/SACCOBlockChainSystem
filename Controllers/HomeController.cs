@@ -129,42 +129,20 @@ namespace SACCOBlockChainSystem.Controllers
                 if (userRole?.ToUpper() == "MEMBER")
                 {
                     var uid = User.FindFirst("UserId")?.Value;
-                    
-                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
-                    var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
 
+                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
                     if (wallet == null)
                     {
-                        //var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == memberId);
-                        //if (wallet == null)
-                        //{
-                        //    var member = await _context.Members.AsNoTracking()
-                        //        .FirstOrDefaultAsync(m => m.Id == memberId);
-                        //    if (member != null)
-                        //        wallet = await _walletService.RegisterMemberAsync(member);
-                        //}
-                        if (member != null)
-                            wallet = await _walletService.RegisterMemberAsync(member);
-                    }
-                    var wg = await _context.WalletConfigurations.AsNoTracking().FirstOrDefaultAsync(w => w.CompanyCode == wallet.CompanyCode);
-                    if(wg != null && wg.EnableWallets == true)
-                    {
-                        if(wg.RequireTransactionPin == true)
+                        var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
+                        wallet = await _walletService.RegisterMemberAsync(member);
+                        if (wallet == null || wallet.MemberId == 0)
                         {
-                            if (string.IsNullOrEmpty(member.Pin))
-                            {
-                                return RedirectToAction("AccountSetup", "Home");
-                            }
+                            ModelState.AddModelError(string.Empty, "Invalid no wallet associated with member.");
+                            return RedirectToAction("MemberLogin", "Account");
                         }
                     }
-                    var trs = await _context.BlockchainTransactions.AsNoTracking().OrderByDescending(t => t.CreatedAt).Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo).Take(20).ToListAsync();
-                    var memberView = new MemberViewModel {
-                        Member = member,
-                        Wallets = new List<Wallet> { wallet },
-                        MemberTransactions = trs,
-                        UserCompanyCode = member.CompanyCode,
-                    };
-                    return View("MemberIndex",memberView);
+                    return View("MemberIndex");
+
                 }
 
                 // Determine effective company code
@@ -179,7 +157,7 @@ namespace SACCOBlockChainSystem.Controllers
                     effectiveCompanyCode = companyCode;
                 }
 
-                // ✅ Get cached dashboard data - MUCH FASTER!
+                // ✅ Get cached dashboard data - includes ALL calculations now!
                 var dashboard = await _dashboardCacheService.GetDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
 
                 // Get companies for filter dropdown (only for Super Admin)
