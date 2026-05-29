@@ -104,220 +104,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        //// ===============================
-        //// POST: /GlSetup/Save
-        //// ===============================
-        //[HttpPost("Save")]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> Save(GlSetup model)
-        //{
-        //    try
-        //    {
-        //        var companyCode = GetCurrentCompanyCode();
-        //        var userName = GetCurrentUserName();
-
-        //        // Set company code from logged-in user
-        //        model.CompanyCode = companyCode;
-
-        //        // Remove validation for nullable fields
-        //        ModelState.Remove("AuditDate");
-        //        ModelState.Remove("EoyDate");
-        //        ModelState.Remove("NewGlOpeningBalDate");
-
-        //        if (!ModelState.IsValid)
-        //        {
-        //            ViewBag.Accounts = _context.GlSetup
-        //                .Where(x => x.CompanyCode == companyCode)
-        //                .OrderBy(x => x.AccNo)
-        //                .ToList();
-        //            ViewBag.AccountTypes = GetAccountTypes();
-        //            ViewBag.AccountCategories = GetAccountCategories();
-        //            ViewBag.Currencies = GetCurrencies();
-        //            ViewBag.SubCategories = GetSubCategories();
-        //            return View("Index", model);
-        //        }
-
-        //        // Set default values
-        //        model.TransDate = DateTime.Now;
-        //        model.Status = true;
-        //        model.AuditDate = DateTime.Now;
-        //        model.AuditId = userName;
-
-        //        // =========================================================
-        //        // FIX: Handle Normal Balance based on Account Group
-        //        // =========================================================
-        //        if (model.GlAccMainGroup == "Capital Reserved")
-        //        {
-        //            // For Capital Reserved, validate and preserve user-entered value
-        //            if (string.IsNullOrEmpty(model.Normalbal))
-        //            {
-        //                ModelState.AddModelError("Normalbal", "Normal Balance is required for Capital Reserved accounts.");
-        //                ViewBag.Accounts = _context.GlSetup
-        //                    .Where(x => x.CompanyCode == companyCode)
-        //                    .OrderBy(x => x.AccNo)
-        //                    .ToList();
-        //                ViewBag.AccountTypes = GetAccountTypes();
-        //                ViewBag.AccountCategories = GetAccountCategories();
-        //                ViewBag.Currencies = GetCurrencies();
-        //                ViewBag.SubCategories = GetSubCategories();
-        //                return View("Index", model);
-        //            }
-
-        //            // Ensure it's either DR or CR (uppercase)
-        //            model.Normalbal = model.Normalbal.ToUpper();
-        //            if (model.Normalbal != "DR" && model.Normalbal != "CR")
-        //            {
-        //                ModelState.AddModelError("Normalbal", "Normal Balance must be either DR or CR.");
-        //                ViewBag.Accounts = _context.GlSetup
-        //                    .Where(x => x.CompanyCode == companyCode)
-        //                    .OrderBy(x => x.AccNo)
-        //                    .ToList();
-        //                ViewBag.AccountTypes = GetAccountTypes();
-        //                ViewBag.AccountCategories = GetAccountCategories();
-        //                ViewBag.Currencies = GetCurrencies();
-        //                ViewBag.SubCategories = GetSubCategories();
-        //                return View("Index", model);
-        //            }
-        //        }
-        //        else
-        //        {
-        //            // For other groups, auto-set the normal balance
-        //            model.Normalbal = GetNormalBalanceByGroup(model.GlAccMainGroup);
-        //        }
-
-        //        // Set default values for required fields
-        //        if (string.IsNullOrEmpty(model.Type)) model.Type = "Balance Sheet";
-        //        if (string.IsNullOrEmpty(model.SubType)) model.SubType = "Others";
-        //        if (model.OpeningBal == 0) model.OpeningBal = 0;
-        //        if (model.NewGlOpeningBal == 0) model.NewGlOpeningBal = 0;
-        //        if (model.NewGlOpeningBalDate == DateTime.MinValue) model.NewGlOpeningBalDate = DateTime.Now;
-
-        //        // Check if account number already exists for this company
-        //        var existingAccount = _context.GlSetup
-        //            .FirstOrDefault(x => x.AccNo == model.AccNo && x.CompanyCode == companyCode);
-
-        //        if (existingAccount != null)
-        //        {
-        //            ModelState.AddModelError("AccNo", "Account number already exists for this company.");
-        //            ViewBag.Accounts = _context.GlSetup
-        //                .Where(x => x.CompanyCode == companyCode)
-        //                .OrderBy(x => x.AccNo)
-        //                .ToList();
-        //            ViewBag.AccountTypes = GetAccountTypes();
-        //            ViewBag.AccountCategories = GetAccountCategories();
-        //            ViewBag.Currencies = GetCurrencies();
-        //            ViewBag.SubCategories = GetSubCategories();
-        //            return View("Index", model);
-        //        }
-
-        //        _context.GlSetup.Add(model);
-        //        await _context.SaveChangesAsync();
-
-        //        _logger.LogInformation($"Account {model.AccNo} saved successfully for company {companyCode} by {userName}");
-
-        //        // =========================================================
-        //        // BLOCKCHAIN INTEGRATION FOR GL ACCOUNT CREATION
-        //        // =========================================================
-        //        try
-        //        {
-        //            // Prepare blockchain data
-        //            var blockchainData = new
-        //            {
-        //                Action = "CREATE",
-        //                TransactionType = "GL_ACCOUNT_CREATION",
-        //                AccountNo = model.AccNo,
-        //                Glaccname = model.Glaccname,
-        //                Glacctype = model.Glacctype,
-        //                GlAccMainGroup = model.GlAccMainGroup,
-        //                Normalbal = model.Normalbal,
-        //                Type = model.Type,
-        //                SubType = model.SubType,
-        //                OpeningBal = model.OpeningBal,
-        //                Status = model.Status,
-        //                IsSuspense = model.IsSuspense,
-        //                CreatedBy = userName,
-        //                CreatedAt = DateTime.Now,
-        //                CompanyCode = companyCode
-        //            };
-
-        //            // Generate block hash
-        //            string blockHash = Guid.NewGuid().ToString().Replace("-", "");
-        //            if (blockHash.Length < 64) blockHash = blockHash.PadRight(64, '0');
-        //            else if (blockHash.Length > 64) blockHash = blockHash.Substring(0, 64);
-
-        //            // Create Block record
-        //            var block = new Block
-        //            {
-        //                BlockHash = blockHash,
-        //                PreviousHash = await GetLastBlockHashAsync(),
-        //                Timestamp = DateTime.Now,
-        //                Nonce = 0,
-        //                MerkleRoot = Guid.NewGuid().ToString(),
-        //                Confirmed = true,
-        //                CreatedAt = DateTime.Now
-        //            };
-
-        //            _context.Blocks.Add(block);
-        //            await _context.SaveChangesAsync();
-
-        //            // Generate data hash
-        //            var payloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData);
-        //            var dataHash = ComputeSHA256Hash(payloadJson);
-
-        //            // Create Blockchain Transaction
-        //            var blockchainTx = new BlockchainTransaction
-        //            {
-        //                TransactionId = Guid.NewGuid().ToString(),
-        //                TransactionType = "GL_ACCOUNT_CREATION",
-        //                MemberNo = null,
-        //                CompanyCode = companyCode,
-        //                Amount = model.OpeningBal,
-        //                Timestamp = DateTime.Now,
-        //                DataHash = dataHash,
-        //                PayloadJson = payloadJson,
-        //                OffChainReferenceId = model.AccNo,
-        //                Status = "CONFIRMED",
-        //                BlockHash = block.BlockHash,
-        //                CreatedAt = DateTime.Now
-        //            };
-
-        //            _context.BlockchainTransactions.Add(blockchainTx);
-        //            await _context.SaveChangesAsync();
-
-        //            // Update the GlSetup record with BlockchainTxId
-        //            model.BlockchainTxId = blockchainTx.TransactionId;
-        //            await _context.SaveChangesAsync();
-
-        //            _logger.LogInformation($"Blockchain transaction recorded for GL Account {model.AccNo}: {blockchainTx.TransactionId}");
-        //        }
-        //        catch (Exception blockchainEx)
-        //        {
-        //            _logger.LogError(blockchainEx, $"Error recording blockchain transaction for GL Account {model.AccNo}, but account was saved");
-        //            // Don't throw - account was saved successfully, blockchain recording failed
-        //        }
-
-        //        TempData["Success"] = "Account saved successfully.";
-        //        return RedirectToAction(nameof(Index));
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error saving account");
-        //        ModelState.AddModelError("", $"Error saving account: {ex.Message}");
-
-        //        var companyCode = GetCurrentCompanyCode();
-        //        ViewBag.Accounts = _context.GlSetup
-        //            .Where(x => x.CompanyCode == companyCode)
-        //            .OrderBy(x => x.AccNo)
-        //            .ToList();
-        //        ViewBag.AccountTypes = GetAccountTypes();
-        //        ViewBag.AccountCategories = GetAccountCategories();
-        //        ViewBag.Currencies = GetCurrencies();
-        //        ViewBag.SubCategories = GetSubCategories();
-        //        return View("Index", model);
-        //    }
-        //}
-
-
         // ===============================
         // POST: /GlSetup/Save
         // ===============================
@@ -332,22 +118,6 @@ namespace SACCOBlockChainSystem.Controllers
 
                 // Set company code from logged-in user
                 model.CompanyCode = companyCode;
-
-                // =========================================================
-                // NEW: Set Glcode = AccNo (ensure they are the same)
-                // =========================================================
-                if (!string.IsNullOrEmpty(model.AccNo))
-                {
-                    model.Glcode = model.AccNo;
-                }
-
-                // =========================================================
-                // NEW: Set Glacctype = Type
-                // =========================================================
-                if (!string.IsNullOrEmpty(model.Type))
-                {
-                    model.Glacctype = model.Type;
-                }
 
                 // Remove validation for nullable fields
                 ModelState.Remove("AuditDate");
@@ -440,20 +210,10 @@ namespace SACCOBlockChainSystem.Controllers
                     return View("Index", model);
                 }
 
-                // =========================================================
-                // ADDITIONAL VALIDATION: Ensure Glcode matches AccNo
-                // =========================================================
-                if (model.Glcode != model.AccNo)
-                {
-                    _logger.LogWarning($"Glcode ({model.Glcode}) does not match AccNo ({model.AccNo}). Setting Glcode = AccNo");
-                    model.Glcode = model.AccNo;
-                }
-
                 _context.GlSetup.Add(model);
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation($"Account {model.AccNo} saved successfully for company {companyCode} by {userName}");
-                _logger.LogInformation($"Glcode: {model.Glcode}, Glacctype: {model.Glacctype}");
 
                 // =========================================================
                 // BLOCKCHAIN INTEGRATION FOR GL ACCOUNT CREATION
@@ -466,7 +226,6 @@ namespace SACCOBlockChainSystem.Controllers
                         Action = "CREATE",
                         TransactionType = "GL_ACCOUNT_CREATION",
                         AccountNo = model.AccNo,
-                        Glcode = model.Glcode,
                         Glaccname = model.Glaccname,
                         Glacctype = model.Glacctype,
                         GlAccMainGroup = model.GlAccMainGroup,
@@ -598,252 +357,6 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
 
-        //// ===============================
-        //// POST: /GlSetup/Update
-        //// ===============================
-        //[HttpPost("Update")]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> Update(GlSetup model)
-        //{
-        //    try
-        //    {
-        //        var companyCode = GetCurrentCompanyCode();
-        //        var userName = GetCurrentUserName();
-
-        //        // Remove validation for nullable fields
-        //        ModelState.Remove("AuditDate");
-        //        ModelState.Remove("EoyDate");
-
-        //        if (!ModelState.IsValid)
-        //        {
-        //            ViewBag.Accounts = _context.GlSetup
-        //                .Where(x => x.CompanyCode == companyCode)
-        //                .OrderBy(x => x.AccNo)
-        //                .ToList();
-        //            ViewBag.AccountTypes = GetAccountTypes();
-        //            ViewBag.AccountCategories = GetAccountCategories();
-        //            ViewBag.Currencies = GetCurrencies();
-        //            ViewBag.SubCategories = GetSubCategories();
-        //            return View("Index", model);
-        //        }
-
-        //        // Find existing account with company code check
-        //        var existing = _context.GlSetup
-        //            .FirstOrDefault(x => x.GlId == model.GlId && x.CompanyCode == companyCode);
-
-        //        if (existing == null)
-        //        {
-        //            TempData["Error"] = "Account not found or you don't have permission to update it.";
-        //            return RedirectToAction(nameof(Index));
-        //        }
-
-        //        // Store old values for blockchain audit
-        //        var oldValues = new
-        //        {
-        //            existing.AccNo,
-        //            existing.Glaccname,
-        //            existing.Glacctype,
-        //            existing.GlAccMainGroup,
-        //            existing.Normalbal,
-        //            existing.Type,
-        //            existing.SubType,
-        //            existing.OpeningBal,
-        //            existing.Status,
-        //            existing.IsSuspense
-        //        };
-
-        //        // Check if account number is being changed and if it already exists in this company
-        //        if (existing.AccNo != model.AccNo)
-        //        {
-        //            var duplicateAccount = _context.GlSetup
-        //                .FirstOrDefault(x => x.AccNo == model.AccNo && x.CompanyCode == companyCode && x.GlId != model.GlId);
-
-        //            if (duplicateAccount != null)
-        //            {
-        //                ModelState.AddModelError("AccNo", "Account number already exists for this company.");
-        //                ViewBag.Accounts = _context.GlSetup
-        //                    .Where(x => x.CompanyCode == companyCode)
-        //                    .OrderBy(x => x.AccNo)
-        //                    .ToList();
-        //                ViewBag.AccountTypes = GetAccountTypes();
-        //                ViewBag.AccountCategories = GetAccountCategories();
-        //                ViewBag.Currencies = GetCurrencies();
-        //                ViewBag.SubCategories = GetSubCategories();
-        //                return View("Index", model);
-        //            }
-        //        }
-
-        //        // =========================================================
-        //        // FIX: Handle Normal Balance based on Account Group
-        //        // =========================================================
-        //        if (model.GlAccMainGroup == "Capital Reserved")
-        //        {
-        //            // For Capital Reserved, keep the user-entered value (DR or CR)
-        //            // Don't overwrite it - just validate it
-        //            if (string.IsNullOrEmpty(model.Normalbal))
-        //            {
-        //                ModelState.AddModelError("Normalbal", "Normal Balance is required for Capital Reserved accounts.");
-        //                ViewBag.Accounts = _context.GlSetup
-        //                    .Where(x => x.CompanyCode == companyCode)
-        //                    .OrderBy(x => x.AccNo)
-        //                    .ToList();
-        //                ViewBag.AccountTypes = GetAccountTypes();
-        //                ViewBag.AccountCategories = GetAccountCategories();
-        //                ViewBag.Currencies = GetCurrencies();
-        //                ViewBag.SubCategories = GetSubCategories();
-        //                return View("Index", model);
-        //            }
-
-        //            // Ensure it's either DR or CR (uppercase)
-        //            model.Normalbal = model.Normalbal.ToUpper();
-        //            if (model.Normalbal != "DR" && model.Normalbal != "CR")
-        //            {
-        //                ModelState.AddModelError("Normalbal", "Normal Balance must be either DR or CR.");
-        //                ViewBag.Accounts = _context.GlSetup
-        //                    .Where(x => x.CompanyCode == companyCode)
-        //                    .OrderBy(x => x.AccNo)
-        //                    .ToList();
-        //                ViewBag.AccountTypes = GetAccountTypes();
-        //                ViewBag.AccountCategories = GetAccountCategories();
-        //                ViewBag.Currencies = GetCurrencies();
-        //                ViewBag.SubCategories = GetSubCategories();
-        //                return View("Index", model);
-        //            }
-        //        }
-        //        else
-        //        {
-        //            // For other groups, auto-set the normal balance
-        //            model.Normalbal = GetNormalBalanceByGroup(model.GlAccMainGroup);
-        //        }
-
-        //        // Preserve audit information
-        //        model.Status = true;
-        //        model.AuditDate = DateTime.Now;
-        //        model.AuditId = userName;
-        //        model.TransDate = existing.TransDate; // Keep original transaction date
-        //        model.CompanyCode = companyCode; // Ensure company code remains the same
-
-        //        _context.Entry(existing).CurrentValues.SetValues(model);
-        //        await _context.SaveChangesAsync();
-
-        //        _logger.LogInformation($"Account {model.AccNo} updated successfully for company {companyCode} by {userName}");
-
-        //        // =========================================================
-        //        // BLOCKCHAIN INTEGRATION FOR GL ACCOUNT UPDATE
-        //        // =========================================================
-        //        try
-        //        {
-        //            // Prepare blockchain data
-        //            var blockchainData = new
-        //            {
-        //                Action = "UPDATE",
-        //                TransactionType = "GL_ACCOUNT_UPDATE",
-        //                OldValues = oldValues,
-        //                NewValues = new
-        //                {
-        //                    AccountNo = model.AccNo,
-        //                    Glaccname = model.Glaccname,
-        //                    Glacctype = model.Glacctype,
-        //                    GlAccMainGroup = model.GlAccMainGroup,
-        //                    Normalbal = model.Normalbal,
-        //                    Type = model.Type,
-        //                    SubType = model.SubType,
-        //                    OpeningBal = model.OpeningBal,
-        //                    Status = model.Status,
-        //                    IsSuspense = model.IsSuspense
-        //                },
-        //                UpdatedBy = userName,
-        //                UpdatedAt = DateTime.Now,
-        //                CompanyCode = companyCode,
-        //                PreviousBlockchainTxId = existing.BlockchainTxId
-        //            };
-
-        //            // Generate block hash
-        //            string blockHash = Guid.NewGuid().ToString().Replace("-", "");
-        //            if (blockHash.Length < 64) blockHash = blockHash.PadRight(64, '0');
-        //            else if (blockHash.Length > 64) blockHash = blockHash.Substring(0, 64);
-
-        //            // Get previous block hash
-        //            var lastBlock = await _context.Blocks
-        //                .OrderByDescending(b => b.BlockId)
-        //                .FirstOrDefaultAsync();
-
-        //            string previousHash = lastBlock?.BlockHash ?? "0".PadLeft(64, '0');
-
-        //            // Create Block record
-        //            var block = new Block
-        //            {
-        //                BlockHash = blockHash,
-        //                PreviousHash = previousHash,
-        //                Timestamp = DateTime.Now,
-        //                Nonce = 0,
-        //                MerkleRoot = Guid.NewGuid().ToString(),
-        //                Confirmed = true,
-        //                CreatedAt = DateTime.Now
-        //            };
-
-        //            _context.Blocks.Add(block);
-        //            await _context.SaveChangesAsync();
-
-        //            // Generate data hash
-        //            var payloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData);
-        //            var dataHash = ComputeSHA256Hash(payloadJson);
-
-        //            // Create Blockchain Transaction
-        //            var blockchainTx = new BlockchainTransaction
-        //            {
-        //                TransactionId = Guid.NewGuid().ToString(),
-        //                TransactionType = "GL_ACCOUNT_UPDATE",
-        //                MemberNo = null,
-        //                CompanyCode = companyCode,
-        //                Amount = model.OpeningBal,
-        //                Timestamp = DateTime.Now,
-        //                DataHash = dataHash,
-        //                PayloadJson = payloadJson,
-        //                OffChainReferenceId = model.AccNo,
-        //                Status = "CONFIRMED",
-        //                BlockHash = block.BlockHash,
-        //                CreatedAt = DateTime.Now
-        //            };
-
-        //            _context.BlockchainTransactions.Add(blockchainTx);
-        //            await _context.SaveChangesAsync();
-
-        //            // Update the GlSetup record with new BlockchainTxId
-        //            existing.BlockchainTxId = blockchainTx.TransactionId;
-        //            await _context.SaveChangesAsync();
-
-        //            _logger.LogInformation($"Blockchain transaction recorded for GL Account update {model.AccNo}: {blockchainTx.TransactionId}");
-        //        }
-        //        catch (Exception blockchainEx)
-        //        {
-        //            _logger.LogError(blockchainEx, $"Error recording blockchain transaction for GL Account update {model.AccNo}, but account was updated");
-        //            // Don't throw - account was updated successfully, blockchain recording failed
-        //        }
-
-        //        TempData["Success"] = "Account updated successfully.";
-        //        return RedirectToAction(nameof(Index));
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error updating account");
-        //        ModelState.AddModelError("", $"Error updating account: {ex.Message}");
-
-        //        var companyCode = GetCurrentCompanyCode();
-        //        ViewBag.Accounts = _context.GlSetup
-        //            .Where(x => x.CompanyCode == companyCode)
-        //            .OrderBy(x => x.AccNo)
-        //            .ToList();
-        //        ViewBag.AccountTypes = GetAccountTypes();
-        //        ViewBag.AccountCategories = GetAccountCategories();
-        //        ViewBag.Currencies = GetCurrencies();
-        //        ViewBag.SubCategories = GetSubCategories();
-        //        return View("Index", model);
-        //    }
-        //}
-
-
-
         // ===============================
         // POST: /GlSetup/Update
         // ===============================
@@ -855,22 +368,6 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 var companyCode = GetCurrentCompanyCode();
                 var userName = GetCurrentUserName();
-
-                // =========================================================
-                // FIX 1: Set Glcode = AccNo (ensure they are the same)
-                // =========================================================
-                if (!string.IsNullOrEmpty(model.AccNo))
-                {
-                    model.Glcode = model.AccNo;
-                }
-
-                // =========================================================
-                // FIX 2: Set Glacctype = Type
-                // =========================================================
-                if (!string.IsNullOrEmpty(model.Type))
-                {
-                    model.Glacctype = model.Type;
-                }
 
                 // Remove validation for nullable fields
                 ModelState.Remove("AuditDate");
@@ -903,7 +400,6 @@ namespace SACCOBlockChainSystem.Controllers
                 var oldValues = new
                 {
                     existing.AccNo,
-                    existing.Glcode,
                     existing.Glaccname,
                     existing.Glacctype,
                     existing.GlAccMainGroup,
@@ -937,11 +433,12 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 // =========================================================
-                // FIX 3: Handle Normal Balance based on Account Group
+                // FIX: Handle Normal Balance based on Account Group
                 // =========================================================
                 if (model.GlAccMainGroup == "Capital Reserved")
                 {
                     // For Capital Reserved, keep the user-entered value (DR or CR)
+                    // Don't overwrite it - just validate it
                     if (string.IsNullOrEmpty(model.Normalbal))
                     {
                         ModelState.AddModelError("Normalbal", "Normal Balance is required for Capital Reserved accounts.");
@@ -978,15 +475,6 @@ namespace SACCOBlockChainSystem.Controllers
                     model.Normalbal = GetNormalBalanceByGroup(model.GlAccMainGroup);
                 }
 
-                // =========================================================
-                // FIX 4: Additional validation - Ensure Glcode matches AccNo
-                // =========================================================
-                if (model.Glcode != model.AccNo)
-                {
-                    _logger.LogWarning($"Glcode ({model.Glcode}) does not match AccNo ({model.AccNo}). Setting Glcode = AccNo");
-                    model.Glcode = model.AccNo;
-                }
-
                 // Preserve audit information
                 model.Status = true;
                 model.AuditDate = DateTime.Now;
@@ -998,7 +486,6 @@ namespace SACCOBlockChainSystem.Controllers
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation($"Account {model.AccNo} updated successfully for company {companyCode} by {userName}");
-                _logger.LogInformation($"Glcode: {model.Glcode}, Glacctype: {model.Glacctype}");
 
                 // =========================================================
                 // BLOCKCHAIN INTEGRATION FOR GL ACCOUNT UPDATE
@@ -1014,7 +501,6 @@ namespace SACCOBlockChainSystem.Controllers
                         NewValues = new
                         {
                             AccountNo = model.AccNo,
-                            Glcode = model.Glcode,
                             Glaccname = model.Glaccname,
                             Glacctype = model.Glacctype,
                             GlAccMainGroup = model.GlAccMainGroup,
@@ -1115,13 +601,9 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-
-
-
-
-        //=========================================================
-        //HELPER METHODS FOR BLOCKCHAIN
-        //=========================================================
+        // =========================================================
+        // HELPER METHODS FOR BLOCKCHAIN
+        // =========================================================
 
         private async Task<string> GetLastBlockHashAsync()
         {
@@ -1150,6 +632,275 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+
+        //// ===============================
+        //// POST: /GlSetup/Save
+        //// ===============================
+        //[HttpPost("Save")]
+        //[ValidateAntiForgeryToken]
+        //public IActionResult Save(GlSetup model)
+        //{
+        //    try
+        //    {
+        //        var companyCode = GetCurrentCompanyCode();
+        //        var userName = GetCurrentUserName();
+
+        //        // Set company code from logged-in user
+        //        model.CompanyCode = companyCode;
+
+        //        // Remove validation for nullable fields
+        //        ModelState.Remove("AuditDate");
+        //        ModelState.Remove("EoyDate");
+        //        ModelState.Remove("NewGlOpeningBalDate");
+
+        //        if (!ModelState.IsValid)
+        //        {
+        //            ViewBag.Accounts = _context.GlSetup
+        //                .Where(x => x.CompanyCode == companyCode)
+        //                .OrderBy(x => x.AccNo)
+        //                .ToList();
+        //            ViewBag.AccountTypes = GetAccountTypes();
+        //            ViewBag.AccountCategories = GetAccountCategories();
+        //            ViewBag.Currencies = GetCurrencies();
+        //            ViewBag.SubCategories = GetSubCategories();
+        //            return View("Index", model);
+        //        }
+
+        //        // Set default values
+        //        model.TransDate = DateTime.Now;
+        //        model.Status = true;
+        //        model.AuditDate = DateTime.Now;
+        //        model.AuditId = userName;
+
+        //        // =========================================================
+        //        // FIX: Handle Normal Balance based on Account Group
+        //        // =========================================================
+        //        if (model.GlAccMainGroup == "Capital Reserved")
+        //        {
+        //            // For Capital Reserved, validate and preserve user-entered value
+        //            if (string.IsNullOrEmpty(model.Normalbal))
+        //            {
+        //                ModelState.AddModelError("Normalbal", "Normal Balance is required for Capital Reserved accounts.");
+        //                ViewBag.Accounts = _context.GlSetup
+        //                    .Where(x => x.CompanyCode == companyCode)
+        //                    .OrderBy(x => x.AccNo)
+        //                    .ToList();
+        //                ViewBag.AccountTypes = GetAccountTypes();
+        //                ViewBag.AccountCategories = GetAccountCategories();
+        //                ViewBag.Currencies = GetCurrencies();
+        //                ViewBag.SubCategories = GetSubCategories();
+        //                return View("Index", model);
+        //            }
+
+        //            // Ensure it's either DR or CR (uppercase)
+        //            model.Normalbal = model.Normalbal.ToUpper();
+        //            if (model.Normalbal != "DR" && model.Normalbal != "CR")
+        //            {
+        //                ModelState.AddModelError("Normalbal", "Normal Balance must be either DR or CR.");
+        //                ViewBag.Accounts = _context.GlSetup
+        //                    .Where(x => x.CompanyCode == companyCode)
+        //                    .OrderBy(x => x.AccNo)
+        //                    .ToList();
+        //                ViewBag.AccountTypes = GetAccountTypes();
+        //                ViewBag.AccountCategories = GetAccountCategories();
+        //                ViewBag.Currencies = GetCurrencies();
+        //                ViewBag.SubCategories = GetSubCategories();
+        //                return View("Index", model);
+        //            }
+        //        }
+        //        else
+        //        {
+        //            // For other groups, auto-set the normal balance
+        //            model.Normalbal = GetNormalBalanceByGroup(model.GlAccMainGroup);
+        //        }
+
+        //        // Set default values for required fields
+        //        if (string.IsNullOrEmpty(model.Type)) model.Type = "Balance Sheet";
+        //        if (string.IsNullOrEmpty(model.SubType)) model.SubType = "Others";
+        //        if (model.OpeningBal == 0) model.OpeningBal = 0;
+        //        if (model.NewGlOpeningBal == 0) model.NewGlOpeningBal = 0;
+        //        if (model.NewGlOpeningBalDate == DateTime.MinValue) model.NewGlOpeningBalDate = DateTime.Now;
+
+        //        // Check if account number already exists for this company
+        //        var existingAccount = _context.GlSetup
+        //            .FirstOrDefault(x => x.AccNo == model.AccNo && x.CompanyCode == companyCode);
+
+        //        if (existingAccount != null)
+        //        {
+        //            ModelState.AddModelError("AccNo", "Account number already exists for this company.");
+        //            ViewBag.Accounts = _context.GlSetup
+        //                .Where(x => x.CompanyCode == companyCode)
+        //                .OrderBy(x => x.AccNo)
+        //                .ToList();
+        //            ViewBag.AccountTypes = GetAccountTypes();
+        //            ViewBag.AccountCategories = GetAccountCategories();
+        //            ViewBag.Currencies = GetCurrencies();
+        //            ViewBag.SubCategories = GetSubCategories();
+        //            return View("Index", model);
+        //        }
+
+        //        _context.GlSetup.Add(model);
+        //        _context.SaveChanges();
+
+        //        _logger.LogInformation($"Account {model.AccNo} saved successfully for company {companyCode} by {userName}");
+        //        TempData["Success"] = "Account saved successfully.";
+        //        return RedirectToAction(nameof(Index));
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error saving account");
+        //        ModelState.AddModelError("", $"Error saving account: {ex.Message}");
+
+        //        var companyCode = GetCurrentCompanyCode();
+        //        ViewBag.Accounts = _context.GlSetup
+        //            .Where(x => x.CompanyCode == companyCode)
+        //            .OrderBy(x => x.AccNo)
+        //            .ToList();
+        //        ViewBag.AccountTypes = GetAccountTypes();
+        //        ViewBag.AccountCategories = GetAccountCategories();
+        //        ViewBag.Currencies = GetCurrencies();
+        //        ViewBag.SubCategories = GetSubCategories();
+        //        return View("Index", model);
+        //    }
+        //}
+
+        //// ===============================
+        //// POST: /GlSetup/Update
+        //// ===============================
+        //[HttpPost("Update")]
+        //[ValidateAntiForgeryToken]
+        //public IActionResult Update(GlSetup model)
+        //{
+        //    try
+        //    {
+        //        var companyCode = GetCurrentCompanyCode();
+        //        var userName = GetCurrentUserName();
+
+        //        // Remove validation for nullable fields
+        //        ModelState.Remove("AuditDate");
+        //        ModelState.Remove("EoyDate");
+
+        //        if (!ModelState.IsValid)
+        //        {
+        //            ViewBag.Accounts = _context.GlSetup
+        //                .Where(x => x.CompanyCode == companyCode)
+        //                .OrderBy(x => x.AccNo)
+        //                .ToList();
+        //            ViewBag.AccountTypes = GetAccountTypes();
+        //            ViewBag.AccountCategories = GetAccountCategories();
+        //            ViewBag.Currencies = GetCurrencies();
+        //            ViewBag.SubCategories = GetSubCategories();
+        //            return View("Index", model);
+        //        }
+
+        //        // Find existing account with company code check
+        //        var existing = _context.GlSetup
+        //            .FirstOrDefault(x => x.GlId == model.GlId && x.CompanyCode == companyCode);
+
+        //        if (existing == null)
+        //        {
+        //            TempData["Error"] = "Account not found or you don't have permission to update it.";
+        //            return RedirectToAction(nameof(Index));
+        //        }
+
+        //        // Check if account number is being changed and if it already exists in this company
+        //        if (existing.AccNo != model.AccNo)
+        //        {
+        //            var duplicateAccount = _context.GlSetup
+        //                .FirstOrDefault(x => x.AccNo == model.AccNo && x.CompanyCode == companyCode && x.GlId != model.GlId);
+
+        //            if (duplicateAccount != null)
+        //            {
+        //                ModelState.AddModelError("AccNo", "Account number already exists for this company.");
+        //                ViewBag.Accounts = _context.GlSetup
+        //                    .Where(x => x.CompanyCode == companyCode)
+        //                    .OrderBy(x => x.AccNo)
+        //                    .ToList();
+        //                ViewBag.AccountTypes = GetAccountTypes();
+        //                ViewBag.AccountCategories = GetAccountCategories();
+        //                ViewBag.Currencies = GetCurrencies();
+        //                ViewBag.SubCategories = GetSubCategories();
+        //                return View("Index", model);
+        //            }
+        //        }
+
+        //        // =========================================================
+        //        // FIX: Handle Normal Balance based on Account Group
+        //        // =========================================================
+        //        if (model.GlAccMainGroup == "Capital Reserved")
+        //        {
+        //            // For Capital Reserved, keep the user-entered value (DR or CR)
+        //            // Don't overwrite it - just validate it
+        //            if (string.IsNullOrEmpty(model.Normalbal))
+        //            {
+        //                ModelState.AddModelError("Normalbal", "Normal Balance is required for Capital Reserved accounts.");
+        //                ViewBag.Accounts = _context.GlSetup
+        //                    .Where(x => x.CompanyCode == companyCode)
+        //                    .OrderBy(x => x.AccNo)
+        //                    .ToList();
+        //                ViewBag.AccountTypes = GetAccountTypes();
+        //                ViewBag.AccountCategories = GetAccountCategories();
+        //                ViewBag.Currencies = GetCurrencies();
+        //                ViewBag.SubCategories = GetSubCategories();
+        //                return View("Index", model);
+        //            }
+
+        //            // Ensure it's either DR or CR (uppercase)
+        //            model.Normalbal = model.Normalbal.ToUpper();
+        //            if (model.Normalbal != "DR" && model.Normalbal != "CR")
+        //            {
+        //                ModelState.AddModelError("Normalbal", "Normal Balance must be either DR or CR.");
+        //                ViewBag.Accounts = _context.GlSetup
+        //                    .Where(x => x.CompanyCode == companyCode)
+        //                    .OrderBy(x => x.AccNo)
+        //                    .ToList();
+        //                ViewBag.AccountTypes = GetAccountTypes();
+        //                ViewBag.AccountCategories = GetAccountCategories();
+        //                ViewBag.Currencies = GetCurrencies();
+        //                ViewBag.SubCategories = GetSubCategories();
+        //                return View("Index", model);
+        //            }
+        //        }
+        //        else
+        //        {
+        //            // For other groups, auto-set the normal balance
+        //            model.Normalbal = GetNormalBalanceByGroup(model.GlAccMainGroup);
+        //        }
+
+        //        // Preserve audit information
+        //        model.Status = true;
+        //        model.AuditDate = DateTime.Now;
+        //        model.AuditId = userName;
+        //        model.TransDate = existing.TransDate; // Keep original transaction date
+        //        model.CompanyCode = companyCode; // Ensure company code remains the same
+
+        //        _context.Entry(existing).CurrentValues.SetValues(model);
+        //        _context.SaveChanges();
+
+        //        _logger.LogInformation($"Account {model.AccNo} updated successfully for company {companyCode} by {userName}");
+        //        TempData["Success"] = "Account updated successfully.";
+        //        return RedirectToAction(nameof(Index));
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error updating account");
+        //        ModelState.AddModelError("", $"Error updating account: {ex.Message}");
+
+        //        var companyCode = GetCurrentCompanyCode();
+        //        ViewBag.Accounts = _context.GlSetup
+        //            .Where(x => x.CompanyCode == companyCode)
+        //            .OrderBy(x => x.AccNo)
+        //            .ToList();
+        //        ViewBag.AccountTypes = GetAccountTypes();
+        //        ViewBag.AccountCategories = GetAccountCategories();
+        //        ViewBag.Currencies = GetCurrencies();
+        //        ViewBag.SubCategories = GetSubCategories();
+        //        return View("Index", model);
+        //    }
+        //}
+        // ===============================
+        // POST: /GlSetup/Delete
+        // ===============================
         [HttpPost("Delete")]
         [ValidateAntiForgeryToken]
         public IActionResult Delete(long glId)
@@ -1282,7 +1033,6 @@ namespace SACCOBlockChainSystem.Controllers
             new AccountSubCategory { Id = 16, Name = "Current Assets", Code = "CURR_ASSETS" },
             new AccountSubCategory { Id = 17, Name = "Loans to Members", Code = "LOAN_MEM" },
             new AccountSubCategory { Id = 18, Name = "Investment", Code = "INVESTMENT" },
-            new AccountSubCategory { Id = 18, Name = "Investment", Code = "INVESTMENT" },
             new AccountSubCategory { Id = 19, Name = "Receivables & Prepayments", Code = "REC_PREP" }
         },
 
@@ -1345,7 +1095,7 @@ namespace SACCOBlockChainSystem.Controllers
                 // EXPENSES SubCategories (for Income Statement)
                 ["Expenses"] = new List<AccountSubCategory>
         {
-                new AccountSubCategory { Id = 46, Name = "Committee Travelling & Subsistence Allowance", Code = "CTA" },
+                          new AccountSubCategory { Id = 46, Name = "Committee Travelling & Subsistence Allowance", Code = "CTA" },
                 new AccountSubCategory { Id = 47, Name = "Printing & Stationery", Code = "PRINT" },
                 new AccountSubCategory { Id = 48, Name = "Bank Charges", Code = "BANK_CHG" },
                 new AccountSubCategory { Id = 49, Name = "Water & Electricity", Code = "UTIL" },
@@ -1363,8 +1113,7 @@ namespace SACCOBlockChainSystem.Controllers
                 new AccountSubCategory { Id = 61, Name = "Repairs & maintenance", Code = "REPAIRS" },
                 new AccountSubCategory { Id = 62, Name = "Ushirika day expenses", Code = "USHIRIKA" },
                 new AccountSubCategory { Id = 63, Name = "Postage & Airtime", Code = "POSTAGE" },
-                new AccountSubCategory { Id = 64, Name = "Security Expenses", Code = "SECURITY" },
-                new AccountSubCategory { Id = 64, Name = "Salaries & Wadges", Code = "SECURITY" }
+                new AccountSubCategory { Id = 64, Name = "Security Expenses", Code = "SECURITY" }
                     }
             };
 

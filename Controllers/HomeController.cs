@@ -128,7 +128,43 @@ namespace SACCOBlockChainSystem.Controllers
                 // Handle Member role - redirect to MemberIndex
                 if (userRole?.ToUpper() == "MEMBER")
                 {
+                    var uid = User.FindFirst("UserId")?.Value;
                     
+                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
+                    var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
+
+                    if (wallet == null)
+                    {
+                        //var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == memberId);
+                        //if (wallet == null)
+                        //{
+                        //    var member = await _context.Members.AsNoTracking()
+                        //        .FirstOrDefaultAsync(m => m.Id == memberId);
+                        //    if (member != null)
+                        //        wallet = await _walletService.RegisterMemberAsync(member);
+                        //}
+                        if (member != null)
+                            wallet = await _walletService.RegisterMemberAsync(member);
+                    }
+                    var wg = await _context.WalletConfigurations.AsNoTracking().FirstOrDefaultAsync(w => w.CompanyCode == wallet.CompanyCode);
+                    if(wg != null && wg.EnableWallets == true)
+                    {
+                        if(wg.RequireTransactionPin == true)
+                        {
+                            if (string.IsNullOrEmpty(member.Pin))
+                            {
+                                return RedirectToAction("AccountSetup", "Home");
+                            }
+                        }
+                    }
+                    var trs = await _context.BlockchainTransactions.AsNoTracking().OrderByDescending(t => t.CreatedAt).Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo).Take(20).ToListAsync();
+                    var memberView = new MemberViewModel {
+                        Member = member,
+                        Wallets = new List<Wallet> { wallet },
+                        MemberTransactions = trs,
+                        UserCompanyCode = member.CompanyCode,
+                    };
+                    return View("MemberIndex",memberView);
                 }
 
                 // Determine effective company code
@@ -143,7 +179,7 @@ namespace SACCOBlockChainSystem.Controllers
                     effectiveCompanyCode = companyCode;
                 }
 
-                // ✅ Get cached dashboard data - includes ALL calculations now!
+                // ✅ Get cached dashboard data - MUCH FASTER!
                 var dashboard = await _dashboardCacheService.GetDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
 
                 // Get companies for filter dropdown (only for Super Admin)
