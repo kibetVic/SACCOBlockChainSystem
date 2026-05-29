@@ -44,7 +44,9 @@ namespace SACCOBlockChainSystem.Controllers
                     GrossDividend = x.GrossDividend,
                     WithholdingTax = x.WithholdingTax,
                     NetDividend = x.NetDividend,
-                    CompanyCode = x.CompanyCode
+                    CompanyCode = x.CompanyCode,
+                    Status = x.Status
+
                 })
                 .ToListAsync();
 
@@ -452,7 +454,8 @@ namespace SACCOBlockChainSystem.Controllers
                         GrossDividend = grossDividend,
                         WithholdingTax = withholdingTax,
                         NetDividend = netDividend,
-                        CompanyCode = companyCode
+                        CompanyCode = companyCode,
+                        Status = DividendStatus.Pending
                     };
 
                     _context.DividendDetails.Add(dividend);
@@ -490,6 +493,66 @@ namespace SACCOBlockChainSystem.Controllers
         }
         // =============================================
         // =============================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ApproveDividends(int dividendYear)
+        {
+            try
+            {
+                var companyCode = User.FindFirst("CompanyCode")?.Value;
+
+                var pendingDividends = await _context.DividendDetails
+                    .Where(x => x.DividendYear == dividendYear
+                             && x.CompanyCode == companyCode
+                             && x.Status == DividendStatus.Pending)
+                    .ToListAsync();
+
+                if (!pendingDividends.Any())
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "No pending dividends found."
+                    });
+                }
+
+                foreach (var div in pendingDividends)
+                {
+                    // find member contributions row(s)
+                    var contrib = await _context.ContribShares
+                        .FirstOrDefaultAsync(x =>
+                            x.MemberNo == div.MemberNo &&
+                            x.CompanyCode == div.CompanyCode);
+
+                    if (contrib != null)
+                    {
+                        // add savings dividend → deposits
+                        contrib.DepositsAmount = (contrib.DepositsAmount ?? 0) + div.SavingsDividend;
+
+                        // add share dividend → share capital
+                        contrib.ShareCapitalAmount = (contrib.ShareCapitalAmount ?? 0) + div.ShareDividend;
+                    }
+
+                    div.Status = DividendStatus.Approved;
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Dividends approved successfully and balances updated."
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = ex.Message
+                });
+            }
+        }
 
         [HttpGet]
         public async Task<IActionResult> ExportDividendsCsv(int? year)

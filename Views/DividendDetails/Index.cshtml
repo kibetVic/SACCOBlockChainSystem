@@ -8,7 +8,7 @@
 
     <h3>Dividend Management</h3>
 
-    <!-- SEARCH CARD -->
+    @* <!-- SEARCH CARD -->
     <div class="card mb-4">
         <div class="card-header bg-primary text-white">
             <h5>Search Member</h5>
@@ -42,7 +42,7 @@
                 No members found
             </div>
         </div>
-    </div>
+    </div> *@
 
     <!-- CREATE FORM -->
     <div class="card mb-4">
@@ -56,20 +56,26 @@
                     <label>Year</label>
                     <input id="DividendYear" class="form-control" value="@DateTime.Now.Year" />
                 </div>
-                <div class="col-md-3">
+               @*  <div class="col-md-3">
                     <label>Member No</label>
                     <input id="MemberNo" class="form-control" readonly />
                 </div>
                 <div class="col-md-4">
                     <label>Member Name</label>
                     <input id="MemberName" class="form-control" readonly />
-                </div>
+                </div> *@
             </div>
-            <button type="button" id="saveDividendBtn" class="btn btn-success mt-3">
+          @*   <button type="button" id="saveDividendBtn" class="btn btn-success mt-3">
                 Calculate & Save Dividend
-            </button>
+            </button> *@
             <button type="button" id="btnCalculateAll" class="btn btn-success mt-3">
                 Process Dividend 
+            </button>
+            <button type="button"
+                    id="approveDividendsBtn"
+                    class="btn btn-success mt-3"
+                    onclick="approveDividends(@ViewBag.SelectedYear)">
+                Approve Dividends
             </button>
         </div>
     </div>
@@ -99,6 +105,7 @@
                         <th>Gross Dividend</th>
                         <th>Tax</th>
                         <th>Net</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody id="dividendTableBody">
@@ -114,6 +121,9 @@
                             <td class="text-end">@item.GrossDividend.ToString("N2")</td>
                             <td class="text-end">@item.WithholdingTax.ToString("N2")</td>
                             <td class="text-end fw-bold">@item.NetDividend.ToString("N2")</td>
+                            <td>
+                                @item.Status.ToString()
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -323,6 +333,29 @@
         });
     }
 
+            function approveDividends(year) {
+            if (!confirm("Are you sure you want to approve all dividends?")) return;
+
+            $.ajax({
+                url: '/DividendDetails/ApproveDividends',
+                type: 'POST',
+                data: {
+                    dividendYear: year,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function (res) {
+                    if (res.success) {
+                        alert(res.message);
+                        location.reload();
+                    } else {
+                        alert(res.message);
+                    }
+                },
+                error: function () {
+                    alert("Error approving dividends");
+                }
+            });
+        }
     function clearSearch() {
         $("#searchInput").val("");
         $("#membersResult").html("");
