@@ -1860,8 +1860,8 @@ namespace SACCOBlockChainSystem.Controllers
                     }
                     else
                     {
-                        ViewBag.RequestPin = true;
-                        return View(model);
+                        //ViewBag.RequestPin = true;
+                        //return View(model);
                     }
                     //HttpContext.Session.SetString($"PinSetFor_{model.Username}", "true");
                         
