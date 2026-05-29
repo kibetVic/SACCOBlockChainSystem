@@ -139,7 +139,6 @@
 <table border="1" cellpadding="5" cellspacing="0" width="100%" style="border-collapse:collapse;">
     <thead style="background-color:#3f2b96;color:white;">
         <tr>
-            <th>Actions</th>
             <th>Account No</th>
             <th>Account Name</th>
             <th>Account Type</th>
@@ -147,7 +146,8 @@
             <th>Normal Balance</th>
             <th>Category</th>
             <th>Currency</th>
-            <th>Company Code</th>            
+            <th>Company Code</th>
+            <th>Actions</th>
         </tr>
     </thead>
     <tbody>
@@ -156,9 +156,6 @@
             foreach (var account in ViewBag.Accounts)
             {
                 <tr>
-                    <td>
-                        <a href="@Url.Action("Edit", new { id = account.GlId })" class="btn btn-sm btn-primary">Select</a>
-                    </td>
                     <td>@account.AccNo</td>
                     <td>@account.Glaccname</td>
                     <td>@account.Type</td>
@@ -169,6 +166,9 @@
                     <td>@account.AccCategory</td>
                     <td>@account.Curr</td>
                     <td>@account.CompanyCode</td>
+                    <td>
+                        <a href="@Url.Action("Edit", new { id = account.GlId })" class="btn btn-sm btn-primary">Edit</a>
+                    </td>
                 </tr>
             }
         }

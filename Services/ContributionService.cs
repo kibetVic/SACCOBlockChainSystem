@@ -51,6 +51,7 @@ namespace SACCOBlockChainSystem.Services
             _cryptoService = cryptoService;
         }
 
+
         public async Task<ContributionResponseDTO> AddContributionAsync(ContributionDTO contributionDto)
         {
             _logger.LogInformation($"Starting contribution addition for member: {contributionDto.MemberNo}");
@@ -88,6 +89,12 @@ namespace SACCOBlockChainSystem.Services
                 // Validate ContrDate (Contribution Date) - can be backdated, now, or future
                 DateTime contributionDate = contributionDto.TransactionDate;
 
+                // Optional: Add validation for future dates (if you want to restrict)
+                // if (contributionDate > DateTime.Now.AddMonths(1))
+                // {
+                //     throw new ValidationException("Contribution date cannot be more than 1 month in the future.");
+                // }
+
                 // 2. DepositedDate (Actual deposit date) - can be backdated or today, NOT future
                 DateTime depositedDate;
                 if (contributionDto.DepositedDate.HasValue)
@@ -107,6 +114,7 @@ namespace SACCOBlockChainSystem.Services
 
                 // ReceiptDate is the same as DepositedDate (system generated)
                 DateTime receiptDate = depositedDate;
+
 
                 // Determine contribution type
                 string contributionCategory = DetermineContributionType(shareType, contributionDto);
@@ -150,7 +158,7 @@ namespace SACCOBlockChainSystem.Services
                 var contrib = new Contrib
                 {
                     MemberNo = contributionDto.MemberNo,
-                    ContrDate = contributionDate,
+                    ContrDate = contributionDate,  // Can be backdated, now, or future
                     Amount = contributionDto.Amount,
                     CompanyCode = contributionDto.CompanyCode,
                     ReceiptNo = receiptNo,
@@ -163,8 +171,8 @@ namespace SACCOBlockChainSystem.Services
                     Posted = "Y",
                     Locked = "N",
                     StaffNo = null,
-                    DepositedDate = depositedDate,
-                    ReceiptDate = receiptDate,
+                    DepositedDate = depositedDate,  // Actual deposit date (can be backdated)
+                    ReceiptDate = receiptDate,       // Same as DepositedDate (system generated)
                     RefNo = contributionDto.ReferenceNo,
                     ShareBal = 0,
                     TransBy = contributionDto.CreatedBy,
@@ -262,19 +270,28 @@ namespace SACCOBlockChainSystem.Services
                 // =============================================
                 if (lastContrib != null)
                 {
+                    // Not the first transaction - link to previous transaction
                     contrib.PreviousTransactionHash = lastContrib.TransactionHash;
                     _logger.LogDebug($"Member {contributionDto.MemberNo} - Linked to previous transaction: {lastContrib.TransactionHash?.Substring(0, 16)}...");
                 }
                 else
                 {
+                    // FIRST TRANSACTION - Use the RAW wallet address as the genesis anchor
                     var memberWallet = await _cryptoService.GetWalletByMemberIdAsync(memberRecord.Id);
+
                     if (memberWallet != null && !string.IsNullOrEmpty(memberWallet.Address))
                     {
+                        // IMPORTANT: Store the RAW wallet address directly (not hashed)
+                        // This will be a 42-character string starting with "0x"
                         contrib.PreviousTransactionHash = memberWallet.Address;
-                        _logger.LogInformation($"✅ FIRST TRANSACTION: Member {contributionDto.MemberNo} - Genesis Hash: {memberWallet.Address}");
+
+                        _logger.LogInformation($"✅ FIRST TRANSACTION: Member {contributionDto.MemberNo}");
+                        _logger.LogInformation($"   Wallet Address: {memberWallet.Address}");
+                        _logger.LogInformation($"   Genesis Hash (Raw Wallet Address): {memberWallet.Address}");
                     }
                     else
                     {
+                        // Fallback - create a deterministic genesis hash from member data
                         var genesisSource = $"{memberRecord.MemberNo}|{memberRecord.Idno}|{memberRecord.ApplicDate?.ToString("o") ?? DateTime.UtcNow.ToString("o")}";
                         var genesisHash = _cryptoService.ComputeHash(genesisSource);
                         contrib.PreviousTransactionHash = genesisHash;
@@ -291,12 +308,14 @@ namespace SACCOBlockChainSystem.Services
                 _context.Contribs.Add(contrib);
                 await _context.SaveChangesAsync();
 
+
                 // ============================================================
                 // CREATE A NEW CONTRIB SHARE ROW FOR EACH TRANSACTION
+                // Each row stores ONLY this transaction's amount
                 // ============================================================
                 var contribShare = new ContribShare
                 {
-                    LocalId = contrib.Id,
+                    LocalId = contrib.Id,  // Link back to the Contrib record
                     MemberNo = contributionDto.MemberNo,
                     CompanyCode = contributionDto.CompanyCode,
                     ReceiptNo = receiptNo,
@@ -306,10 +325,11 @@ namespace SACCOBlockChainSystem.Services
                     AuditTime = DateTime.Now,
                     AuditDateTime = DateTime.Now,
                     TransactionNo = contrib.TransactionNo,
-                    ContrDate = contributionDate,
+                    ContrDate = contributionDate,  // Contribution date
                     LoanNo = null,
-                    DepositedDate = depositedDate,
-                    ReceiptDate = receiptDate,
+                    DepositedDate = depositedDate,  // Actual deposit date
+                    ReceiptDate = receiptDate,      // Same as DepositedDate
+                                                    // Store ONLY this transaction's amount in the appropriate column
                     ShareCapitalAmount = contributionCategory == "SHARE_CAPITAL" ? contributionDto.Amount : 0,
                     DepositsAmount = contributionCategory == "DEPOSIT" ? contributionDto.Amount : 0,
                     PassBookAmount = contributionCategory == "PASSBOOK" ? contributionDto.Amount : 0,
@@ -323,7 +343,7 @@ namespace SACCOBlockChainSystem.Services
                 _context.ContribShares.Add(contribShare);
                 await _context.SaveChangesAsync();
 
-                // Update share balance if needed
+                // Update share balance if needed (for SHARE_CAPITAL or PASSBOOK types)
                 if (contributionCategory == "SHARE_CAPITAL" ||
                     (contributionCategory == "PASSBOOK" && shareType.Issharecapital == 1))
                 {
@@ -336,9 +356,11 @@ namespace SACCOBlockChainSystem.Services
                 // =============================================
                 // STEP: UPDATE WALLET BALANCE AFTER SUCCESSFUL CONTRIBUTION
                 // =============================================
+                // Get or create wallet for the member
                 var wallet = await _cryptoService.GetWalletByMemberIdAsync(memberRecord.Id);
                 if (wallet == null)
                 {
+                    // Create wallet if it doesn't exist
                     var walletResult = await _cryptoService.CreateWalletForMemberAsync(memberRecord.Id, memberRecord.MemberNo, contributionDto.CompanyCode);
                     if (!walletResult.Success)
                     {
@@ -350,25 +372,31 @@ namespace SACCOBlockChainSystem.Services
                     }
                 }
 
+                // Update wallet balances based on contribution category
                 if (wallet != null)
                 {
+                    // Update last activity
                     wallet.LastActivity = DateTime.UtcNow;
 
+                    // Update specific balances based on contribution type
                     switch (contributionCategory)
                     {
                         case "SHARE_CAPITAL":
+                            // Update Capital Balance (for shares)
                             wallet.CapitalBalance += contributionDto.Amount;
-                            wallet.Balance += contributionDto.Amount;
+                            wallet.Balance += contributionDto.Amount; // Also update total balance
                             _logger.LogInformation($"Updated CapitalBalance for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}, New: {wallet.CapitalBalance:C}");
                             break;
 
                         case "DEPOSIT":
+                            // Update Deposit Balance (savings/deposits)
                             wallet.DepositBalance += contributionDto.Amount;
-                            wallet.Balance += contributionDto.Amount;
+                            wallet.Balance += contributionDto.Amount; // Also update total balance
                             _logger.LogInformation($"Updated DepositBalance for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}, New: {wallet.DepositBalance:C}");
                             break;
 
                         case "PASSBOOK":
+                            // For PASSBOOK, update CapitalBalance if Issharecapital=1, otherwise Balance
                             if (shareType.Issharecapital == 1)
                             {
                                 wallet.CapitalBalance += contributionDto.Amount;
@@ -382,154 +410,126 @@ namespace SACCOBlockChainSystem.Services
                             break;
 
                         case "LOAN_REPAYMENT":
+                            // For loan repayment, update Balance (could be separate loan tracking)
                             wallet.Balance += contributionDto.Amount;
                             _logger.LogInformation($"Updated Balance (LOAN_REPAYMENT) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
                             break;
 
                         case "DONOR":
+                            // For donor contributions, update Balance
                             wallet.Balance += contributionDto.Amount;
                             _logger.LogInformation($"Updated Balance (DONOR) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
                             break;
 
                         case "REGISTRATION_FEE":
+                            // Registration fees don't add to balance (they're fees)
                             _logger.LogInformation($"Registration fee of {contributionDto.Amount:C} collected from member {memberRecord.MemberNo} (no balance update)");
                             break;
 
                         default:
+                            // Default - update general balance
                             wallet.Balance += contributionDto.Amount;
                             _logger.LogInformation($"Updated Balance for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}, New: {wallet.Balance:C}");
                             break;
                     }
 
+                    // Save wallet changes
                     await _context.SaveChangesAsync();
                 }
 
-                // ============================================================
-                // CRITICAL FIX: PROPER DOUBLE-ENTRY GL ACCOUNT HANDLING
-                // ============================================================
 
-                // Credit account (WHERE MONEY GOES TO) - from Sharetype
-                string crAcc = shareType.SharesAcc;
+                // ============================================================
+                // GET GL ACCOUNTS
+                // ============================================================
+                string drAcc = null; // Debit account (Where money comes FROM - Bank/Cash)
+                string crAcc = null; // Credit account (Where money goes TO - Share Type account)
 
-                if (string.IsNullOrEmpty(crAcc))
+                // Credit account from Sharetype
+                if (string.IsNullOrEmpty(shareType.SharesAcc))
                 {
-                    throw new Exception($"Share type '{shareType.SharesCode}' does not have a SharesAcc (GL Account) configured.");
+                    throw new Exception($"Share type '{shareType.SharesCode}' does not have a GL Account configured.");
                 }
+                crAcc = shareType.SharesAcc;
 
-                // Debit account (WHERE MONEY COMES FROM) - based on payment method
-                string drAcc = null;
+                // Debit account based on payment method
                 string paymentMethod = contributionDto.PaymentMethod?.ToUpper() ?? "CASH";
 
-                _logger.LogInformation($"Processing payment method: {paymentMethod}");
-
-                // ============================================================
-                // ALL PAYMENT METHODS GET GL ACCOUNT FROM BANK TABLE
-                // ============================================================
-                Bank selectedBank = null;
-
-                // Try to find bank by ReferenceNo (BankCode, AccountNumber, or BankName)
-                if (!string.IsNullOrEmpty(contributionDto.ReferenceNo))
+                switch (paymentMethod)
                 {
-                    selectedBank = await _context.Banks
-                        .FirstOrDefaultAsync(b => b.CompanyCode == contributionDto.CompanyCode &&
-                                                  b.IsActive == true &&
-                                                  (b.BankCode == contributionDto.ReferenceNo ||
-                                                   b.AccountNumber == contributionDto.ReferenceNo ||
-                                                   b.BankName.Contains(contributionDto.ReferenceNo)));
+                    case "BANK TRANSFER":
+                    case "CHEQUE":
+                        if (!string.IsNullOrEmpty(contributionDto.ReferenceNo))
+                        {
+                            var bank = await _context.Banks
+                                .FirstOrDefaultAsync(b => b.CompanyCode == contributionDto.CompanyCode &&
+                                                          b.IsActive == true &&
+                                                          (b.BankCode == contributionDto.ReferenceNo ||
+                                                           b.BankName.Contains(contributionDto.ReferenceNo) ||
+                                                           b.AccountNumber == contributionDto.ReferenceNo));
 
-                    if (selectedBank != null)
-                    {
-                        _logger.LogInformation($"Found bank: {selectedBank.BankName} with GL Account: {selectedBank.GlAccountNo}");
-                    }
+                            if (bank != null && !string.IsNullOrEmpty(bank.GlAccountNo))
+                            {
+                                drAcc = bank.GlAccountNo;
+                                break;
+                            }
+                        }
+
+                        var defaultBank = await _context.Banks
+                            .FirstOrDefaultAsync(b => b.CompanyCode == contributionDto.CompanyCode &&
+                                                      b.IsActive == true &&
+                                                      !string.IsNullOrEmpty(b.GlAccountNo));
+
+                        if (defaultBank != null)
+                        {
+                            drAcc = defaultBank.GlAccountNo;
+                            break;
+                        }
+                        goto case "CASH";
+
+                    case "MOBILE MONEY":
+                    case "CASH":
+                    default:
+                        if (sacco != null && !string.IsNullOrEmpty(sacco.RetainedEarnings))
+                        {
+                            drAcc = sacco.RetainedEarnings;
+                        }
+                        else
+                        {
+                            var cashAccount = await _context.GlSetup
+                                .FirstOrDefaultAsync(g => g.CompanyCode == contributionDto.CompanyCode &&
+                                                          g.Status == true &&
+                                                          (g.Type == "ASSET" || g.Type == "Asset") &&
+                                                          (g.Glaccname != null &&
+                                                           (g.Glaccname.ToLower().Contains("cash") ||
+                                                            g.Glaccname.ToLower().Contains("bank"))));
+
+                            if (cashAccount != null)
+                            {
+                                drAcc = cashAccount.AccNo;
+                            }
+                        }
+                        break;
                 }
 
-                // If no specific bank found, try to get the first active bank
-                if (selectedBank == null)
-                {
-                    selectedBank = await _context.Banks
-                        .FirstOrDefaultAsync(b => b.CompanyCode == contributionDto.CompanyCode &&
-                                                  b.IsActive == true &&
-                                                  !string.IsNullOrEmpty(b.GlAccountNo));
-
-                    if (selectedBank != null)
-                    {
-                        _logger.LogWarning($"No specific bank found for ReferenceNo: {contributionDto.ReferenceNo}. Using default bank: {selectedBank.BankName}");
-                    }
-                }
-
-                // Validate bank exists
-                if (selectedBank == null)
-                {
-                    throw new Exception(
-                        $"No active bank found for {paymentMethod} payment. " +
-                        $"Please configure at least one bank with a valid GL Account Number in the Banks table.");
-                }
-
-                // Validate bank has GL Account configured
-                if (string.IsNullOrEmpty(selectedBank.GlAccountNo))
-                {
-                    throw new Exception(
-                        $"Bank '{selectedBank.BankName}' does not have a GL Account Number configured. " +
-                        "Please update the bank record with the correct GL Account Number.");
-                }
-
-                // Validate the GL Account exists in GLSETUP
-                var bankGlAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(g => g.AccNo == selectedBank.GlAccountNo &&
-                                              g.CompanyCode == contributionDto.CompanyCode &&
-                                              g.Status == true);
-
-                if (bankGlAccount == null)
-                {
-                    throw new Exception(
-                        $"Bank GL Account '{selectedBank.GlAccountNo}' for bank '{selectedBank.BankName}' does not exist in GL Setup or is inactive. " +
-                        "Please ensure the GL Account is properly configured in GLSETUP.");
-                }
-
-                drAcc = selectedBank.GlAccountNo;
-                _logger.LogInformation($"✅ Using Bank GL Account for {paymentMethod}: {drAcc} ({selectedBank.BankName} - {selectedBank.AccountNumber})");
-
-                // ============================================================
-                // FINAL VALIDATION: Ensure we have both DR and CR accounts
-                // ============================================================
+                // Validate GL accounts
                 if (string.IsNullOrEmpty(drAcc))
                 {
-                    throw new Exception(
-                        $"Cannot process {paymentMethod} payment of {contributionDto.Amount:C}. " +
-                        "No valid debit (source) account found from Bank configuration.");
+                    var suspenseAccount = await _context.GlSetup
+                        .FirstOrDefaultAsync(g => g.CompanyCode == contributionDto.CompanyCode &&
+                                                  g.IsSuspense == true);
+                    if (suspenseAccount != null)
+                    {
+                        drAcc = suspenseAccount.AccNo;
+                    }
+                    else
+                    {
+                    }
                 }
 
-                if (string.IsNullOrEmpty(crAcc))
-                {
-                    throw new Exception(
-                        $"Cannot process contribution. Share type '{shareType.SharesCode}' has no valid credit account configured.");
-                }
-
-                // Verify both accounts exist and are active
-                var drAccountValidation = await _context.GlSetup
-                    .FirstOrDefaultAsync(g => g.AccNo == drAcc && g.CompanyCode == contributionDto.CompanyCode && g.Status == true);
-
-                var crAccountValidation = await _context.GlSetup
-                    .FirstOrDefaultAsync(g => g.AccNo == crAcc && g.CompanyCode == contributionDto.CompanyCode && g.Status == true);
-
-                if (drAccountValidation == null)
-                {
-                    throw new Exception($"Debit account '{drAcc}' does not exist or is inactive in GL Setup.");
-                }
-
-                if (crAccountValidation == null)
-                {
-                    throw new Exception($"Credit account '{crAcc}' does not exist or is inactive in GL Setup.");
-                }
-
-                _logger.LogInformation($"✅ DOUBLE-ENTRY VERIFIED: DR={drAcc} ({drAccountValidation.Glaccname}), CR={crAcc} ({crAccountValidation.Glaccname}), Amount={contributionDto.Amount:C}");
-
-                // ============================================================
-                // CREATE GL TRANSACTION (Now properly balanced!)
-                // ============================================================
+                // Create GL Transaction
                 var glTransaction = new Gltransaction
                 {
-                    TransDate = contributionDate,
+                    TransDate = contributionDate,  // Use contribution date for GL transaction
                     Amount = contributionDto.Amount,
                     DrAccNo = drAcc,
                     CrAccNo = crAcc,
@@ -537,7 +537,7 @@ namespace SACCOBlockChainSystem.Services
                     DocumentNo = receiptNo,
                     Source = contributionDto.MemberNo,
                     CompanyCode = contributionDto.CompanyCode,
-                    TransDescript = $"{contributionCategory} - {contributionDto.MemberNo} - Payment: {paymentMethod}",
+                    TransDescript = $"{contributionCategory} - {contributionDto.MemberNo}",
                     AuditTime = DateTime.Now,
                     AuditDateTime = DateTime.Now,
                     AuditId = contributionDto.CreatedBy,
@@ -553,8 +553,6 @@ namespace SACCOBlockChainSystem.Services
 
                 _context.Gltransactions.Add(glTransaction);
                 await _context.SaveChangesAsync();
-
-                _logger.LogInformation($"✅ GL Transaction created: {glTransaction.DocumentNo} - DR:{drAcc} CR:{crAcc} Amount:{glTransaction.Amount:C}");
 
                 // ============================================================
                 // CREATE BLOCK AND BLOCKCHAIN TRANSACTION
@@ -596,9 +594,7 @@ namespace SACCOBlockChainSystem.Services
                     CompanyCode = contributionDto.CompanyCode,
                     CreatedBy = contributionDto.CreatedBy,
                     DrAccount = drAcc,
-                    DrAccountName = drAccountValidation?.Glaccname,
                     CrAccount = crAcc,
-                    CrAccountName = crAccountValidation?.Glaccname,
                     BlockHash = blockHash,
                     CumulativeTotalAfter = existingTotal + contributionDto.Amount,
                     MaxLimit = shareType.MaxAmount,
@@ -632,7 +628,7 @@ namespace SACCOBlockChainSystem.Services
 
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"✅ Contribution {receiptNo} added successfully for member {contributionDto.MemberNo}");
+                _logger.LogInformation($"Contribution {receiptNo} added successfully for member {contributionDto.MemberNo}");
 
                 // ============================================================
                 // SAVE AUDIT TRAIL
@@ -656,9 +652,7 @@ namespace SACCOBlockChainSystem.Services
                     maxLimit = shareType.MaxAmount,
                     remainingLimit = shareType.MaxAmount.HasValue ? shareType.MaxAmount.Value - (existingTotal + contributionDto.Amount) : (decimal?)null,
                     drAccount = drAcc,
-                    drAccountName = drAccountValidation?.Glaccname,
                     crAccount = crAcc,
-                    crAccountName = crAccountValidation?.Glaccname,
                     blockchainTxId = blockchainTx.TransactionId
                 };
 
@@ -742,692 +736,6 @@ namespace SACCOBlockChainSystem.Services
                 throw new Exception($"Error adding contribution: {ex.Message}");
             }
         }
-
-
-        //public async Task<ContributionResponseDTO> AddContributionAsync(ContributionDTO contributionDto)
-        //{
-        //    _logger.LogInformation($"Starting contribution addition for member: {contributionDto.MemberNo}");
-
-        //    using var transaction = await _context.Database.BeginTransactionAsync();
-
-        //    try
-        //    {
-        //        // Validate member exists
-        //        var member = await _context.Members
-        //            .FirstOrDefaultAsync(m => m.MemberNo == contributionDto.MemberNo &&
-        //                                     m.CompanyCode == contributionDto.CompanyCode);
-
-        //        if (member == null)
-        //        {
-        //            throw new ValidationException($"Member {contributionDto.MemberNo} not found");
-        //        }
-
-        //        // Validate share type exists
-        //        var shareType = await _context.Sharetypes
-        //            .FirstOrDefaultAsync(st => st.SharesCode == contributionDto.SharesCode &&
-        //                                      st.CompanyCode == contributionDto.CompanyCode);
-
-        //        if (shareType == null)
-        //        {
-        //            throw new ValidationException($"Share type {contributionDto.SharesCode} not found");
-        //        }
-
-        //        // Validate amount against share type minimum
-        //        if (contributionDto.Amount < shareType.MinAmount)
-        //        {
-        //            throw new ValidationException($"Amount cannot be less than minimum of {shareType.MinAmount:C}");
-        //        }
-
-        //        // Validate ContrDate (Contribution Date) - can be backdated, now, or future
-        //        DateTime contributionDate = contributionDto.TransactionDate;
-
-        //        // Optional: Add validation for future dates (if you want to restrict)
-        //        // if (contributionDate > DateTime.Now.AddMonths(1))
-        //        // {
-        //        //     throw new ValidationException("Contribution date cannot be more than 1 month in the future.");
-        //        // }
-
-        //        // 2. DepositedDate (Actual deposit date) - can be backdated or today, NOT future
-        //        DateTime depositedDate;
-        //        if (contributionDto.DepositedDate.HasValue)
-        //        {
-        //            depositedDate = contributionDto.DepositedDate.Value.Date;
-
-        //            // Validate - cannot be future date
-        //            if (depositedDate > DateTime.Now.Date)
-        //            {
-        //                throw new ValidationException("Deposit date cannot be in the future.");
-        //            }
-        //        }
-        //        else
-        //        {
-        //            depositedDate = DateTime.Now.Date;
-        //        }
-
-        //        // ReceiptDate is the same as DepositedDate (system generated)
-        //        DateTime receiptDate = depositedDate;
-
-
-        //        // Determine contribution type
-        //        string contributionCategory = DetermineContributionType(shareType, contributionDto);
-
-        //        // Get existing total for this member + sharetype combination (for limit checking only)
-        //        decimal existingTotal = await GetExistingContributionTotalAsync(
-        //            contributionDto.MemberNo,
-        //            contributionDto.SharesCode,
-        //            contributionCategory,
-        //            contributionDto.CompanyCode);
-
-        //        decimal newTotal = existingTotal + contributionDto.Amount;
-
-        //        // Check maximum contribution limit (using cumulative total)
-        //        if (shareType.MaxAmount.HasValue && newTotal > shareType.MaxAmount.Value)
-        //        {
-        //            decimal remainingAllowed = shareType.MaxAmount.Value - existingTotal;
-        //            if (remainingAllowed <= 0)
-        //            {
-        //                throw new ValidationException(
-        //                    $"Maximum {shareType.SharesType} limit of {shareType.MaxAmount.Value:C} has already been reached. " +
-        //                    $"Current total: {existingTotal:C}. No further contributions allowed.");
-        //            }
-        //            else
-        //            {
-        //                throw new ValidationException(
-        //                    $"Amount {contributionDto.Amount:C} exceeds remaining limit for {shareType.SharesType}. " +
-        //                    $"Current total: {existingTotal:C}, Maximum: {shareType.MaxAmount.Value:C}, " +
-        //                    $"Remaining allowed: {remainingAllowed:C}. Please reduce the amount.");
-        //            }
-        //        }
-
-        //        // Get Sacco parameters
-        //        var sacco = await _context.SaccoParram
-        //            .FirstOrDefaultAsync(s => s.CompanyCode == contributionDto.CompanyCode);
-
-        //        // Generate receipt number
-        //        var receiptNo = contributionDto.ReceiptNo ?? GenerateReceiptNumber(contributionDto.CompanyCode);
-
-        //        // Create Contrib record (main transaction record)
-        //        var contrib = new Contrib
-        //        {
-        //            MemberNo = contributionDto.MemberNo,
-        //            ContrDate = contributionDate,  // Can be backdated, now, or future
-        //            Amount = contributionDto.Amount,
-        //            CompanyCode = contributionDto.CompanyCode,
-        //            ReceiptNo = receiptNo,
-        //            Remarks = contributionDto.Remarks,
-        //            AuditId = contributionDto.CreatedBy,
-        //            AuditTime = DateTime.Now,
-        //            AuditDateTime = DateTime.Now,
-        //            Sharescode = contributionDto.SharesCode,
-        //            TransactionNo = Guid.NewGuid().ToString().Substring(0, 20),
-        //            Posted = "Y",
-        //            Locked = "N",
-        //            StaffNo = null,
-        //            DepositedDate = depositedDate,  // Actual deposit date (can be backdated)
-        //            ReceiptDate = receiptDate,       // Same as DepositedDate (system generated)
-        //            RefNo = contributionDto.ReferenceNo,
-        //            ShareBal = 0,
-        //            TransBy = contributionDto.CreatedBy,
-        //            ChequeNo = contributionDto.PaymentMethod == "CHEQUE" ? contributionDto.ReferenceNo : null,
-        //            TransDate = contributionDto.TransactionDate,
-        //            SharesAcc = shareType.SharesAcc,
-        //            ContraAcc = shareType.ContraAcc,
-        //            CashBookdate = DateTime.Now,
-        //            Dregard = 0,
-        //            Offs = 0,
-        //            ApiKey = null,
-        //            UserName = contributionDto.CreatedBy,
-        //            Run = 0,
-        //            Run2 = 0,
-        //            MrCleared = "N",
-        //            Mrno = null,
-        //            Offset = false,
-        //            TransferDesc = null,
-        //            Schemecode = contributionDto.CompanyCode
-        //        };
-
-        //        // =============================================
-        //        // STEP: CHECK/CREATE WALLET BEFORE SIGNING
-        //        // =============================================
-        //        var memberRecord = await _context.Members
-        //            .FirstOrDefaultAsync(m => m.MemberNo == contributionDto.MemberNo);
-
-        //        if (memberRecord == null)
-        //        {
-        //            throw new Exception($"Member {contributionDto.MemberNo} not found");
-        //        }
-
-        //        var hasWallet = await _cryptoService.HasWalletAsync(memberRecord.MobileNo);
-        //        if (!hasWallet)
-        //        {
-        //            _logger.LogWarning($"Member {memberRecord.MemberNo} has no wallet. Creating now...");
-        //            var walletResult = await _cryptoService.CreateWalletForMemberAsync(memberRecord.Id, memberRecord.MemberNo, contributionDto.CompanyCode);
-        //            if (!walletResult.Success)
-        //            {
-        //                throw new Exception($"Cannot process transaction: {walletResult.Message}");
-        //            }
-        //        }
-
-        //        // =============================================
-        //        // STEP: RUN FRAUD DETECTION
-        //        // =============================================
-        //        var fraudResult = await _cryptoService.AnalyzeTransactionAsync(
-        //            contributionDto.MemberNo,
-        //            contributionDto.Amount,
-        //            contributionCategory);
-
-        //        if (fraudResult.ShouldBlock)
-        //        {
-        //            throw new Exception($"Transaction blocked by fraud detection: {string.Join(", ", fraudResult.Flags)}");
-        //        }
-
-        //        // =============================================
-        //        // STEP: SIGN THE TRANSACTION
-        //        // =============================================
-        //        var txDataForSigning = new
-        //        {
-        //            MemberNo = contrib.MemberNo,
-        //            Amount = contrib.Amount,
-        //            TransactionDate = contrib.ContrDate?.ToString("o") ?? DateTime.UtcNow.ToString("o"),
-        //            SharesCode = contrib.Sharescode,
-        //            ReceiptNo = contrib.ReceiptNo,
-        //            TransactionNo = contrib.TransactionNo,
-        //            CompanyCode = contrib.CompanyCode,
-        //            ContributionCategory = contributionCategory
-        //        };
-
-        //        var signingResult = await _cryptoService.SignTransactionAsync(memberRecord.MemberNo, txDataForSigning);
-
-        //        if (!signingResult.Success)
-        //        {
-        //            throw new Exception($"Failed to sign transaction: {signingResult.Message}");
-        //        }
-
-        //        // =============================================
-        //        // STEP: ATTACH SIGNATURE TO CONTRIB
-        //        // =============================================
-        //        contrib.TransactionSignature = signingResult.Signature;
-        //        contrib.TransactionHash = signingResult.TransactionHash;
-        //        contrib.TransactionSequence = signingResult.Nonce;
-        //        contrib.IsSignatureVerified = false;
-
-        //        // Get previous transaction hash for chaining
-        //        var lastContrib = await _context.Contribs
-        //            .Where(c => c.MemberNo == contributionDto.MemberNo)
-        //            .OrderByDescending(c => c.Id)
-        //            .FirstOrDefaultAsync();
-
-        //        // =============================================
-        //        // FOR FIRST TRANSACTION: Use RAW Wallet Address as Genesis Hash
-        //        // =============================================
-        //        if (lastContrib != null)
-        //        {
-        //            // Not the first transaction - link to previous transaction
-        //            contrib.PreviousTransactionHash = lastContrib.TransactionHash;
-        //            _logger.LogDebug($"Member {contributionDto.MemberNo} - Linked to previous transaction: {lastContrib.TransactionHash?.Substring(0, 16)}...");
-        //        }
-        //        else
-        //        {
-        //            // FIRST TRANSACTION - Use the RAW wallet address as the genesis anchor
-        //            var memberWallet = await _cryptoService.GetWalletByMemberIdAsync(memberRecord.Id);
-
-        //            if (memberWallet != null && !string.IsNullOrEmpty(memberWallet.Address))
-        //            {
-        //                // IMPORTANT: Store the RAW wallet address directly (not hashed)
-        //                // This will be a 42-character string starting with "0x"
-        //                contrib.PreviousTransactionHash = memberWallet.Address;
-
-        //                _logger.LogInformation($"✅ FIRST TRANSACTION: Member {contributionDto.MemberNo}");
-        //                _logger.LogInformation($"   Wallet Address: {memberWallet.Address}");
-        //                _logger.LogInformation($"   Genesis Hash (Raw Wallet Address): {memberWallet.Address}");
-        //            }
-        //            else
-        //            {
-        //                // Fallback - create a deterministic genesis hash from member data
-        //                var genesisSource = $"{memberRecord.MemberNo}|{memberRecord.Idno}|{memberRecord.ApplicDate?.ToString("o") ?? DateTime.UtcNow.ToString("o")}";
-        //                var genesisHash = _cryptoService.ComputeHash(genesisSource);
-        //                contrib.PreviousTransactionHash = genesisHash;
-        //                _logger.LogWarning($"Member {contributionDto.MemberNo} - No wallet found, using deterministic genesis hash: {genesisHash}");
-        //            }
-        //        }
-
-        //        // Add fraud warning to remarks if suspicious
-        //        if (fraudResult.IsSuspicious)
-        //        {
-        //            contrib.Remarks = $"⚠️ FLAGGED: {string.Join("; ", fraudResult.Flags)} - {contrib.Remarks}";
-        //        }
-
-        //        _context.Contribs.Add(contrib);
-        //        await _context.SaveChangesAsync();
-
-
-        //        // ============================================================
-        //        // CREATE A NEW CONTRIB SHARE ROW FOR EACH TRANSACTION
-        //        // Each row stores ONLY this transaction's amount
-        //        // ============================================================
-        //        var contribShare = new ContribShare
-        //        {
-        //            LocalId = contrib.Id,  // Link back to the Contrib record
-        //            MemberNo = contributionDto.MemberNo,
-        //            CompanyCode = contributionDto.CompanyCode,
-        //            ReceiptNo = receiptNo,
-        //            Sharescode = contributionDto.SharesCode,
-        //            Remarks = contributionDto.Remarks,
-        //            AuditId = contributionDto.CreatedBy,
-        //            AuditTime = DateTime.Now,
-        //            AuditDateTime = DateTime.Now,
-        //            TransactionNo = contrib.TransactionNo,
-        //            ContrDate = contributionDate,  // Contribution date
-        //            LoanNo = null,
-        //            DepositedDate = depositedDate,  // Actual deposit date
-        //            ReceiptDate = receiptDate,      // Same as DepositedDate
-        //                                            // Store ONLY this transaction's amount in the appropriate column
-        //            ShareCapitalAmount = contributionCategory == "SHARE_CAPITAL" ? contributionDto.Amount : 0,
-        //            DepositsAmount = contributionCategory == "DEPOSIT" ? contributionDto.Amount : 0,
-        //            PassBookAmount = contributionCategory == "PASSBOOK" ? contributionDto.Amount : 0,
-        //            Donor = contributionCategory == "DONOR" ? contributionDto.Amount : 0,
-        //            LoanAmount = contributionCategory == "LOAN_REPAYMENT" ? contributionDto.Amount : 0,
-        //            RegFeeAmount = contributionCategory == "REGISTRATION_FEE" ? contributionDto.Amount : 0
-        //        };
-
-        //        _logger.LogInformation($"Creating new ContribShare row for {contributionCategory}: Amount = {contributionDto.Amount:C}");
-
-        //        _context.ContribShares.Add(contribShare);
-        //        await _context.SaveChangesAsync();
-
-        //        // Update share balance if needed (for SHARE_CAPITAL or PASSBOOK types)
-        //        if (contributionCategory == "SHARE_CAPITAL" ||
-        //            (contributionCategory == "PASSBOOK" && shareType.Issharecapital == 1))
-        //        {
-        //            await UpdateShareBalanceAsync(contributionDto.MemberNo,
-        //                contributionDto.SharesCode,
-        //                contributionDto.Amount,
-        //                contributionDto.CompanyCode);
-        //        }
-
-        //        // =============================================
-        //        // STEP: UPDATE WALLET BALANCE AFTER SUCCESSFUL CONTRIBUTION
-        //        // =============================================
-        //        // Get or create wallet for the member
-        //        var wallet = await _cryptoService.GetWalletByMemberIdAsync(memberRecord.Id);
-        //        if (wallet == null)
-        //        {
-        //            // Create wallet if it doesn't exist
-        //            var walletResult = await _cryptoService.CreateWalletForMemberAsync(memberRecord.Id, memberRecord.MemberNo, contributionDto.CompanyCode);
-        //            if (!walletResult.Success)
-        //            {
-        //                _logger.LogWarning($"Failed to create wallet for balance update: {walletResult.Message}");
-        //            }
-        //            else
-        //            {
-        //                wallet = await _cryptoService.GetWalletByMemberIdAsync(memberRecord.Id);
-        //            }
-        //        }
-
-        //        // Update wallet balances based on contribution category
-        //        if (wallet != null)
-        //        {
-        //            // Update last activity
-        //            wallet.LastActivity = DateTime.UtcNow;
-
-        //            // Update specific balances based on contribution type
-        //            switch (contributionCategory)
-        //            {
-        //                case "SHARE_CAPITAL":
-        //                    // Update Capital Balance (for shares)
-        //                    wallet.CapitalBalance += contributionDto.Amount;
-        //                    wallet.Balance += contributionDto.Amount; // Also update total balance
-        //                    _logger.LogInformation($"Updated CapitalBalance for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}, New: {wallet.CapitalBalance:C}");
-        //                    break;
-
-        //                case "DEPOSIT":
-        //                    // Update Deposit Balance (savings/deposits)
-        //                    wallet.DepositBalance += contributionDto.Amount;
-        //                    wallet.Balance += contributionDto.Amount; // Also update total balance
-        //                    _logger.LogInformation($"Updated DepositBalance for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}, New: {wallet.DepositBalance:C}");
-        //                    break;
-
-        //                case "PASSBOOK":
-        //                    // For PASSBOOK, update CapitalBalance if Issharecapital=1, otherwise Balance
-        //                    if (shareType.Issharecapital == 1)
-        //                    {
-        //                        wallet.CapitalBalance += contributionDto.Amount;
-        //                        _logger.LogInformation($"Updated CapitalBalance (PASSBOOK) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
-        //                    }
-        //                    else
-        //                    {
-        //                        wallet.Balance += contributionDto.Amount;
-        //                        _logger.LogInformation($"Updated Balance (PASSBOOK) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
-        //                    }
-        //                    break;
-
-        //                case "LOAN_REPAYMENT":
-        //                    // For loan repayment, update Balance (could be separate loan tracking)
-        //                    wallet.Balance += contributionDto.Amount;
-        //                    _logger.LogInformation($"Updated Balance (LOAN_REPAYMENT) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
-        //                    break;
-
-        //                case "DONOR":
-        //                    // For donor contributions, update Balance
-        //                    wallet.Balance += contributionDto.Amount;
-        //                    _logger.LogInformation($"Updated Balance (DONOR) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
-        //                    break;
-
-        //                case "REGISTRATION_FEE":
-        //                    // Registration fees don't add to balance (they're fees)
-        //                    _logger.LogInformation($"Registration fee of {contributionDto.Amount:C} collected from member {memberRecord.MemberNo} (no balance update)");
-        //                    break;
-
-        //                default:
-        //                    // Default - update general balance
-        //                    wallet.Balance += contributionDto.Amount;
-        //                    _logger.LogInformation($"Updated Balance for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}, New: {wallet.Balance:C}");
-        //                    break;
-        //            }
-
-        //            // Save wallet changes
-        //            await _context.SaveChangesAsync();
-        //        }
-
-
-        //        // ============================================================
-        //        // GET GL ACCOUNTS
-        //        // ============================================================
-        //        string drAcc = null; // Debit account (Where money comes FROM - Bank/Cash)
-        //        string crAcc = null; // Credit account (Where money goes TO - Share Type account)
-
-        //        // Credit account from Sharetype
-        //        if (string.IsNullOrEmpty(shareType.SharesAcc))
-        //        {
-        //            throw new Exception($"Share type '{shareType.SharesCode}' does not have a GL Account configured.");
-        //        }
-        //        crAcc = shareType.SharesAcc;
-
-        //        // Debit account based on payment method
-        //        string paymentMethod = contributionDto.PaymentMethod?.ToUpper() ?? "CASH";
-
-        //        switch (paymentMethod)
-        //        {
-        //            case "BANK TRANSFER":
-        //            case "CHEQUE":
-        //                if (!string.IsNullOrEmpty(contributionDto.ReferenceNo))
-        //                {
-        //                    var bank = await _context.Banks
-        //                        .FirstOrDefaultAsync(b => b.CompanyCode == contributionDto.CompanyCode &&
-        //                                                  b.IsActive == true &&
-        //                                                  (b.BankCode == contributionDto.ReferenceNo ||
-        //                                                   b.BankName.Contains(contributionDto.ReferenceNo) ||
-        //                                                   b.AccountNumber == contributionDto.ReferenceNo));
-
-        //                    if (bank != null && !string.IsNullOrEmpty(bank.GlAccountNo))
-        //                    {
-        //                        drAcc = bank.GlAccountNo;
-        //                        break;
-        //                    }
-        //                }
-
-        //                var defaultBank = await _context.Banks
-        //                    .FirstOrDefaultAsync(b => b.CompanyCode == contributionDto.CompanyCode &&
-        //                                              b.IsActive == true &&
-        //                                              !string.IsNullOrEmpty(b.GlAccountNo));
-
-        //                if (defaultBank != null)
-        //                {
-        //                    drAcc = defaultBank.GlAccountNo;
-        //                    break;
-        //                }
-        //                goto case "CASH";
-
-        //            case "MOBILE MONEY":
-        //            case "CASH":
-        //            default:
-        //                if (sacco != null && !string.IsNullOrEmpty(sacco.RetainedEarnings))
-        //                {
-        //                    drAcc = sacco.RetainedEarnings;
-        //                }
-        //                else
-        //                {
-        //                    var cashAccount = await _context.GlSetup
-        //                        .FirstOrDefaultAsync(g => g.CompanyCode == contributionDto.CompanyCode &&
-        //                                                  g.Status == true &&
-        //                                                  (g.Type == "ASSET" || g.Type == "Asset") &&
-        //                                                  (g.Glaccname != null &&
-        //                                                   (g.Glaccname.ToLower().Contains("cash") ||
-        //                                                    g.Glaccname.ToLower().Contains("bank"))));
-
-        //                    if (cashAccount != null)
-        //                    {
-        //                        drAcc = cashAccount.AccNo;
-        //                    }
-        //                }
-        //                break;
-        //        }
-
-        //        // Validate GL accounts
-        //        if (string.IsNullOrEmpty(drAcc))
-        //        {
-        //            var suspenseAccount = await _context.GlSetup
-        //                .FirstOrDefaultAsync(g => g.CompanyCode == contributionDto.CompanyCode &&
-        //                                          g.IsSuspense == true);
-        //            if (suspenseAccount != null)
-        //            {
-        //                drAcc = suspenseAccount.AccNo;
-        //            }
-        //            else
-        //            {
-        //            }
-        //        }
-
-        //        // Create GL Transaction
-        //        var glTransaction = new Gltransaction
-        //        {
-        //            TransDate = contributionDate,  // Use contribution date for GL transaction
-        //            Amount = contributionDto.Amount,
-        //            DrAccNo = drAcc,
-        //            CrAccNo = crAcc,
-        //            Temp = "N",
-        //            DocumentNo = receiptNo,
-        //            Source = contributionDto.MemberNo,
-        //            CompanyCode = contributionDto.CompanyCode,
-        //            TransDescript = $"{contributionCategory} - {contributionDto.MemberNo}",
-        //            AuditTime = DateTime.Now,
-        //            AuditDateTime = DateTime.Now,
-        //            AuditId = contributionDto.CreatedBy,
-        //            Cash = paymentMethod == "CASH" ? 1 : 0,
-        //            DocPosted = 1,
-        //            ChequeNo = paymentMethod == "CHEQUE" ? contributionDto.ReferenceNo : null,
-        //            Dregard = false,
-        //            Recon = false,
-        //            TransactionNo = contrib.TransactionNo,
-        //            Module = "SHARES",
-        //            ReconId = 0
-        //        };
-
-        //        _context.Gltransactions.Add(glTransaction);
-        //        await _context.SaveChangesAsync();
-
-        //        // ============================================================
-        //        // CREATE BLOCK AND BLOCKCHAIN TRANSACTION
-        //        // ============================================================
-        //        string blockHash = Guid.NewGuid().ToString().Replace("-", "");
-        //        if (blockHash.Length < 64) blockHash = blockHash.PadRight(64, '0');
-        //        else if (blockHash.Length > 64) blockHash = blockHash.Substring(0, 64);
-
-        //        var block = new Block
-        //        {
-        //            BlockHash = blockHash,
-        //            PreviousHash = await GetLastBlockHashAsync(),
-        //            Timestamp = DateTime.Now,
-        //            Nonce = 0,
-        //            MerkleRoot = Guid.NewGuid().ToString(),
-        //            Confirmed = true,
-        //            CreatedAt = DateTime.Now
-        //        };
-
-        //        _context.Blocks.Add(block);
-        //        await _context.SaveChangesAsync();
-
-        //        var blockchainData = new
-        //        {
-        //            TransactionType = "CONTRIBUTION",
-        //            MemberNo = contributionDto.MemberNo,
-        //            MemberName = $"{member.Surname} {member.OtherNames}",
-        //            ShareType = shareType.SharesType,
-        //            ShareTypeCode = shareType.SharesCode,
-        //            ContributionCategory = contributionCategory,
-        //            Amount = contributionDto.Amount,
-        //            ReceiptNo = receiptNo,
-        //            ContributionDate = contributionDate.ToString("yyyy-MM-dd HH:mm:ss"),
-        //            DepositedDate = depositedDate.ToString("yyyy-MM-dd HH:mm:ss"),
-        //            ReceiptDate = receiptDate.ToString("yyyy-MM-dd HH:mm:ss"),
-        //            PaymentMethod = paymentMethod,
-        //            ReferenceNo = contributionDto.ReferenceNo,
-        //            Remarks = contributionDto.Remarks,
-        //            CompanyCode = contributionDto.CompanyCode,
-        //            CreatedBy = contributionDto.CreatedBy,
-        //            DrAccount = drAcc,
-        //            CrAccount = crAcc,
-        //            BlockHash = blockHash,
-        //            CumulativeTotalAfter = existingTotal + contributionDto.Amount,
-        //            MaxLimit = shareType.MaxAmount,
-        //            RemainingLimit = shareType.MaxAmount.HasValue ? shareType.MaxAmount.Value - (existingTotal + contributionDto.Amount) : (decimal?)null
-        //        };
-
-        //        var blockchainTx = new BlockchainTransaction
-        //        {
-        //            TransactionId = Guid.NewGuid().ToString(),
-        //            TransactionType = "CONTRIBUTION",
-        //            MemberNo = contributionDto.MemberNo,
-        //            CompanyCode = contributionDto.CompanyCode,
-        //            Amount = contributionDto.Amount,
-        //            Timestamp = DateTime.Now,
-        //            DataHash = await _blockchainService.GenerateTransactionHash(blockchainData),
-        //            PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData),
-        //            OffChainReferenceId = receiptNo,
-        //            Status = "CONFIRMED",
-        //            BlockHash = block.BlockHash,
-        //            CreatedAt = DateTime.Now
-        //        };
-
-        //        _context.BlockchainTransactions.Add(blockchainTx);
-        //        await _context.SaveChangesAsync();
-
-        //        // Update blockchain references
-        //        contrib.BlockchainTxId = blockchainTx.TransactionId;
-        //        contribShare.BlockchainTxId = blockchainTx.TransactionId;
-        //        glTransaction.BlockchainTxId = blockchainTx.TransactionId;
-        //        await _context.SaveChangesAsync();
-
-        //        await transaction.CommitAsync();
-
-        //        _logger.LogInformation($"Contribution {receiptNo} added successfully for member {contributionDto.MemberNo}");
-
-        //        // ============================================================
-        //        // SAVE AUDIT TRAIL
-        //        // ============================================================
-        //        var auditExtraData = new
-        //        {
-        //            amount = contributionDto.Amount,
-        //            memberName = $"{member.Surname} {member.OtherNames}",
-        //            memberNumber = contributionDto.MemberNo,
-        //            shareType = shareType.SharesType,
-        //            shareTypeCode = contributionDto.SharesCode,
-        //            contributionCategory = contributionCategory,
-        //            receiptNumber = receiptNo,
-        //            contributionDate = contributionDate.ToString("yyyy-MM-dd HH:mm:ss"),
-        //            depositedDate = depositedDate.ToString("yyyy-MM-dd HH:mm:ss"),
-        //            receiptDate = receiptDate.ToString("yyyy-MM-dd HH:mm:ss"),
-        //            paymentMethod = paymentMethod,
-        //            referenceNo = contributionDto.ReferenceNo ?? "",
-        //            remarks = contributionDto.Remarks ?? "",
-        //            cumulativeTotalAfter = existingTotal + contributionDto.Amount,
-        //            maxLimit = shareType.MaxAmount,
-        //            remainingLimit = shareType.MaxAmount.HasValue ? shareType.MaxAmount.Value - (existingTotal + contributionDto.Amount) : (decimal?)null,
-        //            drAccount = drAcc,
-        //            crAccount = crAcc,
-        //            blockchainTxId = blockchainTx.TransactionId
-        //        };
-
-        //        var contribForAudit = new
-        //        {
-        //            contrib.Id,
-        //            contrib.MemberNo,
-        //            contrib.ContrDate,
-        //            contrib.DepositedDate,
-        //            contrib.ReceiptDate,
-        //            contrib.Amount,
-        //            contrib.ReceiptNo,
-        //            contrib.Remarks,
-        //            contrib.Sharescode,
-        //            contrib.TransactionNo,
-        //            contrib.RefNo,
-        //            contrib.ChequeNo,
-        //            contrib.TransDate,
-        //            contrib.SharesAcc,
-        //            contrib.ContraAcc,
-        //            contrib.UserName,
-        //            contrib.CompanyCode,
-        //            BlockchainTxId = blockchainTx.TransactionId,
-        //            CreatedAt = DateTime.Now,
-        //            CreatedBy = contributionDto.CreatedBy
-        //        };
-
-        //        await _auditService.SaveLogAsync(
-        //            actionType: AuditActionType.Insert,
-        //            oldModel: null,
-        //            newModel: contribForAudit,
-        //            tableName: "Contribs",
-        //            recordId: receiptNo,
-        //            userId: contributionDto.CreatedBy,
-        //            userName: contributionDto.CreatedBy,
-        //            companyCode: contributionDto.CompanyCode,
-        //            module: "Contributions",
-        //            extraData: System.Text.Json.JsonSerializer.Serialize(auditExtraData),
-        //            blockchainTxId: blockchainTx.TransactionId
-        //        );
-
-        //        // Get cumulative share balance for response
-        //        var cumulativeShareBalance = await GetMemberShareBalanceAsync(contributionDto.MemberNo);
-
-        //        return new ContributionResponseDTO
-        //        {
-        //            Id = contrib.Id,
-        //            MemberNo = contributionDto.MemberNo,
-        //            MemberName = $"{member.Surname} {member.OtherNames}",
-        //            TransactionDate = contributionDate,
-        //            DepositedDate = depositedDate,
-        //            ReceiptDate = receiptDate,
-        //            SharesCode = contributionDto.SharesCode,
-        //            ShareTypeName = shareType.SharesType ?? shareType.SharesCode,
-        //            Amount = contributionDto.Amount,
-        //            ShareCapitalAmount = contributionCategory == "SHARE_CAPITAL" ? contributionDto.Amount : 0,
-        //            DepositsAmount = contributionCategory == "DEPOSIT" ? contributionDto.Amount : 0,
-        //            RegFeeAmount = contributionCategory == "REGISTRATION_FEE" ? contributionDto.Amount : 0,
-        //            Donor = contributionCategory == "DONOR" ? contributionDto.Amount : 0,
-        //            LoanAmount = contributionCategory == "LOAN_REPAYMENT" ? contributionDto.Amount : 0,
-        //            PassBookAmount = contributionCategory == "PASSBOOK" ? contributionDto.Amount : 0,
-        //            TotalSharesAfter = cumulativeShareBalance,
-        //            ReceiptNo = receiptNo,
-        //            Remarks = contributionDto.Remarks ?? string.Empty,
-        //            BlockchainTxId = contrib.BlockchainTxId ?? string.Empty,
-        //            CreatedAt = DateTime.Now,
-        //            CreatedBy = contributionDto.CreatedBy,
-        //            CompanyCode = contributionDto.CompanyCode
-        //        };
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        await transaction.RollbackAsync();
-        //        _logger.LogError(ex, "Transaction rolled back due to error");
-
-        //        if (ex is ValidationException)
-        //        {
-        //            throw new Exception($"Validation error: {ex.Message}");
-        //        }
-
-        //        throw new Exception($"Error adding contribution: {ex.Message}");
-        //    }
-        //}
 
         private async Task UpdateShareBalanceAsync(string memberNo, string sharesCode, decimal amount, string companyCode)
         {

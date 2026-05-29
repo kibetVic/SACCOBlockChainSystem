@@ -310,7 +310,21 @@ namespace SACCOBlockChainSystem.Controllers
                     {
                         return await SendCode(user);
                     }
+                        
+                    //return Redirect("/Account/VerifyMember?user="+EncryptionHelper.Encrypt(user.MemberNo));
+                    //var claims = new List<Claim>
+                    //{
+                    //    new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+                    //    new Claim(ClaimTypes.Name, user.UserName),
+                    //    new Claim("FullName", user.UserName ?? string.Empty),
+                    //    new Claim("Email", user.Email ?? string.Empty),
+                    //    new Claim("UserId", user.UserId.ToString()),
+                    //    new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                    //    new Claim("CompanyName", companyName),
+                    //    new Claim("UserLoginId", user.UserLoginId ?? string.Empty)
+                    //};
                 }
+                // Hash the password for comparison
 
             }
             catch (Exception ex)
@@ -1846,14 +1860,9 @@ namespace SACCOBlockChainSystem.Controllers
                     }
                     else
                     {
-                        //ViewBag.RequestPin = true;
-                        //return View(model);
+                        ViewBag.RequestPin = true;
+                        return View(model);
                     }
-                    //else
-                    //{
-                    //    ViewBag.RequestPin = true;
-                    //    return View(model);
-                    //}
                     //HttpContext.Session.SetString($"PinSetFor_{model.Username}", "true");
                         
                 }
