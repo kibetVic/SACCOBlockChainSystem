@@ -1844,11 +1844,11 @@ namespace SACCOBlockChainSystem.Controllers
                             }
                         }
                     }
-                    else
-                    {
-                        ViewBag.RequestPin = true;
-                        return View(model);
-                    }
+                    //else
+                    //{
+                    //    ViewBag.RequestPin = true;
+                    //    return View(model);
+                    //}
                     //HttpContext.Session.SetString($"PinSetFor_{model.Username}", "true");
                         
                 }

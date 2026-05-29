@@ -128,7 +128,7 @@ namespace SACCOBlockChainSystem.Controllers
                 // Handle Member role - redirect to MemberIndex
                 if (userRole?.ToUpper() == "MEMBER")
                 {
-                    // ... existing member code ...
+                    
                 }
 
                 // Determine effective company code
