@@ -130,7 +130,7 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     //ensure here to final
                     var uid = User.FindFirst("UserId")?.Value;
-                    
+
                     var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
                     //var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
                     var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
@@ -184,7 +184,7 @@ namespace SACCOBlockChainSystem.Controllers
                     effectiveCompanyCode = companyCode;
                 }
 
-                // ✅ Get cached dashboard data - MUCH FASTER!
+                // ✅ Get cached dashboard data - includes ALL calculations now!
                 var dashboard = await _dashboardCacheService.GetDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
 
                 // Get companies for filter dropdown (only for Super Admin)
