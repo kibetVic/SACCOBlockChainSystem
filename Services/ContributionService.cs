@@ -16,7 +16,7 @@ namespace SACCOBlockChainSystem.Services
         Task<decimal> GetMemberShareBalanceAsync(string memberNo);
         Task<MemberContributionHistoryDTO> GetMemberContributionHistoryAsync(string memberNo);
         Task<List<ContributionResponseDTO>> SearchContributionsAsync(DateTime? fromDate, DateTime? toDate, string? memberNo = null, string? shareType = null);
-        Task<ContributionDeleteResultDTO> DeleteContributionAsync(int contributionId, string deleteReason, string deletedBy);
+        Task<ContributionDeleteResultDTO> ReverseContributionAsync(int contributionId, string deleteReason, string deletedBy);
     }
 
     public class ContributionService : IContributionService
@@ -1016,9 +1016,10 @@ namespace SACCOBlockChainSystem.Services
         //    return result;
         //}
 
-        public async Task<ContributionDeleteResultDTO> DeleteContributionAsync(int contributionId, string deleteReason, string deletedBy)
+
+        public async Task<ContributionDeleteResultDTO> ReverseContributionAsync(int contributionId, string deleteReason, string deletedBy)
         {
-            _logger.LogInformation($"Starting contribution deletion for ID: {contributionId}");
+            _logger.LogInformation($"Starting contribution reversal for ID: {contributionId}");
 
             using var transaction = await _context.Database.BeginTransactionAsync();
 
@@ -1026,108 +1027,259 @@ namespace SACCOBlockChainSystem.Services
             {
                 var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();
 
-                // Find the contribution
-                var contribution = await _context.Contribs
+                // Find the original contribution
+                var originalContribution = await _context.Contribs
                     .Include(c => c.MemberNoNavigation)
                     .FirstOrDefaultAsync(c => c.Id == contributionId && c.CompanyCode == currentCompanyCode);
 
-                if (contribution == null)
+                if (originalContribution == null)
                 {
                     throw new ValidationException($"Contribution with ID {contributionId} not found");
                 }
 
-                // Store information for response and reversal
-                var receiptNo = contribution.ReceiptNo ?? string.Empty;
-                var memberNo = contribution.MemberNo;
-                var amount = contribution.Amount ?? 0;
-                var sharesCode = contribution.Sharescode;
+                // Check if already reversed
+                var existingReversal = await _context.Contribs
+                    .FirstOrDefaultAsync(c => c.ReceiptNo == $"{originalContribution.ReceiptNo}-REVERSAL"
+                                           && c.CompanyCode == currentCompanyCode);
 
-                _logger.LogInformation($"Deleting contribution: Receipt {receiptNo}, Member {memberNo}, Amount {amount}");
-
-                // Find and delete from ContribShare table if exists
-                var contribShare = await _context.ContribShares
-                    .FirstOrDefaultAsync(cs => cs.TransactionNo == contribution.TransactionNo);
-
-                if (contribShare != null)
+                if (existingReversal != null)
                 {
-                    _context.ContribShares.Remove(contribShare);
-                    _logger.LogInformation($"Removed from ContribShare table");
-
-                    // Reverse the share balance
-                    await ReverseShareBalanceAsync(memberNo, sharesCode, amount, currentCompanyCode);
+                    throw new ValidationException($"This contribution has already been reversed. Reversal Receipt: {existingReversal.ReceiptNo}");
                 }
 
-                // Find GL Transaction if exists (using DocumentNo or TransactionNo)
-                var glTransaction = await _context.Gltransactions
+                var receiptNo = originalContribution.ReceiptNo ?? string.Empty;
+                var memberNo = originalContribution.MemberNo;
+                var originalAmount = originalContribution.Amount ?? 0;
+                var sharesCode = originalContribution.Sharescode;
+
+                _logger.LogInformation($"Reversing contribution: Receipt {receiptNo}, Member {memberNo}, Amount {originalAmount}");
+
+                // ============================================================
+                // STEP 1: Create REVERSAL Contrib record (negative amount)
+                // ============================================================
+                var reversalContribution = new Contrib
+                {
+                    MemberNo = memberNo,
+                    ContrDate = DateTime.Now,  // Reversal date is today
+                    DepositedDate = DateTime.Now,
+                    ReceiptDate = DateTime.Now,
+                    Amount = -originalAmount,  // ← NEGATIVE amount to reverse
+                    CompanyCode = currentCompanyCode,
+                    ReceiptNo = $"{receiptNo}-REVERSAL",  // ← New receipt number
+                    Remarks = $"REVERSAL: {deleteReason}. Original: {originalContribution.Remarks}",
+                    AuditId = deletedBy,
+                    AuditTime = DateTime.Now,
+                    AuditDateTime = DateTime.Now,
+                    Sharescode = sharesCode,
+                    TransactionNo = $"{originalContribution.TransactionNo}-REV",
+                    Posted = "Y",
+                    Locked = "Y",  // Lock reversal entries
+                    StaffNo = originalContribution.StaffNo,
+                    RefNo = originalContribution.RefNo,
+                    ShareBal = 0,
+                    TransBy = deletedBy,
+                    ChequeNo = originalContribution.ChequeNo,
+                    TransDate = DateTime.Now,
+                    SharesAcc = originalContribution.SharesAcc,
+                    ContraAcc = originalContribution.ContraAcc,
+                    CashBookdate = DateTime.Now,
+                    Dregard = 0,
+                    Offs = 0,
+                    UserName = deletedBy,
+                    Run = 0,
+                    Run2 = 0,
+                    MrCleared = "N",
+                    Offset = false,
+                    Schemecode = currentCompanyCode,
+                    Status = "REVERSED"  // Mark as reversal
+                };
+
+                _context.Contribs.Add(reversalContribution);
+                await _context.SaveChangesAsync();
+
+                // ============================================================
+                // STEP 2: Create REVERSAL ContribShare record (negative amount)
+                // ============================================================
+                // Get the original ContribShare to know which column to reverse
+                var originalContribShare = await _context.ContribShares
+                    .FirstOrDefaultAsync(cs => cs.TransactionNo == originalContribution.TransactionNo);
+
+                var reversalContribShare = new ContribShare
+                {
+                    LocalId = reversalContribution.Id,
+                    MemberNo = memberNo,
+                    CompanyCode = currentCompanyCode,
+                    ReceiptNo = $"{receiptNo}-REVERSAL",
+                    Sharescode = sharesCode,
+                    Remarks = $"REVERSAL: {deleteReason}",
+                    AuditId = deletedBy,
+                    AuditTime = DateTime.Now,
+                    AuditDateTime = DateTime.Now,
+                    TransactionNo = reversalContribution.TransactionNo,
+                    ContrDate = DateTime.Now,
+                    DepositedDate = DateTime.Now,
+                    ReceiptDate = DateTime.Now,
+                    // Apply negative amount to the SAME column type
+                    ShareCapitalAmount = originalContribShare?.ShareCapitalAmount > 0 ? -originalAmount : 0,
+                    DepositsAmount = originalContribShare?.DepositsAmount > 0 ? -originalAmount : 0,
+                    PassBookAmount = originalContribShare?.PassBookAmount > 0 ? -originalAmount : 0,
+                    Donor = originalContribShare?.Donor > 0 ? -originalAmount : 0,
+                    LoanAmount = originalContribShare?.LoanAmount > 0 ? -originalAmount : 0,
+                    RegFeeAmount = originalContribShare?.RegFeeAmount > 0 ? -originalAmount : 0
+                };
+
+                _context.ContribShares.Add(reversalContribShare);
+                await _context.SaveChangesAsync();
+
+                // ============================================================
+                // STEP 3: Reverse share balance (subtract instead of add)
+                // ============================================================
+                await ReverseShareBalanceAsync(memberNo, sharesCode, originalAmount, currentCompanyCode);
+
+                // ============================================================
+                // STEP 4: Create REVERSAL GL Transaction (swap DR/CR)
+                // ============================================================
+                var originalGL = await _context.Gltransactions
                     .FirstOrDefaultAsync(gl => gl.DocumentNo == receiptNo && gl.CompanyCode == currentCompanyCode);
 
-                if (glTransaction != null)
+                if (originalGL != null)
                 {
-                    // Create reversal GL entry instead of just deleting
-                    await CreateReversalGLTransactionAsync(contribution, glTransaction, deleteReason, deletedBy);
+                    // Create reversal with swapped DR and CR
+                    var reversalGL = new Gltransaction
+                    {
+                        TransDate = DateTime.Now,
+                        Amount = originalAmount,  // Positive amount but with swapped accounts
+                        DrAccNo = originalGL.CrAccNo,  // SWAP: Original CR becomes DR
+                        CrAccNo = originalGL.DrAccNo,  // SWAP: Original DR becomes CR
+                        Temp = "REVERSAL",
+                        DocumentNo = $"{receiptNo}-REV",
+                        Source = originalGL.Source,
+                        CompanyCode = currentCompanyCode,
+                        TransDescript = $"REVERSAL: {originalGL.TransDescript} - Reason: {deleteReason}",
+                        AuditTime = DateTime.Now,
+                        AuditId = deletedBy,
+                        AuditDateTime = DateTime.Now,
+                        Cash = originalGL.Cash,
+                        DocPosted = 1,
+                        ChequeNo = originalGL.ChequeNo,
+                        Dregard = false,
+                        Recon = false,
+                        TransactionNo = reversalContribution.TransactionNo,
+                        Module = "CONTRIBUTION_REVERSAL",
+                        ReconId = 0
+                    };
 
-                    // Delete the original GL transaction
-                    _context.Gltransactions.Remove(glTransaction);
-                    _logger.LogInformation($"Removed original GL Transaction");
+                    _context.Gltransactions.Add(reversalGL);
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation($"Created reversal GL transaction: {reversalGL.DocumentNo}");
                 }
 
-                // Create blockchain reversal record
+                // ============================================================
+                // STEP 5: Update wallet balance (SUBTRACT instead of ADD)
+                // ============================================================
+                var memberRecord = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == currentCompanyCode);
+
+                if (memberRecord != null)
+                {
+                    var wallet = await _context.Wallets
+                        .FirstOrDefaultAsync(w => w.MemberId == memberRecord.Id && w.CompanyCode == currentCompanyCode);
+
+                    if (wallet != null)
+                    {
+                        // Determine which balance to update based on contribution type
+                        if (originalContribShare?.ShareCapitalAmount > 0)
+                        {
+                            wallet.CapitalBalance -= originalAmount;
+                            wallet.Balance -= originalAmount;
+                            _logger.LogInformation($"Reversed CapitalBalance: -{originalAmount:C}, New: {wallet.CapitalBalance:C}");
+                        }
+                        else if (originalContribShare?.DepositsAmount > 0)
+                        {
+                            wallet.DepositBalance -= originalAmount;
+                            wallet.Balance -= originalAmount;
+                            _logger.LogInformation($"Reversed DepositBalance: -{originalAmount:C}, New: {wallet.DepositBalance:C}");
+                        }
+                        else
+                        {
+                            wallet.Balance -= originalAmount;
+                            _logger.LogInformation($"Reversed Balance: -{originalAmount:C}, New: {wallet.Balance:C}");
+                        }
+
+                        wallet.LastActivity = DateTime.UtcNow;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                // ============================================================
+                // STEP 6: Create blockchain reversal record
+                // ============================================================
                 string blockchainTxId = null;
                 try
                 {
                     var blockchainData = new
                     {
-                        Action = "CONTRIBUTION_DELETION",
-                        ContributionId = contributionId,
-                        ReceiptNo = receiptNo,
+                        Action = "CONTRIBUTION_REVERSAL",
+                        OriginalContributionId = contributionId,
+                        OriginalReceiptNo = receiptNo,
+                        ReversalReceiptNo = $"{receiptNo}-REVERSAL",
                         MemberNo = memberNo,
-                        MemberName = contribution.MemberNoNavigation != null ?
-                            $"{contribution.MemberNoNavigation.Surname} {contribution.MemberNoNavigation.OtherNames}" : memberNo,
-                        OriginalAmount = amount,
+                        MemberName = originalContribution.MemberNoNavigation != null ?
+                            $"{originalContribution.MemberNoNavigation.Surname} {originalContribution.MemberNoNavigation.OtherNames}" : memberNo,
+                        OriginalAmount = originalAmount,
+                        ReversalAmount = -originalAmount,
                         SharesCode = sharesCode,
                         DeleteReason = deleteReason,
-                        DeletedBy = deletedBy,
-                        DeletedAt = DateTime.Now,
-                        OriginalTransactionDate = contribution.ContrDate,
-                        OriginalCreatedBy = contribution.AuditId
+                        ReversedBy = deletedBy,
+                        ReversedAt = DateTime.Now,
+                        OriginalTransactionDate = originalContribution.ContrDate,
+                        OriginalCreatedBy = originalContribution.AuditId
                     };
 
                     var blockchainTx = await _blockchainService.CreateAndAddTransactionAsync(
-                        "CONTRIBUTION_DELETION",
+                        "CONTRIBUTION_REVERSAL",
                         memberNo,
                         currentCompanyCode,
-                        -amount, // Negative amount for deletion
-                        $"{receiptNo}-DELETED",
+                        -originalAmount,  // Negative amount for blockchain record
+                        $"{receiptNo}-REV",
                         blockchainData
                     );
 
                     if (blockchainTx != null)
                     {
                         blockchainTxId = blockchainTx.TransactionId;
+
+                        // Update reversal record with blockchain ID
+                        reversalContribution.BlockchainTxId = blockchainTxId;
+                        reversalContribShare.BlockchainTxId = blockchainTxId;
+                        await _context.SaveChangesAsync();
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error recording blockchain deletion transaction");
-                    // Continue with deletion even if blockchain fails
+                    _logger.LogError(ex, "Error recording blockchain reversal transaction");
                 }
 
-                // Remove the contribution
-                _context.Contribs.Remove(contribution);
+                // ============================================================
+                // STEP 7: Mark original as reversed (instead of deleting)
+                // ============================================================
+                originalContribution.Status = "REVERSED";
+                originalContribution.Remarks = $"[REVERSED] {originalContribution.Remarks} - Reversal: {deleteReason}";
+                originalContribution.AuditTime = DateTime.Now;
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"Contribution {receiptNo} deleted successfully");
+                _logger.LogInformation($"Contribution {receiptNo} reversed successfully. New receipt: {reversalContribution.ReceiptNo}");
 
                 return new ContributionDeleteResultDTO
                 {
                     Success = true,
-                    Message = $"Contribution {receiptNo} has been successfully deleted",
+                    Message = $"Contribution {receiptNo} has been successfully reversed. Reversal Receipt: {reversalContribution.ReceiptNo}",
                     ContributionId = contributionId,
                     ReceiptNo = receiptNo,
                     MemberNo = memberNo,
-                    Amount = amount,
+                    Amount = originalAmount,
                     DeletedAt = DateTime.Now,
                     DeletedBy = deletedBy,
                     BlockchainTxId = blockchainTxId ?? string.Empty
@@ -1136,17 +1288,18 @@ namespace SACCOBlockChainSystem.Services
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError(ex, $"Error deleting contribution {contributionId}");
+                _logger.LogError(ex, $"Error reversing contribution {contributionId}");
 
                 if (ex is ValidationException)
                 {
                     throw new Exception($"Validation error: {ex.Message}");
                 }
 
-                throw new Exception($"Error deleting contribution: {ex.Message}");
+                throw new Exception($"Error reversing contribution: {ex.Message}");
             }
         }
 
+        // Updated ReverseShareBalanceAsync (now subtracts)
         private async Task ReverseShareBalanceAsync(string memberNo, string sharesCode, decimal amount, string companyCode)
         {
             var existingShare = await _context.Shares
@@ -1170,9 +1323,167 @@ namespace SACCOBlockChainSystem.Services
                 existingShare.AuditDateTime = DateTime.Now;
 
                 _context.Shares.Update(existingShare);
-                _logger.LogInformation($"Updated share balance: {existingShare.TotalShares}");
+                _logger.LogInformation($"Updated share balance after reversal: {existingShare.TotalShares:C}");
             }
         }
+
+        //public async Task<ContributionDeleteResultDTO> DeleteContributionAsync(int contributionId, string deleteReason, string deletedBy)
+        //{
+        //    _logger.LogInformation($"Starting contribution deletion for ID: {contributionId}");
+
+        //    using var transaction = await _context.Database.BeginTransactionAsync();
+
+        //    try
+        //    {
+        //        var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();
+
+        //        // Find the contribution
+        //        var contribution = await _context.Contribs
+        //            .Include(c => c.MemberNoNavigation)
+        //            .FirstOrDefaultAsync(c => c.Id == contributionId && c.CompanyCode == currentCompanyCode);
+
+        //        if (contribution == null)
+        //        {
+        //            throw new ValidationException($"Contribution with ID {contributionId} not found");
+        //        }
+
+        //        // Store information for response and reversal
+        //        var receiptNo = contribution.ReceiptNo ?? string.Empty;
+        //        var memberNo = contribution.MemberNo;
+        //        var amount = contribution.Amount ?? 0;
+        //        var sharesCode = contribution.Sharescode;
+
+        //        _logger.LogInformation($"Deleting contribution: Receipt {receiptNo}, Member {memberNo}, Amount {amount}");
+
+        //        // Find and delete from ContribShare table if exists
+        //        var contribShare = await _context.ContribShares
+        //            .FirstOrDefaultAsync(cs => cs.TransactionNo == contribution.TransactionNo);
+
+        //        if (contribShare != null)
+        //        {
+        //            _context.ContribShares.Remove(contribShare);
+        //            _logger.LogInformation($"Removed from ContribShare table");
+
+        //            // Reverse the share balance
+        //            await ReverseShareBalanceAsync(memberNo, sharesCode, amount, currentCompanyCode);
+        //        }
+
+        //        // Find GL Transaction if exists (using DocumentNo or TransactionNo)
+        //        var glTransaction = await _context.Gltransactions
+        //            .FirstOrDefaultAsync(gl => gl.DocumentNo == receiptNo && gl.CompanyCode == currentCompanyCode);
+
+        //        if (glTransaction != null)
+        //        {
+        //            // Create reversal GL entry instead of just deleting
+        //            await CreateReversalGLTransactionAsync(contribution, glTransaction, deleteReason, deletedBy);
+
+        //            // Delete the original GL transaction
+        //            _context.Gltransactions.Remove(glTransaction);
+        //            _logger.LogInformation($"Removed original GL Transaction");
+        //        }
+
+        //        // Create blockchain reversal record
+        //        string blockchainTxId = null;
+        //        try
+        //        {
+        //            var blockchainData = new
+        //            {
+        //                Action = "CONTRIBUTION_DELETION",
+        //                ContributionId = contributionId,
+        //                ReceiptNo = receiptNo,
+        //                MemberNo = memberNo,
+        //                MemberName = contribution.MemberNoNavigation != null ?
+        //                    $"{contribution.MemberNoNavigation.Surname} {contribution.MemberNoNavigation.OtherNames}" : memberNo,
+        //                OriginalAmount = amount,
+        //                SharesCode = sharesCode,
+        //                DeleteReason = deleteReason,
+        //                DeletedBy = deletedBy,
+        //                DeletedAt = DateTime.Now,
+        //                OriginalTransactionDate = contribution.ContrDate,
+        //                OriginalCreatedBy = contribution.AuditId
+        //            };
+
+        //            var blockchainTx = await _blockchainService.CreateAndAddTransactionAsync(
+        //                "CONTRIBUTION_DELETION",
+        //                memberNo,
+        //                currentCompanyCode,
+        //                -amount, // Negative amount for deletion
+        //                $"{receiptNo}-DELETED",
+        //                blockchainData
+        //            );
+
+        //            if (blockchainTx != null)
+        //            {
+        //                blockchainTxId = blockchainTx.TransactionId;
+        //            }
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            _logger.LogError(ex, "Error recording blockchain deletion transaction");
+        //            // Continue with deletion even if blockchain fails
+        //        }
+
+        //        // Remove the contribution
+        //        _context.Contribs.Remove(contribution);
+
+        //        await _context.SaveChangesAsync();
+        //        await transaction.CommitAsync();
+
+        //        _logger.LogInformation($"Contribution {receiptNo} deleted successfully");
+
+        //        return new ContributionDeleteResultDTO
+        //        {
+        //            Success = true,
+        //            Message = $"Contribution {receiptNo} has been successfully deleted",
+        //            ContributionId = contributionId,
+        //            ReceiptNo = receiptNo,
+        //            MemberNo = memberNo,
+        //            Amount = amount,
+        //            DeletedAt = DateTime.Now,
+        //            DeletedBy = deletedBy,
+        //            BlockchainTxId = blockchainTxId ?? string.Empty
+        //        };
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        await transaction.RollbackAsync();
+        //        _logger.LogError(ex, $"Error deleting contribution {contributionId}");
+
+        //        if (ex is ValidationException)
+        //        {
+        //            throw new Exception($"Validation error: {ex.Message}");
+        //        }
+
+        //        throw new Exception($"Error deleting contribution: {ex.Message}");
+        //    }
+        //}
+
+        //private async Task ReverseShareBalanceAsync(string memberNo, string sharesCode, decimal amount, string companyCode)
+        //{
+        //    var existingShare = await _context.Shares
+        //        .FirstOrDefaultAsync(s => s.MemberNo == memberNo &&
+        //                                 s.Sharescode == sharesCode &&
+        //                                 s.CompanyCode == companyCode);
+
+        //    if (existingShare != null)
+        //    {
+        //        existingShare.TotalShares -= amount;
+
+        //        // If total shares becomes negative, set to 0
+        //        if (existingShare.TotalShares < 0)
+        //        {
+        //            _logger.LogWarning($"Share balance would become negative for member {memberNo}. Setting to 0.");
+        //            existingShare.TotalShares = 0;
+        //        }
+
+        //        existingShare.TransDate = DateTime.Now;
+        //        existingShare.AuditTime = DateTime.Now;
+        //        existingShare.AuditDateTime = DateTime.Now;
+
+        //        _context.Shares.Update(existingShare);
+        //        _logger.LogInformation($"Updated share balance: {existingShare.TotalShares}");
+        //    }
+        //}
 
         private async Task CreateReversalGLTransactionAsync(Contrib contribution, Gltransaction originalGL, string deleteReason, string deletedBy)
         {

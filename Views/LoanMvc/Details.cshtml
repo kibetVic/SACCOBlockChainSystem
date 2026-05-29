@@ -470,7 +470,10 @@
 
             <!-- Disbursement Tab -->
             <div class="tab-pane fade" id="disbursement" role="tabpanel">
-                @await Html.PartialAsync("_DisbursementDetails", disbursement)
+                @await Html.PartialAsync(
+                    "_LoanBalanceDetails",
+                    (SACCOBlockChainSystem.Models.Loanbal)ViewBag.LoanBalance
+                )
             </div>
 
             <!-- Schedule Tab -->

@@ -640,16 +640,17 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
 
-        // GET: /ContributionMvc/DeleteSearch
+        // In ContributionMvcController.cs - Replace the DeleteSearch and Delete methods with these:
+
+        // GET: /ContributionMvc/ReverseSearch
         [Authorize(Roles = "Super Admin")]
-        public async Task<IActionResult> DeleteSearch(string searchTerm)
+        public async Task<IActionResult> ReverseSearch(string searchTerm)
         {
             try
             {
-                // Verify Super Admin role
                 if (!User.IsInRole("Super Admin"))
                 {
-                    TempData["ErrorMessage"] = "Only Super Administrators can delete contributions.";
+                    TempData["ErrorMessage"] = "Only Super Administrators can reverse contributions.";
                     return RedirectToAction("Index");
                 }
 
@@ -660,23 +661,42 @@ namespace SACCOBlockChainSystem.Controllers
                     return View();
                 }
 
-                // Search for contribution by ReceiptNo or TransactionNo
                 var companyCode = GetUserCompanyCode();
 
+                // Get contributions using the search service
                 var contributions = await _contributionService.SearchContributionsAsync(null, null, null, null);
 
+                // Find contribution that is NOT already reversed
                 var contribution = contributions.FirstOrDefault(c =>
-                    (c.ReceiptNo != null && c.ReceiptNo.Contains(searchTerm)) ||
-                    (c.TransactionNo != null && c.TransactionNo.Contains(searchTerm)));
+                    (c.ReceiptNo != null && c.ReceiptNo.Equals(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                    (c.TransactionNo != null && c.TransactionNo.Equals(searchTerm, StringComparison.OrdinalIgnoreCase)));
 
                 if (contribution == null)
                 {
-                    ViewBag.ErrorMessage = $"No transaction found with Receipt/Transaction Number: '{searchTerm}'";
+                    // Check if it's already reversed
+                    var existingReversal = contributions.FirstOrDefault(c =>
+                        c.ReceiptNo != null && c.ReceiptNo.Contains("-REVERSAL") &&
+                        (c.ReceiptNo.Contains(searchTerm) || (c.TransactionNo != null && c.TransactionNo.Contains(searchTerm))));
+
+                    if (existingReversal != null)
+                    {
+                        ViewBag.ErrorMessage = $"Transaction '{searchTerm}' has already been reversed. Reversal receipt: {existingReversal.ReceiptNo}";
+                    }
+                    else
+                    {
+                        ViewBag.ErrorMessage = $"No transaction found with Receipt/Transaction Number: '{searchTerm}'";
+                    }
                     return View();
                 }
 
-                // Map to Delete DTO
-                var deleteDto = new ContributionDeleteDTO
+                // Check if already reversed by Status or Receipt pattern
+                if (contribution.Status == "REVERSED" || (contribution.ReceiptNo != null && contribution.ReceiptNo.Contains("-REVERSAL")))
+                {
+                    ViewBag.ErrorMessage = $"Transaction '{searchTerm}' has already been reversed.";
+                    return View();
+                }
+
+                var reverseDto = new ContributionReverseDTO
                 {
                     ContributionId = contribution.Id,
                     ReceiptNo = contribution.ReceiptNo,
@@ -687,61 +707,64 @@ namespace SACCOBlockChainSystem.Controllers
                     TransactionDate = contribution.TransactionDate,
                     CreatedBy = contribution.CreatedBy,
                     BlockchainTxId = contribution.BlockchainTxId,
-                    DeleteReason = string.Empty
+                    ReverseReason = string.Empty
                 };
 
-                return View("Delete", deleteDto);
+                return View("Reverse", reverseDto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error searching contribution for deletion");
+                _logger.LogError(ex, $"Error searching contribution for reversal");
                 ViewBag.ErrorMessage = $"Error: {ex.Message}";
                 return View();
             }
         }
 
-        // POST: /ContributionMvc/Delete
+        // POST: /ContributionMvc/Reverse
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = "Super Admin")]
-        public async Task<IActionResult> Delete(ContributionDeleteDTO deleteDto)
+        public async Task<IActionResult> Reverse(ContributionReverseDTO reverseDto)
         {
             try
             {
-                _logger.LogInformation($"Delete contribution POST action for ID: {deleteDto.ContributionId}");
+                _logger.LogInformation($"Reverse contribution POST action for ID: {reverseDto.ContributionId}");
 
                 if (!ModelState.IsValid)
                 {
-                    return View("Delete", deleteDto);
+                    return View("Reverse", reverseDto);
                 }
 
                 // Verify Super Admin role again
                 if (!User.IsInRole("Super Admin"))
                 {
-                    TempData["ErrorMessage"] = "Only Super Admini can delete contributions.";
+                    TempData["ErrorMessage"] = "Only Super Administrators can reverse contributions.";
                     return RedirectToAction("Index");
                 }
 
-                var deletedBy = User.Identity?.Name ?? "SYSTEM";
+                var reversedBy = User.Identity?.Name ?? "SYSTEM";
 
-                var result = await _contributionService.DeleteContributionAsync(deleteDto.ContributionId, deleteDto.DeleteReason, deletedBy);
+                var result = await _contributionService.ReverseContributionAsync(
+                    reverseDto.ContributionId,
+                    reverseDto.ReverseReason,
+                    reversedBy);
 
                 if (result.Success)
                 {
                     TempData["SuccessMessage"] = result.Message;
-                    return RedirectToAction("DeleteSearch");
+                    return RedirectToAction("ReverseSearch");
                 }
                 else
                 {
                     TempData["ErrorMessage"] = result.Message;
-                    return View("Delete", deleteDto);
+                    return View("Reverse", reverseDto);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error deleting contribution {deleteDto.ContributionId}");
-                TempData["ErrorMessage"] = $"Error deleting contribution: {ex.Message}";
-                return View("Delete", deleteDto);
+                _logger.LogError(ex, $"Error reversing contribution {reverseDto.ContributionId}");
+                TempData["ErrorMessage"] = $"Error reversing contribution: {ex.Message}";
+                return View("Reverse", reverseDto);
             }
         }
 

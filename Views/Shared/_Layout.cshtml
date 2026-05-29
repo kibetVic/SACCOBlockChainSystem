@@ -572,15 +572,15 @@ input:invalid:focus {
                                                 </li>
                                             }
 
-                                            <li class="nav-item">
-                                                <a asp-controller="LoanMvc" asp-action="LoanScheduleCalculator" class="nav-link">
-                                                    <i class="nav-icon bi bi-calculator-fill"></i>
-                                                    <p>Loan Calculator</p>
-                                                </a>
-                                            </li>
+                                        <li class="nav-item">
+                                            <a asp-controller="LoanCalculator" asp-action="Index" class="nav-link">
+                                                <i class="nav-icon bi bi-calculator-fill"></i>
+                                                <p>Loan Calculator</p>
+                                            </a>
+                                        </li>
 
                                         <li class="nav-item">
-                                            <a class="nav-link" asp-controller="Loanschd" asp-action="Create" class="nav-link">
+                                            <a class="nav-link" asp-controller="Loanschd" asp-action="Create">
                                                 <i class="nav-icon bi bi-calculator-fill"></i>
                                                 <span>Loan Schedule</span>
                                             </a>
@@ -629,10 +629,30 @@ input:invalid:focus {
                                     </a>
                                 </li>
                                  <li class="nav-item">
-                                    <a class="nav-link" asp-controller="DividendDetails" asp-action="Index">
-                                        <i class="nav-icon bi bi-piggy-bank"></i>
-                                        <p>Dividends Processing</p>
+                                    <a href="#" class="nav-link fw-bold">
+                                        <i class="nav-icon bi bi-file-text"></i>
+                                        <p>
+                                            <b>Dividends Processing</b>
+                                            <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                        </p>
                                     </a>
+                                    <ul class="nav nav-treeview ms-4 border-start border-primary border-opacity-25 ps-2">
+                                        <li class="nav-item">
+                                            <a asp-controller="Savings" asp-action="Index" class="nav-link">
+                                                <i class="nav-icon bi bi-files ms-1"></i>
+                                                <p>Savings Dashboard</p>
+                                            </a>
+                                        </li>
+                                      
+
+                                        <li class="nav-item">
+                                            <a asp-controller="Dividend" asp-action="Index" class="nav-link">
+                                                <i class="nav-icon bi bi-calculator-fill"></i>
+                                                <p>Process Dividends</p>
+                                            </a>
+                                        </li>
+                                       
+                                    </ul>
                                 </li>
                                 @if (User.IsInRole("Super Admin"))
                                 {

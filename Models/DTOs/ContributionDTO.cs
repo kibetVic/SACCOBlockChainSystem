@@ -58,6 +58,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string TransactionSignature { get; internal set; }
         public string TransactionHash { get; internal set; }
         public bool IsSignatureVerified { get; internal set; }
+        public string Status { get; internal set; }
     }
 
     public class ShareTypeDTO
@@ -124,6 +125,26 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal? Amount { get; set; }
 
         // Additional fields for display
+        public string? MemberName { get; set; }
+        public string? ShareTypeName { get; set; }
+        public DateTime? TransactionDate { get; set; }
+        public string? CreatedBy { get; set; }
+        public string? BlockchainTxId { get; set; }
+    }
+
+    // Models/DTOs/ContributionReverseDTO.cs
+    public class ContributionReverseDTO
+    {
+        [Required]
+        public int ContributionId { get; set; }
+
+        [Required(ErrorMessage = "Reversal reason is required")]
+        [StringLength(500, ErrorMessage = "Reason cannot exceed 500 characters")]
+        public string ReverseReason { get; set; } = null!;
+
+        public string? ReceiptNo { get; set; }
+        public string? MemberNo { get; set; }
+        public decimal? Amount { get; set; }
         public string? MemberName { get; set; }
         public string? ShareTypeName { get; set; }
         public DateTime? TransactionDate { get; set; }
