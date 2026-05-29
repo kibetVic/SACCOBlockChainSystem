@@ -141,8 +141,16 @@ namespace SACCOBlockChainSystem.Controllers
                             return RedirectToAction("MemberLogin", "Account");
                         }
                     }
-                    return View("MemberIndex");
+                    var trs = await _context.BlockchainTransactions.AsNoTracking().OrderByDescending(t => t.CreatedAt).Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo).Take(20).ToListAsync();
+                    var memberView = new MemberViewModel {
+                        Member = member,
+                        Wallets = new List<Wallet> { wallet },
+                        MemberTransactions = trs,
+                        UserCompanyCode = member.CompanyCode,
+                    };
 
+                    //check this is pushed
+                    return View("MemberIndex",memberView);
                 }
 
                 // Determine effective company code
