@@ -132,6 +132,7 @@ namespace SACCOBlockChainSystem.Controllers
                     var uid = User.FindFirst("UserId")?.Value;
                     
                     var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
+                    //var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
                     var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
 
                     if (wallet == null)
