@@ -38,6 +38,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [StringLength(50)]
         [Display(Name = "Company Code")]
         public string? CompanyCode { get; set; }
+        public DividendStatus Status { get; set; }
     }
 
     // =========================
@@ -64,6 +65,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal NetDividend { get; set; }
 
         public string? CompanyCode { get; set; }
+        public DividendStatus Status { get; set; }
 
         public string? CreatedBy { get; set; }
         public DateTime? CreatedAt { get; set; }
