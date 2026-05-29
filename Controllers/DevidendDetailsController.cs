@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using DocumentFormat.OpenXml.Wordprocessing;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
 using SACCOBlockChainSystem.Services;
+using System.Text;
 
 namespace SACCOBlockChainSystem.Controllers
 {
@@ -247,21 +249,37 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 // Calculate savings
-                decimal memberSavings = await _context.Contribs
-                    .Where(x => x.MemberNo == model.MemberNo && x.CompanyCode == companyCode)
-                    .SumAsync(x => (decimal?)x.Amount) ?? 0;
+                decimal deposits = await _context.ContribShares
+    .Where(x => x.MemberNo == member.MemberNo &&
+                x.CompanyCode == companyCode)
+                //x.ContrDate >= startDate &&
+                //x.ContrDate <= endDate)
+    .SumAsync(x => (decimal?)x.DepositsAmount) ?? 0;
 
-                System.Diagnostics.Debug.WriteLine($"Member savings: {memberSavings}");
+                decimal shares = await _context.ContribShares
+                    .Where(x => x.MemberNo == member.MemberNo &&
+                                x.CompanyCode == companyCode)
+                                //x.ContrDate >= startDate &&
+                                //x.ContrDate <= endDate)
+                    .SumAsync(x => (decimal?)x.ShareCapitalAmount) ?? 0;
 
-                decimal weightedSavings = memberSavings;
+                //decimal memberSavings = await _context.Contribs
+                //    .Where(c => c.MemberNo == member.MemberNo &&
+                //                c.CompanyCode == companyCode)
+                //    .SumAsync(c => (decimal?)c.Amount) ?? 0;
                 decimal savingsRate = 0.10m;
                 decimal shareRate = 0.05m;
                 decimal withholdingRate = 0.05m;
 
-                decimal savingsDividend = weightedSavings * savingsRate;
-                decimal shareDividend = weightedSavings * shareRate;
+                decimal weightedSavings = deposits + shares;
+
+                decimal savingsDividend = deposits * savingsRate;
+                decimal shareDividend = shares * shareRate;
+
                 decimal grossDividend = savingsDividend + shareDividend;
+
                 decimal withholdingTax = grossDividend * withholdingRate;
+
                 decimal netDividend = grossDividend - withholdingTax;
 
                 System.Diagnostics.Debug.WriteLine($"Calculations - Gross: {grossDividend}, Net: {netDividend}");
@@ -325,6 +343,200 @@ namespace SACCOBlockChainSystem.Controllers
                     message = $"Error: {ex.Message}"
                 });
             }
+        }
+
+
+        // =============================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CalculateAll(int dividendYear)
+        {
+            try
+            {
+                int currentYear = DateTime.Now.Year;
+
+                if (dividendYear >= currentYear)
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"Dividends for {dividendYear} cannot be processed yet. Processing is only allowed after year end (31st December)."
+                    });
+                }
+
+                string companyCode = User.FindFirst("CompanyCode")?.Value;
+
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    companyCode = HttpContext.Session.GetString("CompanyCode");
+                }
+
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    companyCode = _context.Members
+                        .Select(m => m.CompanyCode)
+                        .FirstOrDefault();
+                }
+
+                // Get all members
+                var members = await _context.Members
+                    .Where(m => m.CompanyCode == companyCode)
+                    .ToListAsync();
+
+                if (!members.Any())
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "No members found."
+                    });
+                }
+
+                decimal savingsRate = 0.10m;
+                decimal shareRate = 0.05m;
+                decimal withholdingRate = 0.05m;
+
+                var results = new List<object>();
+
+                foreach (var member in members)
+                {
+                    // Check if dividend already exists
+                    bool exists = await _context.DividendDetails.AnyAsync(x =>
+                        x.MemberNo == member.MemberNo &&
+                        x.DividendYear == dividendYear &&
+                        x.CompanyCode == companyCode);
+
+                    if (exists)
+                        continue;
+
+                    var startDate = new DateTime(dividendYear, 1, 1);
+                    var endDate = new DateTime(dividendYear, 12, 31);
+
+                    decimal deposits = await _context.ContribShares
+    .Where(x => x.MemberNo == member.MemberNo &&
+                x.CompanyCode == companyCode &&
+                x.ContrDate >= startDate &&
+                x.ContrDate <= endDate)
+    .SumAsync(x => (decimal?)x.DepositsAmount) ?? 0;
+
+                    decimal shares = await _context.ContribShares
+                        .Where(x => x.MemberNo == member.MemberNo &&
+                                    x.CompanyCode == companyCode &&
+                                    x.ContrDate >= startDate &&
+                                    x.ContrDate <= endDate)
+                        .SumAsync(x => (decimal?)x.ShareCapitalAmount) ?? 0;
+
+                    //decimal memberSavings = await _context.Contribs
+                    //    .Where(c => c.MemberNo == member.MemberNo &&
+                    //                c.CompanyCode == companyCode)
+                    //    .SumAsync(c => (decimal?)c.Amount) ?? 0;
+
+                    decimal weightedSavings = deposits + shares;
+
+                    decimal savingsDividend = deposits * savingsRate;
+                    decimal shareDividend = shares * shareRate;
+
+                    decimal grossDividend = savingsDividend + shareDividend;
+
+                    decimal withholdingTax = grossDividend * withholdingRate;
+
+                    decimal netDividend = grossDividend - withholdingTax;
+
+                    var dividend = new DividendDetails
+                    {
+                        DividendYear = dividendYear,
+                        MemberNo = member.MemberNo,
+                        WeightedSavings = weightedSavings,
+                        SavingsDividend = savingsDividend,
+                        ShareDividend = shareDividend,
+                        GrossDividend = grossDividend,
+                        WithholdingTax = withholdingTax,
+                        NetDividend = netDividend,
+                        CompanyCode = companyCode
+                    };
+
+                    _context.DividendDetails.Add(dividend);
+
+                    results.Add(new
+                    {
+                        memberNo = member.MemberNo,
+                        memberName = $"{member.Surname} {member.OtherNames}",
+                        weightedSavings,
+                        savingsDividend,
+                        shareDividend,
+                        grossDividend,
+                        withholdingTax,
+                        netDividend
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Json(new
+                {
+                    success = true,
+                    totalMembers = results.Count,
+                    data = results
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = ex.Message
+                });
+            }
+        }
+        // =============================================
+        // =============================================
+
+        [HttpGet]
+        public async Task<IActionResult> ExportDividendsCsv(int? year)
+        {
+            string companyCode = User.FindFirst("CompanyCode")?.Value
+                ?? HttpContext.Session.GetString("CompanyCode");
+
+            var query = _context.DividendDetails
+                .Where(x => x.CompanyCode == companyCode);
+
+            if (year.HasValue)
+            {
+                query = query.Where(x => x.DividendYear == year.Value);
+            }
+
+            var data = await query
+                .OrderBy(x => x.MemberNo)
+                .ToListAsync();
+
+            var csv = new StringBuilder();
+
+            // Header
+            csv.AppendLine("Year,MemberNo,MemberName,WeightedSavings,SavingsDividend,ShareDividend,GrossDividend,Tax,NetDividend");
+
+            foreach (var item in data)
+            {
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == item.MemberNo);
+
+                string name = member != null ? $"{member.Surname} {member.OtherNames}" : "Unknown";
+
+                csv.AppendLine(
+                    $"{item.DividendYear}," +
+                    $"{item.MemberNo}," +
+                    $"\"{name}\"," +
+                    $"{item.WeightedSavings}," +
+                    $"{item.SavingsDividend}," +
+                    $"{item.ShareDividend}," +
+                    $"{item.GrossDividend}," +
+                    $"{item.WithholdingTax}," +
+                    $"{item.NetDividend}"
+                );
+            }
+
+            var bytes = Encoding.UTF8.GetBytes(csv.ToString());
+
+            return File(bytes, "text/csv", "Dividend_Report.csv");
         }
         // =========================================
         // GET COMPANY CODE FROM SESSION

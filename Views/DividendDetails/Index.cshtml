@@ -47,7 +47,7 @@
     <!-- CREATE FORM -->
     <div class="card mb-4">
         <div class="card-header bg-success text-white">
-            <h5>Create Dividend</h5>
+            <h5> Dividend Details</h5>
         </div>
         <div class="card-body">
             @Html.AntiForgeryToken()
@@ -68,6 +68,9 @@
             <button type="button" id="saveDividendBtn" class="btn btn-success mt-3">
                 Calculate & Save Dividend
             </button>
+            <button type="button" id="btnCalculateAll" class="btn btn-success mt-3">
+                Process Dividend 
+            </button>
         </div>
     </div>
 
@@ -75,6 +78,13 @@
     <div class="card">
         <div class="card-header bg-dark text-white">
             <h5>Dividend Records</h5>
+        </div>
+        <!-- Export Button -->
+        <div class="d-flex justify-content-end mb-3">
+            <a href="@Url.Action("ExportDividendsCsv", "DividendDetails")"
+               class="btn btn-success">
+                Export CSV
+            </a>
         </div>
         <div class="card-body">
             <table class="table table-striped table-hover">
@@ -91,7 +101,7 @@
                         <th>Net</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="dividendTableBody">
                     @foreach (var item in Model)
                     {
                         <tr>
@@ -111,150 +121,224 @@
         </div>
     </div>
 </div>
-
 @section Scripts {
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script>
-        $(document).ready(function() {
-            // Bind save button click event
-            $("#saveDividendBtn").on("click", saveDividend);
+  
+<script>
+    $(document).ready(function () {
 
-            // Enter key support for search
-            $("#searchInput").on("keypress", function(e) {
-                if (e.which === 13) {
-                    searchMembers();
-                }
-            });
+        // Save single member dividend
+        $("#saveDividendBtn").on("click", saveDividend);
+
+        // Calculate all members
+        $("#btnCalculateAll").on("click", calculateAllDividends);
+
+        // Enter key support for search
+        $("#searchInput").on("keypress", function (e) {
+            if (e.which === 13) {
+                searchMembers();
+            }
         });
+    });
 
-        function searchMembers() {
-            let term = $("#searchInput").val().trim();
+    function searchMembers() {
+        let term = $("#searchInput").val().trim();
 
-            if (term.length < 2) {
-                alert("Enter at least 2 characters");
-                return;
-            }
+        if (term.length < 2) {
+            alert("Enter at least 2 characters");
+            return;
+        }
 
-            $("#searchResults").show();
-            $("#noResultsMessage").hide();
+        $("#searchResults").show();
+        $("#noResultsMessage").hide();
 
-            $.ajax({
-                url: '@Url.Action("SearchMembers", "DividendDetails")',
-                type: 'GET',
-                data: { term: term },
-                success: function(response) {
-                    let html = "";
-                    if (response.success && response.data.length > 0) {
-                        $.each(response.data, function(i, m) {
-                            html += '<tr>';
-                            html += '<td>' + escapeHtml(m.memberNo) + '</td>';
-                            html += '<td>' + escapeHtml(m.name) + '</td>';
-                            html += '<td>' + escapeHtml(m.idno || '-') + '</td>';
-                            html += '<td>' + escapeHtml(m.phoneNo || '-') + '</td>';
-                            html += '<td><button type="button" class="btn btn-sm btn-success" onclick="selectMember(\'' + escapeHtml(m.memberNo) + '\', \'' + escapeHtml(m.name.replace(/'/g, "\\'")) + '\')">Select</button></td>';
-                            html += '</tr>';
-                        });
-                        $("#membersResult").html(html);
-                        $("#noResultsMessage").hide();
-                    } else {
-                        $("#membersResult").html("");
-                        $("#noResultsMessage").show();
-                    }
-                },
-                error: function(xhr) {
-                    console.log(xhr.responseText);
-                    alert("Search failed");
+        $.ajax({
+            url: '@Url.Action("SearchMembers", "DividendDetails")',
+            type: 'GET',
+            data: { term: term },
+            success: function (response) {
+
+                let html = "";
+
+                if (response.success && response.data.length > 0) {
+
+                    $.each(response.data, function (i, m) {
+
+                        html += '<tr>';
+                        html += '<td>' + escapeHtml(m.memberNo) + '</td>';
+                        html += '<td>' + escapeHtml(m.name) + '</td>';
+                        html += '<td>' + escapeHtml(m.idno || '-') + '</td>';
+                        html += '<td>' + escapeHtml(m.phoneNo || '-') + '</td>';
+                        html += '<td><button type="button" class="btn btn-sm btn-success" onclick="selectMember(\'' +
+                            escapeHtml(m.memberNo) + '\', \'' +
+                            escapeHtml(m.name.replace(/'/g, "\\'")) +
+                            '\')">Select</button></td>';
+                        html += '</tr>';
+                    });
+
+                    $("#membersResult").html(html);
+                    $("#noResultsMessage").hide();
                 }
-            });
-        }
-
-        function selectMember(memberNo, name) {
-            console.log("Selected MemberNo:", memberNo);
-            $("#MemberNo").val(memberNo);
-            $("#MemberName").val(name);
-            $("#searchResults").hide();
-            $("#noResultsMessage").hide();
-        }
-
-        function saveDividend() {
-            let year = $("#DividendYear").val();
-            let memberNo = $("#MemberNo").val();
-
-            console.log("Year:", year);
-            console.log("MemberNo:", memberNo);
-
-            if (!year || !memberNo) {
-                alert("Please select a member and enter the year");
-                return;
-            }
-
-            let currentYear = new Date().getFullYear();
-            let yearNum = parseInt(year);
-
-            if (isNaN(yearNum) || yearNum < 2000 || yearNum > currentYear + 1) {
-                alert("Please enter a valid year (2000-" + (currentYear + 1) + ")");
-                return;
-            }
-
-            let saveButton = $("#saveDividendBtn");
-            let originalText = saveButton.html();
-            saveButton.html('<i class="fas fa-spinner fa-spin"></i> Calculating...').prop('disabled', true);
-
-            $.ajax({
-                url: '@Url.Action("Calculate", "DividendDetails")',
-                type: 'POST',
-                data: {
-                    DividendYear: yearNum,
-                    MemberNo: memberNo,
-                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
-                },
-                dataType: 'json',
-                success: function(response) {
-                    console.log("RESPONSE:", response);
-                    if (response.success) {
-                        let details = response.data;
-                        let message = response.message + "\n\n";
-                        message += "Year: " + details.dividendYear + "\n";
-                        message += "Member: " + (details.memberName || details.memberNo) + "\n";
-                        message += "Net Dividend: KES " + details.netDividend;
-                        alert(message);
-                        location.reload();
-                    } else {
-                        alert("Error: " + response.message);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.log("Status:", status);
-                    console.log("Error:", error);
-                    let errorMsg = "Error saving dividend. ";
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        errorMsg += xhr.responseJSON.message;
-                    } else {
-                        errorMsg += "Please try again.";
-                    }
-                    alert(errorMsg);
-                },
-                complete: function() {
-                    saveButton.html(originalText).prop('disabled', false);
+                else {
+                    $("#membersResult").html("");
+                    $("#noResultsMessage").show();
                 }
-            });
+            },
+            error: function (xhr) {
+                console.log(xhr.responseText);
+                alert("Search failed");
+            }
+        });
+    }
+
+    function selectMember(memberNo, name) {
+        $("#MemberNo").val(memberNo);
+        $("#MemberName").val(name);
+        $("#searchResults").hide();
+        $("#noResultsMessage").hide();
+    }
+
+    function saveDividend() {
+
+        let year = $("#DividendYear").val();
+        let memberNo = $("#MemberNo").val();
+
+        if (!year || !memberNo) {
+            alert("Please select a member and enter the year");
+            return;
         }
 
-        function clearSearch() {
-            $("#searchInput").val("");
-            $("#membersResult").html("");
-            $("#searchResults").hide();
-            $("#noResultsMessage").hide();
+        let saveButton = $("#saveDividendBtn");
+        let originalText = saveButton.html();
+
+        saveButton.html('Calculating...')
+            .prop('disabled', true);
+
+        $.ajax({
+            url: '@Url.Action("Calculate", "DividendDetails")',
+            type: 'POST',
+            data: {
+                DividendYear: year,
+                MemberNo: memberNo,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            },
+            success: function (response) {
+
+                if (response.success) {
+
+                    let details = response.data;
+
+                    alert(
+                        response.message +
+                        "\nNet Dividend: KES " +
+                        details.netDividend
+                    );
+
+                    location.reload();
+                }
+                else {
+                    alert(response.message);
+                }
+            },
+            error: function (xhr) {
+
+                console.log(xhr.responseText);
+
+                alert("Error saving dividend.");
+            },
+            complete: function () {
+
+                saveButton.html(originalText)
+                    .prop('disabled', false);
+            }
+        });
+    }
+
+        function safeNumber(val) {
+        return Number(val || 0).toLocaleString();
+    }
+
+       function calculateAllDividends() {
+
+        let year = $("#DividendYear").val();
+
+        if (!year) {
+            alert("Please enter dividend year.");
+            return;
         }
 
-        function escapeHtml(str) {
-            if (!str) return "";
-            return str
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#39;");
-        }
-    </script>
+        let btn = $("#btnCalculateAll");
+        let originalText = btn.html();
+
+        btn.html("Processing all members...").prop("disabled", true);
+
+        $.ajax({
+            url: '@Url.Action("CalculateAll", "DividendDetails")',
+            type: 'POST',
+            data: {
+                dividendYear: year,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            },
+
+            success: function (response) {
+
+                console.log("ALL MEMBERS RESPONSE:", response);
+
+                if (!response.success) {
+                    alert(response.message);
+                    return;
+                }
+
+                let rows = "";
+
+                response.data.forEach(function (item) {
+
+                    rows += `
+                        <tr>
+                            <td>${item.memberNo}</td>
+                            <td>${item.memberName}</td>
+                            <td class="text-end">${safeNumber(item.weightedSavings)}</td>
+                            <td class="text-end">${safeNumber(item.savingsDividend)}</td>
+                            <td class="text-end">${safeNumber(item.shareDividend)}</td>
+                            <td class="text-end">${safeNumber(item.grossDividend)}</td>
+                            <td class="text-end">${safeNumber(item.withholdingTax)}</td>
+                            <td class="text-end fw-bold">${safeNumber(item.netDividend)}</td>
+                        </tr>
+                    `;
+                });
+
+                // IMPORTANT: replace table body
+                $("#dividendTableBody").html(rows);
+
+                alert(response.totalMembers + " members processed successfully.");
+            },
+
+            error: function (xhr) {
+                console.log(xhr.responseText);
+                alert("Failed to process dividends.");
+            },
+
+            complete: function () {
+                btn.html(originalText).prop("disabled", false);
+            }
+        });
+    }
+
+    function clearSearch() {
+        $("#searchInput").val("");
+        $("#membersResult").html("");
+        $("#searchResults").hide();
+        $("#noResultsMessage").hide();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return "";
+
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+</script>
 }
