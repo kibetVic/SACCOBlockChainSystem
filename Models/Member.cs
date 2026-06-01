@@ -74,6 +74,7 @@ namespace SACCOBlockChainSystem.Models
 
         public string? Pin { get; set; }
 
+        [Column(TypeName = "nvarchar(max)")]
         public string? Photo { get; set; }
 
         public decimal? ShareCap { get; set; }

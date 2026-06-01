@@ -229,6 +229,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal EligibleAmount { get; set; } // Add this if needed
         public string? Reason { get; set; } // Add this if needed
         public string ApprovalStatus { get; internal set; }
+        public string? RepayMethod { get; internal set; }
     }
 
     public class LoanTypeStatisticsDTO

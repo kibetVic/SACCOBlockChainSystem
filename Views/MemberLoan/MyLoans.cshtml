@@ -1,0 +1,409 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.MemberLoanSummaryDTO>
+@{
+    ViewData["Title"] = "My Loans";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var pendingGuarantees = ViewBag.PendingGuarantees as List<SACCOBlockChainSystem.Models.DTOs.PendingGuaranteeDTO> ?? new List<SACCOBlockChainSystem.Models.DTOs.PendingGuaranteeDTO>();
+    var activeLoansCount = ViewBag.ActiveLoansCount ?? 0;
+    var pendingLoansCount = ViewBag.PendingLoansCount ?? 0;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - SACCO Blockchain System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        .stat-card {
+            background: white;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+            .stat-card:hover {
+                transform: translateY(-2px);
+            }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .loan-status {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-Draft {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-Submitted {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-UnderAppraisal {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-Approved {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-Endorsed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-Disbursed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-Closed {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .status-Rejected {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-WrittenOff {
+            background: #fecaca;
+            color: #7f1d1d;
+        }
+
+        .status-Defaulted {
+            background: #fecaca;
+            color: #7f1d1d;
+        }
+
+        .loan-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: white;
+            transition: all 0.2s;
+        }
+
+            .loan-card:hover {
+                box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+                border-color: #2563eb;
+            }
+
+        .progress-bar-custom {
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #2563eb;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .btn-sm-custom {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            border-radius: 0.375rem;
+        }
+
+        .pending-card {
+            border-left: 4px solid #f59e0b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="mb-0"><i class="fas fa-list-alt text-primary"></i> My Loans</h2>
+                <p class="text-muted">View and manage your loan applications</p>
+            </div>
+            <a asp-action="Apply" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Apply for New Loan
+            </a>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted">Total Loans</small>
+                            <h3 class="mb-0">@Model.Count</h3>
+                        </div>
+                        <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted">Active Loans</small>
+                            <h3 class="mb-0 text-success">@activeLoansCount</h3>
+                        </div>
+                        <div class="stat-icon bg-success bg-opacity-10 text-success">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted">Pending Applications</small>
+                            <h3 class="mb-0 text-warning">@pendingLoansCount</h3>
+                        </div>
+                        <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted">Pending Guarantee Requests</small>
+                            <h3 class="mb-0 text-info">@pendingGuarantees.Count</h3>
+                        </div>
+                        <div class="stat-icon bg-info bg-opacity-10 text-info">
+                            <i class="fas fa-handshake"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Guarantee Requests (Member as Guarantor) -->
+        @if (pendingGuarantees.Any())
+        {
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fas fa-bell"></i> Pending Guarantee Requests</h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle"></i> You have been requested to guarantee the following loans.
+                        Please check your email for invitation links to respond.
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Loan No</th>
+                                    <th>Applicant</th>
+                                    <th>Loan Amount</th>
+                                    <th>Invitation Date</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var request in pendingGuarantees)
+                                {
+                                    <tr>
+                                        <td><strong>@request.LoanNo</strong></td>
+                                        <td>@request.ApplicantName</td>
+                                        <td>KES @request.LoanAmount.ToString("N0")</td>
+                                        <td>@request.InvitationDate.ToString("dd/MM/yyyy")</td>
+                                        <td>
+                                            <span class="loan-status status-Submitted">Pending Response</span>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">Check your email for the invitation link</small>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- My Loans List -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="fas fa-list"></i> My Loan Applications</h6>
+            </div>
+            <div class="card-body">
+                @if (!Model.Any())
+                {
+                    <div class="text-center py-5">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <h5>No Loans Found</h5>
+                        <p class="text-muted">You haven't applied for any loans yet.</p>
+                        <a asp-action="Apply" class="btn btn-primary mt-2">
+                            <i class="fas fa-plus"></i> Apply for Loan
+                        </a>
+                    </div>
+                }
+                else
+                {
+                    foreach (var loan in Model)
+                    {
+                        var statusClass = loan.Status switch
+                        {
+                            "Draft" => "status-Draft",
+                            "Submitted" => "status-Submitted",
+                            "UnderAppraisal" => "status-UnderAppraisal",
+                            "Approved" => "status-Approved",
+                            "Endorsed" => "status-Endorsed",
+                            "Disbursed" => "status-Disbursed",
+                            "Closed" => "status-Closed",
+                            "Rejected" => "status-Rejected",
+                            _ => "status-Draft"
+                        };
+
+                        var isActive = loan.Status == "Disbursed" || loan.Status == "Endorsed";
+                        var isPending = loan.Status == "Draft" || loan.Status == "Submitted" || loan.Status == "UnderAppraisal";
+                        var isCompleted = loan.Status == "Closed" || loan.Status == "Rejected" || loan.Status == "WrittenOff";
+
+                        var progressPercentage = loan.PrincipalAmount > 0
+                        ? ((loan.PrincipalAmount - loan.OutstandingBalance) / loan.PrincipalAmount * 100)
+                        : 0;
+
+                        <div class="loan-card">
+                            <div class="row align-items-center">
+                                <div class="col-md-3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-3">
+                                            <i class="fas fa-file-invoice fa-2x text-primary"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0">@loan.LoanNo</h6>
+                                            <small class="text-muted">@loan.LoanType</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div>
+                                        <small class="text-muted">Principal Amount</small>
+                                        <h6 class="mb-0 text-primary">KES @loan.PrincipalAmount.ToString("N0")</h6>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div>
+                                        <small class="text-muted">Outstanding Balance</small>
+                                        <h6 class="mb-0 @(loan.OutstandingBalance > 0 ? "text-danger" : "text-success")">
+                                            KES @loan.OutstandingBalance.ToString("N0")
+                                        </h6>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div>
+                                        <small class="text-muted">Monthly Payment</small>
+                                        <h6 class="mb-0">KES @loan.MonthlyInstallment.ToString("N0")</h6>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div>
+                                        <small class="text-muted">Next Payment Date</small>
+                                        <h6 class="mb-0">
+                                            @(loan.NextPaymentDate?.ToString("dd/MM/yyyy") ?? "N/A")
+                                        </h6>
+                                    </div>
+                                </div>
+                                <div class="col-md-1 text-end">
+                                    <span class="loan-status @statusClass">@loan.Status</span>
+                                </div>
+                            </div>
+
+                            @if (isActive)
+                            {
+                                <div class="mt-3">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <small class="text-muted">Repayment Progress</small>
+                                        <small class="text-muted">@progressPercentage.ToString("F0")%</small>
+                                    </div>
+                                    <div class="progress-bar-custom">
+                                        <div class="progress-fill" style="width: @progressPercentage%"></div>
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="mt-3 d-flex gap-2">
+                                <a asp-action="Details" asp-route-loanNo="@loan.LoanNo" class="btn btn-outline-primary btn-sm-custom">
+                                    <i class="fas fa-eye"></i> View Details
+                                </a>
+
+                                @if (isActive)
+                                {
+                                    <a asp-controller="LoanMvc" asp-action="Repay" asp-route-loanNo="@loan.LoanNo" class="btn btn-success btn-sm-custom">
+                                        <i class="fas fa-money-bill-wave"></i> Make Payment
+                                    </a>
+
+                                    <a asp-controller="LoanMvc" asp-action="Schedule" asp-route-loanNo="@loan.LoanNo" class="btn btn-info btn-sm-custom text-white">
+                                        <i class="fas fa-calendar-alt"></i> View Schedule
+                                    </a>
+                                }
+
+                                @if (isPending)
+                                {
+                                    <a asp-action="TrackStatus" asp-route-loanNo="@loan.LoanNo" class="btn btn-warning btn-sm-custom">
+                                        <i class="fas fa-chart-simple"></i> Track Status
+                                    </a>
+                                }
+
+                                @if (loan.Status == "Disbursed" || loan.Status == "Endorsed")
+                                {
+                                    <button type="button" class="btn btn-secondary btn-sm-custom" onclick="printStatement('@loan.LoanNo')">
+                                        <i class="fas fa-print"></i> Statement
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        function printStatement(loanNo) {
+            window.open('/LoanMvc/PrintStatement?loanNo=' + loanNo, '_blank', 'width=900,height=600');
+        }
+
+        // Auto-refresh pending guarantees count every 30 seconds
+        setInterval(function() {
+            location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>

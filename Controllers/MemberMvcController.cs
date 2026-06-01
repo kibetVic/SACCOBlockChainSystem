@@ -1095,6 +1095,7 @@ namespace SACCOBlockChainSystem.Controllers
                     Employer = member.Employer,
                     MembershipType = member.MembershipType,
                     RegistrationType = member.MemberDescription,
+                    Photo = member.Photo,
                     MaritalStatus = member.Mstatus == true ? "Married" : member.Mstatus == false ? "Single" : "",
                     Status = member.Status switch
                     {
@@ -1169,6 +1170,16 @@ namespace SACCOBlockChainSystem.Controllers
                 if (string.IsNullOrEmpty(model.PhoneNo))
                 {
                     return Json(new { success = false, message = "Phone Number is required" });
+                }
+
+                // Validate photo if provided (optional)
+                if (!string.IsNullOrEmpty(model.Photo))
+                {
+                    // Validate it's a valid base64 image
+                    if (!model.Photo.StartsWith("data:image/"))
+                    {
+                        return Json(new { success = false, message = "Invalid image format" });
+                    }
                 }
 
                 // Update member using service

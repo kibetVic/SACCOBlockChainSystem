@@ -1,0 +1,715 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.MemberLoanApplicationDTO
+@{
+    ViewData["Title"] = "Apply for Loan";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    
+    var eligibleAmount = ViewBag.EligibleAmount as decimal? ?? 0;
+    var maxLoanAmount = ViewBag.MaxLoanAmount as decimal? ?? 0;
+    var totalShares = ViewBag.TotalShares as decimal? ?? 0;
+    var loanTypes = ViewBag.LoanTypes as List<SACCOBlockChainSystem.Models.DTOs.LoanTypeSimpleDTO> ?? new List<SACCOBlockChainSystem.Models.DTOs.LoanTypeSimpleDTO>();
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - SACCO Blockchain System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+        
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .step .circle {
+            width: 40px;
+            height: 40px;
+            background: #e5e7eb;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #6b7280;
+        }
+        
+        .step.active .circle {
+            background: #2563eb;
+            color: white;
+        }
+        
+        .step.completed .circle {
+            background: #10b981;
+            color: white;
+        }
+        
+        .step-label {
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            color: #6b7280;
+        }
+        
+        .step.active .step-label {
+            color: #2563eb;
+            font-weight: 600;
+        }
+        
+        .guarantor-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: #f9fafb;
+        }
+        
+        .eligibility-badge {
+            background: #dcfce7;
+            color: #166534;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .loan-calc-result {
+            background: #f3f4f6;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .required:after {
+            content: " *";
+            color: red;
+        }
+        
+        #loadingOverlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            text-align: center;
+            padding-top: 20%;
+        }
+        
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step active" id="step1">
+                <div class="circle">1</div>
+                <div class="step-label">Loan Details</div>
+            </div>
+            <div class="step" id="step2">
+                <div class="circle">2</div>
+                <div class="step-label">Guarantors</div>
+            </div>
+            <div class="step" id="step3">
+                <div class="circle">3</div>
+                <div class="step-label">Review & Submit</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-hand-holding-usd"></i> Loan Application</h4>
+            </div>
+            <div class="card-body">
+                <!-- Eligibility Summary -->
+                <div class="alert alert-info mb-4">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <small>Your Total Shares/Deposits</small>
+                            <h5 class="mb-0">KES @totalShares.ToString("N0")</h5>
+                        </div>
+                        <div class="col-md-3">
+                            <small>Eligible Amount (3x Shares)</small>
+                            <h5 class="mb-0">KES @eligibleAmount.ToString("N0")</h5>
+                        </div>
+                        <div class="col-md-3">
+                            <small>Maximum Loan Amount</small>
+                            <h5 class="mb-0">KES @maxLoanAmount.ToString("N0")</h5>
+                        </div>
+                        <div class="col-md-3">
+                            <small>Your Active Loans</small>
+                            <h5 class="mb-0">@ViewBag.ActiveLoanCount</h5>
+                        </div>
+                    </div>
+                </div>
+
+                <form id="loanApplicationForm" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" id="currentStep" value="1" />
+                    <input type="hidden" name="MemberNo" value="@Model.MemberNo" />
+                    <input type="hidden" name="CompanyCode" value="@Model.CompanyCode" />
+                    
+                    <!-- STEP 1: Loan Details -->
+                    <div id="step1Content">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label required">Loan Type</label>
+                                    <select id="LoanCode" name="LoanCode" class="form-select" required>
+                                        <option value="">Select Loan Type</option>
+                                        @foreach (var type in loanTypes)
+                                        {
+                                            <option value="@type.LoanCode" 
+                                                    data-max-amount="@type.MaxAmount"
+                                                    data-repay-period="@type.RepayPeriod"
+                                                    data-interest="@type.Interest"
+                                                    data-repay-method="@type.RepayMethod"
+                                                    data-guarantor="@type.Guarantor"
+                                                    data-self-guarantee="@type.SelfGuarantee">
+                                                @type.LoanType @* - @(type.MaxAmount?.ToString("N0") ?? "Unlimited") KES *@
+                                            </option>
+                                        }
+                                    </select>
+                                    <span class="text-danger" id="LoanCodeError"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label required">Loan Purpose</label>
+                                    <select id="Purpose" name="Purpose" class="form-select" required>
+                                        <option value="">Select Purpose</option>
+                                        <option value="School Fees">School Fees</option>
+                                        <option value="Medical Emergency">Medical Emergency</option>
+                                        <option value="Home Improvement">Home Improvement</option>
+                                        <option value="Business Development">Business Development</option>
+                                        <option value="Vehicle Purchase">Vehicle Purchase</option>
+                                        <option value="Land Purchase">Land Purchase</option>
+                                        <option value="Debt Consolidation">Debt Consolidation</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label required">Principal Amount (KES)</label>
+                                    <input type="number" id="PrincipalAmount" name="PrincipalAmount" class="form-control" 
+                                           step="1000" min="1000" max="@maxLoanAmount" required />
+                                    <small class="text-muted">Min: 1,000 | Max: @maxLoanAmount.ToString("N0")</small>
+                                    <span class="text-danger" id="PrincipalAmountError"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label required">Repayment Period (Months)</label>
+                                    <select id="RepayPeriod" name="RepayPeriod" class="form-select" required>
+                                        <option value="12">1 months</option>
+                                        <option value="12">2 months</option>
+                                        <option value="12">3 months</option>
+                                        <option value="12">6 months</option>
+                                        <option value="12">9 months</option>
+                                        <option value="12">12 months</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Interest Rate</label>
+                                    <input type="text" id="InterestRate" class="form-control" readonly disabled />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Loan Calculation Results -->
+                        <div id="loanCalculation" class="loan-calc-result" style="display: none;">
+                            <h6 class="mb-3">Loan Calculation</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <small>Monthly Payment</small>
+                                    <h6 id="monthlyPayment" class="mb-0 text-primary">KES 0</h6>
+                                </div>
+                                <div class="col-md-4">
+                                    <small>Total Interest</small>
+                                    <h6 id="totalInterest" class="mb-0 text-warning">KES 0</h6>
+                                </div>
+                                <div class="col-md-4">
+                                    <small>Total Repayment</small>
+                                    <h6 id="totalRepayment" class="mb-0 text-success">KES 0</h6>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Additional Remarks</label>
+                            <textarea id="Remarks" name="Remarks" class="form-control" rows="3" placeholder="Any additional information..."></textarea>
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="button" class="btn btn-primary" onclick="goToStep2()">
+                                Continue to Guarantors <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- STEP 2: Guarantors -->
+                    <div id="step2Content" style="display: none;">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-info-circle"></i> 
+                            <strong>Guarantor Requirements:</strong> You need 1-3 guarantors. Each guarantor will receive an email invitation 
+                            to accept your loan request. They must have active savings/deposits to guarantee your loan.
+                        </div>
+
+                        <div id="guarantorsContainer">
+                            <div class="guarantor-card" id="guarantor1">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <h6 class="mb-0">Guarantor 1 <span class="text-danger">*</span></h6>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeGuarantor(1)" style="display: none;">
+                                        <i class="fas fa-trash"></i> Remove
+                                    </button>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-5">
+                                        <label class="form-label">Email Address</label>
+                                        <input type="email" class="form-control guarantor-email" placeholder="guarantor@example.com" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Member Number (Optional)</label>
+                                        <input type="text" class="form-control guarantor-memberno" placeholder="Enter if known" />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Proposed Amount (Optional)</label>
+                                        <input type="number" class="form-control guarantor-amount" placeholder="KES" />
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <small class="text-muted" id="guarantorStatus1"></small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-outline-secondary" id="addGuarantorBtn">
+                                <i class="fas fa-plus"></i> Add Another Guarantor
+                            </button>
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="button" class="btn btn-secondary" onclick="goToStep1()">
+                                <i class="fas fa-arrow-left"></i> Back
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="goToStep3()">
+                                Review & Submit <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- STEP 3: Review & Submit -->
+                    <div id="step3Content" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card bg-light mb-3">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Loan Summary</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <td>Loan Type:</td>
+                                                <td id="reviewLoanType" class="fw-bold"></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Principal Amount:</td>
+                                                <td id="reviewPrincipal" class="fw-bold text-primary"></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Repayment Period:</td>
+                                                <td id="reviewPeriod" class="fw-bold"></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Interest Rate:</td>
+                                                <td id="reviewInterest" class="fw-bold"></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Monthly Payment:</td>
+                                                <td id="reviewMonthly" class="fw-bold text-success"></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Total Interest:</td>
+                                                <td id="reviewTotalInterest" class="fw-bold text-warning"></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Total Repayment:</td>
+                                                <td id="reviewTotalRepayment" class="fw-bold text-info"></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Purpose:</td>
+                                                <td id="reviewPurpose"></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Remarks:</td>
+                                                <td id="reviewRemarks"></td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light mb-3">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Guarantors to Invite</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="reviewGuarantors"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i>
+                            <strong>Before Submitting:</strong> Ensure all guarantor email addresses are correct. They will receive an email
+                            invitation to guarantee your loan. The loan will only proceed after all guarantors accept.
+                        </div>
+
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-secondary" onclick="goToStep2()">
+                                <i class="fas fa-arrow-left"></i> Back
+                            </button>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-paper-plane"></i> Submit Application
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div class="spinner-border text-light" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="text-light mt-2">Submitting Application...</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        let maxGuarantors = 3;
+        let currentGuarantorCount = 1;
+        let guarantorCounter = 1;
+        let loanTypesData = {};
+
+        $(document).ready(function() {
+            // Store loan types data
+            $('#LoanCode option').each(function() {
+                if ($(this).val()) {
+                    loanTypesData[$(this).val()] = {
+                        maxAmount: $(this).data('max-amount'),
+                        repayPeriod: $(this).data('repay-period'),
+                        interest: $(this).data('interest'),
+                        repayMethod: $(this).data('repay-method') || 'AMT',
+                        guarantor: $(this).data('guarantor'),
+                        selfGuarantee: $(this).data('self-guarantee')
+                    };
+                }
+            });
+
+            // Calculate loan when amount or period changes
+            $('#PrincipalAmount, #RepayPeriod, #LoanCode').on('change keyup', calculateLoan);
+            
+            // Add guarantor button
+            $('#addGuarantorBtn').on('click', addGuarantor);
+        });
+
+        function calculateLoan() {
+            const loanCode = $('#LoanCode').val();
+            const principal = parseFloat($('#PrincipalAmount').val()) || 0;
+            const period = parseInt($('#RepayPeriod').val()) || 12;
+            
+            if (!loanCode || principal <= 0) return;
+            
+            const selectedOption = $('#LoanCode option:selected');
+            const loanType = {
+                maxAmount: selectedOption.data('max-amount'),
+                repayPeriod: selectedOption.data('repay-period'),
+                interest: selectedOption.data('interest'),
+                repayMethod: selectedOption.data('repay-method') || 'AMT',
+                guarantor: selectedOption.data('guarantor'),
+                selfGuarantee: selectedOption.data('self-guarantee')
+            };
+            
+            const interestRate = parseFloat(loanType.interest) || 0;
+            const repayMethod = loanType.repayMethod;
+            
+            $('#InterestRate').val(interestRate + '%');
+            
+            // Calculate monthly payment based on method
+            let monthlyRate = (interestRate / 100) / 12;
+            let monthlyPayment = 0;
+            let totalInterest = 0;
+            
+            if (repayMethod === 'AMT') {
+                if (monthlyRate > 0) {
+                    let factor = Math.pow(1 + monthlyRate, period);
+                    monthlyPayment = principal * monthlyRate * factor / (factor - 1);
+                } else {
+                    monthlyPayment = principal / period;
+                }
+                totalInterest = (monthlyPayment * period) - principal;
+            } else if (repayMethod === 'STL') {
+                monthlyPayment = (principal / period) + (principal * monthlyRate);
+                totalInterest = principal * (interestRate / 100) * (period / 12);
+            } else {
+                monthlyPayment = principal * monthlyRate;
+                totalInterest = monthlyPayment * period;
+            }
+            
+            let totalRepayment = principal + totalInterest;
+            
+            $('#monthlyPayment').text('KES ' + monthlyPayment.toLocaleString('en-KE', {minimumFractionDigits: 2}));
+            $('#totalInterest').text('KES ' + totalInterest.toLocaleString('en-KE', {minimumFractionDigits: 2}));
+            $('#totalRepayment').text('KES ' + totalRepayment.toLocaleString('en-KE', {minimumFractionDigits: 2}));
+            $('#loanCalculation').show();
+            
+            // Validate against max amount
+            const maxAmount = loanType.maxAmount || 5000000;
+            if (principal > maxAmount) {
+                $('#PrincipalAmountError').text('Amount exceeds maximum allowed for this loan type (KES ' + maxAmount.toLocaleString() + ')');
+            } else {
+                $('#PrincipalAmountError').text('');
+            }
+        }
+
+        function addGuarantor() {
+            if (currentGuarantorCount >= maxGuarantors) {
+                Swal.fire('Maximum Guarantors', 'You can only add up to ' + maxGuarantors + ' guarantors', 'warning');
+                return;
+            }
+            
+            currentGuarantorCount++;
+            guarantorCounter++;
+            
+            const newId = guarantorCounter;
+            const newGuarantor = `
+                <div class="guarantor-card" id="guarantor${newId}">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h6 class="mb-0">Guarantor ${newId}</h6>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeGuarantor(${newId})">
+                            <i class="fas fa-trash"></i> Remove
+                        </button>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-5">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" class="form-control guarantor-email" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Member Number (Optional)</label>
+                            <input type="text" class="form-control guarantor-memberno" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Proposed Amount (Optional)</label>
+                            <input type="number" class="form-control guarantor-amount" placeholder="KES" />
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            $('#guarantorsContainer').append(newGuarantor);
+        }
+        
+        function removeGuarantor(id) {
+            $(`#guarantor${id}`).remove();
+            currentGuarantorCount--;
+        }
+        
+        function goToStep2() {
+            // Validate step 1
+            const loanCode = $('#LoanCode').val();
+            const principal = $('#PrincipalAmount').val();
+            const purpose = $('#Purpose').val();
+            
+            if (!loanCode) {
+                Swal.fire('Error', 'Please select a loan type', 'error');
+                return;
+            }
+            if (!principal || parseFloat(principal) < 1000) {
+                Swal.fire('Error', 'Please enter a valid loan amount (minimum KES 1,000)', 'error');
+                return;
+            }
+            if (!purpose) {
+                Swal.fire('Error', 'Please select a loan purpose', 'error');
+                return;
+            }
+            
+            // Update step UI
+            $('#step1').removeClass('active').addClass('completed');
+            $('#step2').addClass('active');
+            $('#step1Content').hide();
+            $('#step2Content').show();
+            $('#currentStep').val('2');
+        }
+        
+        function goToStep1() {
+            $('#step2').removeClass('active');
+            $('#step1').removeClass('completed').addClass('active');
+            $('#step2Content').hide();
+            $('#step1Content').show();
+            $('#currentStep').val('1');
+        }
+        
+        function goToStep3() {
+            // Validate at least one guarantor
+            const emails = $('.guarantor-email').filter(function() { return $(this).val(); });
+            if (emails.length === 0) {
+                Swal.fire('Error', 'Please add at least one guarantor', 'error');
+                return;
+            }
+            
+            // Validate email formats
+            let valid = true;
+            $('.guarantor-email').each(function() {
+                const email = $(this).val();
+                if (email && !isValidEmail(email)) {
+                    $(this).addClass('is-invalid');
+                    valid = false;
+                } else {
+                    $(this).removeClass('is-invalid');
+                }
+            });
+            
+            if (!valid) {
+                Swal.fire('Error', 'Please enter valid email addresses for all guarantors', 'error');
+                return;
+            }
+            
+            // Populate review section
+            $('#reviewLoanType').text($('#LoanCode option:selected').text());
+            $('#reviewPrincipal').text('KES ' + parseFloat($('#PrincipalAmount').val()).toLocaleString('en-KE'));
+            $('#reviewPeriod').text($('#RepayPeriod').val() + ' months');
+            $('#reviewInterest').text($('#InterestRate').val());
+            $('#reviewMonthly').text($('#monthlyPayment').text());
+            $('#reviewTotalInterest').text($('#totalInterest').text());
+            $('#reviewTotalRepayment').text($('#totalRepayment').text());
+            $('#reviewPurpose').text($('#Purpose option:selected').text());
+            $('#reviewRemarks').text($('#Remarks').val() || 'None');
+            
+            // Build guarantor list
+            let guarantorHtml = '';
+            $('.guarantor-card').each(function(index) {
+                const email = $(this).find('.guarantor-email').val();
+                const memberNo = $(this).find('.guarantor-memberno').val();
+                const amount = $(this).find('.guarantor-amount').val();
+                
+                if (email) {
+                    guarantorHtml += `
+                        <div class="mb-2">
+                            <strong>Guarantor ${index + 1}:</strong> ${email}
+                            ${memberNo ? `<br><small>Member No: ${memberNo}</small>` : ''}
+                            ${amount ? `<br><small>Proposed: KES ${parseFloat(amount).toLocaleString()}</small>` : ''}
+                        </div>
+                        <hr>
+                    `;
+                }
+            });
+            $('#reviewGuarantors').html(guarantorHtml || '<p class="text-muted">No guarantors added</p>');
+            
+            // Update step UI
+            $('#step2').removeClass('active').addClass('completed');
+            $('#step3').addClass('active');
+            $('#step2Content').hide();
+            $('#step3Content').show();
+            $('#currentStep').val('3');
+        }
+        
+        function isValidEmail(email) {
+            return /^[^\s@@]+@@[^\s@@]+\.[^\s@@]+$/.test(email);
+        }
+        
+        // Form submission
+        $('#loanApplicationForm').on('submit', async function(e) {
+            e.preventDefault();
+            
+            // Collect guarantors
+            const guarantors = [];
+            $('.guarantor-card').each(function() {
+                const email = $(this).find('.guarantor-email').val();
+                if (email) {
+                    guarantors.push({
+                        email: email,
+                        memberNo: $(this).find('.guarantor-memberno').val() || '',
+                        fullName: '',
+                        proposedAmount: parseFloat($(this).find('.guarantor-amount').val()) || 0
+                    });
+                }
+            });
+            
+            const formData = {
+                memberNo: $('input[name="MemberNo"]').val(),
+                companyCode: $('input[name="CompanyCode"]').val(),
+                loanCode: $('#LoanCode').val(),
+                principalAmount: parseFloat($('#PrincipalAmount').val()),
+                repayPeriod: parseInt($('#RepayPeriod').val()),
+                purpose: $('#Purpose').val(),
+                remarks: $('#Remarks').val(),
+                guarantorInvites: guarantors,
+                applicationDate: new Date().toISOString()
+            };
+            
+            $('#loadingOverlay').fadeIn(200);
+            
+            try {
+                const response = await fetch('/MemberLoan/Apply', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                $('#loadingOverlay').fadeOut(200);
+                
+                if (data.success) {
+                    Swal.fire({
+                        title: 'Application Submitted!',
+                        html: `Your loan application <strong>${data.loanNo}</strong> has been submitted.<br><br>
+                               Invitations have been sent to ${guarantors.length} guarantor(s).<br>
+                               You will be notified once they respond.`,
+                        icon: 'success',
+                        confirmButtonText: 'View My Loans'
+                    }).then(() => {
+                        window.location.href = '/MemberLoan/MyLoans';
+                    });
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            } catch (error) {
+                $('#loadingOverlay').fadeOut(200);
+                Swal.fire('Error', 'An error occurred. Please try again.', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -245,6 +245,42 @@
                     <!-- RIGHT SIDE - Profile Info & Security -->
                     <div class="col-md-4">
                         <div class="card bg-light mb-3">
+                            <!-- Add this AFTER the Membership Information row and BEFORE the BUTTONS section -->
+                            <!-- Profile Image Upload Section -->
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <div class="card bg-light">
+                                        <div class="card-header">
+                                            <h6 class="mb-0"><i class="fas fa-image"></i> Profile Picture</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="profile-image-wrapper">
+                                                <img id="profileImagePreview"
+                                                     src="@(string.IsNullOrEmpty(Model.Photo) ? $"https://ui-avatars.com/api/?background=2563EB&color=fff&name={Uri.EscapeDataString(memberName)}" : Model.Photo)"
+                                                     alt="Profile Picture"
+                                                     class="profile-preview-img"
+                                                     onclick="document.getElementById('imageUpload').click()" />
+
+                                                <div class="image-upload-btn">
+                                                    <input type="file" id="imageUpload" accept="image/*" style="display: none;" />
+                                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('imageUpload').click()">
+                                                        <i class="fas fa-upload"></i> Upload Photo
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeImage()">
+                                                        <i class="fas fa-trash-alt"></i> Remove
+                                                    </button>
+                                                </div>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-info-circle"></i> Click to upload (Max 5MB, JPG/PNG)
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Hidden field for photo data -->
+                            <input type="hidden" id="PhotoBase64" name="Photo" value="@Model.Photo" />
                             <div class="card-header bg-secondary text-white">
                                 <h6 class="mb-0"><i class="fas fa-shield-alt"></i> Account Information</h6>
                             </div>
@@ -354,11 +390,43 @@
             opacity: 1;
         }
     }
-</style>
 
+    /* Profile Image Styles */
+    .profile-image-wrapper {
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+
+    .profile-preview-img {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #2563EB;
+        cursor: pointer;
+        transition: opacity 0.3s;
+    }
+
+        .profile-preview-img:hover {
+            opacity: 0.8;
+        }
+
+    .image-upload-btn {
+        margin-top: 0.5rem;
+    }
+
+        .image-upload-btn .btn {
+            margin: 0 2px;
+        }
+</style>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        let cropper = null;
+        let selectedImageData = null;
+
         $(document).ready(function() {
             // Calculate age when DOB changes
             $('#DateOfBirth').on('change', function() {
@@ -375,6 +443,24 @@
 
             // Load blockchain status
             loadBlockchainStatus();
+
+            // Image upload handler
+            $('#imageUpload').on('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    if (!file.type.match('image.*')) {
+                        Swal.fire('Error', 'Please select an image file (JPEG, PNG, GIF)', 'error');
+                        return;
+                    }
+
+                    if (file.size > 5 * 1024 * 1024) {
+                        Swal.fire('Error', 'Image size must be less than 5MB', 'error');
+                        return;
+                    }
+
+                    initImageCropper(file);
+                }
+            });
 
             // Form submit
             $('#profileForm').on('submit', function(e) {
@@ -506,7 +592,7 @@
                 return;
             }
 
-            // Build formData with EXACT property names matching MemberUpdateDTO
+            // Build formData with photo included
             const formData = {
                 memberNo: $('#MemberNo').val(),
                 surname: $('#Surname').val(),
@@ -526,10 +612,11 @@
                 registrationDate: $('#RegistrationDate').val(),
                 status: $('#Status').val(),
                 membershipType: $('#MembershipType').val(),
-                registrationType: $('#RegistrationType').val()
+                registrationType: $('#RegistrationType').val(),
+                photo: $('#PhotoBase64').val()
             };
 
-            console.log('Sending data:', formData); // Debug log
+            console.log('Photo data present:', formData.photo ? 'Yes - Length: ' + formData.photo.length : 'No');
 
             $('#loadingOverlay').fadeIn(200);
 
@@ -616,5 +703,171 @@
 
         updateTimeBasedGreeting();
         setInterval(updateTimeBasedGreeting, 60000);
+
+        // Image cropping functions
+        window.initImageCropper = function(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // Remove existing modal if any
+                if ($('#cropModal').length) {
+                    $('#cropModal').remove();
+                }
+
+                // Create modal HTML
+                const modalHtml = `
+                    <div class="modal fade" id="cropModal" tabindex="-1">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Crop Profile Picture</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body text-center">
+                                    <div class="img-container">
+                                        <img id="cropImage" style="max-width: 100%; max-height: 400px;" />
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="cropAndSaveBtn">Crop & Save</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                $('body').append(modalHtml);
+
+                // Set image source
+                $('#cropImage').attr('src', e.target.result);
+
+                // Initialize modal
+                const modal = new bootstrap.Modal(document.getElementById('cropModal'));
+
+                // Show modal when image is loaded
+                $('#cropImage').on('load', function() {
+                    modal.show();
+
+                    // Initialize cropper
+                    if (cropper) {
+                        cropper.destroy();
+                    }
+
+                    cropper = new Cropper(this, {
+                        aspectRatio: 1,
+                        viewMode: 1,
+                        autoCropArea: 1,
+                        cropBoxResizable: true,
+                        dragMode: 'move',
+                        background: false,
+                        zoomable: true,
+                        scalable: true
+                    });
+                });
+
+                // Handle crop and save button click
+                $('#cropAndSaveBtn').off('click').on('click', function() {
+                    if (cropper) {
+                        const canvas = cropper.getCroppedCanvas({
+                            width: 300,
+                            height: 300
+                        });
+
+                        selectedImageData = canvas.toDataURL('image/jpeg', 0.8);
+
+                        // Update preview
+                        $('#profileImagePreview').attr('src', selectedImageData);
+
+                        // Set hidden field value
+                        $('#PhotoBase64').val(selectedImageData);
+
+                        // Close modal
+                        modal.hide();
+
+                        // Destroy cropper
+                        if (cropper) {
+                            cropper.destroy();
+                            cropper = null;
+                        }
+
+                        // Remove modal from DOM
+                        $('#cropModal').remove();
+
+                        // Show success message
+                        Swal.fire({
+                            title: 'Cropped!',
+                            text: 'Profile picture cropped successfully',
+                            icon: 'success',
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                    }
+                });
+
+                // Clean up when modal is hidden
+                $('#cropModal').on('hidden.bs.modal', function() {
+                    if (cropper) {
+                        cropper.destroy();
+                        cropper = null;
+                    }
+                    $('#cropModal').remove();
+                });
+            };
+            reader.readAsDataURL(file);
+        };
+
+        window.cropAndSaveImage = function() {
+            if (cropper) {
+                const canvas = cropper.getCroppedCanvas({
+                    width: 300,
+                    height: 300
+                });
+
+                selectedImageData = canvas.toDataURL('image/jpeg', 0.8);
+
+                // Update preview
+                $('#profileImagePreview').attr('src', selectedImageData);
+
+                // Set hidden field value
+                $('#PhotoBase64').val(selectedImageData);
+
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('cropModal'));
+                if (modal) {
+                    modal.hide();
+                }
+
+                // Destroy cropper
+                if (cropper) {
+                    cropper.destroy();
+                    cropper = null;
+                }
+
+                // Remove modal from DOM
+                $('#cropModal').remove();
+            }
+        };
+
+        window.removeImage = function() {
+            Swal.fire({
+                title: 'Remove Profile Picture?',
+                text: 'This will remove your current profile picture',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, remove it!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const memberName = '@memberName';
+                    const defaultAvatar = `https://ui-avatars.com/api/?background=2563EB&color=fff&name=${encodeURIComponent(memberName)}`;
+
+                    $('#profileImagePreview').attr('src', defaultAvatar);
+                    $('#PhotoBase64').val('');
+
+                    Swal.fire('Removed!', 'Profile picture has been removed.', 'success');
+                }
+            });
+        };
     </script>
 }

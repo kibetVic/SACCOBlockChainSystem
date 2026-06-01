@@ -14,4 +14,23 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public string? UserCompanyCode { get; internal set; }
         public int BlockchainVerifiedCount { get; set; }
     }
+    public class MemberTransactionViewModel
+    {
+        public string TransactionId { get; set; } = string.Empty;
+        public string TransactionType { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public string? ReceiptNo { get; set; }
+        public string? Source { get; set; }
+    }
+
+    public class MemberViewModel
+    {
+        public Member? Member { get; set; }
+        public List<Wallet>? Wallets { get; set; }
+        public List<MemberTransactionViewModel>? MemberTransactions { get; set; }  // Changed from List<BlockchainTransaction>
+        public string? UserCompanyCode { get; set; }
+        public int TotalBlockchainTransactions { get; set; }  // Add this property
+    }
 }

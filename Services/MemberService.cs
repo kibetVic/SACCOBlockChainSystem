@@ -888,7 +888,8 @@ namespace SACCOBlockChainSystem.Services
                     member.MemberDescription,
                     member.Status,
                     member.Mstatus,
-                    member.Employer  // Add employer to old values
+                    member.Employer,  
+                    member.Photo  
                 };
 
                 // Update ID Number if provided and different
@@ -969,6 +970,34 @@ namespace SACCOBlockChainSystem.Services
                 if (updateDto.RegistrationType != null)
                     member.MemberDescription = updateDto.RegistrationType;
 
+                // Add photo update logic
+                if (!string.IsNullOrEmpty(updateDto.Photo))
+                {
+                    // Validate image size (max 5MB)
+                    var base64Data = updateDto.Photo;
+                    if (base64Data.StartsWith("data:image"))
+                    {
+                        // Extract the base64 part
+                        var base64Parts = base64Data.Split(',');
+                        if (base64Parts.Length == 2)
+                        {
+                            var imageBytes = Convert.FromBase64String(base64Parts[1]);
+
+                            // Check file size (max 5MB = 5,242,880 bytes)
+                            if (imageBytes.Length > 5 * 1024 * 1024)
+                            {
+                                throw new ValidationException("Image size must be less than 5MB");
+                            }
+
+                            member.Photo = updateDto.Photo; // Store the full data URL
+                        }
+                    }
+                    else
+                    {
+                        member.Photo = updateDto.Photo;
+                    }
+                }
+
                 // Update marital status
                 if (!string.IsNullOrEmpty(updateDto.MaritalStatus))
                 {
@@ -1026,6 +1055,7 @@ namespace SACCOBlockChainSystem.Services
                             member.MemberDescription,
                             member.Status,
                             member.Mstatus,
+                            member.Photo,
                             member.Employer 
                         },
                         UpdatedBy = currentUserName,
@@ -1077,6 +1107,7 @@ namespace SACCOBlockChainSystem.Services
                     ShareBalance = member.ShareCap ?? 0,
                     Email = member.Email,
                     Phone = member.PhoneNo,
+                    Photo = member.Photo,
                     CompanyCode = member.CompanyCode,
                     MembershipType = member.MembershipType,
                     RegistrationType = member.MemberDescription,

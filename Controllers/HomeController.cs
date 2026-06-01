@@ -11,6 +11,7 @@ using SACCOBlockChainSystem.ViewModels;
 using System.Diagnostics;
 using System.Globalization;
 using System.Security.Claims;
+using MemberViewModel = SACCOBlockChainSystem.Models.MemberViewModel;
 
 namespace SACCOBlockChainSystem.Controllers
 {
@@ -128,30 +129,21 @@ namespace SACCOBlockChainSystem.Controllers
                 // Handle Member role - redirect to MemberIndex
                 if (userRole?.ToUpper() == "MEMBER")
                 {
-                    //ensure here to final
                     var uid = User.FindFirst("UserId")?.Value;
 
                     var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
-                    //var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
                     var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
 
                     if (wallet == null)
                     {
-                        //var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == memberId);
-                        //if (wallet == null)
-                        //{
-                        //    var member = await _context.Members.AsNoTracking()
-                        //        .FirstOrDefaultAsync(m => m.Id == memberId);
-                        //    if (member != null)
-                        //        wallet = await _walletService.RegisterMemberAsync(member);
-                        //}
                         if (member != null)
                             wallet = await _walletService.RegisterMemberAsync(member);
                     }
+
                     var wg = await _context.WalletConfigurations.AsNoTracking().FirstOrDefaultAsync(w => w.CompanyCode == wallet.CompanyCode);
-                    if(wg != null && wg.EnableWallets == true)
+                    if (wg != null && wg.EnableWallets == true)
                     {
-                        if(wg.RequireTransactionPin == true)
+                        if (wg.RequireTransactionPin == true)
                         {
                             if (string.IsNullOrEmpty(member.Pin))
                             {
@@ -159,18 +151,149 @@ namespace SACCOBlockChainSystem.Controllers
                             }
                         }
                     }
-                    //to here
-                    var trs = await _context.BlockchainTransactions.AsNoTracking().OrderByDescending(t => t.CreatedAt).Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo).Take(20).ToListAsync();
-                    var memberView = new MemberViewModel {
+
+                    // ============================================================
+                    // GET LATEST 5 TRANSACTIONS FROM MULTIPLE SOURCES
+                    // ============================================================
+
+                    // 1. Get blockchain transactions (using Timestamp for ordering)
+                    var blockchainTransactions = await _context.BlockchainTransactions
+                        .AsNoTracking()
+                        .Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo)
+                        .Select(t => new MemberTransactionViewModel
+                        {
+                            TransactionId = t.TransactionId,
+                            TransactionType = t.TransactionType,
+                            Amount = t.Amount,
+                            Status = t.Status,
+                            CreatedAt = t.Timestamp,  // Use Timestamp for correct ordering
+                            ReceiptNo = t.OffChainReferenceId,
+                            Source = "Blockchain"
+                        })
+                        .ToListAsync();
+
+                    // 2. Get contributions from Contrib table
+                    var contributions = await _context.Contribs
+                        .AsNoTracking()
+                        .Where(c => c.MemberNo == member.MemberNo && c.CompanyCode == member.CompanyCode && c.Posted == "Y")
+                        .OrderByDescending(c => c.AuditDateTime)
+                        .Select(c => new MemberTransactionViewModel
+                        {
+                            TransactionId = c.TransactionNo,
+                            TransactionType = "Contribution",
+                            Amount = c.Amount ?? 0,
+                            Status = "COMPLETED",
+                            CreatedAt = c.AuditDateTime ?? DateTime.Now,
+                            ReceiptNo = c.ReceiptNo,
+                            Source = "Contrib"
+                        })
+                        .ToListAsync();
+
+                    // 3. Get share contributions from ContribShares table
+                    var shareContributions = await _context.ContribShares
+                        .AsNoTracking()
+                        .Where(cs => cs.MemberNo == member.MemberNo && cs.CompanyCode == member.CompanyCode)
+                        .OrderByDescending(cs => cs.AuditDateTime)
+                        .Select(cs => new MemberTransactionViewModel
+                        {
+                            TransactionId = cs.TransactionNo,
+                            TransactionType = "Share Contribution",
+                            Amount = (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0),
+                            Status = "COMPLETED",
+                            CreatedAt = cs.AuditDateTime ?? DateTime.Now,
+                            ReceiptNo = cs.ReceiptNo,
+                            Source = "ContribShares"
+                        })
+                        .ToListAsync();
+
+                    // 4. Get loan repayments from Repay table
+                    var loanRepayments = await _context.Repay
+                        .AsNoTracking()
+                        .Where(r => r.MemberNo == member.MemberNo && r.CompanyCode == member.CompanyCode)
+                        .OrderByDescending(r => r.AuditDateTime)
+                        .Select(r => new MemberTransactionViewModel
+                        {
+                            TransactionId = r.TransactionNo,
+                            TransactionType = "Loan Repayment",
+                            Amount = r.Amount ?? 0,
+                            Status = "COMPLETED",
+                            CreatedAt = r.AuditDateTime ?? r.AuditTime ?? DateTime.Now,
+                            ReceiptNo = r.ReceiptNo,
+                            Source = "Repay"
+                        })
+                        .ToListAsync();
+
+                    // Combine all transactions
+                    var allTransactions = new List<MemberTransactionViewModel>();
+                    allTransactions.AddRange(blockchainTransactions);
+                    allTransactions.AddRange(contributions);
+                    allTransactions.AddRange(shareContributions);
+                    allTransactions.AddRange(loanRepayments);
+
+                    // Get the latest 5 transactions by CreatedAt (most recent first)
+                    var latestTransactions = allTransactions
+                        .OrderByDescending(t => t.CreatedAt)
+                        .Take(5)
+                        .ToList();
+
+                    var memberView = new MemberViewModel
+                    {
                         Member = member,
                         Wallets = new List<Wallet> { wallet },
-                        MemberTransactions = trs,
+                        MemberTransactions = latestTransactions,
                         UserCompanyCode = member.CompanyCode,
+                        TotalBlockchainTransactions = blockchainTransactions.Count + contributions.Count + shareContributions.Count + loanRepayments.Count
                     };
 
-                    //check this is pushed
-                    return View("MemberIndex",memberView);
+                    return View("MemberIndex", memberView);
                 }
+
+
+                //if (userRole?.ToUpper() == "MEMBER")
+                //{
+                //    //ensure here to final
+                //    var uid = User.FindFirst("UserId")?.Value;
+
+                //    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
+                //    var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
+
+                //    if (wallet == null)
+                //    {
+                //        //var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == memberId);
+                //        //if (wallet == null)
+                //        //{
+                //        //    var member = await _context.Members.AsNoTracking()
+                //        //        .FirstOrDefaultAsync(m => m.Id == memberId);
+                //        //    if (member != null)
+                //        //        wallet = await _walletService.RegisterMemberAsync(member);
+                //        //}
+                //        if (member != null)
+                //            wallet = await _walletService.RegisterMemberAsync(member);
+                //    }
+                //    var wg = await _context.WalletConfigurations.AsNoTracking().FirstOrDefaultAsync(w => w.CompanyCode == wallet.CompanyCode);
+                //    if (wg != null && wg.EnableWallets == true)
+                //    {
+                //        if (wg.RequireTransactionPin == true)
+                //        {
+                //            if (string.IsNullOrEmpty(member.Pin))
+                //            {
+                //                return RedirectToAction("AccountSetup", "Home");
+                //            }
+                //        }
+                //    }
+                //    //to here
+                //    var trs = await _context.BlockchainTransactions.AsNoTracking().OrderByDescending(t => t.CreatedAt).Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo).Take(20).ToListAsync();
+                //    var memberView = new MemberViewModel
+                //    {
+                //        Member = member,
+                //        Wallets = new List<Wallet> { wallet },
+                //        MemberTransactions = trs,
+                //        UserCompanyCode = member.CompanyCode,
+                //    };
+
+                //    //check this is pushed
+                //    return View("MemberIndex", memberView);
+                //}
 
                 // Determine effective company code
                 string effectiveCompanyCode = null;

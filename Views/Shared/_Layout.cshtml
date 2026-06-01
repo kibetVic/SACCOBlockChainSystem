@@ -274,12 +274,22 @@ input:invalid:focus {
                         {
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="ContributionMvc" asp-action="MemberContribute">
-                                    <i class="fas fa-receipt"></i> Contributions / Shares
+                                    <i class="nav-icon bi bi-plus-circle-fill"></i> Contributions / Shares
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="MemberMvc" asp-action="MyProfile">
                                     <i class="nav-icon bi bi-person-circle"></i> My Profile
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="MemberLoan" asp-action="Apply">
+                                    <i class="nav-icon bi bi-file-earmark-plus-fill"></i> Apply for Loan
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="MemberLoan" asp-action="MyLoans">
+                                    <i class="nav-icon bi bi-files ms-1"></i> My Loans
                                 </a>
                             </li>
                         }

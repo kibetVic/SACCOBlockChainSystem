@@ -6,9 +6,13 @@ namespace SACCOBlockChainSystem.Services
     public interface IEmailService
     {
         Task<bool> SendVerificationCodeAsync(string email, string username, string code);
-        }
-        public class EmailService : IEmailService
-        {
+
+        // Add these missing methods
+        Task<bool> SendEmailAsync(string to, string subject, string body);
+        Task<bool> SendEmailAsync(string to, string subject, string body, bool isHtml);
+    }
+    public class EmailService : IEmailService
+    {
         private readonly IConfiguration _configuration;
         private readonly ILogger<EmailService> _logger;
 
@@ -65,6 +69,53 @@ namespace SACCOBlockChainSystem.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Failed to send email to {email}");
+                return false;
+            }
+        }
+
+        // Add this method for general email sending
+        public async Task<bool> SendEmailAsync(string to, string subject, string body)
+        {
+            return await SendEmailAsync(to, subject, body, true);
+        }
+
+        // Add this method for general email sending with HTML option
+        public async Task<bool> SendEmailAsync(string to, string subject, string body, bool isHtml)
+        {
+            try
+            {
+                var smtpServer = _configuration["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
+                var smtpPort = int.Parse(_configuration["EmailSettings:SmtpPort"] ?? "587");
+                var smtpUsername = _configuration["EmailSettings:Username"];
+                var smtpPassword = _configuration["EmailSettings:Password"];
+                var fromEmail = _configuration["EmailSettings:FromEmail"] ?? smtpUsername;
+
+                if (string.IsNullOrEmpty(smtpUsername) || string.IsNullOrEmpty(smtpPassword))
+                {
+                    _logger.LogWarning("Email credentials not configured. Email will not be sent.");
+                    return false;
+                }
+
+                using var client = new SmtpClient(smtpServer, smtpPort);
+                client.EnableSsl = true;
+                client.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+
+                var mailMessage = new MailMessage
+                {
+                    From = new MailAddress(fromEmail),
+                    Subject = subject,
+                    Body = body,
+                    IsBodyHtml = isHtml
+                };
+                mailMessage.To.Add(to);
+
+                await client.SendMailAsync(mailMessage);
+                _logger.LogInformation($"Email sent to {to} - Subject: {subject}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Failed to send email to {to}");
                 return false;
             }
         }
