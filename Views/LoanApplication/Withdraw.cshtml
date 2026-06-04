@@ -1,0 +1,135 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.LoanWithdrawalViewModel
+@{
+    ViewData["Title"] = "Withdraw Loan";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Withdraw Loan</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fa fa-check-circle text-success" style="font-size: 64px;"></i>
+                    </div>
+                    <h4>Your Loan is Ready!</h4>
+                    <p class="lead">Loan Number: <strong>@Model.LoanNo</strong></p>
+                    <h2 class="text-primary mb-3">@Model.Amount.ToString("N0") KES</h2>
+                    <p class="mb-4">Choose how you want to receive your funds:</p>
+
+                    <form asp-action="Withdraw" method="post">
+                        <input type="hidden" asp-for="LoanNo" />
+                        <input type="hidden" asp-for="Amount" />
+
+                        <div class="row">
+                            @foreach (var method in Model.WithdrawalMethods)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <div class="card withdrawal-method @(method.Code == "MPESA" ? "border-success" : "")"
+                                         onclick="selectMethod('@method.Code')">
+                                        <div class="card-body text-center">
+                                            <i class="fa @method.Icon" style="font-size: 48px;"></i>
+                                            <h5 class="mt-2">@method.Name</h5>
+                                            <div class="form-check mt-2">
+                                                <input type="radio" name="WithdrawalMethod" value="@method.Code"
+                                                       class="form-check-input" id="method_@method.Code"
+                                                       @(method.Code == "MPESA" ? "checked" : "") />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div id="mpesaSection" class="mt-3">
+                            <div class="form-group">
+                                <label for="MpesaPhoneNumber">M-Pesa Phone Number</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">+254</span>
+                                    <input type="tel" class="form-control" id="MpesaPhoneNumber" name="MpesaPhoneNumber"
+                                           placeholder="712345678" value="@Model.MemberPhone?.Replace("254", "")" />
+                                </div>
+                                <small class="text-muted">Enter the phone number registered with M-Pesa</small>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info mt-3" id="infoMessage">
+                            <i class="fa fa-info-circle"></i> Funds will be sent to your selected account immediately.
+                        </div>
+
+                        <button type="submit" class="btn btn-success btn-lg w-100 mt-3">
+                            <i class="fa fa-check-circle"></i> Confirm Withdrawal
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">Important Notes</h6>
+                    <ul class="small">
+                        <li>Once withdrawn, your loan repayment schedule begins</li>
+                        <li>First payment is due 30 days from today</li>
+                        <li>You can view your repayment schedule in My Loans section</li>
+                        <li>Early repayment reduces interest costs</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function selectMethod(method) {
+            $('input[name="WithdrawalMethod"]').prop('checked', false);
+            $(`#method_${method}`).prop('checked', true);
+
+            if (method === 'MPESA') {
+                $('#mpesaSection').show();
+                $('#infoMessage').html('<i class="fa fa-info-circle"></i> Funds will be sent to your M-Pesa account immediately.');
+            } else {
+                $('#mpesaSection').hide();
+                if (method === 'FOSA') {
+                    $('#infoMessage').html('<i class="fa fa-info-circle"></i> Funds will be deposited to your FOSA account.');
+                } else {
+                    $('#infoMessage').html('<i class="fa fa-info-circle"></i> A cheque will be prepared for collection at the SACCO office.');
+                }
+            }
+        }
+
+        $('.withdrawal-method').on('click', function() {
+            $('.withdrawal-method').removeClass('border-primary');
+            $(this).addClass('border-primary');
+        });
+
+        // Initial check
+        if ($('input[name="WithdrawalMethod"]:checked').val() !== 'MPESA') {
+            $('#mpesaSection').hide();
+        }
+    </script>
+
+    <style>
+        .withdrawal-method {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+            .withdrawal-method:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            }
+
+            .withdrawal-method.border-primary {
+                border: 2px solid #0d6efd !important;
+            }
+    </style>
+}

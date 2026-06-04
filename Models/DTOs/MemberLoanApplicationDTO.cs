@@ -1,71 +1,64 @@
 ﻿// Models/DTOs/MemberLoanApplicationDTO.cs
 using System.ComponentModel.DataAnnotations;
+using System;
+using SACCOBlockChainSystem.Models.DTOs;
 
 namespace SACCOBlockChainSystem.Models.DTOs
 {
-    public class MemberLoanApplicationDTO
+    public class WithdrawalMethodDTO
     {
-        [Required]
-        public string LoanCode { get; set; }
-
-        [Required]
-        [Range(1000, 5000000)]
-        public decimal PrincipalAmount { get; set; }
-
-        [Required]
-        [Range(1, 360)]
-        public int RepayPeriod { get; set; }
-
-        [Required]
-        public string Purpose { get; set; }
-
-        public string Remarks { get; set; }
-
-        // Guarantors (max 3)
-        public List<GuarantorInviteDTO> GuarantorInvites { get; set; } = new List<GuarantorInviteDTO>();
-
-        public string MemberNo { get; set; }
-        public string CompanyCode { get; set; }
-        public string? CreatedBy { get; set; }
-        public DateTime ApplicationDate { get; set; } = DateTime.Now;
+        public string Code { get; set; }
+        public string Name { get; set; }
+        public bool RequiresPhoneNumber { get; set; }
+        public string Icon { get; set; }
     }
 
-    public class GuarantorInviteDTO
+    public class MemberDashboardDTO
     {
-        [Required]
-        [EmailAddress]
+        public string MemberNo { get; set; }
+        public string MemberName { get; set; }
         public string Email { get; set; }
+        public string PhoneNumber { get; set; }
+        public DateTime MemberSince { get; set; }
 
-        [Required]
-        public string MemberNo { get; set; }
+        // Contribution Summary
+        public decimal TotalDeposits { get; set; }
+        public decimal TotalShares { get; set; }
+        public decimal TotalSavings { get; set; }
 
-        [Required]
-        public string FullName { get; set; }
+        // Loan Summary
+        public int ActiveLoansCount { get; set; }
+        public decimal TotalOutstandingLoans { get; set; }
+        public decimal TotalLoanAmount { get; set; }
 
-        [Range(1000, 10000000)]
-        public decimal? ProposedAmount { get; set; }
+        // Eligibility
+        public List<LoanProductDTO> AvailableLoanProducts { get; set; }
+        public decimal MaxEligibleAmount { get; set; }
+
+        // Lists
+        public List<MemberLoanSummaryDTO> ActiveLoans { get; set; }
+        public List<PendingGuaranteeDTO> PendingGuarantorRequests { get; set; }
+
+        public DateTime LastLogin { get; set; }
     }
 
-    public class GuarantorsResponseDTO
+    public class PendingGuaranteeDTO
     {
-        public int Id { get; set; }
-        public string LoanNo { get; set; }
+        public string LoanNo { get; set; } = null!;
+        public string ApplicantName { get; set; } = null!;
+        public decimal LoanAmount { get; set; }
+        public DateTime InvitationDate { get; set; }
+    }
+
+    public class GuarantorDTO
+    {
         public string GuarantorMemberNo { get; set; }
         public string GuarantorName { get; set; }
         public decimal GuaranteeAmount { get; set; }
-        public string Status { get; set; } // Pending, Accepted, Rejected
-        public DateTime? ResponseDate { get; set; }
-        public string ResponseRemarks { get; set; }
-        public string InvitationToken { get; set; }
-        public DateTime InvitationExpiry { get; set; }
-        public string? IdNo { get; set; }
-        public string? PhoneNo { get; set; }
-        public decimal AvailableShares { get; set; }
-        public DateTime AssignedDate { get; set; }
-        public DateTime? ApprovedDate { get; set; }
-        public string? ApprovedBy { get; set; }
-        public string? Remarks { get; set; }
+        public string Email { get; set; }
+        public string PhoneNo { get; set; }
     }
+
     public class MemberLoanSummaryDTO
     {
         public string LoanNo { get; set; } = null!;
@@ -79,12 +72,85 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal MonthlyInstallment { get; set; }
     }
 
-    public class PendingGuaranteeDTO
+    public class LoanProductDTO
     {
-        public string LoanNo { get; set; } = null!;
-        public string ApplicantName { get; set; } = null!;
-        public decimal LoanAmount { get; set; }
-        public DateTime InvitationDate { get; set; }
+        public string LoanCode { get; set; }
+        public string LoanName { get; set; }
+        public string Description { get; set; }
+        public decimal MinAmount { get; set; }
+        public decimal MaxAmount { get; set; }
+        public decimal InterestRate { get; set; }
+        public int RepaymentPeriodMonths { get; set; }
+        public decimal Multiplier { get; set; }
+        public bool IsMobileLoan { get; set; }
+        public bool RequiresGuarantor { get; set; }
+        public bool IsEligible { get; set; }
+        public string EligibilityMessage { get; set; }
+        public decimal EligibleAmount { get; set; }
+        public decimal EstimatedMonthlyInstallment { get; set; }
+        public decimal MaxEligibleAmount { get; internal set; }
     }
-    
+
+    public class LoanEligibilityDTO
+    {
+        public bool IsEligible { get; set; }
+        public string Message { get; set; }
+        public decimal EligibleAmount { get; set; }
+        public decimal MaxAmount { get; set; }
+        public decimal MinAmount { get; set; }
+        public decimal CurrentDeposits { get; set; }
+        public decimal CurrentShares { get; set; }
+        public decimal Multiplier { get; set; }
+        public bool IsMobileLoan { get; set; }
+        public bool RequiresGuarantor { get; set; }
+        public decimal InterestRate { get; set; }
+        public int RepaymentPeriodMonths { get; set; }
+        public decimal EstimatedMonthlyInstallment { get; set; }
+    }
+
+    public class SelfLoanApplicationDTO
+    {
+        public string LoanCode { get; set; }
+        public decimal PrincipalAmount { get; set; }
+        public int RepayPeriod { get; set; }
+        public string Purpose { get; set; }
+        public string Remarks { get; set; }
+        public string CompanyCode { get; set; }
+        public string IpAddress { get; set; }
+    }
+
+    public class LoanApplicationResultDTO
+    {
+        public bool Success { get; set; }
+        public string LoanNo { get; set; }
+        public string Message { get; set; }
+        public string Status { get; set; }
+        public bool IsMobileLoan { get; set; }
+        public bool CanWithdrawNow { get; set; }
+        public decimal? Amount { get; set; }
+        public DateTime? ApplicationDate { get; set; }
+        public string BlockchainTxId { get; set; }
+    }
+
+    public class LoanDisbursementResultDTO
+    {
+        public bool Success { get; set; }
+        public string LoanNo { get; set; }
+        public decimal Amount { get; set; }
+        public string Message { get; set; }
+        public string TransactionReference { get; set; }
+        public string BlockchainTxId { get; set; }
+    }
+
+    public class AutoAppraisalResultDTO
+    {
+        public bool Success { get; set; }
+        public string LoanNo { get; set; }
+        public string Recommendation { get; set; }
+        public decimal EligibleAmount { get; set; }
+        public decimal RequestedAmount { get; set; }
+        public decimal MonthlyInstallment { get; set; }
+        public decimal TotalInterest { get; set; }
+        public string Message { get; set; }
+    }
 }

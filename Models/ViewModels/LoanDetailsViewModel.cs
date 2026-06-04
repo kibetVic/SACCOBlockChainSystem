@@ -35,5 +35,15 @@ namespace SACCOBlockChainSystem.Models.ViewModels
 
         public string ErrorMessage { get; set; }
         public string SuccessMessage { get; set; }
+        public string LoanNo { get; set; }
+        public string LoanType { get; set; }
+        public decimal PrincipalAmount { get; set; }
+        public decimal OutstandingBalance { get; set; }
+        public decimal MonthlyInstallment { get; set; }
+        public DateTime? NextPaymentDate { get; set; }
+        public string Status { get; set; }
+        public DateTime ApplicationDate { get; set; }
+        public DateTime? DisbursementDate { get; set; }
+        public List<LoanScheduleDTO> RepaymentSchedule { get; set; }
     }
 }

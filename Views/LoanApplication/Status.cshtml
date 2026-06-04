@@ -1,0 +1,171 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.LoanStatusViewModel
+@{
+    ViewData["Title"] = "Loan Status";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Loan Status - @Model.LoanNo</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-body text-center">
+                    @{
+                        var statusClass = Model.Status switch
+                        {
+                            "Approved" => "success",
+                            "Endorsed" => "success",
+                            "Disbursed" => "info",
+                            "Rejected" => "danger",
+                            "Submitted" => "warning",
+                            _ => "secondary"
+                        };
+                    }
+
+                    <div class="mb-4">
+                        @if (Model.Status == "Approved" || Model.Status == "Endorsed")
+                        {
+                            <i class="fa fa-check-circle text-success" style="font-size: 64px;"></i>
+                        }
+                        else if (Model.Status == "Rejected")
+                        {
+                            <i class="fa fa-times-circle text-danger" style="font-size: 64px;"></i>
+                        }
+                        else if (Model.Status == "Disbursed")
+                        {
+                            <i class="fa fa-money-bill-wave text-info" style="font-size: 64px;"></i>
+                        }
+                        else
+                        {
+                            <i class="fa fa-hourglass-half text-warning" style="font-size: 64px;"></i>
+                        }
+                    </div>
+
+                    <h3 class="mb-2">Status: <span class="text-@statusClass">@Model.Status</span></h3>
+                    <p class="lead">@Model.Message</p>
+
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <small class="text-muted">Loan Number</small>
+                                    <h5>@Model.LoanNo</h5>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <small class="text-muted">Amount</small>
+                                    <h5>@Model.Amount.ToString("N0") KES</h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-2">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <small class="text-muted">Application Date</small>
+                                    <h6>@Model.ApplicationDate.ToString("dd MMM yyyy")</h6>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <small class="text-muted">Type</small>
+                                    <h6>@(Model.IsMobileLoan ? "Mobile Loan" : "Standard Loan")</h6>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (Model.CanWithdraw)
+                    {
+                        <div class="alert alert-success mt-4">
+                            <i class="fa fa-check-circle"></i> Your loan is ready for withdrawal!
+                        </div>
+                        <a href="@Url.Action("Withdraw", new { loanNo = Model.LoanNo })" class="btn btn-success btn-lg">
+                            <i class="fa fa-download"></i> Withdraw Funds Now
+                        </a>
+                    }
+
+                    @if (Model.Status == "Disbursed")
+                    {
+                        <a href="@Url.Action("Details", new { loanNo = Model.LoanNo })" class="btn btn-info btn-lg mt-3">
+                            <i class="fa fa-calendar"></i> View Repayment Schedule
+                        </a>
+                    }
+
+                    <div class="mt-4">
+                        <a href="@Url.Action("MyLoans")" class="btn btn-outline-secondary">
+                            <i class="fa fa-arrow-left"></i> Back to My Loans
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            @if (Model.RepaymentSchedule != null && Model.RepaymentSchedule.Any())
+            {
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <h6 class="card-title">Upcoming Payments</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Due Date</th>
+                                        <th>Amount</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var schedule in Model.RepaymentSchedule.Take(6))
+                                    {
+                                        <tr class="@(schedule.Status == "Overdue" ? "table-danger" : "")">
+                                            <td>@schedule.InstallmentNo</td>
+                                            <td>@schedule.DueDate.ToString("dd MMM yyyy")</td>
+                                            <td>@schedule.TotalInstallment.ToString("N0")</td>
+                                            <td>
+                                                @if (schedule.Status == "Paid")
+                                                {
+                                                    <span class="badge bg-success">Paid</span>
+                                                }
+                                                else if (schedule.Status == "Overdue")
+                                                {
+                                                    <span class="badge bg-danger">Overdue</span>
+                                                }
+                                                else if (schedule.Status == "Partial")
+                                                {
+                                                    <span class="badge bg-warning">Partial</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Pending</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (Model.RepaymentSchedule.Count > 6)
+                        {
+                            <a href="@Url.Action("Details", new { loanNo = Model.LoanNo })" class="btn btn-sm btn-link">View all payments →</a>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>

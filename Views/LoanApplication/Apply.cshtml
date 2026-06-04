@@ -1,0 +1,222 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.LoanApplicationViewModel
+@{
+    ViewData["Title"] = $"Apply for {Model.LoanName}";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Apply for @Model.LoanName</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <form asp-action="ApplyLoan" asp-controller="LoanApplication" method="post">
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden" asp-for="LoanCode" />
+                        <input type="hidden" asp-for="LoanName" />
+                        <input type="hidden" asp-for="CompanyCode" />
+                        <input type="hidden" asp-for="IsMobileLoan" />
+                        <input type="hidden" asp-for="RequiresGuarantor" />
+                        <input type="hidden" asp-for="MaxAmount" />
+                        <input type="hidden" asp-for="MinAmount" />
+                        <input type="hidden" asp-for="EligibleAmount" />
+                        <input type="hidden" asp-for="InterestRate" />
+                        <input type="hidden" asp-for="MaxRepayPeriod" />
+
+                        @if (Model.IsMobileLoan)
+                        {
+                            <div class="alert alert-info">
+                                <i class="fa fa-mobile-alt"></i> This is a Mobile Loan - No guarantors required, instant approval!
+                            </div>
+                        }
+
+                        @if (Model.RequiresGuarantor)
+                        {
+                            <div class="alert alert-warning">
+                                <i class="fa fa-users"></i> This loan requires guarantors. You will need to provide guarantor details after application.
+                            </div>
+                        }
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="PrincipalAmount" class="form-label">Loan Amount (KES)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input asp-for="PrincipalAmount" class="form-control" type="number" step="1000" min="@Model.MinAmount" max="@Model.EligibleAmount" id="loanAmount" />
+                                </div>
+                                <span asp-validation-for="PrincipalAmount" class="text-danger"></span>
+                                <small class="text-muted">Min: @Model.MinAmount.ToString("N0") | Max: @Model.EligibleAmount.ToString("N0")</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="RepayPeriod" class="form-label">Repayment Period (months)</label>
+                                <select asp-for="RepayPeriod" class="form-control" id="repayPeriod">
+                                    @for (int i = 1; i <= Model.MaxRepayPeriod; i++)
+                                    {
+                                        <option value="@i">@i month@(i > 1 ? "s" : "")</option>
+                                    }
+                                </select>
+                                <span asp-validation-for="RepayPeriod" class="text-danger"></span>
+                                <small class="text-muted">Max: @Model.MaxRepayPeriod months</small>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label asp-for="Purpose" class="form-label">Loan Purpose</label>
+                                <textarea asp-for="Purpose" class="form-control" rows="2" placeholder="What is the purpose of this loan?"></textarea>
+                                <span asp-validation-for="Purpose" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Loan Summary</h6>
+                                        <div class="row mb-1">
+                                            <div class="col-6">Loan Amount:</div>
+                                            <div class="col-6 text-end" id="displayAmount">@Model.PrincipalAmount.ToString("N0")</div>
+                                        </div>
+                                        <div class="row mb-1">
+                                            <div class="col-6">Interest Rate:</div>
+                                            <div class="col-6 text-end">@Model.InterestRate% p.a</div>
+                                        </div>
+                                        <div class="row mb-1">
+                                            <div class="col-6">Repayment Period:</div>
+                                            <div class="col-6 text-end" id="displayPeriod">@Model.RepayPeriod months</div>
+                                        </div>
+                                        <hr />
+                                        <div class="row mb-1">
+                                            <div class="col-6 fw-bold">Monthly Installment:</div>
+                                            <div class="col-6 text-end fw-bold text-primary" id="monthlyInstallment">0</div>
+                                        </div>
+                                        <div class="row mb-1">
+                                            <div class="col-6">Total Interest:</div>
+                                            <div class="col-6 text-end" id="totalInterest">0</div>
+                                        </div>
+                                        <div class="row mb-1">
+                                            <div class="col-6">Total Repayment:</div>
+                                            <div class="col-6 text-end" id="totalRepayment">0</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Eligibility Summary</h6>
+                                        <div class="row mb-1">
+                                            <div class="col-6">Your Deposits:</div>
+                                            <div class="col-6 text-end">@Model.EligibleAmount.ToString("N0")</div>
+                                        </div>
+                                        <div class="row mb-1">
+                                            <div class="col-6">Eligible Amount:</div>
+                                            <div class="col-6 text-end">@Model.EligibleAmount.ToString("N0")</div>
+                                        </div>
+                                        <div class="row mb-1">
+                                            <div class="col-6">Requesting:</div>
+                                            <div class="col-6 text-end" id="requestAmount">@Model.PrincipalAmount.ToString("N0")</div>
+                                        </div>
+                                        <hr />
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <div class="progress">
+                                                    <div class="progress-bar" role="progressbar" id="eligibilityProgress" style="width: 0%"></div>
+                                                </div>
+                                                <small class="text-muted" id="eligibilityText"></small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary btn-lg w-100">
+                                    <i class="fa fa-paper-plane"></i> Submit Application
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Important Information</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fa fa-check-circle text-success"></i> Apply from anywhere</li>
+                        <li><i class="fa fa-clock text-info"></i> Receive decision in minutes</li>
+                        <li><i class="fa fa-mobile-alt text-success"></i> Mobile loans disbursed instantly</li>
+                        <li><i class="fa fa-file-text text-primary"></i> No paperwork required</li>
+                    </ul>
+                    <hr />
+                    <p class="small text-muted">
+                        By submitting this application, you confirm that all information provided is true and correct.
+                        You agree to the loan terms and conditions of the SACCO.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function calculateLoan() {
+            let amount = parseFloat($('#loanAmount').val()) || 0;
+            let months = parseInt($('#repayPeriod').val()) || 12;
+            let rate = @Model.InterestRate / 100 / 12;
+
+            let monthlyPayment = 0;
+            let totalInterest = 0;
+
+            if (rate > 0 && months > 0 && amount > 0) {
+                let factor = Math.pow(1 + rate, months);
+                monthlyPayment = amount * rate * factor / (factor - 1);
+                totalInterest = (monthlyPayment * months) - amount;
+            } else if (months > 0 && amount > 0) {
+                monthlyPayment = amount / months;
+            }
+
+            let totalRepayment = amount + totalInterest;
+
+            $('#displayAmount').text(amount.toLocaleString());
+            $('#displayPeriod').text(months + (months > 1 ? ' months' : ' month'));
+            $('#monthlyInstallment').text(monthlyPayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+            $('#totalInterest').text(totalInterest.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+            $('#totalRepayment').text(totalRepayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+            $('#requestAmount').text(amount.toLocaleString());
+
+            let maxEligible = @Model.EligibleAmount;
+            let percentage = (amount / maxEligible) * 100;
+            $('#eligibilityProgress').css('width', percentage + '%');
+            if (amount > maxEligible) {
+                $('#eligibilityProgress').addClass('bg-danger');
+                $('#eligibilityText').html('<span class="text-danger">Amount exceeds eligible limit!</span>');
+            } else if (amount > 0) {
+                $('#eligibilityProgress').removeClass('bg-danger');
+                $('#eligibilityText').html(Math.round(percentage) + '% of your eligible amount');
+            } else {
+                $('#eligibilityProgress').css('width', '0%');
+                $('#eligibilityText').html('');
+            }
+        }
+
+        $('#loanAmount, #repayPeriod').on('input change', calculateLoan);
+        calculateLoan();
+    </script>
+}

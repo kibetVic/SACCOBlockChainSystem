@@ -414,6 +414,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public List<LoanSummaryDTO> RecentLoans { get; set; } = new();
         public Dictionary<string, int> LoansByStatus { get; set; } = new();
         public Dictionary<string, decimal> LoanPortfolioByType { get; set; } = new();
+        public int ClosedLoans { get; internal set; }
+        public DateTime? NextPaymentDue { get; internal set; }
+        public decimal NextPaymentAmount { get; internal set; }
     }
 
     public class BatchGuarantorRequestDTO

@@ -129,6 +129,7 @@ builder.Services.AddScoped<IPaymentTypeService, PaymentTypeService>();
 //builder.Services.AddHostedService<TransactionProcessorService>();
 //builder.Services.AddHostedService<LoanOverdueUpdateService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<ISelfServiceLoanService, SelfServiceLoanService>();
 
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IDashboardCacheService, DashboardCacheService>();

@@ -1,0 +1,105 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.LoanProductDTO>
+@{
+    ViewData["Title"] = "Loan Products";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Loan Products</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        @foreach (var product in Model)
+        {
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100 @(product.IsMobileLoan ? "border-success" : "")">
+                    <div class="card-header @(product.IsMobileLoan ? "bg-success text-white" : "bg-primary text-white")">
+                        <h5 class="mb-0">
+                            @product.LoanName
+                            @if (product.IsMobileLoan)
+                            {
+                                <span class="badge bg-light text-success float-end">Mobile Loan</span>
+                            }
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">@product.Description</p>
+
+                        <hr />
+
+                        <div class="row mb-2">
+                            <div class="col-6">Min Amount:</div>
+                            <div class="col-6 text-end fw-bold">@product.MinAmount.ToString("N0")</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">Max Amount:</div>
+                            <div class="col-6 text-end fw-bold">@product.MaxAmount.ToString("N0")</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">Interest Rate:</div>
+                            <div class="col-6 text-end fw-bold">@product.InterestRate% p.a</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">Repayment Period:</div>
+                            <div class="col-6 text-end fw-bold">@product.RepaymentPeriodMonths months</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">Multiplier:</div>
+                            <div class="col-6 text-end fw-bold">@product.Multiplier x deposits</div>
+                        </div>
+
+                        @if (product.RequiresGuarantor)
+                        {
+                            <div class="alert alert-warning small mt-2 mb-0">
+                                <i class="fa fa-users"></i> Requires guarantors
+                            </div>
+                        }
+
+                        <hr />
+
+                        @if (product.IsEligible)
+                        {
+                            <div class="alert alert-success mb-2">
+                                <i class="fa fa-check-circle"></i> You qualify for up to @product.EligibleAmount.ToString("N0")
+                                <br />
+                                <small>Est. monthly: @product.EstimatedMonthlyInstallment.ToString("N0")</small>
+                            </div>
+                            <a href="@Url.Action("Apply", new { loanCode = product.LoanCode })" class="btn btn-primary w-100">
+                                Apply Now
+                            </a>
+                        }
+                        else
+                        {
+                            <div class="alert alert-danger mb-2">
+                                <i class="fa fa-exclamation-circle"></i> @product.EligibilityMessage
+                            </div>
+                            <button class="btn btn-secondary w-100" disabled>Not Eligible</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">How Loan Eligibility is Calculated</h5>
+                    <p>Your loan eligibility is based on your deposits/savings with the SACCO:</p>
+                    <ul>
+                        <li><strong>Mobile Loan:</strong> Up to 3× your deposits - Instant approval</li>
+                        <li><strong>Emergency Loan:</strong> Up to 4× your deposits</li>
+                        <li><strong>Development Loan:</strong> Up to 5× your deposits</li>
+                    </ul>
+                    <p class="mb-0 text-muted">Current deposits: <strong>@(Model.FirstOrDefault()?.EligibleAmount ?? 0)</strong> would determine your eligibility</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

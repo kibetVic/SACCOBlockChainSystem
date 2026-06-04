@@ -283,13 +283,28 @@ input:invalid:focus {
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" asp-controller="MemberLoan" asp-action="Apply">
-                                    <i class="nav-icon bi bi-file-earmark-plus-fill"></i> Apply for Loan
+                                <a class="nav-link" asp-controller="LoanApplication" asp-action="Products">
+                                    <i class="nav-icon bi bi-grid-3x3-gap-fill"></i> Loan Products
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" asp-controller="MemberLoan" asp-action="MyLoans">
-                                    <i class="nav-icon bi bi-files ms-1"></i> My Loans
+                                <a class="nav-link" asp-controller="LoanApplication" asp-action="MyLoans">
+                                    <i class="nav-icon bi bi-folder2-open"></i> My Loans
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="LoanApplication" asp-action="Dashboard">
+                                    <i class="nav-icon bi bi-speedometer2"></i> Dashboard
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="LoanApplication" asp-action="MobileLoan">
+                                    <i class="nav-icon bi bi-phone"></i> Mobile Loan
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="LoanApplication" asp-action="Withdraw">
+                                    <i class="nav-icon bi bi-cash-stack"></i> Withdraw
                                 </a>
                             </li>
                         }

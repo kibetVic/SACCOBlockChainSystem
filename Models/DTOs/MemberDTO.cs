@@ -256,4 +256,14 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? RegistrationType { get; set; }
         public decimal InitialShares { get; set; }
     }
+
+    public class GuarantorAcceptDTO
+    {
+        public int GuarantorId { get; set; }
+        public string LoanNo { get; set; } = null!;
+        public string GuarantorMemberNo { get; set; } = null!;
+        public decimal GuaranteeAmount { get; set; }
+        public string? Remarks { get; set; }
+        public string? InvitationToken { get; set; }
+    }
 }

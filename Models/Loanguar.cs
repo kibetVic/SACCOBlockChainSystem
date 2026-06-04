@@ -5,7 +5,7 @@ namespace SACCOBlockChainSystem.Models;
 
 public partial class Loanguar
 {
-    public string MemberNo { get; set; } = null!;
+    public string? MemberNo { get; set; } = null!;
 
     public string? LoanNo { get; set; }
 

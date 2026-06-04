@@ -48,6 +48,9 @@ namespace SACCOBlockChainSystem.Services
         }
 
 
+
+
+
         #region Loan Deletion - Permanent Delete
 
         public async Task<bool> DeleteLoanAsync(string loanNo, string companyCode, string deletedBy, string reason)
