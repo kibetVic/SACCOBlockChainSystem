@@ -248,53 +248,6 @@ namespace SACCOBlockChainSystem.Controllers
                     return View("MemberIndex", memberView);
                 }
 
-
-                //if (userRole?.ToUpper() == "MEMBER")
-                //{
-                //    //ensure here to final
-                //    var uid = User.FindFirst("UserId")?.Value;
-
-                //    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
-                //    var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
-
-                //    if (wallet == null)
-                //    {
-                //        //var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == memberId);
-                //        //if (wallet == null)
-                //        //{
-                //        //    var member = await _context.Members.AsNoTracking()
-                //        //        .FirstOrDefaultAsync(m => m.Id == memberId);
-                //        //    if (member != null)
-                //        //        wallet = await _walletService.RegisterMemberAsync(member);
-                //        //}
-                //        if (member != null)
-                //            wallet = await _walletService.RegisterMemberAsync(member);
-                //    }
-                //    var wg = await _context.WalletConfigurations.AsNoTracking().FirstOrDefaultAsync(w => w.CompanyCode == wallet.CompanyCode);
-                //    if (wg != null && wg.EnableWallets == true)
-                //    {
-                //        if (wg.RequireTransactionPin == true)
-                //        {
-                //            if (string.IsNullOrEmpty(member.Pin))
-                //            {
-                //                return RedirectToAction("AccountSetup", "Home");
-                //            }
-                //        }
-                //    }
-                //    //to here
-                //    var trs = await _context.BlockchainTransactions.AsNoTracking().OrderByDescending(t => t.CreatedAt).Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo).Take(20).ToListAsync();
-                //    var memberView = new MemberViewModel
-                //    {
-                //        Member = member,
-                //        Wallets = new List<Wallet> { wallet },
-                //        MemberTransactions = trs,
-                //        UserCompanyCode = member.CompanyCode,
-                //    };
-
-                //    //check this is pushed
-                //    return View("MemberIndex", memberView);
-                //}
-
                 // Determine effective company code
                 string effectiveCompanyCode = null;
                 if (!isSuperAdmin)
@@ -336,286 +289,6 @@ namespace SACCOBlockChainSystem.Controllers
                 return View("Error");
             }
         }
-
-        //public async Task<IActionResult> Index(string? companyCode)
-        //{
-        //    try
-        //    {
-        //        // Get the logged-in user's role and company code from claims
-        //        var userRole = User.FindFirstValue(ClaimTypes.Role);
-        //        var isSuperAdmin = userRole == "Super Admin" || userRole == "SuperAdmin";
-        //        var userCompanyCode = User.FindFirst("CompanyCode")?.Value ??
-        //                              User.FindFirst("SaccoCode")?.Value ??
-        //                              User.FindFirst("Company")?.Value;
-
-        //        if(userRole.ToUpper() == "MEMBER")
-        //        {
-        //           // var companyCode = User.FindFirst("CompanyCode")?.Value;
-        //            var uid = User.FindFirst("UserId")?.Value;
-
-        //            var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
-        //            if(wallet == null)
-        //            {
-        //                var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
-        //                wallet = await _walletService.RegisterMemberAsync(member );
-        //                if (wallet == null || wallet.MemberId == 0)
-        //                {
-        //                    ModelState.AddModelError(string.Empty, "Invalid no wallet associated with member.");
-        //                    return RedirectToAction("MemberLogin", "Account");
-        //                }
-        //            }
-        //            return View("MemberIndex");
-        //        }
-
-        //        // Determine the effective company code for filtering
-        //        string effectiveCompanyCode = null;
-
-        //        if (isSuperAdmin)
-        //        {
-        //            // Super Admin: Use selected company code if provided, otherwise null (show all)
-        //            effectiveCompanyCode = string.IsNullOrEmpty(companyCode) ? null : companyCode;
-        //            ViewBag.ShowCompanyFilter = true;
-        //        }
-        //        else
-        //        {
-        //            // Non-SuperAdmin: Always limited to their own company
-        //            effectiveCompanyCode = userCompanyCode;
-        //            companyCode = userCompanyCode; // Override any passed company code
-        //            ViewBag.ShowCompanyFilter = false;
-        //        }
-
-        //        var userCompanyName = User.FindFirst("CompanyName")?.Value ??
-        //                              User.FindFirst("SaccoName")?.Value;
-
-        //        DashboardVM dashboard = await GetUniversalDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
-
-        //        var cutoffDate = DateTime.Now.AddMonths(-6);
-
-        //        // Build member query with role-based filtering
-        //        var membersQuery = _context.Members.AsQueryable();
-
-        //        // Apply filtering based on role and effective company code
-        //        if (!isSuperAdmin && !string.IsNullOrEmpty(effectiveCompanyCode))
-        //        {
-        //            // Non-SuperAdmin: Filter by their company
-        //            membersQuery = membersQuery.Where(m => m.CompanyCode == effectiveCompanyCode);
-        //            dashboard.SelectedCompanyCode = effectiveCompanyCode;
-        //            dashboard.SelectedCompanyName = userCompanyName ?? effectiveCompanyCode;
-        //        }
-        //        else if (isSuperAdmin && !string.IsNullOrEmpty(effectiveCompanyCode))
-        //        {
-        //            // SuperAdmin: Filter by selected company
-        //            membersQuery = membersQuery.Where(m => m.CompanyCode == effectiveCompanyCode);
-        //            dashboard.SelectedCompanyCode = effectiveCompanyCode;
-        //            dashboard.SelectedCompanyName = effectiveCompanyCode;
-        //        }
-        //        else if (isSuperAdmin && string.IsNullOrEmpty(effectiveCompanyCode))
-        //        {
-        //            // SuperAdmin: No company filter - show ALL companies
-        //            dashboard.SelectedCompanyName = "All Companies";
-        //            dashboard.SelectedCompanyCode = "ALL";
-        //            // Don't apply any company filter to membersQuery
-        //        }
-
-        //        // Get all members (filtered appropriately)
-        //        var members = await membersQuery
-        //            .Where(m => m.Dob.HasValue || m.Status.HasValue)
-        //            .Select(m => new
-        //            {
-        //                m.MemberNo,
-        //                m.Sex,
-        //                m.Dob,
-        //                m.Status,
-        //                m.EffectDate,
-        //                m.Withdrawn,
-        //                m.Dormant,
-        //                m.CompanyCode
-        //            })
-        //            .ToListAsync();
-
-        //        // ==========================
-        //        // MEMBER STATISTICS
-        //        // ==========================
-        //        dashboard.TotalWomen = members.Count(m =>
-        //            !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "FEMALE");
-
-        //        dashboard.TotalMen = members.Count(m =>
-        //            !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "MALE");
-
-        //        dashboard.TotalOthers = members.Count(m =>
-        //            string.IsNullOrEmpty(m.Sex) ||
-        //            (m.Sex.ToUpper() != "MALE" && m.Sex.ToUpper() != "FEMALE"));
-
-        //        dashboard.TotalMembers = members.Count;
-
-        //        // ACTIVE & DORMANT MEMBERS
-        //        var activeMemberNos = await GetActiveMemberNumbersAsync(cutoffDate, effectiveCompanyCode, isSuperAdmin);
-        //        var activeFromStatus = members.Where(m => m.Status == 1).Select(m => m.MemberNo).ToHashSet();
-
-        //        var allActiveMembers = new HashSet<string>(activeMemberNos);
-        //        allActiveMembers.UnionWith(activeFromStatus);
-
-        //        dashboard.ActiveMembers = allActiveMembers.Count;
-        //        dashboard.DormantMembers = dashboard.TotalMembers - dashboard.ActiveMembers;
-
-        //        // ACTIVE/DORMANT BY GENDER
-        //        dashboard.ActiveWomen = members.Count(m =>
-        //            !string.IsNullOrEmpty(m.Sex) &&
-        //            m.Sex.ToUpper() == "FEMALE" &&
-        //            allActiveMembers.Contains(m.MemberNo));
-
-        //        dashboard.DormantWomen = dashboard.TotalWomen - dashboard.ActiveWomen;
-
-        //        dashboard.ActiveMen = members.Count(m =>
-        //            !string.IsNullOrEmpty(m.Sex) &&
-        //            m.Sex.ToUpper() == "MALE" &&
-        //            allActiveMembers.Contains(m.MemberNo));
-
-        //        dashboard.DormantMen = dashboard.TotalMen - dashboard.ActiveMen;
-
-        //        // YOUTH CALCULATION (<= 35 years)
-        //        var membersWithAge = members.Where(m => m.Dob.HasValue).ToList();
-
-        //        dashboard.YouthTotal = membersWithAge.Count(m =>
-        //        {
-        //            var age = CalculateAgeSafe(m.Dob.Value);
-        //            return age <= 35;
-        //        });
-
-        //        dashboard.YouthMale = membersWithAge.Count(m =>
-        //        {
-        //            var age = CalculateAgeSafe(m.Dob.Value);
-        //            return age <= 35 && !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "MALE";
-        //        });
-
-        //        dashboard.YouthFemale = membersWithAge.Count(m =>
-        //        {
-        //            var age = CalculateAgeSafe(m.Dob.Value);
-        //            return age <= 35 && !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "FEMALE";
-        //        });
-
-        //        // ==========================
-        //        // FINANCIAL DATA FROM TABLES
-        //        // ==========================
-
-        //        // Get Member Contributions from ContribShares table
-        //        var contributionsData = await GetContributionsDataAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.TotalContributions = contributionsData.Total;
-        //        dashboard.WomenContributions = contributionsData.Women;
-        //        dashboard.MenContributions = contributionsData.Men;
-        //        dashboard.OthersContributions = contributionsData.Others;
-
-        //        // Get Share Capital from Shares table
-        //        var shareCapitalData = await GetShareCapitalDataAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.TotalShareCapital = shareCapitalData.Total;
-        //        dashboard.WomenShareCapital = shareCapitalData.Women;
-        //        dashboard.MenShareCapital = shareCapitalData.Men;
-        //        dashboard.OthersShareCapital = shareCapitalData.Others;
-
-        //        // Get Non-Withdrawable Deposits from ContribShares (DepositsAmount)
-        //        var depositsData = await GetDepositsDataAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.TotalDeposits = depositsData.Total;
-        //        dashboard.WomenDeposits = depositsData.Women;
-        //        dashboard.MenDeposits = depositsData.Men;
-        //        dashboard.OthersDeposits = depositsData.Others;
-
-        //        // Get Registration Fees from Members table (RegFee)
-        //        var registrationData = await GetRegistrationFeesDataAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.TotalRegistrationFees = registrationData.Total;
-        //        dashboard.WomenRegistrationFees = registrationData.Women;
-        //        dashboard.MenRegistrationFees = registrationData.Men;
-        //        dashboard.OthersRegistrationFees = registrationData.Others;
-
-        //        // Get Loans Taken from Loans table
-        //        var loansTakenData = await GetLoansTakenDataAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.TotalLoansTaken = loansTakenData.Total;
-        //        dashboard.WomenLoansTaken = loansTakenData.Women;
-        //        dashboard.MenLoansTaken = loansTakenData.Men;
-        //        dashboard.OthersLoansTaken = loansTakenData.Others;
-
-        //        // Get Loan Balances from Loans table (outstanding)
-        //        var loanBalancesData = await GetLoanBalancesDataAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.TotalLoanBalances = loanBalancesData.Total;
-        //        dashboard.WomenLoanBalances = loanBalancesData.Women;
-        //        dashboard.MenLoanBalances = loanBalancesData.Men;
-        //        dashboard.OthersLoanBalances = loanBalancesData.Others;
-
-        //        // Get Loans Paid from Loanbals table (Cleared)
-        //        var loansPaidData = await GetLoansPaidDataAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.TotalLoansPaid = loansPaidData.Total;
-        //        dashboard.WomenLoansPaid = loansPaidData.Women;
-        //        dashboard.MenLoansPaid = loansPaidData.Men;
-        //        dashboard.OthersLoansPaid = loansPaidData.Others;
-
-        //        // Get Total Loanees from Loans table (distinct members with loans)
-        //        var loaneesData = await GetLoaneesDataAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.TotalLoanees = loaneesData.Total;
-        //        dashboard.WomenLoanees = loaneesData.Women;
-        //        dashboard.MenLoanees = loaneesData.Men;
-        //        dashboard.OthersLoanees = loaneesData.Others;
-
-        //        dashboard.RepaymentRate = await CalculateRepaymentRateAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.PARPercent = await CalculatePARPercentAsync(effectiveCompanyCode, isSuperAdmin);
-        //        //dashboard.AmountPastDueRate = await CalculatePenaltyInterestRateAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.AmountPastDueRate = await CalculateAmountPastDueRateAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.AmountPastDueRate = dashboard.PARPercent;
-        //        dashboard.OutstandingLoanPortfolio = await CalculateOutstandingLoanPortfolioAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.ArrearsBalance = await CalculateArrearsBalanceAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.TotalArrears = dashboard.ArrearsBalance;
-        //        dashboard.WomenParticipationRate = await CalculateWomenParticipationRateAsync(effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.LoanPortfolioHealth = GetLoanPortfolioHealth(dashboard.PARPercent);
-
-        //        // Get grants data - SuperAdmin sees all, others see filtered
-        //        dashboard.InclusionGrantTotal = await GetGrantTotalAsync("inclusion grant", effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.MatchingGrantTotal = await GetGrantTotalAsync("matching grant", effectiveCompanyCode, isSuperAdmin);
-
-        //        // Load chart data
-        //        dashboard.MonthlyTransactions = await GetMonthlyTransactionsDataAsync(6, effectiveCompanyCode, isSuperAdmin);
-        //        dashboard.MemberGrowth = await GetMemberGrowthDataAsync(12, effectiveCompanyCode, isSuperAdmin);
-
-        //        // Get companies for filter dropdown (only for Super Admin)
-        //        if (isSuperAdmin)
-        //        {
-        //            dashboard.Companies = await _context.Companies
-        //                .Where(c => c.Project == true)
-        //                .Select(c => new CompanyInfo
-        //                {
-        //                    Code = c.CompanyCode,
-        //                    Name = c.CompanyName ?? c.CompanyCode
-        //                })
-        //                .OrderBy(c => c.Name)
-        //                .ToListAsync();
-        //        }
-        //        else
-        //        {
-        //            dashboard.Companies = new List<CompanyInfo>();
-        //        }
-
-        //        // Get user info
-        //        dashboard.UserGroup = GetUserGroup();
-        //        dashboard.UserRoles = User.Claims
-        //            .Where(c => c.Type == ClaimTypes.Role)
-        //            .Select(c => c.Value)
-        //            .ToList();
-
-        //        ViewData["Title"] = $"{dashboard.UserGroup} Dashboard";
-        //        ViewData["Subtitle"] = $"SACCO Blockchain System - {dashboard.SelectedCompanyName}";
-
-        //        return View(dashboard);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error loading dashboard: {Message}", ex.Message);
-        //        _logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
-
-        //        if (_webHostEnvironment.IsDevelopment())
-        //        {
-        //            return Content($"Error: {ex.Message}\n\nStack Trace: {ex.StackTrace}");
-        //        }
-
-        //        return View("Error");
-        //    }
-        //}
 
 
         #region Financial Data Methods
@@ -1367,24 +1040,18 @@ namespace SACCOBlockChainSystem.Controllers
         {
             try
             {
-                var query = _context.Journals
+                var query = _context.Gltransactions
                     .Where(j =>
-                        j.NARATION != null &&
-                        j.TRANSTYPE == "CR" &&
-                        j.NARATION.ToLower().Contains(keyword));
+                        j.TransDescript != null &&
+                        j.TransDescript.ToLower().Contains(keyword.ToLower())); // ✅ Check for keyword in description
 
                 // Apply company filter based on role
-                if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+                if (!string.IsNullOrEmpty(companyCode))
                 {
                     query = query.Where(j => j.CompanyCode == companyCode);
                 }
-                else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-                {
-                    query = query.Where(j => j.CompanyCode == companyCode);
-                }
-                // If SuperAdmin and no companyCode, include ALL grants
 
-                return await query.SumAsync(j => (decimal?)j.AMOUNT) ?? 0;
+                return await query.SumAsync(j => (decimal?)j.Amount) ?? 0;
             }
             catch (Exception ex)
             {
@@ -1393,76 +1060,92 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+
+        //private async Task<decimal> GetGrantTotalAsync(string keyword, string? companyCode, bool isSuperAdmin)
+        //{
+        //    try
+        //    {
+        //        var query = _context.Gltransactions
+        //            .Where(j =>
+        //                j.TransDescript != null &&
+        //                (j.TransDescript == "CR" || j.TransDescript == "DR") &&
+        //                j.TransDescript.ToLower().Contains(keyword));
+
+        //        // Apply company filter based on role
+        //        if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+        //        {
+        //            query = query.Where(j => j.CompanyCode == companyCode);
+        //        }
+        //        else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+        //        {
+        //            query = query.Where(j => j.CompanyCode == companyCode);
+        //        }
+        //        // If SuperAdmin and no companyCode, include ALL grants
+
+        //        return await query.SumAsync(j => (decimal?)j.Amount) ?? 0;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"Error getting grant total for {keyword}");
+        //        return 0;
+        //    }
+        //}
+
         #endregion
 
-        // Calculate Repayment Rate (Current Month)
+        // Calculate Repayment Rate (Current Month) - Standard MFI Formula
+        // Repayment Rate = Amount Received (this month) / (Amount Due this month + Arrears from previous months)
         private async Task<decimal> CalculateRepaymentRateAsync(string? companyCode, bool isSuperAdmin)
         {
             try
             {
-                var currentMonth = DateTime.Now.Month;
-                var currentYear = DateTime.Now.Year;
+                var currentDate = DateTime.Now;
+                var startOfCurrentMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
+                var endOfCurrentMonth = startOfCurrentMonth.AddMonths(1).AddDays(-1);
 
-                // Get active loans that should be making payments this month
-                var activeLoansQuery = _context.Loans
-                    .Where(l => l.ApplicDate <= DateTime.Now) // Loan was taken before or on today
-                    .Where(l => l.LoanAmt > 0 && l.RepayPeriod > 0);
+                // Get all active loans with balances
+                var activeLoansQuery = from lb in _context.Loanbal
+                                       join l in _context.Loans on lb.LoanNo equals l.LoanNo
+                                       where lb.Balance > 0
+                                       select new { lb.LoanNo, lb.Balance, l.CompanyCode, l.RepayPeriod, l.LoanAmt };
 
-                // Apply company filter based on role
-                if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+                if (!string.IsNullOrEmpty(companyCode))
                 {
-                    activeLoansQuery = activeLoansQuery.Where(l => l.CompanyCode == companyCode);
+                    activeLoansQuery = activeLoansQuery.Where(x => x.CompanyCode == companyCode);
                 }
-                else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-                {
-                    activeLoansQuery = activeLoansQuery.Where(l => l.CompanyCode == companyCode);
-                }
-                // If SuperAdmin and no companyCode, include ALL loans
 
                 var activeLoans = await activeLoansQuery.ToListAsync();
 
-                // Calculate expected payments for current month (only for loans that are still active)
-                decimal expectedPayments = 0;
-                foreach (var loan in activeLoans)
+                if (!activeLoans.Any())
                 {
-                    // Calculate how many months the loan has been active
-                    var monthsSinceStart = ((DateTime.Now.Year - loan.ApplicDate.Year) * 12) +
-                                           (DateTime.Now.Month - loan.ApplicDate.Month);
-
-                    var totalRepayPeriod = loan.RepayPeriod ?? 1;
-
-                    // Only include if still within repayment period
-                    if (monthsSinceStart < totalRepayPeriod)
-                    {
-                        var monthlyPayment = (loan.LoanAmt ?? 0) / totalRepayPeriod;
-                        expectedPayments += monthlyPayment;
-                    }
+                    return 0;
                 }
 
-                // Get actual payments for current month
-                var repayQuery = from r in _context.Repay
-                                 join l in _context.Loans on r.LoanNo equals l.LoanNo
-                                 where r.DateReceived.HasValue &&
-                                       r.DateReceived.Value.Month == currentMonth &&
-                                       r.DateReceived.Value.Year == currentYear
-                                 select new { r.Amount, l.CompanyCode };
+                var loanNos = activeLoans.Select(l => l.LoanNo).ToList();
 
-                // Apply company filter based on role
-                if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-                {
-                    repayQuery = repayQuery.Where(x => x.CompanyCode == companyCode);
-                }
-                else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-                {
-                    repayQuery = repayQuery.Where(x => x.CompanyCode == companyCode);
-                }
-                // If SuperAdmin and no companyCode, include ALL repayments
+                // Calculate Total Amount Due (Outstanding Balance)
+                decimal totalAmountDue = activeLoans.Sum(l => l.Balance);
 
-                var actualPayments = await repayQuery.SumAsync(x => x.Amount ?? 0);
+                // Calculate Amount Received this month
+                var repaymentsQuery = from r in _context.Repay
+                                      where loanNos.Contains(r.LoanNo)
+                                            && r.DateReceived.HasValue
+                                            && r.DateReceived >= startOfCurrentMonth
+                                            && r.DateReceived <= endOfCurrentMonth
+                                      select r.Amount;
 
-                // Repayment rate should never exceed 100%
-                var rate = expectedPayments > 0 ? (actualPayments / expectedPayments) * 100 : 0;
-                return Math.Min(rate, 100); // Cap at 100%
+                decimal totalAmountReceived = await repaymentsQuery.SumAsync(r => r ?? 0);
+
+                // Repayment Rate = Amount Received this month / Total Outstanding Balance
+                decimal repaymentRate = totalAmountDue > 0
+                    ? (totalAmountReceived / totalAmountDue) * 100
+                    : 0;
+
+                repaymentRate = Math.Min(repaymentRate, 100);
+
+                _logger.LogInformation($"Repayment Rate - Received: {totalAmountReceived:C}, Outstanding: {totalAmountDue:C}, Rate: {repaymentRate:F1}%");
+
+                return repaymentRate;
             }
             catch (Exception ex)
             {
@@ -1666,6 +1349,187 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+        // Calculate PAR > 60 Days (Portfolio at Risk) using LoanBal and Aging Analysis logic
+        private async Task<decimal> CalculatePAR60PercentAsync(string? companyCode, bool isSuperAdmin)
+        {
+            try
+            {
+                var asAtDate = DateTime.Now.Date;
+                var asAtDateEnd = asAtDate.AddDays(1).AddSeconds(-1);
+
+                // Get all active/disbursed loans with member and loan type data
+                var loansQuery = from loan in _context.Loans
+                                 join member in _context.Members
+                                     on loan.MemberNo equals member.MemberNo
+                                 join loantype in _context.Loantypes
+                                     on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                 from lt in loanTypeJoin.DefaultIfEmpty()
+                                 where (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
+                                     && loan.AuditTime <= asAtDateEnd
+                                 select new
+                                 {
+                                     loan.MemberNo,
+                                     loan.LoanNo,
+                                     loan.LoanCode,
+                                     loan.ApplicDate,
+                                     loan.AuditTime,
+                                     loan.RepayPeriod,
+                                     loan.LoanAmt,
+                                     loan.Aamount,
+                                     loan.Interest,
+                                     loan.CompanyCode,
+                                     loan.Status,
+                                     LoanName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown"),
+                                     LoanTypeRepayPeriod = lt != null ? lt.RepayPeriod : (int?)null,
+                                     InterestRateFromType = lt != null ? lt.Interest : null
+                                 };
+
+                // Apply company filter
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loansQuery = loansQuery.Where(l => l.CompanyCode == companyCode);
+                }
+
+                var loans = await loansQuery.ToListAsync();
+
+                if (!loans.Any())
+                {
+                    // Fallback: Get loans with positive balance from Loanbal
+                    var loanbalQuery = from lb in _context.Loanbal
+                                       join loan in _context.Loans on lb.LoanNo equals loan.LoanNo
+                                       join member in _context.Members on loan.MemberNo equals member.MemberNo
+                                       join loantype in _context.Loantypes on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                       from lt in loanTypeJoin.DefaultIfEmpty()
+                                       where lb.Balance > 0
+                                       select new
+                                       {
+                                           loan.MemberNo,
+                                           loan.LoanNo,
+                                           loan.LoanCode,
+                                           loan.ApplicDate,
+                                           loan.AuditTime,
+                                           loan.RepayPeriod,
+                                           loan.LoanAmt,
+                                           loan.Aamount,
+                                           loan.Interest,
+                                           loan.CompanyCode,
+                                           loan.Status,
+                                           LoanName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown"),
+                                           LoanTypeRepayPeriod = lt != null ? lt.RepayPeriod : (int?)null,
+                                           InterestRateFromType = lt != null ? lt.Interest : null
+                                       };
+
+                    if (!string.IsNullOrEmpty(companyCode))
+                    {
+                        loanbalQuery = loanbalQuery.Where(l => l.CompanyCode == companyCode);
+                    }
+
+                    loans = await loanbalQuery.ToListAsync();
+                }
+
+                if (!loans.Any())
+                {
+                    return 0;
+                }
+
+                var loanNos = loans.Select(l => l.LoanNo).ToList();
+
+                // Get loan balances from Loanbal table (ONE QUERY)
+                var loanBalances = await _context.Loanbal
+                    .Where(lb => loanNos.Contains(lb.LoanNo))
+                    .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
+
+                // Get the latest LastDate from Loanbal for each loan (ONE QUERY)
+                var latestRepayments = await _context.Loanbal
+                    .Where(r => loanNos.Contains(r.LoanNo) && r.LastDate <= asAtDateEnd)
+                    .GroupBy(r => r.LoanNo)
+                    .Select(g => new
+                    {
+                        LoanNo = g.Key,
+                        LastPaymentDate = g.Max(r => r.LastDate),
+                        TotalBalance = g.Sum(r => r.Balance)
+                    })
+                    .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+                decimal totalOutstandingBalance = 0;
+                decimal overdueAmount60Days = 0;  // For PAR > 60 days
+
+                foreach (var loan in loans)
+                {
+                    // Get current balance from Loanbal
+                    decimal currentBalance = 0;
+                    if (loanBalances.ContainsKey(loan.LoanNo))
+                    {
+                        currentBalance = loanBalances[loan.LoanNo];
+                    }
+                    else
+                    {
+                        currentBalance = loan.Aamount ?? loan.LoanAmt ?? 0;
+                    }
+
+                    // Skip if loan is fully paid
+                    if (currentBalance <= 0) continue;
+
+                    totalOutstandingBalance += currentBalance;
+
+                    // Get last payment date from Loanbal.LastDate
+                    DateTime? lastPaymentDate = null;
+                    if (latestRepayments.ContainsKey(loan.LoanNo))
+                    {
+                        lastPaymentDate = latestRepayments[loan.LoanNo].LastPaymentDate;
+                    }
+
+                    // Calculate Days In Arrears
+                    int daysInArrears = 0;
+
+                    if (lastPaymentDate.HasValue)
+                    {
+                        // Calculate next due date = last payment date + 1 month
+                        var calculatedNextDueDate = lastPaymentDate.Value.AddMonths(1);
+
+                        if (asAtDate > calculatedNextDueDate)
+                        {
+                            daysInArrears = (asAtDate - calculatedNextDueDate).Days;
+                        }
+                    }
+                    else
+                    {
+                        // No payments made yet - check if first payment is due
+                        DateTime firstDueDate = loan.AuditTime.AddMonths(1);
+                        if (asAtDate > firstDueDate)
+                        {
+                            daysInArrears = (asAtDate - firstDueDate).Days;
+                        }
+                    }
+
+                    // Ensure days in arrears is not negative
+                    if (daysInArrears < 0) daysInArrears = 0;
+
+                    // PAR > 60 DAYS - Only add loans with days in arrears > 60
+                    if (daysInArrears > 60)  // CHANGED FROM 30 TO 60
+                    {
+                        overdueAmount60Days += currentBalance;
+                    }
+                }
+
+                // Calculate PAR percentage for >60 days
+                decimal parPercentage60 = totalOutstandingBalance > 0
+                    ? (overdueAmount60Days / totalOutstandingBalance) * 100
+                    : 0;
+
+                _logger.LogInformation($"=== PAR > 60 DAYS CALCULATION ===");
+                _logger.LogInformation($"Total Outstanding Balance: {totalOutstandingBalance:C}");
+                _logger.LogInformation($"Overdue >60 Days Balance: {overdueAmount60Days:C}");
+                _logger.LogInformation($"PAR >60 Days: {parPercentage60:F1}%");
+
+                return parPercentage60;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calculating PAR >60 days percentage");
+                return 0;
+            }
+        }
         // Calculate Outstanding Loan Portfolio
         private async Task<decimal> CalculateOutstandingLoanPortfolioAsync(string? companyCode, bool isSuperAdmin)
         {
@@ -1937,7 +1801,7 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
         /// <summary>
-        /// Calculates the Amount Past Due Rate - Penalty amount as percentage of overdue balance
+        /// Calculates the Amount Past Due Rate - (Total Arrears > 30 Days / Outstanding Loan Portfolio) × 100
         /// </summary>
         private async Task<decimal> CalculateAmountPastDueRateAsync(string? companyCode, bool isSuperAdmin)
         {
@@ -1983,19 +1847,8 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 var loanNos = loans.Select(l => l.LoanNo).ToList();
-                var loanCodes = loans.Select(l => l.LoanCode).Distinct().ToList();
 
-                // Get penalty configurations from Penalty table
-                var penaltyConfigs = new Dictionary<string, Penalties>();
-                if (loanCodes.Any())
-                {
-                    var penalties = await _context.Penalties
-                        .Where(p => loanCodes.Contains(p.LoanCode) && p.Penalty == 1)
-                        .ToListAsync();
-                    penaltyConfigs = penalties.ToDictionary(p => p.LoanCode, p => p);
-                }
-
-                // Get loan balances
+                // Get loan balances (Outstanding Loan Portfolio)
                 var loanBalances = await _context.Loanbal
                     .Where(lb => loanNos.Contains(lb.LoanNo))
                     .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
@@ -2011,17 +1864,20 @@ namespace SACCOBlockChainSystem.Controllers
                     })
                     .ToDictionaryAsync(g => g.LoanNo, g => g);
 
-                decimal totalPenaltyAmount = 0;
-                decimal totalOverdueBalance = 0;
+                decimal totalOutstandingPortfolio = 0;
+                decimal totalArrearsBalance = 0;
 
                 foreach (var loan in loans)
                 {
-                    // Get current balance
+                    // Get current balance (Outstanding Loan Portfolio)
                     decimal currentBalance = loanBalances.ContainsKey(loan.LoanNo)
                         ? loanBalances[loan.LoanNo]
                         : (loan.Aamount ?? loan.LoanAmt ?? 0);
 
                     if (currentBalance <= 0) continue;
+
+                    // Add to total outstanding portfolio
+                    totalOutstandingPortfolio += currentBalance;
 
                     // Get last payment date
                     DateTime? lastPaymentDate = latestRepayments.ContainsKey(loan.LoanNo)
@@ -2031,41 +1887,23 @@ namespace SACCOBlockChainSystem.Controllers
                     // Calculate days in arrears
                     int daysInArrears = CalculateDaysInArrearsForPenalty(asAtDate, lastPaymentDate, loan.AuditTime);
 
-                    // Only consider loans with arrears > 30 days
+                    // If days in arrears > 30, add to total arrears balance
                     if (daysInArrears > 30)
                     {
-                        totalOverdueBalance += currentBalance;
-
-                        // Calculate penalty amount if loan type attracts penalty
-                        if (loan.AttractsPenalty && penaltyConfigs.ContainsKey(loan.LoanCode))
-                        {
-                            var penaltyConfig = penaltyConfigs[loan.LoanCode];
-                            decimal penaltyAmount = CalculatePenaltyAmount(
-                                currentBalance,
-                                daysInArrears,
-                                penaltyConfig.Value,
-                                penaltyConfig.Mode,
-                                penaltyConfig.Rate
-                            );
-
-                            totalPenaltyAmount += penaltyAmount;
-
-                            _logger.LogDebug($"Loan {loan.LoanNo}: Balance={currentBalance:C}, Days={daysInArrears}, Penalty={penaltyAmount:C}");
-                        }
+                        totalArrearsBalance += currentBalance;
                     }
                 }
 
-                // AMOUNT PAST DUE RATE = (Total Penalty Amount / Total Overdue Balance) × 100
-                // This shows what percentage of the overdue balance is penalty
-                decimal amountPastDueRate = totalOverdueBalance > 0
-                    ? (totalPenaltyAmount / totalOverdueBalance) * 100
+                // AMOUNT PAST DUE RATE = (Total Arrears > 30 Days / Outstanding Loan Portfolio) × 100
+                decimal amountPastDueRate = totalOutstandingPortfolio > 0
+                    ? (totalArrearsBalance / totalOutstandingPortfolio) * 100
                     : 0;
 
                 amountPastDueRate = Math.Round(amountPastDueRate, 1);
 
                 _logger.LogInformation($"=== AMOUNT PAST DUE RATE ===");
-                _logger.LogInformation($"Total Penalty Amount: {totalPenaltyAmount:C}");
-                _logger.LogInformation($"Total Overdue Balance: {totalOverdueBalance:C}");
+                _logger.LogInformation($"Total Arrears (>30 days): {totalArrearsBalance:C}");
+                _logger.LogInformation($"Outstanding Loan Portfolio: {totalOutstandingPortfolio:C}");
                 _logger.LogInformation($"Amount Past Due Rate: {amountPastDueRate}%");
 
                 return amountPastDueRate;
@@ -2078,7 +1916,7 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
         /// <summary>
-        /// Calculate penalty amount for a specific loan
+        /// Calculate penalty amount for a specific loan (kept for reference, not used in AmountPastDueRate)
         /// </summary>
         private decimal CalculatePenaltyAmount(decimal balance, int daysInArrears, decimal penaltyValue, string penaltyMode, string penaltyRateType)
         {
@@ -3224,6 +3062,8 @@ namespace SACCOBlockChainSystem.Controllers
             return View(errorViewModel);
         }
     }
+
+    internal record NewRecord(string LoanNo, string MemberNo, decimal? LoanAmt, decimal? Item, int? RepayPeriod, DateTime ApplicDate, DateTime AuditTime, string CompanyCode, int? LoanTypeRepayPeriod);
 }
 
 

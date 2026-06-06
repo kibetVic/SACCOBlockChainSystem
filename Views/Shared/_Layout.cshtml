@@ -131,18 +131,6 @@ input:invalid:focus {
                             </div>
                         }
                     </li>
-
-                    @* <li class="nav-item">
-                        @using System.Security.Claims
-                        @if (User.Identity.IsAuthenticated)
-                        {
-                            <div class="company-info">
-                                <small>
-                                    <strong>@User.FindFirstValue("CompanyName")</strong>
-                                </small>
-                            </div>
-                        }
-                    </li> *@
                 </ul>
                 <!--end::Start Navbar Links-->
                 <!--begin::End Navbar Links-->
@@ -449,7 +437,7 @@ input:invalid:focus {
                                         userGroup == "System Administrator";
                                     }
 
-                                    @if (Company == "SACCO145111624-001")
+                                    @if (canManageUsers)
                                     {
                                         <li class="nav-item">
                                             <a class="nav-link" asp-controller="Account" asp-action="UserGroups">

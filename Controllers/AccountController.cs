@@ -836,7 +836,7 @@ namespace SACCOBlockChainSystem.Controllers
                     new ClaimsPrincipal(claimsIdentity));
 
                 _logger.LogInformation($"User {updatedUser.UserName} switched from {user.CompanyCode} to company: {newCompany.CompanyName} ({companyCode})");
-                TempData["SuccessMessage"] = $"Successfully switched to company: {newCompany.CompanyName}";
+                //TempData["SuccessMessage"] = $"Successfully switched to company: {newCompany.CompanyName}";
 
                 return RedirectToAction("Index", "Home");
             }

@@ -317,25 +317,28 @@
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">INCLUSION GRANT:</small>
-                    <strong> @(Model.InclusionGrantTotal.ToString("N0") ?? "0")</strong>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.InclusionGrantTotal.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
     </div>
 
     <!--  Matching Grants Card -->
-
     <div class="col-xl-3 col-md-6">
         <div class="card h-100 shadow-sm border-0 rounded-3">
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">MATCHING GRANT:</small>
-                    <strong> @(Model.MatchingGrantTotal.ToString("N0") ?? "0")</strong>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.MatchingGrantTotal.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
     </div>
-    <!--  Matching Grants Card -->
+    <!--  repayment rate card -->
     <div class="col-xl-3 col-md-6">
         <div class="card h-100 shadow-sm border-0 rounded-3">
             <div class="card-body py-2 px-3">
@@ -364,29 +367,17 @@
         </div>
     </div>
 
-    @* <div class="col-xl-3 col-md-6">
-        <div class="card h-100 shadow-sm border-0 rounded-3">
-            <div class="card-body py-2 px-3">
-                <div class="text-center mb-1">
-                    <small class="text-primary fw-semibold">
-                        AMOUNT PAST DUE RATE:
-                    </small>
-                    <h2 class="mb-1 fw-bold @(Model.PARPercent < 5 ? "text-success" : Model.AmountPastDueRate < 10 ? "text-warning" : "text-danger")">@Model.AmountPastDueRate.ToString("F1")%</h2>
-                </div>
-            </div>
-        </div>
-    </div> *@
-
-    <!--
-    BALANCE OF LOANS WITH AREARS >30 DAYS: -->
+    <!--BALANCE OF LOANS WITH AREARS >30 DAYS: -->
     <div class="col-xl-3 col-md-6">
         <div class="card h-100 shadow-sm border-0 rounded-3">
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">
-                        BALANCE OF LOANS WITH AREARS >30 DAYS::
+                        BALANCE OF LOANS WITH AREARS >30 DAYS:
                     </small>
-                    <strong> @(Model.ArrearsBalance.ToString("N0") ?? "0")</strong>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.ArrearsBalance.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
@@ -399,7 +390,9 @@
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">TOTAL AREARS >30 DAYS:</small>
-                    <strong> @(Model.TotalArrears.ToString("N0") ?? "0")</strong>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.TotalArrears.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
@@ -410,14 +403,78 @@
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">OUTSTANDING LOAN PORTFOLIO:</small>
-                    <strong> @(Model.TotalLoanBalances.ToString("N0") ?? "0")</strong>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.TotalLoanBalances.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Charts Row -->
+<!-- Last month PROFIT/LOSS -->
+<div class="row g-3 mb-4">
+    <!-- Last Month PROFIT/LOSS -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">
+                        LAST MONTH PROFIT/LOSS:
+                    </small>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.ArrearsBalance.ToString("N0") ?? "0")
+                    </h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- This Month PROFIT/LOSS -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">
+                        THIS MONTH PROFIT/LOSS:
+                    </small>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.ThisMonthProfitLoss.ToString("N0") ?? "0")
+                    </h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PORTFOLIO AT RISK >60 DAYS (PAR) -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">
+                        PORTFOLIO AT RISK >60 DAYS (PAR):
+                    </small>
+                    <h2 class="mb-1 fw-bold @(Model.PAR60Percent < 5 ? "text-success" : Model.PAR60Percent < 10 ? "text-warning" : "text-danger")">
+                        @Model.PAR60Percent.ToString("F1")%
+                    </h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--  OUTSTANDING LOAN PORTFOLIO -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    @* <small class="text-primary fw-semibold">OUTSTANDING LOAN PORTFOLIO:</small> *@
+                    @* <strong> @(Model.TotalLoanBalances.ToString("N0") ?? "0")</strong> *@
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* <!-- Charts Row -->
 <div class="row g-4">
     <!-- Transaction Statistics Chart -->
     <div class="col-lg-5 col-xl-8 mb-4">
@@ -466,7 +523,7 @@
             </div>
         </div>
     </div>
-</div>
+</div> *@
 
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

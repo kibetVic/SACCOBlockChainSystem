@@ -81,7 +81,7 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public int OthersLoanees { get; set; }
         public decimal InclusionGrantTotal { get; set; }
         public decimal MatchingGrantTotal { get; set; }
-
+        public decimal BalanceOfLoansInArrears { get; set; }
         public decimal TotalGrants => InclusionGrantTotal + MatchingGrantTotal;
 
         public int InclusionGrantCount { get; set; }
@@ -92,6 +92,7 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         // ==========================
         public decimal RepaymentRate { get; set; }  // Current month repayment rate (%)
         public decimal PARPercent { get; set; }     // Portfolio at Risk > 30 Days (%)
+        public decimal PAR60Percent { get; set; }      // Portfolio at Risk > 60 Days (%)
         public decimal AmountPastDueRate { get; set; } // Amount past due rate (%)
 
         // ==========================
