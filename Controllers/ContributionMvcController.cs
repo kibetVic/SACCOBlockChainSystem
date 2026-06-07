@@ -39,7 +39,7 @@ namespace SACCOBlockChainSystem.Controllers
                 ViewBag.CompanyCode = companyCode;
 
                 var allRecentContributions = await _contributionService.SearchContributionsAsync(
-                    DateTime.Now.AddDays(-30),
+                    DateTime.Now.AddDays(-180),
                     DateTime.Now,
                     null,
                     null);

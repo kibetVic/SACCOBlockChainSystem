@@ -811,36 +811,6 @@ namespace SACCOBlockChainSystem.Services
             return contributions;
         }
 
-        //public async Task<List<ContributionResponseDTO>> GetMemberContributionsAsync(string memberNo)
-        //{
-        //    var contributions = await _context.Contribs
-        //        .Include(c => c.SharescodeNavigation)
-        //        .Where(c => c.MemberNo == memberNo)
-        //        .OrderByDescending(c => c.ContrDate)
-        //        .Take(100)
-        //        .ToListAsync();
-
-        //    var member = await _context.Members
-        //        .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
-
-        //    return contributions.Select(c => new ContributionResponseDTO
-        //    {
-        //        Id = c.Id,
-        //        MemberNo = c.MemberNo,
-        //        MemberName = member != null ? $"{member.Surname} {member.OtherNames}" : c.MemberNo,
-        //        TransactionDate = c.ContrDate ?? DateTime.MinValue,
-        //        SharesCode = c.Sharescode ?? string.Empty,
-        //        ShareTypeName = c.SharescodeNavigation?.SharesType ?? c.Sharescode ?? "Unknown",
-        //        Amount = c.Amount ?? 0,
-        //        ReceiptNo = c.ReceiptNo ?? string.Empty,
-        //        Remarks = c.Remarks ?? string.Empty,
-        //        BlockchainTxId = c.BlockchainTxId ?? string.Empty,
-        //        CreatedAt = c.AuditTime,
-        //        CreatedBy = c.AuditId ?? string.Empty,
-        //        CompanyCode = c.CompanyCode ?? string.Empty
-        //    }).ToList();
-        //}
-
         public async Task<List<ShareTypeDTO>> GetShareTypesAsync(string companyCode)
         {
             return await _context.Sharetypes
@@ -928,8 +898,8 @@ namespace SACCOBlockChainSystem.Services
                     equals new { MemberNo = m.MemberNo, CompanyCode = m.CompanyCode } into memberJoin
                 from m in memberJoin.DefaultIfEmpty()
                 join s in _context.Sharetypes
-                    on new { SharesCode = c.Sharescode, c.CompanyCode }
-                    equals new { s.SharesCode, s.CompanyCode } into shareJoin
+                    on new { SharesCode = c.Sharescode.Trim(), CompanyCode = c.CompanyCode.Trim() }
+                    equals new { SharesCode = s.SharesCode.Trim(), CompanyCode = s.CompanyCode.Trim() } into shareJoin
                 from s in shareJoin.DefaultIfEmpty()
                 orderby c.ContrDate descending
                 select new ContributionResponseDTO
@@ -953,69 +923,6 @@ namespace SACCOBlockChainSystem.Services
 
             return result;
         }
-
-        //public async Task<List<ContributionResponseDTO>> SearchContributionsAsync(DateTime? fromDate, DateTime? toDate, string? memberNo = null, string? shareType = null)
-        //{
-        //    var query = _context.Contribs.AsQueryable();
-
-        //    // Apply filters
-        //    if (fromDate.HasValue)
-        //    {
-        //        query = query.Where(c => c.ContrDate >= fromDate);
-        //    }
-
-        //    if (toDate.HasValue)
-        //    {
-        //        query = query.Where(c => c.ContrDate <= toDate);
-        //    }
-
-        //    if (!string.IsNullOrEmpty(memberNo))
-        //    {
-        //        query = query.Where(c => c.MemberNo.Contains(memberNo));
-        //    }
-
-        //    if (!string.IsNullOrEmpty(shareType))
-        //    {
-        //        query = query.Where(c => c.Sharescode == shareType);
-        //    }
-
-        //    // Execute query
-        //    var contributions = await query
-        //        .OrderByDescending(c => c.ContrDate)
-        //        .Take(200)
-        //        .ToListAsync();
-
-        //    // Manually get member names for each contribution
-        //    var result = new List<ContributionResponseDTO>();
-        //    foreach (var c in contributions)
-        //    {
-        //        var member = await _context.Members
-        //            .FirstOrDefaultAsync(m => m.MemberNo == c.MemberNo && m.CompanyCode == c.CompanyCode);
-
-        //        var shareTypeObj = await _context.Sharetypes
-        //            .FirstOrDefaultAsync(s => s.SharesCode == c.Sharescode && s.CompanyCode == c.CompanyCode);
-
-        //        result.Add(new ContributionResponseDTO
-        //        {
-        //            Id = c.Id,
-        //            MemberNo = c.MemberNo ?? string.Empty,
-        //            MemberName = member != null ? $"{member.Surname} {member.OtherNames}".Trim() : c.MemberNo ?? "Unknown",
-        //            TransactionDate = c.ContrDate ?? DateTime.MinValue,
-        //            SharesCode = c.Sharescode ?? string.Empty,
-        //            ShareTypeName = shareTypeObj?.SharesType ?? c.Sharescode ?? "Unknown",
-        //            Amount = c.Amount ?? 0,
-        //            ReceiptNo = c.ReceiptNo ?? string.Empty,
-        //            Remarks = c.Remarks ?? string.Empty,
-        //            BlockchainTxId = c.BlockchainTxId ?? string.Empty,
-        //            CreatedAt = c.AuditTime,
-        //            CreatedBy = c.AuditId ?? string.Empty,
-        //            CompanyCode = c.CompanyCode ?? string.Empty
-        //        });
-        //    }
-
-        //    return result;
-        //}
-
 
         public async Task<ContributionDeleteResultDTO> ReverseContributionAsync(int contributionId, string deleteReason, string deletedBy)
         {

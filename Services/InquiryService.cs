@@ -119,26 +119,49 @@ namespace SACCOBlockChainSystem.Services
                 throw new Exception($"Member {memberNo} not found");
             }
 
-            // Get all share contributions grouped by share type
-            var shareContributions = await _context.ContribShares
-                .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
-                .Include(cs => cs.SharescodeNavigation)
-                .OrderByDescending(cs => cs.ContrDate)
+            // Get valid share types for this company
+            var validShareTypes = await _context.Sharetypes
+                .Where(st => st.CompanyCode == companyCode)
+                .Select(st => st.SharesCode)
                 .ToListAsync();
 
-            // Get share purchases from Contrib table
-            var sharePurchases = await _context.Contribs
-                .Where(c => c.MemberNo == memberNo && c.CompanyCode == companyCode && c.Sharescode != null)
-                .Include(c => c.SharescodeNavigation)
-                .OrderByDescending(c => c.ContrDate)
+            // Get from ContribShares - ONLY where Sharescode exists in Sharetypes
+            var shareContributions = await _context.ContribShares
+                .Where(cs => cs.MemberNo == memberNo
+                    && cs.CompanyCode == companyCode
+                    && cs.Sharescode != null
+                    && validShareTypes.Contains(cs.Sharescode))  // Strict validation
+                .Include(cs => cs.SharescodeNavigation)
                 .ToListAsync();
+
+            // Get from Contribs - ONLY where Sharescode exists in Sharetypes
+            var sharePurchases = await _context.Contribs
+                .Where(c => c.MemberNo == memberNo
+                    && c.CompanyCode == companyCode
+                    && c.Sharescode != null
+                    && validShareTypes.Contains(c.Sharescode))  // Strict validation
+                .Include(c => c.SharescodeNavigation)
+                .ToListAsync();
+
+            // Create a set of receipt numbers that exist in ContribShares (primary source)
+            var contribSharesReceipts = new HashSet<string>(shareContributions
+                .Where(cs => !string.IsNullOrEmpty(cs.ReceiptNo))
+                .Select(cs => cs.ReceiptNo));
+
+            // Filter out purchases that have matching receipts in ContribShares
+            var filteredPurchases = sharePurchases
+                .Where(cp => string.IsNullOrEmpty(cp.ReceiptNo) || !contribSharesReceipts.Contains(cp.ReceiptNo))
+                .ToList();
 
             // Calculate totals by share type
             var shareTypeSummaries = new Dictionary<string, ShareTypeSummaryDTO>();
 
+            // Process ContribShares first (primary source)
             foreach (var cs in shareContributions)
             {
-                var code = cs.Sharescode ?? "Unknown";
+                var code = cs.Sharescode;
+                if (string.IsNullOrEmpty(code) || !validShareTypes.Contains(code)) continue; // Skip invalid
+
                 if (!shareTypeSummaries.ContainsKey(code))
                 {
                     shareTypeSummaries[code] = new ShareTypeSummaryDTO
@@ -156,30 +179,41 @@ namespace SACCOBlockChainSystem.Services
                     };
                 }
 
+                var transactionTotal = (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0) +
+                                       (cs.RegFeeAmount ?? 0) + (cs.Donor ?? 0) +
+                                       (cs.LoanAmount ?? 0) + (cs.PassBookAmount ?? 0);
+
                 shareTypeSummaries[code].ShareCapital += cs.ShareCapitalAmount ?? 0;
                 shareTypeSummaries[code].Deposits += cs.DepositsAmount ?? 0;
                 shareTypeSummaries[code].RegFees += cs.RegFeeAmount ?? 0;
                 shareTypeSummaries[code].Donations += cs.Donor ?? 0;
                 shareTypeSummaries[code].LoanAllocations += cs.LoanAmount ?? 0;
                 shareTypeSummaries[code].PassBook += cs.PassBookAmount ?? 0;
-                shareTypeSummaries[code].TotalShares = shareTypeSummaries[code].ShareCapital + shareTypeSummaries[code].Deposits;
+                shareTypeSummaries[code].TotalShares += transactionTotal;
 
                 shareTypeSummaries[code].Transactions.Add(new ShareTransactionDetailDTO
                 {
                     TransactionDate = cs.ContrDate ?? DateTime.Now,
                     TransactionType = "Contribution",
-                    Amount = (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0),
+                    Amount = transactionTotal,
                     ShareCapital = cs.ShareCapitalAmount ?? 0,
                     Deposits = cs.DepositsAmount ?? 0,
+                    RegFees = cs.RegFeeAmount ?? 0,
+                    Donations = cs.Donor ?? 0,
+                    LoanAllocations = cs.LoanAmount ?? 0,
+                    PassBook = cs.PassBookAmount ?? 0,
                     ReceiptNo = cs.ReceiptNo,
                     Remarks = cs.Remarks,
                     BlockchainTxId = cs.BlockchainTxId
                 });
             }
 
-            foreach (var cp in sharePurchases)
+            // Process only unique purchases (those without matching receipts in ContribShares)
+            foreach (var cp in filteredPurchases)
             {
-                var code = cp.Sharescode ?? "Unknown";
+                var code = cp.Sharescode;
+                if (string.IsNullOrEmpty(code) || !validShareTypes.Contains(code)) continue; // Skip invalid
+
                 if (!shareTypeSummaries.ContainsKey(code))
                 {
                     shareTypeSummaries[code] = new ShareTypeSummaryDTO
@@ -197,15 +231,16 @@ namespace SACCOBlockChainSystem.Services
                     };
                 }
 
-                shareTypeSummaries[code].ShareCapital += cp.Amount ?? 0;
-                shareTypeSummaries[code].TotalShares = shareTypeSummaries[code].ShareCapital + shareTypeSummaries[code].Deposits;
+                var amount = cp.Amount ?? 0;
+                shareTypeSummaries[code].ShareCapital += amount;
+                shareTypeSummaries[code].TotalShares += amount;
 
                 shareTypeSummaries[code].Transactions.Add(new ShareTransactionDetailDTO
                 {
                     TransactionDate = cp.ContrDate ?? DateTime.Now,
-                    TransactionType = "Purchase",
-                    Amount = cp.Amount ?? 0,
-                    ShareCapital = cp.Amount ?? 0,
+                    TransactionType = "Share Purchase",
+                    Amount = amount,
+                    ShareCapital = amount,
                     Deposits = 0,
                     ReceiptNo = cp.ReceiptNo,
                     Remarks = cp.Remarks,
@@ -213,7 +248,7 @@ namespace SACCOBlockChainSystem.Services
                 });
             }
 
-            // Calculate shares locked for guarantees
+            // Calculate locked shares
             var lockedShares = await _context.Loanguar
                 .Where(lg => lg.MemberNo == memberNo && lg.CompanyCode == companyCode)
                 .SumAsync(lg => lg.Balance ?? 0);
@@ -221,7 +256,7 @@ namespace SACCOBlockChainSystem.Services
             var response = new ShareInquiryResponseDTO
             {
                 MemberNo = member.MemberNo,
-                MemberName = $"{member.Surname} {member.OtherNames}",
+                MemberName = $"{member.Surname} {member.OtherNames}".Trim(),
                 TotalShareBalance = shareTypeSummaries.Values.Sum(s => s.TotalShares),
                 TotalShareCapital = shareTypeSummaries.Values.Sum(s => s.ShareCapital),
                 TotalDeposits = shareTypeSummaries.Values.Sum(s => s.Deposits),
@@ -234,6 +269,135 @@ namespace SACCOBlockChainSystem.Services
 
             return response;
         }
+
+
+
+        //public async Task<ShareInquiryResponseDTO> GetShareInquiryAsync(string memberNo, string companyCode, string userId)
+        //{
+        //    var member = await _context.Members
+        //        .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
+
+        //    if (member == null)
+        //    {
+        //        throw new Exception($"Member {memberNo} not found");
+        //    }
+
+        //    // Get all share contributions grouped by share type
+        //    var shareContributions = await _context.ContribShares
+        //        .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
+        //        .Include(cs => cs.SharescodeNavigation)
+        //        .OrderByDescending(cs => cs.ContrDate)
+        //        .ToListAsync();
+
+        //    // Get share purchases from Contrib table
+        //    var sharePurchases = await _context.Contribs
+        //        .Where(c => c.MemberNo == memberNo && c.CompanyCode == companyCode && c.Sharescode != null)
+        //        .Include(c => c.SharescodeNavigation)
+        //        .OrderByDescending(c => c.ContrDate)
+        //        .ToListAsync();
+
+        //    // Calculate totals by share type
+        //    var shareTypeSummaries = new Dictionary<string, ShareTypeSummaryDTO>();
+
+        //    foreach (var cs in shareContributions)
+        //    {
+        //        var code = cs.Sharescode ?? "Unknown";
+        //        if (!shareTypeSummaries.ContainsKey(code))
+        //        {
+        //            shareTypeSummaries[code] = new ShareTypeSummaryDTO
+        //            {
+        //                SharesCode = code,
+        //                SharesType = cs.SharescodeNavigation?.SharesType ?? "Unknown",
+        //                TotalShares = 0,
+        //                ShareCapital = 0,
+        //                Deposits = 0,
+        //                RegFees = 0,
+        //                Donations = 0,
+        //                LoanAllocations = 0,
+        //                PassBook = 0,
+        //                Transactions = new List<ShareTransactionDetailDTO>()
+        //            };
+        //        }
+
+        //        shareTypeSummaries[code].ShareCapital += cs.ShareCapitalAmount ?? 0;
+        //        shareTypeSummaries[code].Deposits += cs.DepositsAmount ?? 0;
+        //        shareTypeSummaries[code].RegFees += cs.RegFeeAmount ?? 0;
+        //        shareTypeSummaries[code].Donations += cs.Donor ?? 0;
+        //        shareTypeSummaries[code].LoanAllocations += cs.LoanAmount ?? 0;
+        //        shareTypeSummaries[code].PassBook += cs.PassBookAmount ?? 0;
+        //        shareTypeSummaries[code].TotalShares = shareTypeSummaries[code].ShareCapital + shareTypeSummaries[code].Deposits;
+
+        //        shareTypeSummaries[code].Transactions.Add(new ShareTransactionDetailDTO
+        //        {
+        //            TransactionDate = cs.ContrDate ?? DateTime.Now,
+        //            TransactionType = "Contribution",
+        //            Amount = (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0),
+        //            ShareCapital = cs.ShareCapitalAmount ?? 0,
+        //            Deposits = cs.DepositsAmount ?? 0,
+        //            ReceiptNo = cs.ReceiptNo,
+        //            Remarks = cs.Remarks,
+        //            BlockchainTxId = cs.BlockchainTxId
+        //        });
+        //    }
+
+        //    foreach (var cp in sharePurchases)
+        //    {
+        //        var code = cp.Sharescode ?? "Unknown";
+        //        if (!shareTypeSummaries.ContainsKey(code))
+        //        {
+        //            shareTypeSummaries[code] = new ShareTypeSummaryDTO
+        //            {
+        //                SharesCode = code,
+        //                SharesType = cp.SharescodeNavigation?.SharesType ?? "Unknown",
+        //                TotalShares = 0,
+        //                ShareCapital = 0,
+        //                Deposits = 0,
+        //                RegFees = 0,
+        //                Donations = 0,
+        //                LoanAllocations = 0,
+        //                PassBook = 0,
+        //                Transactions = new List<ShareTransactionDetailDTO>()
+        //            };
+        //        }
+
+        //        shareTypeSummaries[code].ShareCapital += cp.Amount ?? 0;
+        //        shareTypeSummaries[code].TotalShares = shareTypeSummaries[code].ShareCapital + shareTypeSummaries[code].Deposits;
+
+        //        shareTypeSummaries[code].Transactions.Add(new ShareTransactionDetailDTO
+        //        {
+        //            TransactionDate = cp.ContrDate ?? DateTime.Now,
+        //            TransactionType = "Purchase",
+        //            Amount = cp.Amount ?? 0,
+        //            ShareCapital = cp.Amount ?? 0,
+        //            Deposits = 0,
+        //            ReceiptNo = cp.ReceiptNo,
+        //            Remarks = cp.Remarks,
+        //            BlockchainTxId = cp.BlockchainTxId
+        //        });
+        //    }
+
+        //    // Calculate shares locked for guarantees
+        //    var lockedShares = await _context.Loanguar
+        //        .Where(lg => lg.MemberNo == memberNo && lg.CompanyCode == companyCode)
+        //        .SumAsync(lg => lg.Balance ?? 0);
+
+        //    var response = new ShareInquiryResponseDTO
+        //    {
+        //        MemberNo = member.MemberNo,
+        //        MemberName = $"{member.Surname} {member.OtherNames}",
+        //        TotalShareBalance = shareTypeSummaries.Values.Sum(s => s.TotalShares),
+        //        TotalShareCapital = shareTypeSummaries.Values.Sum(s => s.ShareCapital),
+        //        TotalDeposits = shareTypeSummaries.Values.Sum(s => s.Deposits),
+        //        LockedForGuarantees = lockedShares,
+        //        AvailableShares = shareTypeSummaries.Values.Sum(s => s.TotalShares) - lockedShares,
+        //        ShareTypeSummaries = shareTypeSummaries.Values.ToList(),
+        //        InquiryTimestamp = DateTime.Now,
+        //        InquiredBy = userId
+        //    };
+
+        //    return response;
+        //}
+
 
         public async Task<LoanInquiryResponseDTO> GetLoanInquiryAsync(string memberNo, string companyCode, string userId)
         {

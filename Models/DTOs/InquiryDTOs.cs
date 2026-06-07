@@ -125,6 +125,10 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public List<ShareTypeSummaryDTO> ShareTypeSummaries { get; set; } = new();
         public DateTime InquiryTimestamp { get; set; }
         public string? InquiredBy { get; set; }
+        public decimal TotalRegFees { get; set; }
+        public decimal TotalDonations { get; set; }
+        public decimal TotalLoanAllocations { get; set; }
+        public decimal TotalPassBook { get; set; }
     }
 
     public class ShareTypeSummaryDTO
@@ -151,6 +155,10 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? ReceiptNo { get; set; }
         public string? Remarks { get; set; }
         public string? BlockchainTxId { get; set; }
+        public decimal RegFees { get; set; }
+        public decimal Donations { get; set; }
+        public decimal LoanAllocations { get; set; }
+        public decimal PassBook { get; set; }
     }
 
     // Loan Inquiry DTOs
