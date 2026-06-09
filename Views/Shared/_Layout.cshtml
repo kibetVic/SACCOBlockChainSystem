@@ -262,37 +262,38 @@ input:invalid:focus {
                         {
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="ContributionMvc" asp-action="MemberContribute">
-                                    <i class="nav-icon bi bi-plus-circle-fill"></i> Contributions / Shares
+                                    <i class="nav-icon bi bi-plus-circle-fill"></i> 
+                                    <p><b>Contributions / Shares</b></p>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="MemberMvc" asp-action="MyProfile">
-                                    <i class="nav-icon bi bi-person-circle"></i> My Profile
+                                    <i class="nav-icon bi bi-person-circle"></i> 
+                                    <p><b>My Profile</b></p>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="LoanApplication" asp-action="Products">
-                                    <i class="nav-icon bi bi-grid-3x3-gap-fill"></i> Loan Products
+                                    <i class="nav-icon bi bi-grid-3x3-gap-fill"></i> 
+                                    <p><b>Loan Products</b></p>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="LoanApplication" asp-action="MyLoans">
-                                    <i class="nav-icon bi bi-folder2-open"></i> My Loans
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" asp-controller="LoanApplication" asp-action="Dashboard">
-                                    <i class="nav-icon bi bi-speedometer2"></i> Dashboard
+                                    <i class="nav-icon bi bi-folder2-open"></i> 
+                                    <p><b>My Loans</b></p>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="LoanApplication" asp-action="MobileLoan">
-                                    <i class="nav-icon bi bi-phone"></i> Mobile Loan
+                                    <i class="nav-icon bi bi-phone"></i>
+                                    <p><b>Mobile Loan</b></p>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="LoanApplication" asp-action="Withdraw">
-                                    <i class="nav-icon bi bi-cash-stack"></i> Withdraw
+                                    <i class="nav-icon bi bi-cash-stack"></i> 
+                                    <p><b>Withdraw</b></p>
                                 </a>
                             </li>
                         }
@@ -671,9 +672,9 @@ input:invalid:focus {
                                 @if (User.IsInRole("Super Admin"))
                                 {
                                     <li class="nav-item">
-                                        <a asp-controller="ContributionMvc" asp-action="DeleteSearch" class="nav-link">
+                                        <a asp-controller="ContributionMvc" asp-action="ReverseSearch" class="nav-link">
                                             <i class="nav-icon bi bi-trash-fill text-danger"></i>
-                                            <p class="text-danger">Delete Transaction</p>
+                                            <p class="text-danger">Reverse Transaction</p>
                                         </a>
                                     </li>
                                 }

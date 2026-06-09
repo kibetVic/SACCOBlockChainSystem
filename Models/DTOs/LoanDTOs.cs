@@ -234,6 +234,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
     public class LoanRepaymentDTO
     {
+        internal string? MpesaPhoneNumber;
+
         [Required]
         public string LoanNo { get; set; } = null!;
 
@@ -249,19 +251,17 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
         [Required]
         public string PaymentMethod { get; set; } = null!;
-
         [Required]
         public string GlAccountNo { get; set; } = null!;
-
+        public decimal Amount { get; set; }
         public string? GlAccountName { get; set; }
-
         public string? ReferenceNo { get; set; }
-
         public string? Remarks { get; set; }
-
         public string? ReceivedBy { get; set; }
-
         public string CompanyCode { get; set; } = null!;
+        public string? ReferenceNumber { get; set; }
+        public string ChequeNumber { get; set; }
+        public string IpAddress { get; set; }
     }
 
     public class LoanOffsetDTO

@@ -99,6 +99,16 @@
                         </a>
                     }
 
+                    @* @if (Model.CanWithdraw)
+                    {
+                        <div class="alert alert-success mt-4">
+                            <i class="fa fa-check-circle"></i> Your loan is ready for withdrawal!
+                        </div>
+                        <a href="@Url.Action("Withdraw", new { loanNo = Model.LoanNo })" class="btn btn-success btn-lg">
+                            <i class="fa fa-download"></i> Withdraw Funds Now
+                        </a>
+                    } *@
+
                     @if (Model.Status == "Disbursed")
                     {
                         <a href="@Url.Action("Details", new { loanNo = Model.LoanNo })" class="btn btn-info btn-lg mt-3">

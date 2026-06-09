@@ -639,10 +639,8 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-
-        // In ContributionMvcController.cs - Replace the DeleteSearch and Delete methods with these:
-
         // GET: /ContributionMvc/ReverseSearch
+        [HttpGet]
         [Authorize(Roles = "Super Admin")]
         public async Task<IActionResult> ReverseSearch(string searchTerm)
         {

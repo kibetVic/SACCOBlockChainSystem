@@ -893,5 +893,31 @@
             submitBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Saving...');
             return true;
         });
+
+
+
+            // Debug form submission
+        $(document).ready(function() {
+            $('#saccoForm').on('submit', function(e) {
+                console.log('=== FORM SUBMISSION DEBUG ===');
+                console.log('SaccoName:', $('#SaccoName').val());
+                console.log('Telephone:', $('#Telephone').val());
+                console.log('EmailAddress:', $('#EmailAddress').val());
+                console.log('PhysicalAddress:', $('#PhysicalAddress').val());
+                console.log('Town:', $('#Town').val());
+                console.log('Address:', $('#Address').val());
+                console.log('MembershipMaturityMonths:', $('#MembershipMaturityMonths').val());
+                console.log('WithdrawalNoticeDays:', $('#WithdrawalNoticeDays').val());
+                console.log('MaxGuarantor:', $('#MaxGuarantor').val());
+                console.log('Suspense:', $('#Suspense').val());
+                console.log('RetainedEarnings:', $('#RetainedEarnings').val());
+                console.log('Creditors:', $('#Creditors').val());
+                console.log('CompanyCode:', $('#CompanyCode').val());
+                console.log('Id:', $('#Id').val());
+
+                // Don't prevent default - let the form submit normally
+                return true;
+            });
+        });
     </script>
 }

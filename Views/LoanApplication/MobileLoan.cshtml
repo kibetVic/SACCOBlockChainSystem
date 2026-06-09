@@ -21,29 +21,6 @@
                     <p class="mb-0">Get funds instantly to your M-Pesa</p>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="alert alert-info">
-                                <h6 class="mb-1">Your Eligibility</h6>
-                                <p class="mb-0">Deposits: <strong>@Model.CurrentDeposits.ToString("N0")</strong> KES</p>
-                                <p class="mb-0">Multiplier: <strong>@Model.Multiplier</strong>x</p>
-                                <hr class="my-2" />
-                                <h5 class="text-success mb-0">You qualify for up to @Model.EligibleAmount.ToString("N0") KES</h5>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="alert alert-light border">
-                                <h6 class="mb-1">Mobile Loan Features</h6>
-                                <ul class="mb-0 small">
-                                    <li>✓ No guarantors required</li>
-                                    <li>✓ Instant approval</li>
-                                    <li>✓ Immediate disbursement</li>
-                                    <li>✓ Flexible repayment</li>
-                                    <li>✓ @Model.InterestRate% interest p.a</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
 
                     <form asp-action="MobileLoan" method="post">
                         <input type="hidden" asp-for="LoanCode" />
@@ -83,11 +60,35 @@
                             <div class="col-12">
                                 <label class="form-label">Repayment Period (months)</label>
                                 <select asp-for="RepayPeriod" class="form-select" id="repayPeriod">
-                                    @for (int i = 1; i <= Model.MaxRepayPeriod; i++)
+                                    @{
+                                        int maxMonths = Model.MaxRepayPeriod > 0 ? Model.MaxRepayPeriod : 12;
+                                    }
+                                    @for (int i = 1; i <= maxMonths; i++)
                                     {
-                                        <option value="@i" selected="@(i == 6)">@i month@(i > 1 ? "s" : "")</option>
+                                        string displayText = i switch
+                                        {
+                                            1 => "1 month",
+                                            2 => "2 month",
+                                            3 => "3 months",
+                                            4 => "4 months",
+                                            6 => "6 months",
+                                            _ => $"{i} months"
+                                        };
+
+                                        @if (i == 6)
+                                        {
+                                            <option value="@i" selected="selected">@displayText</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@i">@displayText</option>
+                                        }
                                     }
                                 </select>
+                                <div class="form-text text-muted">
+                                    <i class="fa fa-info-circle"></i> Choose a repayment period that suits you best.
+                                    Longer periods have lower monthly payments but higher total interest.
+                                </div>
                             </div>
                         </div>
 

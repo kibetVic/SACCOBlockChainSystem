@@ -104,6 +104,7 @@
                                     <th>Total</th>
                                     <th>Paid</th>
                                     <th>Status</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -137,6 +138,21 @@
                                                 <span class="badge bg-secondary">Pending</span>
                                             }
                                         </td>
+                                        <td>
+                                            @if (Model.Status == "Disbursed" && Model.OutstandingBalance > 0)
+                                            {
+                                                <a href="@Url.Action("Repay", "LoanApplication", new { loanNo = Model.LoanNo })" class="btn btn-primary">
+                                                    <i class="fa fa-money-bill-wave"></i> Make Payment
+                                                </a>
+                                            }
+                                            @if (Model.Status == "Disbursed" || Model.Status == "Closed")
+                                            {
+                                                <a href="@Url.Action("RepaymentHistory", "LoanApplication", new { loanNo = Model.LoanNo })" class="btn btn-info">
+                                                    <i class="fa fa-history"></i> Payment History
+                                                </a>
+                                            }
+                                        </td>
+
                                     </tr>
                                 }
                             </tbody>

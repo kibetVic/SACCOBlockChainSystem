@@ -88,6 +88,28 @@
                                                 <a href="@Url.Action("Details", new { loanNo = loan.LoanNo })" class="btn btn-sm btn-info">
                                                     <i class="fa fa-eye"></i> View
                                                 </a>
+                                                
+                                                @if (loan.Status == "Endorsed")
+                                                {
+                                                    <a href="@Url.Action("Withdraw", new { loanNo = loan.LoanNo })" class="btn btn-sm btn-success mt-1">
+                                                        <i class="fa fa-download"></i> Withdraw
+                                                    </a>
+                                                }
+                                                
+                                                <!-- FIXED: Use 'loan' not 'Model' -->
+                                                @if (loan.Status == "Disbursed" && loan.OutstandingBalance > 0)
+                                                {
+                                                    <a href="@Url.Action("Repay", "LoanApplication", new { loanNo = loan.LoanNo })" class="btn btn-sm btn-primary mt-1">
+                                                        <i class="fa fa-money-bill-wave"></i> Pay
+                                                    </a>
+                                                }
+                                                
+                                                @if (loan.Status == "Disbursed" || loan.Status == "Closed")
+                                                {
+                                                    <a href="@Url.Action("RepaymentHistory", "LoanApplication", new { loanNo = loan.LoanNo })" class="btn btn-sm btn-info mt-1">
+                                                        <i class="fa fa-history"></i> History
+                                                    </a>
+                                                }
                                             </td>
                                         </tr>
                                     }

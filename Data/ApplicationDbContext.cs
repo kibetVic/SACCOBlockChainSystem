@@ -56,6 +56,9 @@ namespace SACCOBlockChainSystem.Data
         public DbSet<Wallet> Wallets { get; set; }
         public DbSet<Agent> Agents { get; set; }
         public DbSet<GlSetup> GlSetup { get; set; }
+        public DbSet<AccountType> GLAccountTypes { get; set; }
+        public DbSet<AccountGroup> GLAccountGroups { get; set; }
+        public DbSet<AccountSubCategory> GLAccSubCatego { get; set; }
         public DbSet<GIGs> CIGs { get; set; }
         public DbSet<MemberNumberCounter> MemberNumberCounters { get; set; }
         public DbSet<Block> Blocks { get; set; }

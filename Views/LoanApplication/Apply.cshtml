@@ -10,14 +10,40 @@
             <div class="page-title-box">
                 <h4 class="page-title">Apply for @Model.LoanName</h4>
             </div>
+            @if (Model.SelfGuarantee && Model.IsMobileLoan)
+            {
+                <div class="alert alert-success">
+                    <i class="fa fa-shield-alt"></i>
+                    <strong>Self-Guarantee Loan</strong><br />
+                    This loan is fully guaranteed by your shares. You have <strong>@Model.AvailableSharesForGuarantee.ToString("N0") KES</strong> in shares.
+                    Your loan amount cannot exceed this amount.
+                </div>
+            }
+            else if (Model.SelfGuarantee)
+            {
+                <div class="alert alert-info">
+                    <i class="fa fa-shield-alt"></i>
+                    <strong>Self-Guarantee Available</strong><br />
+                    This loan uses your shares as partial guarantee. Your shares: <strong>@Model.AvailableSharesForGuarantee.ToString("N0") KES</strong>
+                </div>
+            }
         </div>
     </div>
 
     <div class="row">
         <div class="col-lg-8">
-            <div class="card">
+            <div class="card @(Model.IsMobileLoan ? "border-success" : "")">
+                <div class="card-header @(Model.IsMobileLoan ? "bg-success text-white" : "bg-primary text-white")">
+                    <h5 class="mb-0">
+                        @if (Model.IsMobileLoan)
+                        {
+                            <i class="fa fa-mobile-alt me-2"></i>
+                        }
+                        @Model.LoanName Application
+                    </h5>
+                </div>
                 <div class="card-body">
-                    <form asp-action="ApplyLoan" asp-controller="LoanApplication" method="post">
+                    <form asp-action="ApplyLoan" asp-controller="LoanApplication" method="post" id="applyForm">
                         @Html.AntiForgeryToken()
 
                         <input type="hidden" asp-for="LoanCode" />
@@ -33,8 +59,9 @@
 
                         @if (Model.IsMobileLoan)
                         {
-                            <div class="alert alert-info">
-                                <i class="fa fa-mobile-alt"></i> This is a Mobile Loan - No guarantors required, instant approval!
+                            <div class="alert alert-success">
+                                <i class="fa fa-mobile-alt"></i>
+                                <strong>Mobile Loan Benefits:</strong> No guarantors required, instant approval, immediate disbursement!
                             </div>
                         }
 
@@ -50,7 +77,8 @@
                                 <label asp-for="PrincipalAmount" class="form-label">Loan Amount (KES)</label>
                                 <div class="input-group">
                                     <span class="input-group-text">KES</span>
-                                    <input asp-for="PrincipalAmount" class="form-control" type="number" step="1000" min="@Model.MinAmount" max="@Model.EligibleAmount" id="loanAmount" />
+                                    <input asp-for="PrincipalAmount" class="form-control" type="number"
+                                           min="@Model.MinAmount" max="@Model.EligibleAmount" id="loanAmount" />
                                 </div>
                                 <span asp-validation-for="PrincipalAmount" class="text-danger"></span>
                                 <small class="text-muted">Min: @Model.MinAmount.ToString("N0") | Max: @Model.EligibleAmount.ToString("N0")</small>
@@ -60,7 +88,7 @@
                                 <select asp-for="RepayPeriod" class="form-control" id="repayPeriod">
                                     @for (int i = 1; i <= Model.MaxRepayPeriod; i++)
                                     {
-                                        <option value="@i">@i month@(i > 1 ? "s" : "")</option>
+                                        <option value="@i" selected="@(i == (Model.IsMobileLoan ? 6 : 12))">@i month@(i > 1 ? "s" : "")</option>
                                     }
                                 </select>
                                 <span asp-validation-for="RepayPeriod" class="text-danger"></span>
@@ -143,7 +171,7 @@
 
                         <div class="row">
                             <div class="col-12">
-                                <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <button type="submit" class="btn btn-@(Model.IsMobileLoan ? "success" : "primary") btn-lg w-100" id="submitBtn">
                                     <i class="fa fa-paper-plane"></i> Submit Application
                                 </button>
                             </div>
@@ -160,7 +188,11 @@
                     <ul class="list-unstyled">
                         <li><i class="fa fa-check-circle text-success"></i> Apply from anywhere</li>
                         <li><i class="fa fa-clock text-info"></i> Receive decision in minutes</li>
-                        <li><i class="fa fa-mobile-alt text-success"></i> Mobile loans disbursed instantly</li>
+                        @if (Model.IsMobileLoan)
+                        {
+                            <li><i class="fa fa-mobile-alt text-success"></i> Mobile loans disbursed instantly to M-Pesa</li>
+                            <li><i class="fa fa-gavel text-warning"></i> No guarantors required</li>
+                        }
                         <li><i class="fa fa-file-text text-primary"></i> No paperwork required</li>
                     </ul>
                     <hr />
@@ -176,6 +208,10 @@
 
 @section Scripts {
     <script>
+        $(document).ready(function() {
+            calculateLoan();
+        });
+
         function calculateLoan() {
             let amount = parseFloat($('#loanAmount').val()) || 0;
             let months = parseInt($('#repayPeriod').val()) || 12;
@@ -204,6 +240,7 @@
             let maxEligible = @Model.EligibleAmount;
             let percentage = (amount / maxEligible) * 100;
             $('#eligibilityProgress').css('width', percentage + '%');
+
             if (amount > maxEligible) {
                 $('#eligibilityProgress').addClass('bg-danger');
                 $('#eligibilityText').html('<span class="text-danger">Amount exceeds eligible limit!</span>');
@@ -217,6 +254,10 @@
         }
 
         $('#loanAmount, #repayPeriod').on('input change', calculateLoan);
-        calculateLoan();
+
+        // Prevent double submission
+        $('#applyForm').on('submit', function() {
+            $('#submitBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Processing...');
+        });
     </script>
 }

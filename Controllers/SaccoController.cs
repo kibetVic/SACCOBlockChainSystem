@@ -35,25 +35,21 @@ namespace SACCOBlockChainSystem.Controllers
                 var parametersList = await _saccoService.GetAllSaccoParametersAsync(companyCode);
                 var glAccounts = await _saccoService.GetGlAccountsForDropdownAsync(companyCode);
 
-                // Check if there's an existing parameter for this company
+                // Get existing parameter if it exists
                 var existingParam = await _saccoService.GetSaccoParametersAsync(companyCode);
                 var walletsParam = await _walletService.GetConfigurations(companyCode);
+
                 ViewBag.ParametersList = parametersList;
                 ViewBag.GlAccounts = glAccounts;
-                ViewBag.IsEdit = false;
+                ViewBag.IsEdit = existingParam != null && existingParam.Id > 0;
+                ViewBag.EditId = existingParam?.Id;
 
-
+                // Create model with existing data if available, otherwise use defaults
                 var model = new SaccoParramDTO
                 {
-                    WalletConfig = walletsParam,
+                    WalletConfig = walletsParam ?? new WalletConfig(),
                     CompanyCode = companyCode,
-                    MembershipMaturityMonths = existingParam?.MembershipMaturityMonths ?? 3,
-                    WithdrawalNoticeDays = existingParam?.WithdrawalNoticeDays ?? 30,
-                    DividendProcessingDays = existingParam?.DividendProcessingDays ?? 14,
-                    MaxGuarantor = existingParam?.MaxGuarantor ?? 5,
-                    MinGuarantor = existingParam?.MinGuarantor ?? 1,
-                    DefaultCurrency = existingParam?.DefaultCurrency ?? "KES",
-                    DefaultRounding = existingParam?.DefaultRounding ?? 2,
+                    Id = existingParam?.Id ?? 0,
                     SaccoName = existingParam?.SaccoName ?? "",
                     NoOfEmployees = existingParam?.NoOfEmployees,
                     Address = existingParam?.Address,
@@ -64,6 +60,13 @@ namespace SACCOBlockChainSystem.Controllers
                     Website = existingParam?.Website,
                     PhysicalAddress = existingParam?.PhysicalAddress,
                     CheckOffDate = existingParam?.CheckOffDate,
+                    MembershipMaturityMonths = existingParam?.MembershipMaturityMonths ?? 3,
+                    WithdrawalNoticeDays = existingParam?.WithdrawalNoticeDays ?? 30,
+                    DividendProcessingDays = existingParam?.DividendProcessingDays ?? 14,
+                    MaxGuarantor = existingParam?.MaxGuarantor ?? 5,
+                    MinGuarantor = existingParam?.MinGuarantor ?? 1,
+                    DefaultCurrency = existingParam?.DefaultCurrency ?? "KES",
+                    DefaultRounding = existingParam?.DefaultRounding ?? 2,
                     SignificantLoanBalance = existingParam?.SignificantLoanBalance,
                     ActionOnDefaultedInterest = existingParam?.ActionOnDefaultedInterest,
                     Suspense = existingParam?.Suspense,
@@ -146,8 +149,30 @@ namespace SACCOBlockChainSystem.Controllers
         {
             try
             {
+                // DEBUG: Log all incoming data
+                _logger.LogInformation("=== SAVE METHOD STARTED ===");
+                _logger.LogInformation($"Model Id: {model.Id}");
+                _logger.LogInformation($"Model SaccoName: {model.SaccoName}");
+                _logger.LogInformation($"Model CompanyCode: {model.CompanyCode}");
+                _logger.LogInformation($"Model Telephone: {model.Telephone}");
+                _logger.LogInformation($"Model EmailAddress: {model.EmailAddress}");
+                _logger.LogInformation($"Model PhysicalAddress: {model.PhysicalAddress}");
+                _logger.LogInformation($"Model Town: {model.Town}");
+                _logger.LogInformation($"Model Address: {model.Address}");
+                _logger.LogInformation($"Model MembershipMaturityMonths: {model.MembershipMaturityMonths}");
+                _logger.LogInformation($"Model WithdrawalNoticeDays: {model.WithdrawalNoticeDays}");
+                _logger.LogInformation($"Model MaxGuarantor: {model.MaxGuarantor}");
+                _logger.LogInformation($"Model Suspense: {model.Suspense}");
+                _logger.LogInformation($"Model RetainedEarnings: {model.RetainedEarnings}");
+                _logger.LogInformation($"Model Creditors: {model.Creditors}");
+
                 if (!ModelState.IsValid)
                 {
+                    var errors = string.Join("; ", ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage));
+                    _logger.LogWarning($"ModelState invalid: {errors}");
+
                     var companyCode = _companyContextService.GetCurrentCompanyCode();
                     var parametersList = await _saccoService.GetAllSaccoParametersAsync(companyCode);
                     var glAccounts = await _saccoService.GetGlAccountsForDropdownAsync(companyCode);
@@ -158,30 +183,45 @@ namespace SACCOBlockChainSystem.Controllers
                     return View("Index", model);
                 }
 
-                var companyCod = _companyContextService.GetCurrentCompanyCode();
-                var existing = await _saccoService.GetSaccoParametersAsync(companyCod);
+                var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();
 
+                // Ensure CompanyCode is set correctly
+                if (string.IsNullOrEmpty(model.CompanyCode))
+                {
+                    model.CompanyCode = currentCompanyCode;
+                }
+
+                // Get existing parameters for this company
+                var existing = await _saccoService.GetSaccoParametersAsync(currentCompanyCode);
+
+                _logger.LogInformation($"Existing parameters found: {(existing != null ? $"Yes (ID: {existing.Id})" : "No")}");
 
                 if (existing != null && existing.Id > 0)
                 {
+                    // UPDATE existing record
+                    _logger.LogInformation($"Updating existing SACCO parameters with ID: {existing.Id}");
+                    model.Id = existing.Id; // Ensure the ID is set
                     await _saccoService.UpdateSaccoParametersAsync(model, User.Identity?.Name ?? "SYSTEM");
                     TempData["SuccessMessage"] = $"SACCO parameters for {model.SaccoName} updated successfully!";
-                    var companyCode = _companyContextService.GetCurrentCompanyCode();
-                    await _walletService.UpdateWalletConfig(model.WalletConfig, companyCode);
+
+                    // Update Wallet Config
+                    if (model.WalletConfig != null)
+                    {
+                        await _walletService.UpdateWalletConfig(model.WalletConfig, currentCompanyCode);
+                    }
                 }
                 else
                 {
-                    //var companyCode = _companyContextService.GetCurrentCompanyCode();
-                    //var existing = await _saccoService.GetSaccoParametersAsync(companyCode);
-
-                    //if (existing != null && existing.Id > 0)
-                    //{
-                    //    TempData["ErrorMessage"] = $"SACCO parameters already exist for company {companyCode}. Please edit existing record.";
-                    //    return RedirectToAction("Index");
-                    //}
-
+                    // CREATE new record
+                    _logger.LogInformation($"Creating new SACCO parameters for company: {currentCompanyCode}");
                     await _saccoService.CreateSaccoParametersAsync(model, User.Identity?.Name ?? "SYSTEM");
                     TempData["SuccessMessage"] = $"SACCO parameters for {model.SaccoName} created successfully!";
+
+                    // Create Wallet Config for new record
+                    if (model.WalletConfig != null)
+                    {
+                        await _walletService.UpdateWalletConfig(model.WalletConfig, currentCompanyCode);
+                    }
                 }
 
                 return RedirectToAction("Index");
@@ -189,8 +229,9 @@ namespace SACCOBlockChainSystem.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving SACCO parameters");
-                ModelState.AddModelError("", ex.Message);
+                TempData["ErrorMessage"] = $"Error saving: {ex.Message}";
 
+                // Reload data for the view
                 var companyCode = _companyContextService.GetCurrentCompanyCode();
                 var parametersList = await _saccoService.GetAllSaccoParametersAsync(companyCode);
                 var glAccounts = await _saccoService.GetGlAccountsForDropdownAsync(companyCode);
@@ -198,10 +239,10 @@ namespace SACCOBlockChainSystem.Controllers
                 ViewBag.ParametersList = parametersList;
                 ViewBag.GlAccounts = glAccounts;
                 ViewBag.IsEdit = model.Id > 0;
+
                 return View("Index", model);
             }
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete(int id)

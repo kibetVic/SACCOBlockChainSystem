@@ -305,7 +305,7 @@
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">PORTFOLIO AT RISK>30 DAYS (PAR):</small>
-                    <h2 class="mb-1 fw-bold @(Model.PARPercent < 5 ? "text-success" : Model.PARPercent < 10 ? "text-warning" : "text-danger")">@Model.PARPercent.ToString("F1")%</h2>
+                    <h5 class="mb-1 fw-bold @(Model.PARPercent < 5 ? "text-success" : Model.PARPercent < 10 ? "text-warning" : "text-danger")">@Model.PARPercent.ToString("F1")%</h5>
                 </div>
             </div>
         </div>
@@ -344,7 +344,7 @@
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">REPAYMENT RATE(CURRENT MONTH):</small>
-                    <h2 class="mb-1 fw-bold @(Model.RepaymentRate < 5 ? "text-success" : Model.RepaymentRate < 10 ? "text-warning" : "text-danger")">@Model.RepaymentRate.ToString("F1")%</h2>
+                    <h5 class="mb-1 fw-bold @(Model.RepaymentRate < 5 ? "text-success" : Model.RepaymentRate < 10 ? "text-warning" : "text-danger")">@Model.RepaymentRate.ToString("F1")%</h5>
                 </div>
             </div>
         </div>
@@ -359,9 +359,9 @@
                     <small class="text-primary fw-semibold">
                         AMOUNT PAST DUE RATE:
                     </small>
-                    <h2 class="mb-1 fw-bold @(Model.AmountPastDueRate < 5 ? "text-success" : Model.AmountPastDueRate < 10 ? "text-warning" : "text-danger")">
+                    <h5 class="mb-1 fw-bold @(Model.AmountPastDueRate < 5 ? "text-success" : Model.AmountPastDueRate < 10 ? "text-warning" : "text-danger")">
                         @Model.AmountPastDueRate.ToString("F1")%
-                    </h2>
+                    </h5>
                 </div>
             </div>
         </div>
@@ -454,9 +454,9 @@
                     <small class="text-primary fw-semibold">
                         PORTFOLIO AT RISK >60 DAYS (PAR):
                     </small>
-                    <h2 class="mb-1 fw-bold @(Model.PAR60Percent < 5 ? "text-success" : Model.PAR60Percent < 10 ? "text-warning" : "text-danger")">
+                    <h5 class="mb-1 fw-bold @(Model.PAR60Percent < 5 ? "text-success" : Model.PAR60Percent < 10 ? "text-warning" : "text-danger")">
                         @Model.PAR60Percent.ToString("F1")%
-                    </h2>
+                    </h5>
                 </div>
             </div>
         </div>

@@ -30,6 +30,13 @@
                     <div class="card-body">
                         <p class="card-text">@product.Description</p>
 
+                        @if (product.SelfGuarantee)
+                        {
+                            <div class="alert alert-info small p-1 mb-2">
+                                <i class="fa fa-user-check"></i> Self-guarantee using your shares
+                            </div>
+                        }
+
                         <hr />
 
                         <div class="row mb-2">
@@ -45,18 +52,14 @@
                             <div class="col-6 text-end fw-bold">@product.InterestRate% p.a</div>
                         </div>
                         <div class="row mb-2">
-                            <div class="col-6">Repayment Period:</div>
-                            <div class="col-6 text-end fw-bold">@product.RepaymentPeriodMonths months</div>
+                            <div class="col-6">Repayment Method:</div>
+                            <div class="col-6 text-end fw-bold">@product.RepayMethod</div>
                         </div>
-                        <div class="row mb-2">
-                            <div class="col-6">Multiplier:</div>
-                            <div class="col-6 text-end fw-bold">@product.Multiplier x deposits</div>
-                        </div>
-
-                        @if (product.RequiresGuarantor)
+                        @if (product.ProcessingFee > 0)
                         {
-                            <div class="alert alert-warning small mt-2 mb-0">
-                                <i class="fa fa-users"></i> Requires guarantors
+                            <div class="row mb-2">
+                                <div class="col-6">Processing Fee:</div>
+                                <div class="col-6 text-end text-warning fw-bold">@product.ProcessingFee.ToString("N0")</div>
                             </div>
                         }
 
@@ -68,8 +71,18 @@
                                 <i class="fa fa-check-circle"></i> You qualify for up to @product.EligibleAmount.ToString("N0")
                                 <br />
                                 <small>Est. monthly: @product.EstimatedMonthlyInstallment.ToString("N0")</small>
+                                @if (product.ProcessingFee > 0)
+                                {
+                                    <br />
+                                    <small>Net after fee: @((product.EligibleAmount - product.ProcessingFee).ToString("N0"))</small>
+                                }
                             </div>
-                            <a href="@Url.Action("Apply", new { loanCode = product.LoanCode })" class="btn btn-primary w-100">
+                            <!-- FIXED: This should work for ALL loan types including mobile -->
+                            <a href="@Url.Action("Apply", new { loanCode = product.LoanCode })" class="btn btn-@(product.IsMobileLoan ? "success" : "primary") w-100">
+                                @if (product.IsMobileLoan)
+                                {
+                                    <i class="fa fa-mobile-alt"></i>
+                                }
                                 Apply Now
                             </a>
                         }
@@ -84,22 +97,5 @@
                 </div>
             </div>
         }
-    </div>
-
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">How Loan Eligibility is Calculated</h5>
-                    <p>Your loan eligibility is based on your deposits/savings with the SACCO:</p>
-                    <ul>
-                        <li><strong>Mobile Loan:</strong> Up to 3× your deposits - Instant approval</li>
-                        <li><strong>Emergency Loan:</strong> Up to 4× your deposits</li>
-                        <li><strong>Development Loan:</strong> Up to 5× your deposits</li>
-                    </ul>
-                    <p class="mb-0 text-muted">Current deposits: <strong>@(Model.FirstOrDefault()?.EligibleAmount ?? 0)</strong> would determine your eligibility</p>
-                </div>
-            </div>
-        </div>
     </div>
 </div>

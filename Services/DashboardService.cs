@@ -86,9 +86,6 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-
-
-
         public async Task<DashboardVM> GetMemberDashboardAsync(string memberNo)
         {
             var dashboard = new DashboardVM();

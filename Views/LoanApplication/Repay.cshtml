@@ -1,0 +1,349 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.LoanRepaymentViewModel
+@{
+    ViewData["Title"] = "Loan Repayment";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Loan Repayment - @Model.LoanNo</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Loan Summary</h6>
+                    <hr />
+                    <div class="row mb-2">
+                        <div class="col-6">Loan Number:</div>
+                        <div class="col-6 text-end fw-bold">@Model.LoanNo</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Member Name:</div>
+                        <div class="col-6 text-end">@Model.MemberName</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Original Amount:</div>
+                        <div class="col-6 text-end">@Model.LoanAmount.ToString("N0") KES</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Monthly Installment:</div>
+                        <div class="col-6 text-end">@Model.MonthlyInstallment.ToString("N0") KES</div>
+                    </div>
+                    <hr />
+                    <div class="row mb-2">
+                        <div class="col-6">Outstanding Principal:</div>
+                        <div class="col-6 text-end text-danger fw-bold">@Model.OutstandingBalance.ToString("N0") KES</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Outstanding Interest:</div>
+                        <div class="col-6 text-end text-warning fw-bold">@Model.OutstandingInterest.ToString("N0") KES</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Total Outstanding:</div>
+                        <div class="col-6 text-end text-primary fw-bold fs-5">@Model.TotalOutstanding.ToString("N0") KES</div>
+                    </div>
+                    @if (Model.NextPaymentDate.HasValue)
+                    {
+                        <div class="row mb-2">
+                            <div class="col-6">Next Due Date:</div>
+                            <div class="col-6 text-end">
+                                @Model.NextPaymentDate.Value.ToString("dd MMM yyyy")
+                                @if (Model.NextPaymentDate.Value < DateTime.Now)
+                                {
+                                    <span class="badge bg-danger ms-1">Overdue</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Make a Payment</h6>
+                    <hr />
+
+                    <form method="post" asp-action="Repay" asp-route-loanNo="@Model.LoanNo" id="repaymentForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="LoanNo" />
+                        <input type="hidden" asp-for="TotalOutstanding" />
+                        <input type="hidden" asp-for="OutstandingBalance" />
+                        <input type="hidden" asp-for="OutstandingInterest" />
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label asp-for="PaymentAmount" class="form-label">Payment Amount (KES)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input asp-for="PaymentAmount" class="form-control form-control-lg" type="number"
+                                           step="1" min="1" max="@Model.TotalOutstanding" id="paymentAmount" value="@Model.PaymentAmount" />
+                                </div>
+                                <span asp-validation-for="PaymentAmount" class="text-danger"></span>
+                                <small class="text-muted">Min: 1 | Max: @Model.TotalOutstanding.ToString("N0")</small>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label class="form-label">Payment Method</label>
+                                <div class="row">
+                                    @foreach (var method in Model.PaymentMethods)
+                                    {
+                                        <div class="col-md-3 mb-2">
+                                            <div class="card payment-method @(method.Code == "MPESA" ? "border-success selected" : "")"
+                                                 data-method="@method.Code">
+                                                <div class="card-body text-center py-2">
+                                                    <i class="fa @method.Icon" style="font-size: 24px;"></i>
+                                                    <div class="form-check mt-1">
+                                                        <input type="radio" name="PaymentMethod" value="@method.Code"
+                                                               class="form-check-input" id="method_@method.Code"
+                                                               @(method.Code == "MPESA" ? "checked" : "") />
+                                                        <label class="form-check-label small" for="method_@method.Code">
+                                                            @method.Name
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                <span asp-validation-for="PaymentMethod" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div id="mpesaSection" class="row mb-3">
+                            <div class="col-12">
+                                <label asp-for="MpesaPhoneNumber" class="form-label">M-Pesa Phone Number</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">+254</span>
+                                    <input asp-for="MpesaPhoneNumber" class="form-control" placeholder="712345678" />
+                                </div>
+                                <span asp-validation-for="MpesaPhoneNumber" class="text-danger"></span>
+                                <small class="text-muted">Enter the phone number registered with M-Pesa</small>
+                            </div>
+                        </div>
+
+                        <div id="chequeSection" class="row mb-3" style="display: none;">
+                            <div class="col-12">
+                                <label asp-for="ChequeNumber" class="form-label">Cheque Number</label>
+                                <input asp-for="ChequeNumber" class="form-control" placeholder="e.g., 000123" />
+                                <span asp-validation-for="ChequeNumber" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label asp-for="ReferenceNumber" class="form-label">Reference Number (Optional)</label>
+                                <input asp-for="ReferenceNumber" class="form-control" placeholder="Transaction reference" />
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label asp-for="Remarks" class="form-label">Remarks (Optional)</label>
+                                <textarea asp-for="Remarks" class="form-control" rows="2" placeholder="Additional notes"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info" id="paymentSummary">
+                            <strong>Payment Summary:</strong>
+                            <span id="summaryText">Enter amount to see breakdown</span>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100" id="submitBtn">
+                            <i class="fa fa-money-bill-wave"></i> Process Payment
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.RepaymentSchedule != null && Model.RepaymentSchedule.Any())
+    {
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">Repayment Schedule</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Due Date</th>
+                                        <th>Principal</th>
+                                        <th>Interest</th>
+                                        <th>Total</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var schedule in Model.RepaymentSchedule)
+                                    {
+                                        <tr class="@(schedule.Status == "Overdue" ? "table-danger" : "")">
+                                            <td>@schedule.InstallmentNo</td>
+                                            <td>@schedule.DueDate.ToString("dd MMM yyyy")</td>
+                                            <td>@schedule.PrincipalAmount.ToString("N0")</td>
+                                            <td>@schedule.InterestAmount.ToString("N0")</td>
+                                            <td>@schedule.TotalAmount.ToString("N0")</td>
+                                            <td>
+                                                @if (schedule.Status == "Paid")
+                                                {
+                                                    <span class="badge bg-success">Paid</span>
+                                                }
+                                                else if (schedule.Status == "Partial")
+                                                {
+                                                    <span class="badge bg-warning">Partial</span>
+                                                }
+                                                else if (schedule.DueDate < DateTime.Now)
+                                                {
+                                                    <span class="badge bg-danger">Overdue</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Pending</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        $(document).ready(function() {
+            let initialMethod = $('input[name="PaymentMethod"]:checked').val();
+            togglePaymentSections(initialMethod);
+            calculatePaymentSummary();
+        });
+
+        function togglePaymentSections(method) {
+            $('#mpesaSection').hide();
+            $('#chequeSection').hide();
+
+            if (method === 'MPESA') {
+                $('#mpesaSection').show();
+            } else if (method === 'CHEQUE') {
+                $('#chequeSection').show();
+            }
+
+            $('.payment-method').removeClass('border-success selected');
+            $(`.payment-method[data-method="${method}"]`).addClass('border-success selected');
+        }
+
+        function calculatePaymentSummary() {
+            let amount = parseFloat($('#paymentAmount').val()) || 0;
+            let totalOutstanding = @Model.TotalOutstanding;
+            let outstandingInterest = @Model.OutstandingInterest;
+
+            if (amount <= 0) {
+                $('#summaryText').text('Enter amount to see breakdown');
+                return;
+            }
+
+            let interestPaid = Math.min(amount, outstandingInterest);
+            let principalPaid = amount - interestPaid;
+            let newBalance = totalOutstanding - amount;
+
+            // Round to nearest whole number
+            interestPaid = Math.round(interestPaid);
+            principalPaid = Math.round(principalPaid);
+            newBalance = Math.round(newBalance);
+
+            $('#summaryText').html(`
+                <strong>Payment Breakdown:</strong><br />
+                Amount: <strong>${Math.round(amount).toLocaleString()} KES</strong><br />
+                Interest Paid: <strong>${interestPaid.toLocaleString()} KES</strong><br />
+                Principal Paid: <strong>${principalPaid.toLocaleString()} KES</strong><br />
+                Remaining Balance: <strong>${newBalance.toLocaleString()} KES</strong>
+            `);
+        }
+
+        $('input[name="PaymentMethod"]').on('change', function() {
+            togglePaymentSections($(this).val());
+        });
+
+        $('#paymentAmount').on('input', calculatePaymentSummary);
+
+        $('#repaymentForm').on('submit', function(e) {
+            let selectedMethod = $('input[name="PaymentMethod"]:checked').val();
+            let amount = parseFloat($('#paymentAmount').val()) || 0;
+
+            if (!selectedMethod) {
+                e.preventDefault();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Selection Required',
+                    text: 'Please select a payment method',
+                    confirmButtonColor: '#198754'
+                });
+                return false;
+            }
+
+            if (amount <= 0) {
+                e.preventDefault();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid Amount',
+                    text: 'Please enter a valid payment amount',
+                    confirmButtonColor: '#198754'
+                });
+                return false;
+            }
+
+            if (selectedMethod === 'MPESA') {
+                let phone = $('#MpesaPhoneNumber').val();
+                let cleanPhone = phone.replace(/\D/g, '');
+
+                if (!cleanPhone || cleanPhone.length !== 9) {
+                    e.preventDefault();
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid Phone Number',
+                        text: 'Please enter a valid 9-digit M-Pesa phone number',
+                        confirmButtonColor: '#198754'
+                    });
+                    return false;
+                }
+            }
+
+            $('#submitBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Processing...');
+            return true;
+        });
+    </script>
+
+    <style>
+        .payment-method {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #dee2e6;
+        }
+
+            .payment-method:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+
+            .payment-method.selected {
+                border: 2px solid #198754 !important;
+                background-color: #f8f9fa;
+            }
+    </style>
+}
