@@ -199,6 +199,10 @@ namespace SACCOBlockChainSystem.Models.ViewModels
 
         public List<PaymentMethodDTO> PaymentMethods { get; set; }
         public List<RepaymentSchedulerDTO> RepaymentSchedule { get; set; }
+        public decimal PenaltyAmount { get; internal set; }
+        public int DaysOverdue { get; internal set; }
+        public bool HasPenalty { get; internal set; }
+        public string? PenaltyMessage { get; internal set; }
     }
     public class RepaymentConfirmationViewModel
     {

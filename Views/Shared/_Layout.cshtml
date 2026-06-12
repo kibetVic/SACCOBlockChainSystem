@@ -108,13 +108,20 @@ input:invalid:focus {
                         {
                             var userGroupClaims = User.FindFirstValue(ClaimTypes.Role);
                             var isSuperAdmin = userGroupClaims == "Super Admin" || userGroupClaims == "SuperAdmin";
-                            //var isMember = userGroupClaim == "MEMBER" || userGroupClaim == "Member" || userGroupClaim == "member";
+                            var companyCount = ViewBag.CompanyCount ?? 0;
 
                             <div class="company-info">
                                 <small>
                                     @if (isSuperAdmin)
                                     {
-                                        <strong>@User.FindFirstValue("CompanyName") - System SACCOs</strong>
+                                        if (companyCount > 0)
+                                        {
+                                            <strong>@companyCount Integrated System SACCOs</strong>
+                                        }
+                                        else
+                                        {
+                                            <strong>System SACCOs</strong>
+                                        }
                                     }
                                     else if (isMember)
                                     {
@@ -130,7 +137,6 @@ input:invalid:focus {
                                 </small>
                             </div>
                         }
-                    </li>
                 </ul>
                 <!--end::Start Navbar Links-->
                 <!--begin::End Navbar Links-->

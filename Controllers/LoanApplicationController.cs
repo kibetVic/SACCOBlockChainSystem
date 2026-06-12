@@ -1073,12 +1073,12 @@ namespace SACCOBlockChainSystem.Controllers
         private List<PaymentMethodDTO> GetPaymentMethods()
         {
             return new List<PaymentMethodDTO>
-    {
-        new PaymentMethodDTO { Code = "MPESA", Name = "M-Pesa", Icon = "fa-mobile-alt", RequiresPhoneNumber = true, RequiresChequeNumber = false },
-        new PaymentMethodDTO { Code = "CASH", Name = "Cash", Icon = "fa-money-bill-wave", RequiresPhoneNumber = false, RequiresChequeNumber = false },
-        new PaymentMethodDTO { Code = "CHEQUE", Name = "Cheque", Icon = "fa-file-alt", RequiresPhoneNumber = false, RequiresChequeNumber = true },
-        new PaymentMethodDTO { Code = "FOSA", Name = "FOSA Transfer", Icon = "fa-university", RequiresPhoneNumber = false, RequiresChequeNumber = false }
-    };
+            {
+                new PaymentMethodDTO { Code = "MPESA", Name = "M-Pesa", Icon = "fa-mobile-alt", RequiresPhoneNumber = true, RequiresChequeNumber = false },
+                new PaymentMethodDTO { Code = "CASH", Name = "Cash", Icon = "fa-money-bill-wave", RequiresPhoneNumber = false, RequiresChequeNumber = false },
+                new PaymentMethodDTO { Code = "CHEQUE", Name = "Cheque", Icon = "fa-file-alt", RequiresPhoneNumber = false, RequiresChequeNumber = true },
+                new PaymentMethodDTO { Code = "FOSA", Name = "FOSA Transfer", Icon = "fa-university", RequiresPhoneNumber = false, RequiresChequeNumber = false }
+            };
         }
 
         #endregion

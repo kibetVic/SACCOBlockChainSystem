@@ -1,5 +1,6 @@
 ﻿// Services/SelfServiceLoanService.cs - COMPLETE UNIFIED VERSION
 using Microsoft.EntityFrameworkCore;
+using Microsoft.VisualBasic;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
@@ -544,7 +545,7 @@ namespace SACCOBlockChainSystem.Services
 
                 // ***** GET REPAYMENT METHOD AND PROCESSING FEE PERCENTAGE FROM LOANTYPE *****
                 string repayMethod = loanType.Repaymethod ?? "AMT";
-                decimal processingFeePercentage = loanType.Processingfee ?? 0; // This is a PERCENTAGE (e.g., 5 = 5%)
+                decimal processingFeePercentage = loanType.Processingfee ?? 0; 
                 bool isMobileLoan = loanType.MobileLoan == true;
 
                 // Parse interest rate
@@ -627,6 +628,7 @@ namespace SACCOBlockChainSystem.Services
                     LoanCode = application.LoanCode,
                     LoanAmt = principalAmount,
                     MaxLoanamt = principalAmount,
+                    Aamount = principalAmount,
                     IdNo = member.Idno,
                     RepayPeriod = application.RepayPeriod,
                     ApplicDate = DateTime.Now,
@@ -915,13 +917,16 @@ namespace SACCOBlockChainSystem.Services
             try
             {
                 _logger.LogInformation($"Creating auto self-guarantee for loan {loanNo}, member {memberNo}");
+                _logger.LogInformation($"Loan Amount: {loanAmount:C}");
 
                 // Get member's total shares
                 var totalShares = await _context.ContribShares
                     .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
                     .SumAsync(cs => cs.ShareCapitalAmount ?? 0);
 
-                // FIXED: Get loan code first, then get loan type (no nested await issue)
+                _logger.LogInformation($"Total Shares available: {totalShares:C}");
+
+                // Get loan details
                 var loan = await _context.Loans
                     .Where(l => l.LoanNo == loanNo)
                     .Select(l => new { l.LoanCode, l.LoanAmt })
@@ -936,22 +941,31 @@ namespace SACCOBlockChainSystem.Services
                 var loanType = await _context.Loantypes
                     .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode);
 
-                // Calculate guarantee amount (typically 10-30% of loan amount, or based on shares)
-                decimal guaranteePercentage = 0.1m; // Default 10%
+                // ============================================================
+                // CORRECTED: For self-guarantee, the FULL loan amount is guaranteed
+                // The member is using their own shares as collateral
+                // ============================================================
 
-                if (loanType != null && loanType.SelfGuarantee == true)
+                // Guarantee amount = FULL loan amount (100%)
+                decimal guaranteeAmount = loanAmount;
+
+                // Check if member has enough shares to cover the full loan amount
+                if (totalShares < guaranteeAmount)
                 {
-                    // You can customize the percentage based on loan type
-                    // Could also read from a field like loanType.GuaranteePercentage if exists
-                    guaranteePercentage = 0.1m; // 10% of loan amount
+                    _logger.LogWarning($"Insufficient shares for self-guarantee. Required: {guaranteeAmount:C}, Available: {totalShares:C}");
+
+                    // Option 1: Reject the loan (recommended - should have been caught in eligibility)
+                    _logger.LogError($"Member {memberNo} does not have enough shares ({totalShares:C}) to guarantee loan amount {guaranteeAmount:C}");
+                    return false;
+
+                    // Option 2: Only guarantee up to available shares (not recommended for self-guarantee)
+                    // guaranteeAmount = totalShares;
                 }
 
-                decimal guaranteeAmount = loanAmount * guaranteePercentage;
+                // For self-guarantee, the guaranteed amount equals the loan amount
+                decimal finalGuaranteeAmount = guaranteeAmount;
 
-                // Ensure guarantee amount doesn't exceed available shares
-                decimal finalGuaranteeAmount = Math.Min(guaranteeAmount, totalShares);
-
-                _logger.LogInformation($"Self-guarantee details: Loan={loanNo}, Total Shares={totalShares:C}, Guarantee Amount={finalGuaranteeAmount:C}, Percentage={guaranteePercentage:P}");
+                _logger.LogInformation($"Self-guarantee details: Loan={loanNo}, Loan Amount={loanAmount:C}, Total Shares={totalShares:C}, Guarantee Amount={finalGuaranteeAmount:C} (100% of loan)");
 
                 // Check if guarantee already exists
                 var existingGuarantee = await _context.Loanguar
@@ -968,23 +982,26 @@ namespace SACCOBlockChainSystem.Services
                 {
                     LoanNo = loanNo,
                     MemberNo = memberNo,
-                    Amount = finalGuaranteeAmount,
-                    Balance = finalGuaranteeAmount,
+                    Amount = finalGuaranteeAmount,      // Full loan amount
+                    Balance = finalGuaranteeAmount,      // Full loan amount as balance
                     AuditId = "SYSTEM_AUTO",
                     AuditTime = DateTime.Now,
                     Collateral = "SELF_SHARES",
-                    Description = $"Self-guarantee using member shares. Total shares: {totalShares:C}, Guarantee amount: {finalGuaranteeAmount:C}",
+                    Description = $"Self-guarantee using member shares. Total shares: {totalShares:C}, Guarantee amount (100% of loan): {finalGuaranteeAmount:C}",
                     Transfered = false,
                     Transdate = DateTime.Now,
                     FullNames = await GetMemberFullNameAsync(memberNo, companyCode),
-                    Tguaranto = finalGuaranteeAmount,
+                    Tguaranto = finalGuaranteeAmount,    // Total guarantee amount
                     CompanyCode = companyCode,
                     BlockchainTxId = null
                 };
 
                 _context.Loanguar.Add(loanguar);
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Self-guarantee created for loan {loanNo} with amount {finalGuaranteeAmount:C}");
+                _logger.LogInformation($"Self-guarantee created for loan {loanNo} with amount {finalGuaranteeAmount:C} (100% of loan)");
+
+                // Update loan with self-guarantee information
+                await UpdateLoanWithSelfGuaranteeAsync(loanNo, finalGuaranteeAmount);
 
                 // Create blockchain record for guarantee
                 var blockchainData = new
@@ -992,10 +1009,15 @@ namespace SACCOBlockChainSystem.Services
                     TransactionType = "SELF_GUARANTEE",
                     LoanNo = loanNo,
                     MemberNo = memberNo,
+                    LoanAmount = loanAmount,
                     GuaranteeAmount = finalGuaranteeAmount,
+                    GuaranteePercentage = 100,  // 100% of loan amount
                     TotalShares = totalShares,
-                    GuaranteePercentage = guaranteePercentage,
+                    SharesUsedAsCollateral = finalGuaranteeAmount,
+                    RemainingShares = totalShares - finalGuaranteeAmount,
                     LoanCode = loan.LoanCode,
+                    LoanTypeName = loanType?.LoanType1,
+                    IsMobileLoan = loanType?.MobileLoan == true,
                     CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
                 };
 
@@ -1038,6 +1060,7 @@ namespace SACCOBlockChainSystem.Services
                 };
 
                 _context.BlockchainTransactions.Add(blockchainTx);
+                await _context.SaveChangesAsync();
 
                 loanguar.BlockchainTxId = blockchainTx.TransactionId;
                 await _context.SaveChangesAsync();
@@ -1052,6 +1075,7 @@ namespace SACCOBlockChainSystem.Services
                 return false;
             }
         }
+
 
         private async Task<string> GetMemberFullNameAsync(string memberNo, string companyCode)
         {
@@ -1083,7 +1107,6 @@ namespace SACCOBlockChainSystem.Services
                 _logger.LogError(ex, $"Error updating loan with self-guarantee info for {loanNo}");
             }
         }
-
 
         private async Task<bool> AutoAppraiseLoanInternalAsync(string loanNo, LoanCalculationResult calculation)
         {
@@ -1118,8 +1141,49 @@ namespace SACCOBlockChainSystem.Services
                     multiplier = (decimal)shareTypes.Max(s => s.LoanToShareRatio.Value);
                 }
 
+                // Get loan count for the member
+                int loanCount = await _context.Loans
+                    .CountAsync(l => l.MemberNo == loan.MemberNo && l.CompanyCode == loan.CompanyCode);
+
                 decimal eligibleAmount = totalDeposits * multiplier;
+
+                // For self-guarantee loans, also check shares
+                bool isSelfGuarantee = loanType?.SelfGuarantee == true;
+                bool isMobileLoan = loanType?.MobileLoan == true;
+
                 bool approved = (loan.LoanAmt ?? 0) <= eligibleAmount;
+
+                // For self-guarantee, also verify shares are sufficient
+                if (approved && isSelfGuarantee)
+                {
+                    decimal requiredGuarantee = loan.LoanAmt ?? 0;
+                    if (totalShares < requiredGuarantee)
+                    {
+                        approved = false;
+                        _logger.LogWarning($"Self-guarantee failed: Shares {totalShares:C} < Loan amount {requiredGuarantee:C}");
+                    }
+                }
+
+                // Parse interest rate from loanType (handle string to decimal conversion)
+                decimal? interestRate = null;
+                if (!string.IsNullOrEmpty(loanType?.Interest))
+                {
+                    string interestStr = loanType.Interest.ToString().Replace("%", "");
+                    if (decimal.TryParse(interestStr, out decimal parsedRate))
+                    {
+                        interestRate = parsedRate;
+                    }
+                }
+
+                decimal? totalInterestRate = null;
+                if (!string.IsNullOrEmpty(loanType?.Interest)) 
+                {
+                    string interestStr = loanType.Interest.ToString().Replace("%", "");
+                    if (decimal.TryParse(interestStr, out decimal parsedRate))
+                    {
+                        totalInterestRate = parsedRate;
+                    }
+                }
 
                 string appraisalReason = approved
                     ? $"APPROVED - Loan amount {loan.LoanAmt:C} within eligible amount {eligibleAmount:C} (Deposits: {totalDeposits:C} × {multiplier})"
@@ -1158,6 +1222,8 @@ namespace SACCOBlockChainSystem.Services
                 {
                     LoanNo = loanNo,
                     CompanyCode = loan.CompanyCode,
+                    Salary = 0,
+                    Allowances = 0,
                     MemberNo = loan.MemberNo,
                     AppraisDate = DateTime.Now,
                     AuditTime = DateTime.Now,
@@ -1167,6 +1233,11 @@ namespace SACCOBlockChainSystem.Services
                     Shares = totalDeposits,
                     AmtRecommended = approved ? loan.LoanAmt : eligibleAmount,
                     Principal = loan.LoanAmt ?? 0,
+                    Loans = loanCount,  
+                    NoOfLoans = loanCount,  
+                    TotalDeductions = 0,
+                    Interest = interestRate,  
+                    TInterest = totalInterestRate,  
                     Reason = appraisalReason,
                     RepayMethod = loan.RepayMethod ?? "AMT",
                     RepayRate = calculation.MonthlyInstallment,
@@ -1407,7 +1478,6 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-
         #region Loan Disbursement with GL Integration
         private async Task<bool> AutoEndorseLoanInternalAsync(string loanNo)
         {
@@ -1425,6 +1495,12 @@ namespace SACCOBlockChainSystem.Services
                     .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == loan.CompanyCode);
 
                 if (loanType == null) return false;
+
+                // ============================================================
+                // FIXED: Get the appraisal record for this loan
+                // ============================================================
+                var appraisal = await _context.Appraisal
+                    .FirstOrDefaultAsync(a => a.LoanNo == loanNo);
 
                 // Get the bank/GL account for disbursement
                 var bankAccount = await GetDisbursementBankAccountAsync(loan.CompanyCode);
@@ -1464,6 +1540,7 @@ namespace SACCOBlockChainSystem.Services
 
                 // Generate transaction numbers
                 string transactionNo = GenerateTransactionNumber();
+                string chequeNo = GenerateChequeNumber();
                 string voucherNo = GenerateVoucherNumber();
 
                 // ============================================================
@@ -1498,7 +1575,9 @@ namespace SACCOBlockChainSystem.Services
                     LoanNo = loanNo,
                     MemberNo = loan.MemberNo,
                     CompanyCode = loan.CompanyCode,
+                    ChequeNo = chequeNo,
                     Amount = amountToDisburse,
+                    IntAmount = 0,
                     AmountIssued = netAmount,
                     ProcessingFee = processingFeeAmount,
                     DateIssued = DateTime.Now,
@@ -1506,6 +1585,7 @@ namespace SACCOBlockChainSystem.Services
                     AuditId = "SYSTEM_AUTO",
                     AuditTime = DateTime.Now,
                     TransactionNo = transactionNo,
+                    Reasons = appraisal?.Reason ?? "Auto-endorsed loan",  // FIXED: Use appraisal instance
                     Voucherno = voucherNo,
                     Voucheramount = netAmount,
                     Paymethod = "AUTO",
@@ -1597,9 +1677,9 @@ namespace SACCOBlockChainSystem.Services
                 {
                     LoanNo = loanNo,
                     CompanyCode = loan.CompanyCode,
-                    MinuteNo = Guid.NewGuid().ToString().Substring(0, 10),
+                    MinuteNo = await GenerateMinuteNumberAsync(loan.CompanyCode),
                     MeetingDate = DateTime.Now,
-                    AmtApproved = netAmount,
+                    AmtApproved = appraisal?.AmtRecommended ?? netAmount, 
                     Accepted = "1",
                     ChairSigned = "SYSTEM_AUTO",
                     SecSigned = "SYSTEM_AUTO",
@@ -1613,6 +1693,8 @@ namespace SACCOBlockChainSystem.Services
                 };
 
                 _context.Endmain.Add(endmain);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Endmain record created for loan {loanNo}");
 
                 // ============================================================
                 // 5. CREATE BLOCKCHAIN TRANSACTION DATA FOR ENDORSEMENT
@@ -1844,6 +1926,38 @@ namespace SACCOBlockChainSystem.Services
                 return false;
             }
         }
+
+        private async Task<string> GenerateMinuteNumberAsync(string companyCode)
+        {
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            string prefix = "MIN";
+
+            // Get the last minute number for today to determine sequence
+            var lastMinute = await _context.Endmain
+                .Where(e => e.CompanyCode == companyCode && e.MinuteNo.StartsWith(prefix + today))
+                .OrderByDescending(e => e.MinuteNo)
+                .Select(e => e.MinuteNo)
+                .FirstOrDefaultAsync();
+
+            int nextSequence = 1;
+
+            if (!string.IsNullOrEmpty(lastMinute) && lastMinute.Length >= 14)
+            {
+                // Extract the last 4 digits as sequence number
+                string sequenceStr = lastMinute.Substring(lastMinute.Length - 4);
+                if (int.TryParse(sequenceStr, out int lastSeq))
+                {
+                    nextSequence = lastSeq + 1;
+                }
+            }
+
+            // Format: MIN + YYYYMMDD + 4-digit sequence (padded with zeros)
+            string minuteNo = $"{prefix}{today}{nextSequence:D4}";
+
+            _logger.LogInformation($"Generated minute number: {minuteNo}");
+            return minuteNo;
+        }
+
         public async Task<LoanDisbursementResultDTO> WithdrawLoanAsync(string loanNo, string memberNo, string withdrawalMethod, string phoneNumber = null)
         {
             _logger.LogInformation($"=== WITHDRAWAL REQUEST ===");
@@ -1875,6 +1989,12 @@ namespace SACCOBlockChainSystem.Services
                 {
                     return new LoanDisbursementResultDTO { Success = false, Message = "Loan product configuration not found" };
                 }
+
+                // ==================================================================
+                // FIXED: Get the appraisal record for this loan to get TotalInterest
+                // ==================================================================
+                var appraisal = await _context.Appraisal
+                    .FirstOrDefaultAsync(a => a.LoanNo == loanNo);
 
                 // 3. Get the cheque record
                 var cheque = await _context.Cheques
@@ -1913,16 +2033,20 @@ namespace SACCOBlockChainSystem.Services
                 // ============================================================
                 // CORRECT: Calculate amounts using PERCENTAGE
                 // ============================================================
-                decimal principalAmount = loan.LoanAmt ?? 0;  // Full loan amount from Loans table
-                decimal processingFeePercentage = loanType.Processingfee ?? 0;  // e.g., 5 = 5%
+                decimal principalAmount = loan.LoanAmt ?? 0;  
+                decimal processingFeePercentage = loanType.Processingfee ?? 0;  
                 decimal processingFeeAmount = (principalAmount * processingFeePercentage) / 100;
                 decimal netAmount = principalAmount - processingFeeAmount;
+
+                // Get total interest from appraisal or calculate
+                decimal totalInterest = appraisal?.TotalInterest ?? 0;
 
                 _logger.LogInformation($"Disbursement Calculation:");
                 _logger.LogInformation($"  Principal Amount: {principalAmount:C}");
                 _logger.LogInformation($"  Processing Fee Percentage: {processingFeePercentage}%");
                 _logger.LogInformation($"  Processing Fee Amount: {processingFeeAmount:C}");
                 _logger.LogInformation($"  Net Disbursement: {netAmount:C}");
+                _logger.LogInformation($"  Total Interest: {totalInterest:C}");
 
                 // Clean phone number for M-Pesa
                 if (!string.IsNullOrEmpty(memberPhone) && withdrawalMethod == "MPESA")
@@ -2068,28 +2192,28 @@ namespace SACCOBlockChainSystem.Services
                     LoanNo = loanNo,
                     LoanCode = loan.LoanCode,
                     MemberNo = memberNo,
-                    Balance = principalAmount,  // CORRECT: Full principal amount
-                    IntrOwed = 0,
+                    Balance = principalAmount,  
+                    IntrOwed = totalInterest,   
                     Installments = loan.RepayPeriod ?? 12,
                     IntrOwed2 = 0,
                     FirstDate = DateTime.Now,
                     RepayRate = monthlyInstallment,
+                    RepayRate2 = monthlyInstallment,
                     LastDate = DateTime.Now.AddMonths(loan.RepayPeriod ?? 12),
                     Duedate = DateTime.Now.AddMonths(1),
-                    IntrCharged = 0,
+                    IntrCharged = totalInterest,  
                     Interest = loan.Interest ?? 0,
                     Companycode = loan.CompanyCode,
                     Penalty = 0,
-                    RepayRate2 = 0,
                     RepayMethod = loan.RepayMethod ?? "AMT",
                     Cleared = false,
                     AutoCalc = true,
-                    IntrAmount = 0,
+                    IntrAmount = totalInterest,  
                     RepayPeriod = loan.RepayPeriod ?? 12,
                     Remarks = $"Self-service withdrawal via {withdrawalMethod} - Processing fee: {processingFeePercentage}% ({processingFeeAmount:C})",
                     AuditId = memberNo,
                     AuditTime = DateTime.Now,
-                    IntBalance = 0,
+                    IntBalance = totalInterest,  
                     CategoryCode = null,
                     InterestAccrued = 0,
                     Defaulter = "N",
@@ -2112,7 +2236,7 @@ namespace SACCOBlockChainSystem.Services
 
                 _context.Loanbal.Add(loanbal);
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Loan balance record created: Principal={principalAmount:C}, Monthly Installment={monthlyInstallment:C}");
+                _logger.LogInformation($"Loan balance record created: Principal={principalAmount:C}, Monthly Installment={monthlyInstallment:C}, Total Interest={totalInterest:C}");
 
                 // ============================================================
                 // 7. GENERATE REPAYMENT SCHEDULE
@@ -2132,6 +2256,7 @@ namespace SACCOBlockChainSystem.Services
                     LoanCode = loan.LoanCode,
                     LoanTypeName = loanType.LoanType1,
                     PrincipalAmount = principalAmount,
+                    TotalInterest = totalInterest,
                     ProcessingFeePercentage = processingFeePercentage,
                     ProcessingFeeAmount = processingFeeAmount,
                     NetAmount = netAmount,
@@ -2278,6 +2403,7 @@ namespace SACCOBlockChainSystem.Services
                     withdrawalDate = DateTime.Now,
                     withdrawalMethod = withdrawalMethod,
                     principalAmount = principalAmount,
+                    totalInterest = totalInterest,
                     processingFeePercentage = processingFeePercentage,
                     processingFeeAmount = processingFeeAmount,
                     netAmount = netAmount,
@@ -2308,6 +2434,7 @@ namespace SACCOBlockChainSystem.Services
                     WithdrawalDate = DateTime.Now,
                     WithdrawalMethod = withdrawalMethod,
                     PrincipalAmount = principalAmount,
+                    TotalInterest = totalInterest,
                     ProcessingFeePercentage = processingFeePercentage,
                     ProcessingFeeAmount = processingFeeAmount,
                     NetAmount = netAmount,
@@ -2377,6 +2504,7 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
+
         private async Task<Bank?> GetDisbursementBankAccountAsync(string companyCode)
         {
             return await _context.Banks
@@ -2428,6 +2556,11 @@ namespace SACCOBlockChainSystem.Services
             return $"TXN_{DateTime.Now:yyyyMMddHHmmss}_{new Random().Next(500, 9999)}";
         }
 
+        private string GenerateChequeNumber()
+        {
+            return $"CHQ{DateTime.Now:yyyyMMddHHmmss}{new Random().Next(500, 9999)}";
+        }
+
         /// <summary>
         /// Generate voucher number
         /// </summary>
@@ -2451,6 +2584,208 @@ namespace SACCOBlockChainSystem.Services
             return phoneNumber;
         }
 
+
+        public async Task<List<LoanSchedule>> GenerateLoanScheduleAsync(string loanNo)
+        {
+            var loan = await _context.Loans
+                .FirstOrDefaultAsync(l => l.LoanNo == loanNo);
+
+            if (loan == null)
+            {
+                throw new InvalidOperationException($"Loan {loanNo} not found");
+            }
+
+            var loanbal = await _context.Loanbal
+                .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo);
+
+            if (loanbal == null)
+            {
+                throw new InvalidOperationException($"Loan balance record not found for loan {loanNo}");
+            }
+
+            // Get the approved amount from Endmain (endorsement)
+            var endmain = await _context.Endmain
+                .FirstOrDefaultAsync(e => e.LoanNo == loanNo);
+
+            // Principal amount is the APPROVED amount from appraisal
+            decimal principalAmount = endmain?.AmtApproved ?? loan.LoanAmt ?? 0;
+
+            if (principalAmount <= 0)
+            {
+                throw new InvalidOperationException("Cannot generate schedule. No approved amount found for this loan.");
+            }
+
+            _logger.LogInformation($"Generating schedule for loan {loanNo} with approved principal: {principalAmount:C}");
+            _logger.LogInformation($"Repayment Method: {loan.RepayMethod}, Interest Rate: {loan.Interest}%, Period: {loan.RepayPeriod} months");
+
+            var existingSchedule = await _context.LoanSchedules
+                .Where(s => s.LoanNo == loanNo)
+                .ToListAsync();
+
+            if (existingSchedule.Any())
+            {
+                _context.LoanSchedules.RemoveRange(existingSchedule);
+                await _context.SaveChangesAsync();
+            }
+
+            var schedules = new List<LoanSchedule>();
+            var annualInterestRate = loan.Interest ?? 0;
+            var monthlyInterestRate = annualInterestRate / 100 / 12; // Convert percentage to decimal (e.g., 12% = 0.12, then /12 = 0.01)
+            var months = loan.RepayPeriod ?? 12;
+            var dueDate = loanbal.FirstDate.AddMonths(1);
+            var repaymentMethod = loan.RepayMethod ?? "AMT";
+
+            decimal totalInterestForLoan = 0;
+
+            if (repaymentMethod == "STL")
+            {
+                // STL: Fixed Principal + Interest on ORIGINAL balance (not reducing)
+                // In STL, interest is calculated on the original principal amount for each period
+                decimal monthlyPrincipal = principalAmount / months;
+                decimal monthlyInterest = principalAmount * monthlyInterestRate; // Interest on FULL principal
+                decimal totalInstallment = monthlyPrincipal + monthlyInterest;
+                totalInterestForLoan = monthlyInterest * months;
+
+                decimal remainingBalance = principalAmount;
+
+                for (int i = 1; i <= months; i++)
+                {
+                    var schedule = new LoanSchedule
+                    {
+                        LoanNo = loanNo,
+                        CompanyCode = loan.CompanyCode,
+                        InstallmentNo = i,
+                        DueDate = dueDate.AddMonths(i - 1),
+                        PrincipalAmount = monthlyPrincipal,
+                        InterestAmount = monthlyInterest,
+                        TotalInstallment = totalInstallment,
+                        BalancePrincipal = remainingBalance - monthlyPrincipal,
+                        BalanceInterest = totalInterestForLoan - (monthlyInterest * i),
+                        BalanceTotal = (remainingBalance - monthlyPrincipal) + (totalInterestForLoan - (monthlyInterest * i)),
+                        PaidPrincipal = 0,
+                        PaidInterest = 0,
+                        PaidTotal = 0,
+                        OutstandingPrincipal = monthlyPrincipal,
+                        OutstandingInterest = monthlyInterest,
+                        OutstandingTotal = totalInstallment,
+                        PenaltyAmount = 0,
+                        Status = "Pending",
+                        DaysOverdue = 0,
+                        IsFlexible = false
+                    };
+
+                    schedules.Add(schedule);
+                    remainingBalance -= monthlyPrincipal;
+                }
+            }
+            else if (repaymentMethod == "AMT")
+            {
+                // AMT: Equal Monthly Installments (EMI)
+                decimal monthlyPayment;
+                if (monthlyInterestRate > 0)
+                {
+                    decimal factor = (decimal)Math.Pow((double)(1 + monthlyInterestRate), months);
+                    monthlyPayment = principalAmount * monthlyInterestRate * factor / (factor - 1);
+                }
+                else
+                {
+                    monthlyPayment = principalAmount / months;
+                }
+
+                decimal remainingBalance = principalAmount;
+
+                for (int i = 1; i <= months; i++)
+                {
+                    decimal interestAmount = remainingBalance * monthlyInterestRate;
+                    decimal principalAmountPayment = monthlyPayment - interestAmount;
+                    totalInterestForLoan += interestAmount;
+
+                    if (i == months)
+                    {
+                        principalAmountPayment = remainingBalance;
+                        monthlyPayment = principalAmountPayment + interestAmount;
+                    }
+
+                    var schedule = new LoanSchedule
+                    {
+                        LoanNo = loanNo,
+                        CompanyCode = loan.CompanyCode,
+                        InstallmentNo = i,
+                        DueDate = dueDate.AddMonths(i - 1),
+                        PrincipalAmount = principalAmountPayment,
+                        InterestAmount = interestAmount,
+                        TotalInstallment = monthlyPayment,
+                        BalancePrincipal = remainingBalance - principalAmountPayment,
+                        BalanceInterest = totalInterestForLoan - (interestAmount * i),
+                        BalanceTotal = (remainingBalance - principalAmountPayment) + (totalInterestForLoan - (interestAmount * i)),
+                        PaidPrincipal = 0,
+                        PaidInterest = 0,
+                        PaidTotal = 0,
+                        OutstandingPrincipal = principalAmountPayment,
+                        OutstandingInterest = interestAmount,
+                        OutstandingTotal = monthlyPayment,
+                        PenaltyAmount = 0,
+                        Status = "Pending",
+                        DaysOverdue = 0,
+                        IsFlexible = false
+                    };
+
+                    schedules.Add(schedule);
+                    remainingBalance -= principalAmountPayment;
+                }
+            }
+            else if (repaymentMethod == "RBAL")
+            {
+                // RBAL: Interest only minimum, principal flexible
+                decimal remainingBalance = principalAmount;
+
+                for (int i = 1; i <= months; i++)
+                {
+                    decimal interestAmount = remainingBalance * monthlyInterestRate;
+                    totalInterestForLoan += interestAmount;
+
+                    var schedule = new LoanSchedule
+                    {
+                        LoanNo = loanNo,
+                        CompanyCode = loan.CompanyCode,
+                        InstallmentNo = i,
+                        DueDate = dueDate.AddMonths(i - 1),
+                        PrincipalAmount = 0,
+                        InterestAmount = interestAmount,
+                        TotalInstallment = interestAmount,
+                        BalancePrincipal = remainingBalance,
+                        BalanceInterest = totalInterestForLoan - (interestAmount * i),
+                        BalanceTotal = remainingBalance,
+                        PaidPrincipal = 0,
+                        PaidInterest = 0,
+                        PaidTotal = 0,
+                        OutstandingPrincipal = 0,
+                        OutstandingInterest = interestAmount,
+                        OutstandingTotal = interestAmount,
+                        PenaltyAmount = 0,
+                        Status = "Pending",
+                        DaysOverdue = 0,
+                        IsFlexible = true,
+                        MinimumPayment = interestAmount
+                    };
+
+                    schedules.Add(schedule);
+                }
+            }
+
+            // Update loanbal with correct total interest
+            loanbal.IntrOwed = totalInterestForLoan;
+            loanbal.IntBalance = totalInterestForLoan;
+            await _context.SaveChangesAsync();
+
+            await _context.LoanSchedules.AddRangeAsync(schedules);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation($"Generated {schedules.Count} schedule entries for loan {loanNo}. Total Interest: {totalInterestForLoan:C}");
+
+            return schedules;
+        }
+
         private async Task GenerateLoanScheduleAsync(string loanNo, decimal principal, decimal interestRate, int months, string repayMethod)
         {
             try
@@ -2467,34 +2802,170 @@ namespace SACCOBlockChainSystem.Services
 
                 var calculation = LoanCalculationHelper.CalculateLoan(principal, interestRate, months, repayMethod);
 
+                decimal runningPrincipalBalance = principal;
+                decimal runningInterestBalance = 0;
+                decimal runningTotalBalance = principal;
+
                 foreach (var installment in calculation.Schedule)
                 {
+                    // Calculate running balances
+                    decimal principalForInstallment = Math.Round(installment.PrincipalPayment, 2);
+                    decimal interestForInstallment = Math.Round(installment.InterestPayment, 2);
+                    decimal totalForInstallment = Math.Round(installment.TotalPayment, 2);
+
+                    // Update running balances BEFORE this installment is paid
+                    decimal balancePrincipalBefore = runningPrincipalBalance;
+                    decimal balanceInterestBefore = runningInterestBalance;
+                    decimal balanceTotalBefore = runningTotalBalance;
+
+                    // After payment, remaining balances
+                    runningPrincipalBalance = Math.Round(installment.RemainingBalance, 2);
+                    runningInterestBalance = 0; // Interest is fully paid each installment in standard loan
+                    runningTotalBalance = runningPrincipalBalance;
+
                     var schedule = new LoanSchedule
                     {
                         LoanNo = loanNo,
-                        CompanyCode = loan.CompanyCode,  // ADD THIS - Set CompanyCode
+                        CompanyCode = loan.CompanyCode,
                         InstallmentNo = installment.InstallmentNo,
                         DueDate = DateTime.Now.AddMonths(installment.InstallmentNo),
-                        PrincipalAmount = installment.PrincipalPayment,
-                        InterestAmount = installment.InterestPayment,
-                        TotalInstallment = installment.TotalPayment,
-                        OutstandingPrincipal = installment.RemainingBalance,
-                        OutstandingInterest = 0,
-                        OutstandingTotal = installment.RemainingBalance,
+
+                        // Original amounts for this installment
+                        PrincipalAmount = principalForInstallment,
+                        InterestAmount = interestForInstallment,
+                        TotalInstallment = totalForInstallment,
+
+                        // Balance BEFORE payment (what was outstanding before this installment)
+                        BalancePrincipal = balancePrincipalBefore,
+                        BalanceInterest = balanceInterestBefore,
+                        BalanceTotal = balanceTotalBefore,
+
+                        // Amounts paid (initially 0, updated when payment is made)
+                        PaidPrincipal = 0,
+                        PaidInterest = 0,
+                        PaidTotal = 0,
+
+                        // Outstanding AFTER this installment (what remains if not paid)
+                        OutstandingPrincipal = runningPrincipalBalance,
+                        OutstandingInterest = runningInterestBalance,
+                        OutstandingTotal = runningTotalBalance,
+
+                        // Penalty (initially 0, updated when overdue)
+                        PenaltyAmount = 0,
+
+                        // Status and tracking
                         Status = "Pending",
-                        PaidDate = null
+                        PaidDate = null,
+                        MinimumPayment = totalForInstallment,
+                        IsFlexible = false,
+                        PaymentReference = null,
+                        BlockchainTxId = null,
+                        DaysOverdue = 0
                     };
+
                     _context.LoanSchedules.Add(schedule);
                 }
 
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Repayment schedule generated for loan {loanNo}");
+                _logger.LogInformation($"Repayment schedule generated for loan {loanNo} with {calculation.Schedule.Count} installments");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error generating repayment schedule for loan {loanNo}");
+                throw;
             }
         }
+
+
+        ///// <summary>
+        ///// No round off
+        ///// </summary>
+        //private async Task GenerateLoanScheduleAsync(string loanNo, decimal principal, decimal interestRate, int months, string repayMethod)
+        //{
+        //    try
+        //    {
+        //        var loan = await _context.Loans
+        //            .FirstOrDefaultAsync(l => l.LoanNo == loanNo);
+
+        //        if (loan == null)
+        //        {
+        //            _logger.LogError($"Loan {loanNo} not found for generating schedule");
+        //            return;
+        //        }
+
+        //        var calculation = LoanCalculationHelper.CalculateLoan(principal, interestRate, months, repayMethod);
+
+        //        decimal remainingPrincipal = principal;
+
+        //        for (int i = 0; i < calculation.Schedule.Count; i++)
+        //        {
+        //            var installment = calculation.Schedule[i];
+
+        //            decimal principalForInstallment = Math.Round(installment.PrincipalPayment, 2);
+        //            decimal interestForInstallment = Math.Round(installment.InterestPayment, 2);
+        //            decimal totalForInstallment = Math.Round(installment.TotalPayment, 2);
+
+        //            // Calculate remaining principal after this payment
+        //            decimal remainingAfterPayment = i < calculation.Schedule.Count - 1
+        //                ? Math.Round(calculation.Schedule[i + 1].RemainingBalance, 2)
+        //                : 0;
+
+        //            var schedule = new LoanSchedule
+        //            {
+        //                // Required identifiers
+        //                LoanNo = loanNo,
+        //                CompanyCode = loan.CompanyCode,
+        //                InstallmentNo = installment.InstallmentNo,
+        //                DueDate = DateTime.Now.AddMonths(installment.InstallmentNo),
+
+        //                // Payment amounts for this installment
+        //                PrincipalAmount = principalForInstallment,
+        //                InterestAmount = interestForInstallment,
+        //                TotalInstallment = totalForInstallment,
+
+        //                // Balances before this installment
+        //                BalancePrincipal = remainingPrincipal,
+        //                BalanceInterest = interestForInstallment,
+        //                BalanceTotal = remainingPrincipal + interestForInstallment,
+
+        //                // Paid amounts (initial - to be updated on payment)
+        //                PaidPrincipal = 0,
+        //                PaidInterest = 0,
+        //                PaidTotal = 0,
+
+        //                // Outstanding after this installment
+        //                OutstandingPrincipal = remainingAfterPayment,
+        //                OutstandingInterest = 0,  // Interest is fully paid each installment
+        //                OutstandingTotal = remainingAfterPayment,
+
+        //                // Penalty (to be updated if overdue)
+        //                PenaltyAmount = 0,
+
+        //                // Status tracking
+        //                Status = "Pending",
+        //                PaidDate = null,
+        //                MinimumPayment = totalForInstallment,
+        //                IsFlexible = false,
+        //                PaymentReference = null,
+        //                BlockchainTxId = null,
+        //                DaysOverdue = 0
+        //            };
+
+        //            _context.LoanSchedules.Add(schedule);
+
+        //            // Update remaining principal for next iteration
+        //            remainingPrincipal = remainingAfterPayment;
+        //        }
+
+        //        await _context.SaveChangesAsync();
+        //        _logger.LogInformation($"Repayment schedule generated for loan {loanNo} with {calculation.Schedule.Count} installments");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"Error generating repayment schedule for loan {loanNo}");
+        //        throw;
+        //    }
+        //}
 
 
         /// <summary>
@@ -2844,8 +3315,7 @@ namespace SACCOBlockChainSystem.Services
         #endregion
 
 
-        #region Loan Repayment
-
+        #region Loan Repayment - Complete Implementation
         public async Task<LoanRepaymentViewModel> GetRepaymentDetailsAsync(string loanNo, string memberNo)
         {
             try
@@ -2855,33 +3325,103 @@ namespace SACCOBlockChainSystem.Services
                 var loan = await _context.Loans
                     .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.MemberNo == memberNo);
 
-                if (loan == null)
-                {
-                    return null;
-                }
+                if (loan == null) return null;
 
                 var member = await _context.Members
                     .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
 
+                var loanType = await _context.Loantypes
+                    .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode);
+
+                // Get the current pending installment from schedule
+                var currentSchedule = await _context.LoanSchedules
+                    .Where(s => s.LoanNo == loanNo && (s.Status == "Pending" || s.Status == "Partial"))
+                    .OrderBy(s => s.InstallmentNo)
+                    .FirstOrDefaultAsync();
+
+                // Get loan balance
                 var loanBalance = await _context.Loanbal
                     .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo);
 
-                // CRITICAL: Get correct values
-                decimal principalAmount = loan.LoanAmt ?? 0;  // Original loan amount (6,500)
-                decimal balance = loanBalance?.Balance ?? principalAmount;  // Remaining principal after payments
-                decimal intrOwed = loanBalance?.IntrOwed ?? 0;  // Outstanding interest
-                decimal totalOutstanding = balance + intrOwed;  // Total to pay
+                // Calculate outstanding amounts from schedule if available
+                decimal outstandingPrincipal = 0;
+                decimal outstandingInterest = 0;
+                decimal installmentInterest = 0;  
+                DateTime? nextDueDate = null;
+                int daysOverdue = 0;
+                decimal penaltyAmount = 0;
 
-                _logger.LogInformation($"Loan {loanNo}: Principal={principalAmount}, Balance={balance}, Interest={intrOwed}, Total={totalOutstanding}");
-
-                // Calculate monthly installment if not already set
-                decimal monthlyInstallment = loan.Repayrate ?? 0;
-                if (monthlyInstallment == 0 && principalAmount > 0 && loan.RepayPeriod > 0)
+                if (currentSchedule != null)
                 {
-                    monthlyInstallment = principalAmount / loan.RepayPeriod.Value;
+                    // FIXED: Use OutstandingPrincipal if set, otherwise calculate from remaining balance
+                    outstandingPrincipal = currentSchedule.OutstandingPrincipal > 0
+                        ? currentSchedule.OutstandingPrincipal
+                        : currentSchedule.OutstandingTotal;  // Fallback
+
+                    // FIXED: For interest, use InterestAmount from the schedule (what's owed for this installment)
+                    // NOT OutstandingInterest which is never set
+                    installmentInterest = currentSchedule.InterestAmount;
+                    outstandingInterest = installmentInterest;  // Use the installment's interest amount
+
+                    nextDueDate = currentSchedule.DueDate;
+
+                    _logger.LogInformation($"Schedule #{currentSchedule.InstallmentNo}: Principal={outstandingPrincipal:C}, Interest={installmentInterest:C}, Total={currentSchedule.TotalInstallment:C}");
+
+                    // Calculate days overdue
+                    if (currentSchedule.DueDate < DateTime.Now.Date && currentSchedule.Status != "Paid")
+                    {
+                        daysOverdue = (DateTime.Now.Date - currentSchedule.DueDate.Date).Days;
+
+                        // Calculate penalty if applicable
+                        if (loanType != null && daysOverdue > (loanType.GracePeriod))
+                        {
+                            var penaltyConfig = await _context.Penalties
+                                .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == loan.CompanyCode);
+
+                            if (penaltyConfig != null)
+                            {
+                                penaltyAmount = CalculatePenalty(
+                                    currentSchedule.TotalInstallment,
+                                    daysOverdue - (loanType.GracePeriod),
+                                    penaltyConfig);
+                            }
+                        }
+                    }
+                }
+                else if (loanBalance != null)
+                {
+                    // Fallback to loan balance
+                    outstandingPrincipal = loanBalance.Balance;
+                    outstandingInterest = loanBalance.IntrOwed;
+                    nextDueDate = loanBalance.Nextduedate;
+
+                    if (nextDueDate.HasValue && nextDueDate.Value < DateTime.Now.Date)
+                    {
+                        daysOverdue = (DateTime.Now.Date - nextDueDate.Value.Date).Days;
+
+                        if (loanType != null && daysOverdue > (loanType.GracePeriod))
+                        {
+                            var penaltyConfig = await _context.Penalties
+                                .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == loan.CompanyCode);
+
+                            if (penaltyConfig != null)
+                            {
+                                decimal monthlyInstallment = loan.Repayrate ?? (loan.LoanAmt ?? 0) / (loan.RepayPeriod ?? 12);
+                                penaltyAmount = CalculatePenalty(monthlyInstallment, daysOverdue - (loanType.GracePeriod), penaltyConfig);
+                            }
+                        }
+                    }
                 }
 
-                // Get repayment schedule
+                decimal totalOutstanding = outstandingPrincipal + outstandingInterest + penaltyAmount;
+
+                // Round all amounts to whole numbers for display
+                outstandingPrincipal = Math.Round(outstandingPrincipal, 0, MidpointRounding.AwayFromZero);
+                outstandingInterest = Math.Round(outstandingInterest, 0, MidpointRounding.AwayFromZero);
+                penaltyAmount = Math.Round(penaltyAmount, 0, MidpointRounding.AwayFromZero);
+                totalOutstanding = Math.Round(totalOutstanding, 0, MidpointRounding.AwayFromZero);
+
+                // Get repayment schedule for display
                 var schedule = await _context.LoanSchedules
                     .Where(s => s.LoanNo == loanNo)
                     .OrderBy(s => s.InstallmentNo)
@@ -2889,10 +3429,10 @@ namespace SACCOBlockChainSystem.Services
                     {
                         InstallmentNo = s.InstallmentNo,
                         DueDate = s.DueDate,
-                        PrincipalAmount = s.PrincipalAmount,
-                        InterestAmount = s.InterestAmount,
-                        TotalAmount = s.TotalInstallment,
-                        OutstandingAmount = s.OutstandingTotal,
+                        PrincipalAmount = Math.Round(s.PrincipalAmount, 0, MidpointRounding.AwayFromZero),
+                        InterestAmount = Math.Round(s.InterestAmount, 0, MidpointRounding.AwayFromZero),
+                        TotalAmount = Math.Round(s.TotalInstallment, 0, MidpointRounding.AwayFromZero),
+                        OutstandingAmount = Math.Round(s.OutstandingTotal, 0, MidpointRounding.AwayFromZero),
                         Status = s.Status ?? "Pending",
                         PaidDate = s.PaidDate
                     })
@@ -2903,15 +3443,19 @@ namespace SACCOBlockChainSystem.Services
                     LoanNo = loanNo,
                     MemberNo = memberNo,
                     MemberName = $"{member?.Surname} {member?.OtherNames}".Trim(),
-                    LoanAmount = principalAmount,
-                    OutstandingBalance = Math.Round(balance, 0, MidpointRounding.AwayFromZero),
-                    OutstandingInterest = Math.Round(intrOwed, 0, MidpointRounding.AwayFromZero),
-                    TotalOutstanding = Math.Round(totalOutstanding, 0, MidpointRounding.AwayFromZero),
-                    MonthlyInstallment = Math.Round(monthlyInstallment, 0, MidpointRounding.AwayFromZero),
-                    NextPaymentDate = loanBalance?.Nextduedate,
-                    PaymentAmount = Math.Min(monthlyInstallment, totalOutstanding),
+                    LoanAmount = Math.Round(loan.LoanAmt ?? 0, 0, MidpointRounding.AwayFromZero),
+                    OutstandingBalance = outstandingPrincipal,
+                    OutstandingInterest = outstandingInterest,  
+                    TotalOutstanding = totalOutstanding,
+                    MonthlyInstallment = Math.Round(loan.Repayrate ?? 0, 0, MidpointRounding.AwayFromZero),
+                    NextPaymentDate = nextDueDate,
+                    PaymentAmount = Math.Min(loan.Repayrate ?? totalOutstanding, totalOutstanding),
                     PaymentMethods = GetPaymentMethods(),
-                    RepaymentSchedule = schedule
+                    RepaymentSchedule = schedule,
+                    PenaltyAmount = penaltyAmount,
+                    DaysOverdue = daysOverdue,
+                    HasPenalty = penaltyAmount > 0,
+                    PenaltyMessage = penaltyAmount > 0 ? $"Penalty of {penaltyAmount:N0} KES applied for {daysOverdue} days overdue" : null
                 };
 
                 return viewModel;
@@ -2923,6 +3467,75 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
+        /// <summary>
+        /// Calculate penalty based on Penalty configuration
+        /// </summary>
+        private decimal CalculatePenalty(decimal baseAmount, int overdueDays, Penalties penaltyConfig)
+        {
+            if (overdueDays <= 0) return 0;
+
+            decimal penaltyAmount = 0;
+
+            switch (penaltyConfig.Mode?.ToUpper())
+            {
+                case "FIXED":
+                    // Fixed penalty amount
+                    penaltyAmount = penaltyConfig.Value;
+                    break;
+
+                case "PERCENTAGE":
+                default:
+                    // Percentage of overdue amount
+                    if (penaltyConfig.Rate?.ToUpper() == "DAILY")
+                    {
+                        penaltyAmount = (baseAmount * penaltyConfig.Value / 100) * overdueDays;
+                    }
+                    else // Monthly
+                    {
+                        int monthsOverdue = (int)Math.Ceiling((double)overdueDays / 30);
+                        penaltyAmount = (baseAmount * penaltyConfig.Value / 100) * monthsOverdue;
+                    }
+                    break;
+            }
+
+            // Apply maximum penalty if specified
+            if (penaltyConfig.Penalty > 0 && penaltyAmount > penaltyConfig.Penalty)
+            {
+                penaltyAmount = penaltyConfig.Penalty;
+            }
+
+            return penaltyAmount;
+        }
+
+        /// <summary>
+        /// Get the current installment details from schedule
+        /// </summary>
+        private async Task<(LoanSchedule schedule, decimal outstandingPrincipal, decimal outstandingInterest, decimal totalDue, bool isOverdue, int daysOverdue)>
+            GetCurrentInstallmentDetailsAsync(string loanNo, DateTime currentDate)
+        {
+            var currentSchedule = await _context.LoanSchedules
+                .Where(s => s.LoanNo == loanNo && (s.Status == "Pending" || s.Status == "Partial"))
+                .OrderBy(s => s.InstallmentNo)
+                .FirstOrDefaultAsync();
+
+            if (currentSchedule == null)
+            {
+                return (null, 0, 0, 0, false, 0);
+            }
+
+            decimal outstandingPrincipal = currentSchedule.OutstandingPrincipal;
+            decimal outstandingInterest = currentSchedule.OutstandingInterest;
+            decimal totalDue = outstandingPrincipal + outstandingInterest;
+
+            bool isOverdue = currentSchedule.DueDate < currentDate && currentSchedule.Status != "Paid";
+            int daysOverdue = isOverdue ? (currentDate - currentSchedule.DueDate).Days : 0;
+
+            return (currentSchedule, outstandingPrincipal, outstandingInterest, totalDue, isOverdue, daysOverdue);
+        }
+
+        /// <summary>
+        /// Main repayment method with GL integration
+        /// </summary>
         public async Task<RepaymentResultDTO> MakeRepaymentAsync(LoanRepaymentDTO repayment, string memberNo)
         {
             _logger.LogInformation($"=== REPAYMENT REQUEST ===");
@@ -2941,13 +3554,149 @@ namespace SACCOBlockChainSystem.Services
                     return new RepaymentResultDTO { Success = false, Message = "Loan not found" };
                 }
 
-                // 2. Get or create loan balance
+                // 2. Get loan type for GL accounts and penalty configuration
+                var loanType = await _context.Loantypes
+                    .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == loan.CompanyCode);
+
+                if (loanType == null)
+                {
+                    return new RepaymentResultDTO { Success = false, Message = "Loan product configuration not found" };
+                }
+
+                decimal remainingAmount = repayment.Amount;
+                decimal totalPrincipalPaid = 0;
+                decimal totalInterestPaid = 0;
+                decimal totalPenaltyPaid = 0;
+                string lastReceiptNo = null;
+                string lastTransactionNo = null;
+                BlockchainTransaction lastBlockchainTx = null;
+
+                bool isFullyPaid = false;
+
+                // Loop through pending installments until payment amount is exhausted or loan is fully paid
+                while (remainingAmount > 0 && !isFullyPaid)
+                {
+                    // Get current pending installment
+                    var currentSchedule = await _context.LoanSchedules
+                        .Where(s => s.LoanNo == repayment.LoanNo && (s.Status == "Pending" || s.Status == "Partial"))
+                        .OrderBy(s => s.InstallmentNo)
+                        .FirstOrDefaultAsync();
+
+                    if (currentSchedule == null)
+                    {
+                        // No more pending installments - loan is fully paid
+                        isFullyPaid = true;
+                        break;
+                    }
+
+                    // Calculate outstanding amounts for this installment
+                    decimal outstandingPrincipal = currentSchedule.OutstandingPrincipal;
+                    decimal outstandingInterest = currentSchedule.OutstandingInterest;
+
+                    // If OutstandingPrincipal is 0, use the original principal amount
+                    if (outstandingPrincipal <= 0)
+                    {
+                        outstandingPrincipal = currentSchedule.PrincipalAmount - currentSchedule.PaidPrincipal;
+                    }
+                    if (outstandingInterest <= 0)
+                    {
+                        outstandingInterest = currentSchedule.InterestAmount - currentSchedule.PaidInterest;
+                    }
+
+                    decimal installmentTotalDue = outstandingPrincipal + outstandingInterest;
+
+                    _logger.LogInformation($"Processing Installment #{currentSchedule.InstallmentNo}: Due={installmentTotalDue:C}, Remaining Payment={remainingAmount:C}");
+
+                    // Calculate penalty if overdue
+                    decimal penaltyAmount = 0;
+                    bool isOverdue = currentSchedule.DueDate < DateTime.Now.Date && currentSchedule.Status != "Paid";
+                    int daysOverdue = isOverdue ? (DateTime.Now.Date - currentSchedule.DueDate.Date).Days : 0;
+                    int gracePeriod = loanType.GracePeriod;
+
+                    if (isOverdue && daysOverdue > gracePeriod)
+                    {
+                        var penaltyConfig = await _context.Penalties
+                            .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == loan.CompanyCode);
+
+                        if (penaltyConfig != null)
+                        {
+                            int overdueDaysForPenalty = daysOverdue - gracePeriod;
+                            penaltyAmount = CalculatePenalty(currentSchedule.TotalInstallment, overdueDaysForPenalty, penaltyConfig);
+                            _logger.LogInformation($"Penalty for installment #{currentSchedule.InstallmentNo}: {penaltyAmount:C}");
+                        }
+                    }
+
+                    decimal totalWithPenalty = installmentTotalDue + penaltyAmount;
+                    decimal amountForThisInstallment = Math.Min(remainingAmount, totalWithPenalty);
+
+                    // Allocate payment for this installment: Penalty first -> Interest -> Principal
+                    decimal penaltyPaid = Math.Min(amountForThisInstallment, penaltyAmount);
+                    decimal remainingAfterPenalty = amountForThisInstallment - penaltyPaid;
+
+                    decimal interestPaid = Math.Min(remainingAfterPenalty, outstandingInterest);
+                    decimal remainingAfterInterest = remainingAfterPenalty - interestPaid;
+
+                    decimal principalPaid = Math.Min(remainingAfterInterest, outstandingPrincipal);
+
+                    // Round to 2 decimal places
+                    penaltyPaid = Math.Round(penaltyPaid, 2, MidpointRounding.AwayFromZero);
+                    interestPaid = Math.Round(interestPaid, 2, MidpointRounding.AwayFromZero);
+                    principalPaid = Math.Round(principalPaid, 2, MidpointRounding.AwayFromZero);
+
+                    _logger.LogInformation($"Installment #{currentSchedule.InstallmentNo} Allocation: Penalty={penaltyPaid:C}, Interest={interestPaid:C}, Principal={principalPaid:C}");
+
+                    // Update totals
+                    totalPrincipalPaid += principalPaid;
+                    totalInterestPaid += interestPaid;
+                    totalPenaltyPaid += penaltyPaid;
+
+                    // Update the schedule
+                    currentSchedule.PaidPrincipal += principalPaid;
+                    currentSchedule.PaidInterest += interestPaid;
+                    currentSchedule.PaidTotal += amountForThisInstallment;
+                    currentSchedule.OutstandingPrincipal -= principalPaid;
+                    currentSchedule.OutstandingInterest -= interestPaid;
+                    currentSchedule.OutstandingTotal = currentSchedule.OutstandingPrincipal + currentSchedule.OutstandingInterest;
+
+                    // Check if this installment is fully paid
+                    if (currentSchedule.OutstandingPrincipal <= 0 && currentSchedule.OutstandingInterest <= 0)
+                    {
+                        currentSchedule.Status = "Paid";
+                        currentSchedule.PaidDate = DateTime.Now;
+                        _logger.LogInformation($"Installment #{currentSchedule.InstallmentNo} fully paid");
+                    }
+                    else
+                    {
+                        currentSchedule.Status = "Partial";
+                        _logger.LogInformation($"Installment #{currentSchedule.InstallmentNo} partially paid");
+                    }
+
+                    remainingAmount -= amountForThisInstallment;
+
+                    // Check if loan is fully paid (no more pending installments)
+                    var anyPending = await _context.LoanSchedules
+                        .AnyAsync(s => s.LoanNo == repayment.LoanNo && (s.Status == "Pending" || s.Status == "Partial"));
+
+                    if (!anyPending)
+                    {
+                        isFullyPaid = true;
+                        loan.Status = 7; // Closed
+                        loan.Posted = "CLOSED";
+                        _logger.LogInformation($"Loan {repayment.LoanNo} is now fully paid!");
+                    }
+                }
+
+                if (totalPrincipalPaid == 0 && totalInterestPaid == 0 && totalPenaltyPaid == 0)
+                {
+                    return new RepaymentResultDTO { Success = false, Message = "No payment was applied" };
+                }
+
+                // Update LoanBal table
                 var loanBalance = await _context.Loanbal
                     .FirstOrDefaultAsync(lb => lb.LoanNo == repayment.LoanNo);
 
                 if (loanBalance == null)
                 {
-                    // Create loan balance if it doesn't exist
                     loanBalance = new Loanbal
                     {
                         LoanNo = repayment.LoanNo,
@@ -2973,67 +3722,23 @@ namespace SACCOBlockChainSystem.Services
                         AuditDateTime = DateTime.Now
                     };
                     _context.Loanbal.Add(loanBalance);
-                    await _context.SaveChangesAsync();
                 }
 
-                decimal currentBalance = loanBalance.Balance;
-                decimal currentInterest = loanBalance.IntrOwed;
-                decimal totalOutstanding = currentBalance + currentInterest;
+                // Get the next pending installment to set next due date
+                var nextSchedule = await _context.LoanSchedules
+                    .Where(s => s.LoanNo == repayment.LoanNo && (s.Status == "Pending" || s.Status == "Partial"))
+                    .OrderBy(s => s.InstallmentNo)
+                    .FirstOrDefaultAsync();
 
-                _logger.LogInformation($"Current Balance: {currentBalance:C}, Interest: {currentInterest:C}, Total: {totalOutstanding:C}");
+                loanBalance.Balance = await _context.LoanSchedules
+                    .Where(s => s.LoanNo == repayment.LoanNo)
+                    .SumAsync(s => s.OutstandingPrincipal);
+                loanBalance.IntrOwed = await _context.LoanSchedules
+                    .Where(s => s.LoanNo == repayment.LoanNo)
+                    .SumAsync(s => s.OutstandingInterest);
+                loanBalance.Nextduedate = nextSchedule?.DueDate ?? (isFullyPaid ? null : DateTime.Now.AddMonths(1));
 
-                if (repayment.Amount <= 0)
-                {
-                    return new RepaymentResultDTO { Success = false, Message = "Payment amount must be greater than 0" };
-                }
-
-                if (repayment.Amount > totalOutstanding)
-                {
-                    return new RepaymentResultDTO { Success = false, Message = $"Payment amount cannot exceed outstanding balance of {totalOutstanding:C}" };
-                }
-
-                // 3. Calculate allocation (Interest first, then Principal)
-                decimal interestPaid = Math.Min(repayment.Amount, currentInterest);
-                decimal principalPaid = repayment.Amount - interestPaid;
-                decimal penaltyPaid = 0;
-
-                // Round to 2 decimal places
-                interestPaid = Math.Round(interestPaid, 2, MidpointRounding.AwayFromZero);
-                principalPaid = Math.Round(principalPaid, 2, MidpointRounding.AwayFromZero);
-
-                _logger.LogInformation($"Allocation: Principal={principalPaid:C}, Interest={interestPaid:C}");
-
-                // 4. Update loan balance
-                decimal newBalance = currentBalance - principalPaid;
-                decimal newInterest = currentInterest - interestPaid;
-
-                if (newBalance < 0) newBalance = 0;
-                if (newInterest < 0) newInterest = 0;
-
-                loanBalance.Balance = newBalance;
-                loanBalance.IntrOwed = newInterest;
-
-                // Update next due date
-                if (newBalance <= 0 && newInterest <= 0)
-                {
-                    loanBalance.Nextduedate = null;
-                }
-                else
-                {
-                    loanBalance.Nextduedate = DateTime.Now.AddMonths(1);
-                }
-
-                // 5. Check if loan is fully paid
-                bool isFullyPaid = newBalance <= 0 && newInterest <= 0;
-
-                if (isFullyPaid)
-                {
-                    loan.Status = 7; // Closed
-                    loan.Posted = "CLOSED";
-                    _logger.LogInformation($"Loan {repayment.LoanNo} is now fully paid!");
-                }
-
-                // 6. Create repayment record
+                // Create a single repayment record for the total payment
                 string receiptNo = GenerateReceiptNumber();
                 string transactionNo = GenerateTransactionNumber();
 
@@ -3045,13 +3750,16 @@ namespace SACCOBlockChainSystem.Services
                     SerialNo = receiptNo,
                     DateReceived = DateTime.Now,
                     Amount = repayment.Amount,
-                    Principal = principalPaid,
-                    Interest = interestPaid,
-                    Penalty = penaltyPaid,
-                    LoanBalance = newBalance,
+                    Principal = totalPrincipalPaid,
+                    Interest = totalInterestPaid,
+                    Penalty = totalPenaltyPaid,
+                    LoanBalance = loanBalance.Balance + loanBalance.IntrOwed,
                     ReceiptNo = receiptNo,
-                    Chequeno = repayment.ChequeNumber,
-                    Remarks = repayment.Remarks ?? $"Payment via {repayment.PaymentMethod}",
+                    Chequeno = repayment.PaymentMethod == "MPESA" ? $"MPESA_{repayment.MpesaPhoneNumber}" : repayment.ChequeNumber,
+                    Remarks = repayment.Remarks ?? $"Payment via {repayment.PaymentMethod}" +
+                              (repayment.Amount > (totalPrincipalPaid + totalInterestPaid + totalPenaltyPaid)
+                                  ? $" (Overpayment of {repayment.Amount - (totalPrincipalPaid + totalInterestPaid + totalPenaltyPaid):C} will be credited to deposit)"
+                                  : ""),
                     AuditId = memberNo,
                     AuditTime = DateTime.Now,
                     TransactionNo = transactionNo,
@@ -3064,44 +3772,43 @@ namespace SACCOBlockChainSystem.Services
                 _context.Repay.Add(repay);
                 await _context.SaveChangesAsync();
 
-                // 7. Update repayment schedule
-                await UpdateRepaymentScheduleAsync(repayment.LoanNo, principalPaid, interestPaid);
-
-                // 8. Create simple blockchain record
-                var blockchainTx = new BlockchainTransaction
+                // Handle overpayment (if any)
+                if (remainingAmount > 0)
                 {
-                    TransactionId = Guid.NewGuid().ToString(),
-                    TransactionType = "LOAN_REPAYMENT",
-                    MemberNo = memberNo,
-                    CompanyCode = loan.CompanyCode,
-                    Amount = repayment.Amount,
-                    Timestamp = DateTime.Now,
-                    DataHash = Guid.NewGuid().ToString(),
-                    PayloadJson = $"{{\"LoanNo\":\"{repayment.LoanNo}\",\"Amount\":{repayment.Amount},\"Principal\":{principalPaid},\"Interest\":{interestPaid}}}",
-                    OffChainReferenceId = repayment.LoanNo,
-                    Status = "CONFIRMED",
-                    CreatedAt = DateTime.Now
-                };
+                    _logger.LogInformation($"Overpayment of {remainingAmount:C} will be credited to member's deposit account");
+                    // TODO: Credit overpayment to member's deposit account
+                    // This would require creating a deposit transaction
+                }
 
-                _context.BlockchainTransactions.Add(blockchainTx);
+                // Create GL transactions
+                await CreateRepaymentGLTransactionsAsync(loan, loanType, repayment, totalPrincipalPaid, totalInterestPaid, totalPenaltyPaid, transactionNo);
+
+                // Create blockchain record
+                var blockchainTx = await CreateRepaymentBlockchainRecordAsync(
+                    repayment.LoanNo, memberNo, loan.CompanyCode,
+                    repayment.Amount, totalPrincipalPaid, totalInterestPaid, totalPenaltyPaid,
+                    loanBalance.Balance + loanBalance.IntrOwed, transactionNo);
+
                 repay.BlockchainTxId = blockchainTx.TransactionId;
                 await _context.SaveChangesAsync();
 
                 await transaction.CommitAsync();
 
                 _logger.LogInformation($"=== REPAYMENT COMPLETED SUCCESSFULLY ===");
-                _logger.LogInformation($"Receipt: {receiptNo}, Amount: {repayment.Amount:C}, New Balance: {newBalance:C}");
+                _logger.LogInformation($"Receipt: {receiptNo}, Amount: {repayment.Amount:C}, Principal Paid: {totalPrincipalPaid:C}, Interest Paid: {totalInterestPaid:C}");
+                _logger.LogInformation($"Blockchain Tx: {blockchainTx.TransactionId}");
 
                 return new RepaymentResultDTO
                 {
                     Success = true,
-                    Message = $"Payment of {repayment.Amount:C} received successfully. Receipt No: {receiptNo}",
+                    Message = $"Payment of {repayment.Amount:N0} KES received successfully. Receipt No: {receiptNo}" +
+                              (remainingAmount > 0 ? $" Overpayment of {remainingAmount:N0} KES credited to your deposit account." : ""),
                     ReceiptNo = receiptNo,
                     TransactionReference = transactionNo,
-                    PrincipalPaid = principalPaid,
-                    InterestPaid = interestPaid,
-                    PenaltyPaid = penaltyPaid,
-                    NewBalance = newBalance,
+                    PrincipalPaid = totalPrincipalPaid,
+                    InterestPaid = totalInterestPaid,
+                    PenaltyPaid = totalPenaltyPaid,
+                    NewBalance = loanBalance.Balance + loanBalance.IntrOwed,
                     IsFullyPaid = isFullyPaid,
                     BlockchainTxId = blockchainTx.TransactionId
                 };
@@ -3118,23 +3825,241 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
+
+        /// <summary>
+        /// Create GL Transactions for Loan Repayment
+        /// Similar to AutoEndorseLoanInternalAsync pattern:
+        /// - DR Bank Account (Cash/MPESA/Bank)
+        /// - CR Loan Asset Account (Principal portion)
+        /// - CR Interest Income Account (Interest portion)
+        /// - CR Penalty Income Account (Penalty portion)
+        /// </summary>
+        private async Task CreateRepaymentGLTransactionsAsync(Loan loan, Loantype loanType, LoanRepaymentDTO repayment, decimal principalPaid, decimal interestPaid, decimal penaltyPaid, string transactionNo)
+        {
+            try
+            {
+                _logger.LogInformation($"Creating GL Transactions for repayment of loan {loan.LoanNo}");
+                _logger.LogInformation($"Principal: {principalPaid:C}, Interest: {interestPaid:C}, Penalty: {penaltyPaid:C}");
+                _logger.LogInformation($"Loan Asset Account: {loanType.LoanAcc}");
+                _logger.LogInformation($"Interest Account: {loanType.InterestAcc}");
+                _logger.LogInformation($"Penalty Account: {loanType.PenaltyAcc}");
+
+                // Get the bank/cash account for receiving payments
+                string bankAccountNo = await GetBankGLAccountAsync(loan.CompanyCode);
+                _logger.LogInformation($"Bank/Cash Account: {bankAccountNo}");
+
+                string voucherNo = GenerateVoucherNumber();
+
+                // Transaction 1: DR Bank Account, CR Loan Asset Account (Principal portion)
+                if (principalPaid > 0 && !string.IsNullOrEmpty(loanType.LoanAcc))
+                {
+                    var principalGL = new Gltransaction
+                    {
+                        TransDate = DateTime.Now,
+                        Amount = principalPaid,
+                        DrAccNo = bankAccountNo,           // Debit bank/cash account
+                        CrAccNo = loanType.LoanAcc,        // Credit loan asset account
+                        Temp = "LOAN_REPAYMENT_PRINCIPAL",
+                        DocumentNo = voucherNo,
+                        Source = "LOAN_REPAYMENT",
+                        CompanyCode = loan.CompanyCode,
+                        TransDescript = $"Loan Principal Repayment - {loan.LoanNo} - Installment payment",
+                        AuditTime = DateTime.Now,
+                        AuditId = repayment.MpesaPhoneNumber ?? repayment.ChequeNumber ?? "SYSTEM",
+                        Cash = 0,
+                        DocPosted = 1,
+                        ChequeNo = repayment.PaymentMethod == "MPESA" ? $"MPESA_{repayment.MpesaPhoneNumber}" : repayment.ChequeNumber,
+                        TransactionNo = transactionNo,
+                        Module = "LOAN",
+                        ReconId = 0,
+                        AuditDateTime = DateTime.Now
+                    };
+                    _context.Gltransactions.Add(principalGL);
+                    _logger.LogInformation($"Principal GL: DR {bankAccountNo}, CR {loanType.LoanAcc} = {principalPaid:C}");
+                }
+
+                // Transaction 2: DR Bank Account, CR Interest Income Account (Interest portion)
+                if (interestPaid > 0 && !string.IsNullOrEmpty(loanType.InterestAcc))
+                {
+                    var interestGL = new Gltransaction
+                    {
+                        TransDate = DateTime.Now,
+                        Amount = interestPaid,
+                        DrAccNo = bankAccountNo,           // Debit bank/cash account
+                        CrAccNo = loanType.InterestAcc,    // Credit interest income account
+                        Temp = "LOAN_REPAYMENT_INTEREST",
+                        DocumentNo = voucherNo,
+                        Source = "LOAN_REPAYMENT",
+                        CompanyCode = loan.CompanyCode,
+                        TransDescript = $"Loan Interest Repayment - {loan.LoanNo} - Interest on loan",
+                        AuditTime = DateTime.Now,
+                        AuditId = repayment.MpesaPhoneNumber ?? repayment.ChequeNumber ?? "SYSTEM",
+                        Cash = 0,
+                        DocPosted = 1,
+                        ChequeNo = repayment.PaymentMethod == "MPESA" ? $"MPESA_{repayment.MpesaPhoneNumber}" : repayment.ChequeNumber,
+                        TransactionNo = transactionNo,
+                        Module = "LOAN",
+                        ReconId = 0,
+                        AuditDateTime = DateTime.Now
+                    };
+                    _context.Gltransactions.Add(interestGL);
+                    _logger.LogInformation($"Interest GL: DR {bankAccountNo}, CR {loanType.InterestAcc} = {interestPaid:C}");
+                }
+
+                // Transaction 3: DR Bank Account, CR Penalty Income Account (Penalty portion)
+                if (penaltyPaid > 0 && !string.IsNullOrEmpty(loanType.PenaltyAcc))
+                {
+                    var penaltyGL = new Gltransaction
+                    {
+                        TransDate = DateTime.Now,
+                        Amount = penaltyPaid,
+                        DrAccNo = bankAccountNo,           // Debit bank/cash account
+                        CrAccNo = loanType.PenaltyAcc,     // Credit penalty income account
+                        Temp = "LOAN_REPAYMENT_PENALTY",
+                        DocumentNo = voucherNo,
+                        Source = "LOAN_REPAYMENT",
+                        CompanyCode = loan.CompanyCode,
+                        TransDescript = $"Loan Penalty Repayment - {loan.LoanNo} - Overdue penalty",
+                        AuditTime = DateTime.Now,
+                        AuditId = repayment.MpesaPhoneNumber ?? repayment.ChequeNumber ?? "SYSTEM",
+                        Cash = 0,
+                        DocPosted = 1,
+                        ChequeNo = repayment.PaymentMethod == "MPESA" ? $"MPESA_{repayment.MpesaPhoneNumber}" : repayment.ChequeNumber,
+                        TransactionNo = transactionNo,
+                        Module = "LOAN",
+                        ReconId = 0,
+                        AuditDateTime = DateTime.Now
+                    };
+                    _context.Gltransactions.Add(penaltyGL);
+                    _logger.LogInformation($"Penalty GL: DR {bankAccountNo}, CR {loanType.PenaltyAcc} = {penaltyPaid:C}");
+                }
+
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"GL Transactions created successfully for loan {loan.LoanNo}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error creating GL transactions for repayment of loan {loan.LoanNo}");
+                throw; // Re-throw to let outer transaction handle rollback
+            }
+        }
+
+        /// <summary>
+        /// Create blockchain record for repayment
+        /// </summary>
+        private async Task<BlockchainTransaction> CreateRepaymentBlockchainRecordAsync(
+            string loanNo, string memberNo, string companyCode,
+            decimal amount, decimal principalPaid, decimal interestPaid, decimal penaltyPaid,
+            decimal newBalance, string transactionNo)
+        {
+            // Create block
+            string blockHash = GenerateBlockHash();
+            var lastBlock = await _context.Blocks
+                .OrderByDescending(b => b.BlockId)
+                .FirstOrDefaultAsync();
+            string previousHash = lastBlock?.BlockHash ?? "0".PadLeft(64, '0');
+
+            var block = new Block
+            {
+                BlockHash = blockHash,
+                PreviousHash = previousHash,
+                Timestamp = DateTime.Now,
+                Nonce = 0,
+                MerkleRoot = Guid.NewGuid().ToString(),
+                Confirmed = true,
+                CreatedAt = DateTime.Now
+            };
+
+            _context.Blocks.Add(block);
+            await _context.SaveChangesAsync();
+
+            // Create blockchain data
+            var blockchainData = new
+            {
+                TransactionType = "LOAN_REPAYMENT",
+                LoanNo = loanNo,
+                MemberNo = memberNo,
+                PaymentAmount = amount,
+                PrincipalPaid = principalPaid,
+                InterestPaid = interestPaid,
+                PenaltyPaid = penaltyPaid,
+                NewBalance = newBalance,
+                TransactionNo = transactionNo,
+                PaymentDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                BlockHash = blockHash,
+                PreviousBlockHash = previousHash
+            };
+
+            string dataHash = await GenerateTransactionHashAsync(blockchainData);
+
+            var blockchainTx = new BlockchainTransaction
+            {
+                TransactionId = Guid.NewGuid().ToString(),
+                TransactionType = "LOAN_REPAYMENT",
+                MemberNo = memberNo,
+                CompanyCode = companyCode,
+                Amount = amount,
+                Timestamp = DateTime.Now,
+                DataHash = dataHash,
+                PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData),
+                OffChainReferenceId = loanNo,
+                Status = "CONFIRMED",
+                BlockHash = block.BlockHash,
+                CreatedAt = DateTime.Now
+            };
+
+            _context.BlockchainTransactions.Add(blockchainTx);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation($"Blockchain transaction created for repayment: {blockchainTx.TransactionId}");
+
+            return blockchainTx;
+        }
+
+        /// <summary>
+        /// Get repayment history for a loan
+        /// </summary>
         public async Task<List<RepaymentHistoryDTO>> GetRepaymentHistoryAsync(string loanNo, string memberNo)
         {
             try
             {
+                _logger.LogInformation($"Getting repayment history for loan {loanNo}, member {memberNo}");
+
+                // First, check if any repayments exist for this loan
+                var repaymentCount = await _context.Repay
+                    .Where(r => r.LoanNo == loanNo && r.MemberNo == memberNo)
+                    .CountAsync();
+
+                _logger.LogInformation($"Found {repaymentCount} repayments for loan {loanNo}");
+
+                if (repaymentCount == 0)
+                {
+                    // Try without member filter
+                    var countWithoutMember = await _context.Repay
+                        .Where(r => r.LoanNo == loanNo)
+                        .CountAsync();
+
+                    _logger.LogInformation($"Found {countWithoutMember} repayments without member filter");
+
+                    if (countWithoutMember > 0)
+                    {
+                        _logger.LogWarning($"Repayments exist but MemberNo doesn't match. Expected: {memberNo}");
+                    }
+                }
+
                 var repayments = await _context.Repay
                     .Where(r => r.LoanNo == loanNo && r.MemberNo == memberNo)
                     .OrderByDescending(r => r.DateReceived)
                     .Select(r => new RepaymentHistoryDTO
                     {
                         Id = r.Id,
-                        ReceiptNo = r.ReceiptNo,
+                        ReceiptNo = r.ReceiptNo ?? "N/A",
                         PaymentDate = r.DateReceived ?? DateTime.Now,
-                        Amount = r.Amount ?? 0,
-                        Principal = r.Principal ?? 0,
-                        Interest = r.Interest ?? 0,
-                        Penalty = r.Penalty ?? 0,
-                        LoanBalance = r.LoanBalance ?? 0,
+                        Amount = Math.Round(r.Amount ?? 0, 0, MidpointRounding.AwayFromZero),
+                        Principal = Math.Round(r.Principal ?? 0, 0, MidpointRounding.AwayFromZero),
+                        Interest = Math.Round(r.Interest ?? 0, 0, MidpointRounding.AwayFromZero),
+                        Penalty = Math.Round(r.Penalty ?? 0, 0, MidpointRounding.AwayFromZero),
+                        LoanBalance = Math.Round(r.LoanBalance ?? 0, 0, MidpointRounding.AwayFromZero),
                         PaymentMethod = GetPaymentMethodFromCheque(r.Chequeno),
                         ChequeNo = r.Chequeno,
                         Status = "Completed",
@@ -3142,123 +4067,18 @@ namespace SACCOBlockChainSystem.Services
                     })
                     .ToListAsync();
 
+                // Log each repayment found
+                foreach (var repayment in repayments)
+                {
+                    _logger.LogInformation($"Repayment: Receipt={repayment.ReceiptNo}, Amount={repayment.Amount}, Date={repayment.PaymentDate}");
+                }
+
                 return repayments;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error getting repayment history for loan {loanNo}");
                 return new List<RepaymentHistoryDTO>();
-            }
-        }
-
-        #region Helper Methods for Repayment
-
-        private async Task UpdateRepaymentScheduleAsync(string loanNo, decimal principalPaid, decimal interestPaid)
-        {
-            try
-            {
-                // Get the current pending installment
-                var currentInstallment = await _context.LoanSchedules
-                    .Where(s => s.LoanNo == loanNo && (s.Status == "Pending" || s.Status == "Partial"))
-                    .OrderBy(s => s.InstallmentNo)
-                    .FirstOrDefaultAsync();
-
-                if (currentInstallment != null)
-                {
-                    decimal remainingAmount = currentInstallment.TotalInstallment - (currentInstallment.PrincipalAmount);
-
-                    if (principalPaid + interestPaid >= remainingAmount)
-                    {
-                        currentInstallment.Status = "Paid";
-                        currentInstallment.PaidDate = DateTime.Now;
-                        currentInstallment.PrincipalAmount = currentInstallment.TotalInstallment;
-                    }
-                    else
-                    {
-                        currentInstallment.Status = "Partial";
-                        currentInstallment.PrincipalAmount = (currentInstallment.PrincipalAmount) + principalPaid + interestPaid;
-                    }
-
-                    await _context.SaveChangesAsync();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error updating repayment schedule for loan {loanNo}");
-            }
-        }
-
-        private async Task CreateRepaymentGLTransactionAsync(Loan loan, LoanRepaymentDTO repayment, decimal principalPaid, decimal interestPaid, string transactionNo)
-        {
-            try
-            {
-                var loanType = await _context.Loantypes
-                    .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode);
-
-                // Get the bank account for receiving payments
-                var bankAccount = await GetDisbursementBankAccountAsync(loan.CompanyCode);
-                string bankAccountNo = bankAccount?.GlAccountNo ?? "BANK_ACCOUNT";
-                string loanAssetAccount = loanType?.LoanAcc ?? "LOAN_ASSET_ACCOUNT";
-                string interestIncomeAccount = loanType?.InterestAcc ?? "INTEREST_INCOME_ACCOUNT";
-
-                // DR Bank account, CR Loan Asset account for principal
-                if (principalPaid > 0)
-                {
-                    var principalGL = new Gltransaction
-                    {
-                        TransDate = DateTime.Now,
-                        Amount = principalPaid,
-                        DrAccNo = bankAccountNo,
-                        CrAccNo = loanAssetAccount,
-                        Temp = "LOAN_REPAYMENT_PRINCIPAL",
-                        DocumentNo = repayment.ReferenceNumber ?? transactionNo,
-                        Source = "LOAN_REPAYMENT",
-                        CompanyCode = loan.CompanyCode,
-                        TransDescript = $"Loan Principal Repayment - {loan.LoanNo}",
-                        AuditTime = DateTime.Now,
-                        AuditId = repayment.MpesaPhoneNumber ?? "SYSTEM",
-                        Cash = 0,
-                        DocPosted = 1,
-                        TransactionNo = transactionNo,
-                        Module = "LOAN",
-                        ReconId = 0,
-                        AuditDateTime = DateTime.Now
-                    };
-                    _context.Gltransactions.Add(principalGL);
-                }
-
-                // DR Bank account, CR Interest Income account for interest
-                if (interestPaid > 0)
-                {
-                    var interestGL = new Gltransaction
-                    {
-                        TransDate = DateTime.Now,
-                        Amount = interestPaid,
-                        DrAccNo = bankAccountNo,
-                        CrAccNo = interestIncomeAccount,
-                        Temp = "LOAN_REPAYMENT_INTEREST",
-                        DocumentNo = repayment.ReferenceNumber ?? transactionNo,
-                        Source = "LOAN_REPAYMENT",
-                        CompanyCode = loan.CompanyCode,
-                        TransDescript = $"Loan Interest Repayment - {loan.LoanNo}",
-                        AuditTime = DateTime.Now,
-                        AuditId = repayment.MpesaPhoneNumber ?? "SYSTEM",
-                        Cash = 0,
-                        DocPosted = 1,
-                        TransactionNo = transactionNo,
-                        Module = "LOAN",
-                        ReconId = 0,
-                        AuditDateTime = DateTime.Now
-                    };
-                    _context.Gltransactions.Add(interestGL);
-                }
-
-                await _context.SaveChangesAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error creating GL transaction for repayment");
-                // Don't throw - repayment already recorded
             }
         }
 
@@ -3272,12 +4092,12 @@ namespace SACCOBlockChainSystem.Services
         private List<PaymentMethodDTO> GetPaymentMethods()
         {
             return new List<PaymentMethodDTO>
-    {
-        new PaymentMethodDTO { Code = "MPESA", Name = "M-Pesa", Icon = "fa-mobile-alt", RequiresPhoneNumber = true, RequiresChequeNumber = false },
-        new PaymentMethodDTO { Code = "CASH", Name = "Cash", Icon = "fa-money-bill-wave", RequiresPhoneNumber = false, RequiresChequeNumber = false },
-        new PaymentMethodDTO { Code = "CHEQUE", Name = "Cheque", Icon = "fa-file-alt", RequiresPhoneNumber = false, RequiresChequeNumber = true },
-        new PaymentMethodDTO { Code = "FOSA", Name = "FOSA Transfer", Icon = "fa-university", RequiresPhoneNumber = false, RequiresChequeNumber = false }
-    };
+            {
+                new PaymentMethodDTO { Code = "MPESA", Name = "M-Pesa", Icon = "fa-mobile-alt", RequiresPhoneNumber = true, RequiresChequeNumber = false },
+                new PaymentMethodDTO { Code = "CASH", Name = "Cash", Icon = "fa-money-bill-wave", RequiresPhoneNumber = false, RequiresChequeNumber = false },
+                new PaymentMethodDTO { Code = "CHEQUE", Name = "Cheque", Icon = "fa-file-alt", RequiresPhoneNumber = false, RequiresChequeNumber = true },
+                new PaymentMethodDTO { Code = "FOSA", Name = "FOSA Transfer", Icon = "fa-university", RequiresPhoneNumber = false, RequiresChequeNumber = false }
+            };
         }
 
         private string GenerateReceiptNumber()
@@ -3285,11 +4105,10 @@ namespace SACCOBlockChainSystem.Services
             string prefix = "RCP";
             string datePart = DateTime.Now.ToString("yyyyMMdd");
             string randomPart = new Random().Next(1000, 9999).ToString();
-            string sequence = (_context.Repay.Count() + 1).ToString("D6");
+            int count = _context.Repay.Count() + 1;
+            string sequence = count.ToString("D6");
             return $"{prefix}{datePart}{randomPart}{sequence}";
         }
-
-        #endregion
 
         #endregion
 

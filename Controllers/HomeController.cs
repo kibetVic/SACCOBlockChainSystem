@@ -264,6 +264,15 @@ namespace SACCOBlockChainSystem.Controllers
                 var dashboard = await _dashboardCacheService.GetDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
 
                 // Get companies for filter dropdown (only for Super Admin)
+                //if (isSuperAdmin)
+                //{
+                //    dashboard.Companies = await _context.Companies
+                //        .Where(c => c.Project == true)
+                //        .Select(c => new CompanyInfo { Code = c.CompanyCode, Name = c.CompanyName ?? c.CompanyCode })
+                //        .OrderBy(c => c.Name)
+                //        .ToListAsync();
+                //}
+
                 if (isSuperAdmin)
                 {
                     dashboard.Companies = await _context.Companies
@@ -271,6 +280,9 @@ namespace SACCOBlockChainSystem.Controllers
                         .Select(c => new CompanyInfo { Code = c.CompanyCode, Name = c.CompanyName ?? c.CompanyCode })
                         .OrderBy(c => c.Name)
                         .ToListAsync();
+
+                    // Add company count to ViewBag for layout
+                    ViewBag.CompanyCount = dashboard.Companies.Count;
                 }
 
                 // Set UI properties
