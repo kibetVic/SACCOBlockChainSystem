@@ -10,11 +10,11 @@ public partial class Transaction
 
     public decimal Amount { get; set; }
 
-    public DateTime TransDate { get; set; }
+    public DateTime TransDate { get; set; } = DateTime.Now;
 
     public string AuditId { get; set; } = null!;
 
-    public DateTime AuditTime { get; set; }
+    public DateTime AuditTime { get; set; } = DateTime.Now;
 
     public string TransDescription { get; set; } = null!;
 
@@ -26,7 +26,7 @@ public partial class Transaction
 
     public string? Channel { get; set; }
 
-    public DateTime? AuditDateTime { get; set; }
+    public DateTime? AuditDateTime { get; set; } = DateTime.Now;
 
     [NotMapped]
     public String? TransactionType { get; set; }

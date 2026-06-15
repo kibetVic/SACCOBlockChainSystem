@@ -123,6 +123,14 @@ namespace SACCOBlockChainSystem.Controllers
 
                 contributionDto.CompanyCode = GetUserCompanyCode();
                 contributionDto.CreatedBy = User.Identity?.Name ?? "SYSTEM";
+                bool prompt = false;
+                if (!string.IsNullOrEmpty(contributionDto.PromptPayment))
+                {
+                    if(contributionDto.PromptPayment.ToLower() == "true" || contributionDto.PromptPayment.ToLower() == "on")
+                    {
+                        prompt = true;
+                    }
+                }
 
                 if (contributionDto.TransactionDate == default)
                 {
@@ -131,7 +139,7 @@ namespace SACCOBlockChainSystem.Controllers
 
                 _logger.LogInformation($"Adding contribution for member: {contributionDto.MemberNo}, Amount: {contributionDto.Amount:C}");
 
-                var result = await _contributionService.AddContributionAsync(contributionDto);
+                var result = await _contributionService.AddContributionAsync(contributionDto,prompt);
 
                 TempData["SuccessMessage"] = $"Contribution of {contributionDto.Amount:C} added successfully! Receipt: {result.ReceiptNo}";
 
