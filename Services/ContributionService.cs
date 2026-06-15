@@ -431,11 +431,18 @@ namespace SACCOBlockChainSystem.Services
                 {
                     contrib.Remarks = $"⚠️ FLAGGED: {string.Join("; ", fraudResult.Flags)} - {contrib.Remarks}";
                 }
-                
-                
+
+                var pending_trans = false;
                 if (prompt == true)
                 {
-                    await CreateTransactionDeposit(contrib,contrib.CompanyCode,contrib.AuditId,contrib.ReceiptNo,null);
+                    var res = await CreateTransactionDeposit(contrib,contrib.CompanyCode,contrib.AuditId,contrib.ReceiptNo,null);
+                    if(res != null && res.Success == true)
+                    {
+                        pending_trans = true;
+                    }else if(res != null && res.Success == false)
+                    {
+                        throw new Exception($"Could not process prompt for  {contributionDto.MemberNo}. Try again.");
+                    }
                 }
                 
                 _context.Contribs.Add(contrib);
