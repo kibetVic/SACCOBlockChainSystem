@@ -127,6 +127,7 @@ namespace SACCOBlockChainSystem.Controllers
                 var userCompanyCode = User.FindFirst("CompanyCode")?.Value;
 
                 // Handle Member role - redirect to MemberIndex
+                // Handle Member role - redirect to MemberIndex
                 if (userRole?.ToUpper() == "MEMBER")
                 {
                     var uid = User.FindFirst("UserId")?.Value;
@@ -153,10 +154,70 @@ namespace SACCOBlockChainSystem.Controllers
                     }
 
                     // ============================================================
-                    // GET LATEST 5 TRANSACTIONS FROM MULTIPLE SOURCES
+                    // GET FINANCIAL SUMMARY DATA
                     // ============================================================
 
-                    // 1. Get blockchain transactions (using Timestamp for ordering)
+                    // 1. Get total contributions from Contrib table
+                    var totalContributions = await _context.Contribs
+                        .AsNoTracking()
+                        .Where(c => c.MemberNo == member.MemberNo && c.CompanyCode == member.CompanyCode && c.Posted == "Y")
+                        .SumAsync(c => c.Amount ?? 0);
+
+                    // 2. Get total share capital from ContribShares table
+                    var totalShareCapital = await _context.ContribShares
+                        .AsNoTracking()
+                        .Where(cs => cs.MemberNo == member.MemberNo && cs.CompanyCode == member.CompanyCode)
+                        .SumAsync(cs => cs.ShareCapitalAmount ?? 0);
+
+                    // 3. Get total deposits from ContribShares table
+                    var totalDeposits = await _context.ContribShares
+                        .AsNoTracking()
+                        .Where(cs => cs.MemberNo == member.MemberNo && cs.CompanyCode == member.CompanyCode)
+                        .SumAsync(cs => cs.DepositsAmount ?? 0);
+
+                    // 4. Get loan summary
+                    var activeLoan = await _context.Loans
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(l => l.MemberNo == member.MemberNo && l.CompanyCode == member.CompanyCode && l.Status != (int)Status.Closed && l.Status != (int)Status.Rejected);
+
+                    var loanBalance = 0m;
+                    var loanAmount = 0m;
+                    var loanRepaid = 0m;
+                    var totalInterest = 0m;
+
+                    if (activeLoan != null)
+                    {
+                        // Get loan balance from Loanbal table
+                        var loanbal = await _context.Loanbal
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(lb => lb.LoanNo == activeLoan.LoanNo && lb.MemberNo == member.MemberNo);
+
+                        if (loanbal != null)
+                        {
+                            loanBalance = loanbal.Balance;
+                            totalInterest = loanbal.IntrOwed;
+                        }
+
+                        loanAmount = activeLoan.LoanAmt ?? 0;
+
+                        // Calculate total repaid from Repay table
+                        loanRepaid = await _context.Repay
+                            .AsNoTracking()
+                            .Where(r => r.LoanNo == activeLoan.LoanNo && r.MemberNo == member.MemberNo)
+                            .SumAsync(r => r.Amount ?? 0);
+                    }
+
+                    // 5. Get all loans (active and closed)
+                    var allLoans = await _context.Loans
+                        .AsNoTracking()
+                        .Where(l => l.MemberNo == member.MemberNo && l.CompanyCode == member.CompanyCode)
+                        .ToListAsync();
+
+                    var totalLoanAmount = allLoans.Sum(l => l.LoanAmt ?? 0);
+                    var activeLoansCount = allLoans.Count(l => l.Status != (int)Status.Closed && l.Status != (int)Status.Rejected);
+                    var completedLoansCount = allLoans.Count(l => l.Status == (int)Status.Closed);
+
+                    // 6. Get recent transactions (same as before)
                     var blockchainTransactions = await _context.BlockchainTransactions
                         .AsNoTracking()
                         .Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo)
@@ -166,13 +227,12 @@ namespace SACCOBlockChainSystem.Controllers
                             TransactionType = t.TransactionType,
                             Amount = t.Amount,
                             Status = t.Status,
-                            CreatedAt = t.Timestamp,  // Use Timestamp for correct ordering
+                            CreatedAt = t.Timestamp,
                             ReceiptNo = t.OffChainReferenceId,
                             Source = "Blockchain"
                         })
                         .ToListAsync();
 
-                    // 2. Get contributions from Contrib table
                     var contributions = await _context.Contribs
                         .AsNoTracking()
                         .Where(c => c.MemberNo == member.MemberNo && c.CompanyCode == member.CompanyCode && c.Posted == "Y")
@@ -189,7 +249,6 @@ namespace SACCOBlockChainSystem.Controllers
                         })
                         .ToListAsync();
 
-                    // 3. Get share contributions from ContribShares table
                     var shareContributions = await _context.ContribShares
                         .AsNoTracking()
                         .Where(cs => cs.MemberNo == member.MemberNo && cs.CompanyCode == member.CompanyCode)
@@ -206,7 +265,6 @@ namespace SACCOBlockChainSystem.Controllers
                         })
                         .ToListAsync();
 
-                    // 4. Get loan repayments from Repay table
                     var loanRepayments = await _context.Repay
                         .AsNoTracking()
                         .Where(r => r.MemberNo == member.MemberNo && r.CompanyCode == member.CompanyCode)
@@ -223,14 +281,13 @@ namespace SACCOBlockChainSystem.Controllers
                         })
                         .ToListAsync();
 
-                    // Combine all transactions
+                    // Combine all transactions for recent list
                     var allTransactions = new List<MemberTransactionViewModel>();
                     allTransactions.AddRange(blockchainTransactions);
                     allTransactions.AddRange(contributions);
                     allTransactions.AddRange(shareContributions);
                     allTransactions.AddRange(loanRepayments);
 
-                    // Get the latest 5 transactions by CreatedAt (most recent first)
                     var latestTransactions = allTransactions
                         .OrderByDescending(t => t.CreatedAt)
                         .Take(5)
@@ -242,7 +299,20 @@ namespace SACCOBlockChainSystem.Controllers
                         Wallets = new List<Wallet> { wallet },
                         MemberTransactions = latestTransactions,
                         UserCompanyCode = member.CompanyCode,
-                        TotalBlockchainTransactions = blockchainTransactions.Count + contributions.Count + shareContributions.Count + loanRepayments.Count
+                        TotalBlockchainTransactions = blockchainTransactions.Count + contributions.Count + shareContributions.Count + loanRepayments.Count,
+
+                        // Add financial summary properties
+                        TotalContributions = totalContributions,
+                        TotalShareCapital = totalShareCapital,
+                        TotalDeposits = totalDeposits,
+                        CurrentLoanBalance = loanBalance,
+                        CurrentLoanAmount = loanAmount,
+                        TotalLoanRepaid = loanRepaid,
+                        TotalLoanInterest = totalInterest,
+                        TotalAllLoans = totalLoanAmount,
+                        ActiveLoansCount = activeLoansCount,
+                        CompletedLoansCount = completedLoansCount,
+                        HasActiveLoan = activeLoan != null
                     };
 
                     return View("MemberIndex", memberView);
@@ -262,16 +332,6 @@ namespace SACCOBlockChainSystem.Controllers
 
                 // ✅ Get cached dashboard data - includes ALL calculations now!
                 var dashboard = await _dashboardCacheService.GetDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
-
-                // Get companies for filter dropdown (only for Super Admin)
-                //if (isSuperAdmin)
-                //{
-                //    dashboard.Companies = await _context.Companies
-                //        .Where(c => c.Project == true)
-                //        .Select(c => new CompanyInfo { Code = c.CompanyCode, Name = c.CompanyName ?? c.CompanyCode })
-                //        .OrderBy(c => c.Name)
-                //        .ToListAsync();
-                //}
 
                 if (isSuperAdmin)
                 {

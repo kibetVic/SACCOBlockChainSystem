@@ -29,8 +29,19 @@ namespace SACCOBlockChainSystem.Models.ViewModels
     {
         public Member? Member { get; set; }
         public List<Wallet>? Wallets { get; set; }
-        public List<MemberTransactionViewModel>? MemberTransactions { get; set; }  // Changed from List<BlockchainTransaction>
+        public List<MemberTransactionViewModel>? MemberTransactions { get; set; }  
         public string? UserCompanyCode { get; set; }
-        public int TotalBlockchainTransactions { get; set; }  // Add this property
+        public int TotalBlockchainTransactions { get; set; }  
+        public decimal TotalContributions { get; set; }
+        public decimal TotalShareCapital { get; set; }
+        public decimal TotalDeposits { get; set; }
+        public decimal CurrentLoanBalance { get; set; }
+        public decimal CurrentLoanAmount { get; set; }
+        public decimal TotalLoanRepaid { get; set; }
+        public decimal TotalLoanInterest { get; set; }
+        public decimal TotalAllLoans { get; set; }
+        public int ActiveLoansCount { get; set; }
+        public int CompletedLoansCount { get; set; }
+        public bool HasActiveLoan { get; set; }
     }
 }
