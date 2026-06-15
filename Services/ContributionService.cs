@@ -63,7 +63,7 @@ namespace SACCOBlockChainSystem.Services
 
                 String transactionno = System.DateTime.Now.ToString("yyyyMMddHHmmss"); // Better unique format
                 var trans = new Transaction();
-                var dt = DateTime.Now;
+                var dt = DateTime.ParseExact(trans.TransDate.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);//;
                 var am = 0m;
                 decimal.TryParse(ld.Amount.ToString(), out am);
 
@@ -107,8 +107,8 @@ namespace SACCOBlockChainSystem.Services
 
                 //tra
 
-                transb.ContributionDate = trans.TransDate;//DateTime.ParseExact(contribDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
-                transb.DepositedDate = trans.TransDate; //DateTime.ParseExact(ld.DateDeposited, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                transb.ContributionDate = DateTime.ParseExact(trans.TransDate.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);// trans.TransDate;//DateTime.ParseExact(contribDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                transb.DepositedDate = DateTime.ParseExact(trans.TransDate.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);// trans.TransDate; //DateTime.ParseExact(ld.DateDeposited, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
                 transb.PaymentMode = member?.PhoneNo ?? member?.MobileNo;
                 transb.TransactionType = "DEPOSIT";
                 transb.Status = trans.Status;
