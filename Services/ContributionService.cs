@@ -3,12 +3,13 @@ using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
 using System.ComponentModel.DataAnnotations;
+using System.Text;
 
 namespace SACCOBlockChainSystem.Services
 {
     public interface IContributionService
     {
-        Task<ContributionResponseDTO> AddContributionAsync(ContributionDTO contributionDto);
+        Task<ContributionResponseDTO> AddContributionAsync(ContributionDTO contributionDto, bool prompt = false);
         Task<List<ContributionResponseDTO>> GetMemberContributionsAsync(string memberNo);
         Task<List<ShareTypeDTO>> GetShareTypesAsync(string companyCode);
         Task<Member> GetMemberByMemberNoAsync(string memberNo);
@@ -22,6 +23,7 @@ namespace SACCOBlockChainSystem.Services
     public class ContributionService : IContributionService
     {
         private readonly ApplicationDbContext _context;
+        private readonly AppDbContext _db;
         private readonly IBlockchainService _blockchainService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<MemberService> _logger;
@@ -32,7 +34,7 @@ namespace SACCOBlockChainSystem.Services
         // private readonly UserManager<IdentityUser> _userManager;
 
         public ContributionService(
-            ApplicationDbContext context,
+            ApplicationDbContext context, AppDbContext db,
             IBlockchainService blockchainService,
             ILogger<MemberService> logger,
             IHttpContextAccessor httpContextAccessor,
@@ -42,6 +44,7 @@ namespace SACCOBlockChainSystem.Services
             ICryptoService cryptoService)
         {
             _context = context;
+            _db = db;
             _blockchainService = blockchainService;
             _httpContextAccessor = httpContextAccessor;
             _auditService = auditService;
@@ -51,8 +54,132 @@ namespace SACCOBlockChainSystem.Services
             _cryptoService = cryptoService;
         }
 
+        public async Task<dynamic> CreateTransactionDeposit(Contrib ld, string CompanyCode, string UserId, string sessionId, string? email)
+        {
+            try
+            {
+                //var _db = _context;
+                var member = _context.Members.AsNoTracking().FirstOrDefault(m => m.CompanyCode == CompanyCode && m.MemberNo.Contains(ld.MemberNo));
 
-        public async Task<ContributionResponseDTO> AddContributionAsync(ContributionDTO contributionDto)
+                String transactionno = System.DateTime.Now.ToString("yyyyMMddHHmmss"); // Better unique format
+                var trans = new Transaction();
+                var dt = DateTime.Now;
+                var am = 0m;
+                decimal.TryParse(ld.Amount.ToString(), out am);
+
+                trans.TransactionNo = transactionno;
+                trans.TransDate = dt;
+                trans.TransDescription = ld.Remarks+" - " + ld.Sharescode;
+                trans.Status = "Active";
+                trans.Amount = am;
+                trans.Channel = "BLOCKCHAIN";
+
+                //trans.s
+                trans.AuditId = sessionId;
+                trans.AuditTime = DateTime.Now;
+                trans.CompanyCode = CompanyCode;
+                var transb = new Transactions2();
+                transb.Companycode = CompanyCode;
+                transb.TransactionNo = trans.TransactionNo;
+                transb.Status = "Active";
+                transb.ReceiptNo = transactionno;
+                transb.AuditId = trans.AuditId;
+                transb.Amount = trans.Amount;
+                if (member == null)
+                {
+                    transb.MemberNo = ld.MemberNo ?? "";
+                }
+                else
+                {
+                    if (String.IsNullOrEmpty(ld.MemberNo)) { ld.MemberNo = ""; }
+                    transb.MemberNo = member.MemberNo ?? ld.MemberNo;
+                    if (!string.IsNullOrEmpty(member.Email))
+                    {
+                        transb.Contact = member.Email;
+                    }
+                    else
+                    {
+                        transb.Contact = member.PhoneNo;
+                    }
+
+
+                }
+
+                //tra
+
+                transb.ContributionDate = trans.TransDate;//DateTime.ParseExact(contribDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                transb.DepositedDate = trans.TransDate; //DateTime.ParseExact(ld.DateDeposited, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                transb.PaymentMode = member?.PhoneNo ?? member?.MobileNo;
+                transb.TransactionType = "DEPOSIT";
+                transb.Status = trans.Status;
+
+                transb.RunE = 102;
+                _db.Add(transb);
+                _db.Add(trans);
+                await _db.SaveChangesAsync();
+                var sima = new ApiSimulate();
+                var refa = sima.BASE_URL + "/api/appcheck/reconcile?companycode=" + ld.CompanyCode;
+
+
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        //SendAfterDelay(refa);
+                        _ = SendAfterDelayAsync(refa, "");
+                    }
+                    catch (Exception ex)
+                    {
+                        // Crucial: Catch exceptions here, otherwise an unhandled 
+                        // exception on a background task could crash the process.
+                        Console.WriteLine($"Background task error: {ex.Message}");
+                    }
+                });
+
+                return new
+                {
+                    Success = true,
+                    StatusCode = 200,
+                    Message = "Transactions added successfully, Process to save.",
+                    // Data = null
+                };
+            }
+            catch (Exception ex)
+            {
+                // Log the exception for debugging purposes
+                // Log.Error(ex, "Error adding journals");
+
+                return new
+                {
+                    Success = false,
+                    StatusCode = 204,
+                    Message = "Ensure all required fields are properly filled and try again.",
+                    // Data = null
+                };
+            }
+        }
+
+        public async Task SendAfterDelayAsync(string url, string res)
+        {
+            try
+            {
+                await Task.Delay(2000); // wait 1.2 seconds
+
+                using var httpClient = new HttpClient();
+                var content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+                await httpClient.PostAsync(url + "&failed=" + res, content);
+            }
+            catch (Exception ex)
+            {
+                // log ex
+            }
+        }
+
+
+
+
+        public async Task<ContributionResponseDTO> AddContributionAsync(ContributionDTO contributionDto, bool prompt = false)
         {
             _logger.LogInformation($"Starting contribution addition for member: {contributionDto.MemberNo}");
 
@@ -304,7 +431,13 @@ namespace SACCOBlockChainSystem.Services
                 {
                     contrib.Remarks = $"⚠️ FLAGGED: {string.Join("; ", fraudResult.Flags)} - {contrib.Remarks}";
                 }
-
+                
+                
+                if (prompt == true)
+                {
+                    await CreateTransactionDeposit(contrib,contrib.CompanyCode,contrib.AuditId,contrib.ReceiptNo,null);
+                }
+                
                 _context.Contribs.Add(contrib);
                 await _context.SaveChangesAsync();
 

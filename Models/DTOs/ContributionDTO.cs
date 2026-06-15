@@ -24,6 +24,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? Remarks { get; set; }
         public string? PaymentMethod { get; set; } = "CASH";
         public string? ReferenceNo { get; set; }
+        public string? PromptPayment { get; set; }
         public string CreatedBy { get; set; } = null!;
         public string CompanyCode { get; set; } = null!;
         public DateTime? DepositedDate { get; internal set; }
@@ -55,6 +56,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? ReferenceNo { get; set; }
         public DateTime DepositedDate { get; set; }
         public DateTime ReceiptDate { get; set; }
+        public string? PromptPayment { get; set; }
         public string TransactionSignature { get; internal set; }
         public string TransactionHash { get; internal set; }
         public bool IsSignatureVerified { get; internal set; }

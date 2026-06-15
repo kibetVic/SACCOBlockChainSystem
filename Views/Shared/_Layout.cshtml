@@ -1247,23 +1247,23 @@ input:invalid:focus {
 
         function loadBlockchainStats() {
             // Fetch blockchain status
-            fetch('/api/Blockchain/Status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('blockchainStatus').textContent = data.status;
-                        document.getElementById('transactionCount').textContent = data.totalTransactions;
-                        document.getElementById('lastSyncTime').textContent = new Date(data.lastSync).toLocaleTimeString();
+            // fetch('/api/Blockchain/Status')
+            //     .then(response => response.json())
+            //     .then(data => {
+            //         if (data.success) {
+            //             document.getElementById('blockchainStatus').textContent = data.status;
+            //             document.getElementById('transactionCount').textContent = data.totalTransactions;
+            //             document.getElementById('lastSyncTime').textContent = new Date(data.lastSync).toLocaleTimeString();
 
-                        // Update pending loans count for admin
-                        if (data.pendingLoans) {
-                            document.getElementById('pendingLoansCount').textContent = data.pendingLoans;
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading blockchain stats:', error);
-                });
+            //             Update pending loans count for admin
+            //             if (data.pendingLoans) {
+            //                 document.getElementById('pendingLoansCount').textContent = data.pendingLoans;
+            //             }
+            //         }
+            //     })
+            //     .catch(error => {
+            //         console.error('Error loading blockchain stats:', error);
+            //     });
         }
                   
 
@@ -1303,7 +1303,7 @@ input:invalid:focus {
                 });
 
 
-            $(document).ready(function() {
+        $(document).ready(function() {
             // ============================================
             // COMPLETELY DISABLE ALL DEFAULT SIDEBAR BEHAVIOR
             // ============================================
@@ -1450,7 +1450,7 @@ input:invalid:focus {
                 }
             });
         });
-        });
+        
 
     </script>
 
