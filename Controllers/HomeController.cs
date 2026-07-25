@@ -65,6 +65,21 @@ namespace SACCOBlockChainSystem.Controllers
              return View(wp);
         }
 
+       
+        private async Task<List<string>> GetCompanyCodesInSameCountyAsync(string companyCode)
+        {
+            var company = await _context.Companies
+                .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+            if (company == null || string.IsNullOrEmpty(company.County))
+                return new List<string> { companyCode };
+
+            return await _context.Companies
+                .Where(c => c.County == company.County)
+                .Select(c => c.CompanyCode)
+                .ToListAsync();
+        }
+
         [HttpPost]
         public async Task<IActionResult> AccountSetup(WalletPinSetup model)
         {
@@ -124,9 +139,53 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 var userRole = User.FindFirstValue(ClaimTypes.Role);
                 var isSuperAdmin = userRole == "Super Admin" || userRole == "SuperAdmin";
+                var isCountyAdmin = userRole == "County Admin" || userRole == "CountyAdmin";
                 var userCompanyCode = User.FindFirst("CompanyCode")?.Value;
 
-                // Handle Member role - redirect to MemberIndex
+                // County Admin Logic
+                if (isCountyAdmin && !string.IsNullOrEmpty(userCompanyCode))
+                {
+                    // Step 1: Get the user's company
+                    var userCompany = await _context.Companies
+                        .FirstOrDefaultAsync(c => c.CompanyCode == userCompanyCode);
+
+                    if (userCompany != null && !string.IsNullOrEmpty(userCompany.County))
+                    {
+                        // Step 2: Get all companies in the same county
+                        var countyCompanies = await _context.Companies
+                            .Where(c => c.County != null && c.County == userCompany.County)
+                            .Select(c => c.CompanyCode)
+                            .ToListAsync();
+
+                        // Step 3: Get dashboard data for ALL companies in this county
+                        // FIXED: Use a different variable name (countyDashboard) to avoid conflict
+                        var countyDashboard = await _dashboardCacheService.GetDashboardDataForCompaniesAsync(
+                            countyCompanies,
+                            isCountyAdmin);
+
+                        // Step 4: Populate company list for the dropdown
+                        countyDashboard.Companies = await _context.Companies
+                            .Where(c => countyCompanies.Contains(c.CompanyCode))
+                            .Select(c => new CompanyInfo { Code = c.CompanyCode, Name = c.CompanyName ?? c.CompanyCode })
+                            .OrderBy(c => c.Name)
+                            .ToListAsync();
+
+                        countyDashboard.SelectedCompanyCode = "ALL";
+                        countyDashboard.SelectedCompanyName = $"County: {userCompany.County} ({countyDashboard.Companies.Count} companies)";
+                        countyDashboard.UserGroup = GetUserGroup();
+                        countyDashboard.UserRoles = User.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
+                        countyDashboard.IsCountyView = true;
+                        countyDashboard.CountyName = userCompany.County;
+
+                        return View(countyDashboard);
+                    }
+                    else
+                    {
+                        // Fallback: If user's company has no county, just show their company
+                        _logger.LogWarning($"County Admin {userCompanyCode} has no county assigned. Falling back to single company view.");
+                    }
+                }
+
                 // Handle Member role - redirect to MemberIndex
                 if (userRole?.ToUpper() == "MEMBER")
                 {
@@ -2423,8 +2482,25 @@ namespace SACCOBlockChainSystem.Controllers
                 stats.TransactionsToday = await transactionsQuery.CountAsync();
                 stats.NewMembersToday = await membersQuery
                     .CountAsync(m => m.EffectDate.HasValue && m.EffectDate.Value.Date == today);
-                stats.AverageDeposit = await depositsQuery.AverageAsync(t => t.Amount);
-                stats.AverageLoan = await loansQuery.AverageAsync(l => l.LoanAmt ?? 0);
+
+                // ============================================================
+                // FIXED: AverageDeposit - handles empty sequence with DefaultIfEmpty
+                // ============================================================
+                var avgDeposit = await depositsQuery
+                    .Select(t => (decimal?)t.Amount)
+                    .DefaultIfEmpty()
+                    .AverageAsync();
+                stats.AverageDeposit = avgDeposit ?? 0;
+
+                // ============================================================
+                // FIXED: AverageLoan - handles empty sequence with DefaultIfEmpty
+                // ============================================================
+                var avgLoan = await loansQuery
+                    .Select(l => (decimal?)l.LoanAmt)
+                    .DefaultIfEmpty()
+                    .AverageAsync();
+                stats.AverageLoan = avgLoan ?? 0;
+
                 stats.BlockchainUptime = 99.9m;
 
                 var totalLoans = await loansQuery.CountAsync();
@@ -2438,6 +2514,83 @@ namespace SACCOBlockChainSystem.Controllers
 
             return stats;
         }
+
+
+
+        //private async Task<DashboardQuickStats> GetQuickStats(string? companyCode, bool isSuperAdmin)
+        //{
+        //    var today = DateTime.Today;
+        //    var stats = new DashboardQuickStats();
+
+        //    try
+        //    {
+        //        var transactionsQuery = _context.Transactions2
+        //            .Where(t => t.ContributionDate.Date == today && t.Status == "COMPLETED");
+
+        //        var membersQuery = _context.Members.AsQueryable();
+        //        var depositsQuery = _context.Transactions2
+        //            .Where(t => t.TransactionType == "DEPOSIT" && t.Status == "COMPLETED");
+        //        var loansQuery = _context.Loans.Where(l => l.Status == 1);
+
+        //        // Apply company filter based on role
+        //        if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+        //        {
+        //            var membersInCompany = await _context.Members
+        //                .Where(m => m.CompanyCode == companyCode)
+        //                .Select(m => m.MemberNo)
+        //                .ToListAsync();
+
+        //            if (membersInCompany.Any())
+        //            {
+        //                transactionsQuery = transactionsQuery.Where(t => membersInCompany.Contains(t.MemberNo));
+        //                membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
+        //                depositsQuery = depositsQuery.Where(t => membersInCompany.Contains(t.MemberNo));
+        //                loansQuery = loansQuery.Where(l => membersInCompany.Contains(l.MemberNo));
+        //            }
+        //            else
+        //            {
+        //                return stats;
+        //            }
+        //        }
+        //        else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+        //        {
+        //            var membersInCompany = await _context.Members
+        //                .Where(m => m.CompanyCode == companyCode)
+        //                .Select(m => m.MemberNo)
+        //                .ToListAsync();
+
+        //            if (membersInCompany.Any())
+        //            {
+        //                transactionsQuery = transactionsQuery.Where(t => membersInCompany.Contains(t.MemberNo));
+        //                membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
+        //                depositsQuery = depositsQuery.Where(t => membersInCompany.Contains(t.MemberNo));
+        //                loansQuery = loansQuery.Where(l => membersInCompany.Contains(l.MemberNo));
+        //            }
+        //            else
+        //            {
+        //                return stats;
+        //            }
+        //        }
+        //        // If SuperAdmin and no companyCode, include ALL data
+
+        //        stats.TransactionsToday = await transactionsQuery.CountAsync();
+        //        stats.NewMembersToday = await membersQuery
+        //            .CountAsync(m => m.EffectDate.HasValue && m.EffectDate.Value.Date == today);
+        //        stats.AverageDeposit = await depositsQuery.AverageAsync(t => t.Amount);
+        //        stats.AverageLoan = await loansQuery.AverageAsync(l => l.LoanAmt ?? 0);
+        //        stats.BlockchainUptime = 99.9m;
+
+        //        var totalLoans = await loansQuery.CountAsync();
+        //        var approvedLoans = await loansQuery.CountAsync(l => l.Status == 1);
+        //        stats.LoanApprovalRate = totalLoans > 0 ? (approvedLoans * 100m / totalLoans) : 0;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error getting quick stats");
+        //    }
+
+        //    return stats;
+        //}
         private async Task<List<MonthlyTransactionData>> GetMonthlyTransactionsDataAsync(int months, string? companyCode, bool isSuperAdmin)
         {
             var data = new List<MonthlyTransactionData>();

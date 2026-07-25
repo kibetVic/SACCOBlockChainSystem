@@ -168,56 +168,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        //// GET: /Sms/Send
-        //public async Task<IActionResult> Send()
-        //{
-        //    try
-        //    {
-        //        var companyCode = _companyContextService.GetCurrentCompanyCode();
-        //        var templates = await _smsService.GetAllTemplatesAsync(companyCode);
-        //        ViewBag.Templates = templates;
-        //        return View(new SendSmsRequestDTO());
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error loading send SMS form");
-        //        TempData["ErrorMessage"] = "Error loading form";
-        //        return RedirectToAction("Index");
-        //    }
-        //}
-
-        //// POST: /Sms/Send
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> Send(SendSmsRequestDTO request)
-        //{
-        //    try
-        //    {
-        //        if (!ModelState.IsValid)
-        //        {
-        //            var companyCode = _companyContextService.GetCurrentCompanyCode();
-        //            var templates = await _smsService.GetAllTemplatesAsync(companyCode);
-        //            ViewBag.Templates = templates;
-        //            return View(request);
-        //        }
-
-        //        var result = await _smsService.SendSmsAsync(request);
-
-        //        TempData["SuccessMessage"] = $"SMS sent successfully to {request.PhoneNumber}";
-        //        return RedirectToAction("Details", new { id = result.Id });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error sending SMS");
-        //        ModelState.AddModelError("", ex.Message);
-
-        //        var companyCode = _companyContextService.GetCurrentCompanyCode();
-        //        var templates = await _smsService.GetAllTemplatesAsync(companyCode);
-        //        ViewBag.Templates = templates;
-        //        return View(request);
-        //    }
-        //}
-
         // GET: /Sms/BulkSend
         public async Task<IActionResult> BulkSend()
         {
@@ -225,7 +175,21 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 var companyCode = _companyContextService.GetCurrentCompanyCode();
                 var templates = await _smsService.GetAllTemplatesAsync(companyCode);
+
+                // Get GIGs for the company - using CIGs table
+                var gigs = await _context.CIGs
+                    .Where(g => g.CompanyCode == companyCode && g.Status == "Active")
+                    .OrderBy(g => g.GigName)
+                    .ToListAsync();
+
+                // Get company name
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                ViewBag.CompanyName = company?.CompanyName ?? companyCode ?? "SACCO";
                 ViewBag.Templates = templates;
+                ViewBag.GIGs = gigs;
+
                 return View(new BulkSmsRequestDTO());
             }
             catch (Exception ex)
@@ -235,6 +199,7 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("Index");
             }
         }
+
 
         // POST: /Sms/BulkSend
         [HttpPost]
@@ -370,7 +335,11 @@ namespace SACCOBlockChainSystem.Controllers
                     TemplateName = template.TemplateName,
                     TemplateContent = template.TemplateContent,
                     Description = template.Description,
-                    IsActive = template.IsActive
+                    IsActive = template.IsActive,
+                     // AGM fields
+                    AGMDate = template.AGMDate,
+                    AGMTime = template.AGMTime,
+                    AGMVenue = template.AGMVenue
                 };
 
                 return View(dto);
@@ -392,6 +361,17 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 if (!ModelState.IsValid)
                 {
+                    // Load audit fields for display
+                    var companyCode = _companyContextService.GetCurrentCompanyCode();
+                    var templates = await _smsService.GetAllTemplatesAsync(companyCode);
+                    var template = templates.FirstOrDefault(t => t.Id == id);
+                    if (template != null)
+                    {
+                        dto.CreatedBy = template.CreatedBy;
+                        dto.CreatedAt = template.CreatedAt;
+                        dto.ModifiedBy = template.ModifiedBy;
+                        dto.ModifiedAt = template.ModifiedAt;
+                    }
                     return View(dto);
                 }
 
@@ -407,6 +387,8 @@ namespace SACCOBlockChainSystem.Controllers
                 return View(dto);
             }
         }
+
+
 
         // POST: /Sms/DeleteTemplate/5
         [HttpPost]
@@ -524,28 +506,12 @@ namespace SACCOBlockChainSystem.Controllers
                 var companyCode = _companyContextService.GetCurrentCompanyCode();
                 var settings = await _smsService.GetSmsSettingsAsync(companyCode);
 
-                // Get company name for display - FILTER BY COMPANY CODE
-                var company = await _context.SaccoParram
-                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);  // Add this filter
+                // Get company name from Companies table (not SaccoParram)
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
 
-                // Also try to get from Member if SaccoParram doesn't have it
-                if (company == null)
-                {
-                    var firstMember = await _context.Members
-                        .FirstOrDefaultAsync(m => m.CompanyCode == companyCode);
-                    if (firstMember != null)
-                    {
-                        ViewBag.CompanyName = firstMember.CompanyCode ?? "JUHUDI SACCO";
-                    }
-                    else
-                    {
-                        ViewBag.CompanyName = companyCode ?? "JUHUDI SACCO";
-                    }
-                }
-                else
-                {
-                    ViewBag.CompanyName = company.SaccoName ?? companyCode ?? "JUHUDI SACCO";
-                }
+                // Set the company name for display
+                ViewBag.CompanyName = company?.CompanyName ?? companyCode ?? "SACCO";
 
                 var dto = new SmsSettingDTO
                 {
@@ -578,7 +544,7 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        // POST: /Sms/Settings
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Settings(SmsSettingDTO dto)
@@ -670,5 +636,275 @@ namespace SACCOBlockChainSystem.Controllers
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
+
+        #region Member Filtering Methods
+
+        /// <summary>
+        /// Filter members based on criteria from Members table
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> FilterMembers([FromBody] MemberFilterRequest filter)
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+
+                // Start with base query - only active company members
+                var query = _context.Members
+                    .Where(m => m.CompanyCode == companyCode)
+                    .AsQueryable();
+
+                // Apply Membership Type filter (Individual, Corporate)
+                if (!string.IsNullOrEmpty(filter.MembershipType))
+                {
+                    query = query.Where(m => m.MembershipType == filter.MembershipType);
+                }
+
+                // Apply Status filter (1 = Active, 0 = Inactive)
+                if (!string.IsNullOrEmpty(filter.Status))
+                {
+                    if (short.TryParse(filter.Status, out short statusValue))
+                    {
+                        query = query.Where(m => m.Status == statusValue);
+                    }
+                }
+
+                // Apply Department filter (Dept field in Members table)
+                if (!string.IsNullOrEmpty(filter.Department))
+                {
+                    query = query.Where(m => m.Dept != null && m.Dept.Contains(filter.Department));
+                }
+
+                // Apply Station filter (Station field in Members table)
+                if (!string.IsNullOrEmpty(filter.Station))
+                {
+                    query = query.Where(m => m.Station != null && m.Station.Contains(filter.Station));
+                }
+
+                // Get results with proper mapping
+                var members = await query
+                    .Select(m => new
+                    {
+                        m.MemberNo,
+                        FullName = (m.Surname ?? "") + " " + (m.OtherNames ?? ""),
+                        m.PhoneNo,
+                        m.Surname,
+                        m.OtherNames,
+                        m.Status,
+                        m.MembershipType,
+                        m.Dept,
+                        m.Station,
+                        m.Email
+                    })
+                    .ToListAsync();
+
+                if (!members.Any())
+                {
+                    return Json(new { success = true, members = new List<object>(), message = "No members found matching the criteria" });
+                }
+
+                return Json(new { success = true, members = members });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error filtering members");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Get members by predefined groups
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GetMembersByGroups([FromBody] GroupMembersRequest request)
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+
+                // Get SaccoParram settings for member contribution criteria
+                var saccoSettings = await _context.SaccoParram
+                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
+
+                var query = _context.Members
+                    .Where(m => m.CompanyCode == companyCode)
+                    .AsQueryable();
+
+                if (request.Groups == null || !request.Groups.Any())
+                {
+                    return Json(new { success = false, message = "No groups selected" });
+                }
+
+                // Apply each group filter
+                foreach (var group in request.Groups)
+                {
+                    switch (group.ToLower())
+                    {
+                        case "allactive":
+                            // Get members who have contributions (ContribShare table)
+                            var contributingMembers = _context.ContribShares
+                                .Where(c => c.CompanyCode == companyCode)
+                                .Select(c => c.MemberNo)
+                                .Distinct();
+
+                            query = query.Where(m => contributingMembers.Contains(m.MemberNo) && m.Status == 1);
+                            break;
+
+                        case "newmembers":
+                            // Get members registered in the last 30 days (using ApplicDate or AuditTime)
+                            var thirtyDaysAgo = DateTime.Now.AddDays(-30);
+                            query = query.Where(m =>
+                                (m.ApplicDate.HasValue && m.ApplicDate.Value >= thirtyDaysAgo) ||
+                                (m.AuditTime.HasValue && m.AuditTime.Value >= thirtyDaysAgo));
+                            break;
+
+                        case "loanholders":
+                            // Get members with disbursed loans (Status = 6 = Disbursed)
+                            var loanMemberNos = _context.Loans
+                                .Where(l => l.CompanyCode == companyCode && l.Status == 6)
+                                .Select(l => l.MemberNo)
+                                .Distinct();
+                            query = query.Where(m => loanMemberNos.Contains(m.MemberNo));
+                            break;
+
+                        case "noloans":
+                            // Get members with NO loans at all
+                            var allLoanMemberNos = _context.Loans
+                                .Where(l => l.CompanyCode == companyCode)
+                                .Select(l => l.MemberNo)
+                                .Distinct();
+                            query = query.Where(m => !allLoanMemberNos.Contains(m.MemberNo));
+                            break;
+                    }
+                }
+
+                var members = await query
+                    .Select(m => new
+                    {
+                        m.MemberNo,
+                        FullName = (m.Surname ?? "") + " " + (m.OtherNames ?? ""),
+                        m.PhoneNo,
+                        m.Surname,
+                        m.OtherNames
+                    })
+                    .ToListAsync();
+
+                return Json(new { success = true, members = members });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting members by groups");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Get GIG member counts
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetGIGMemberCounts()
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+
+                var gigs = await _context.CIGs
+                    .Where(g => g.CompanyCode == companyCode && g.Status == "Active")
+                    .ToListAsync();
+
+                var counts = new List<object>();
+                foreach (var gig in gigs)
+                {
+                    var count = await _context.Members
+                        .CountAsync(m => m.Cigcode == gig.GigCode && m.CompanyCode == companyCode && m.Status == 1);
+
+                    counts.Add(new { id = gig.Id, count = count });
+                }
+
+                return Json(new { success = true, counts = counts });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting GIG counts");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Get members by GIG (Community Investment Groups)
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GetGIGMembers([FromBody] GetGIGMembersRequest request)
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+                var members = new List<object>();
+
+                if (request.GigIds == null || !request.GigIds.Any())
+                {
+                    return Json(new { success = false, message = "No GIGs selected" });
+                }
+
+                foreach (var gigId in request.GigIds)
+                {
+                    var gig = await _context.CIGs
+                        .FirstOrDefaultAsync(g => g.Id == gigId && g.CompanyCode == companyCode);
+
+                    if (gig != null)
+                    {
+                        var gigMembers = await _context.Members
+                            .Where(m => m.Cigcode == gig.GigCode && m.CompanyCode == companyCode && m.Status == 1)
+                            .Select(m => new
+                            {
+                                m.MemberNo,
+                                FullName = (m.Surname ?? "") + " " + (m.OtherNames ?? ""),
+                                m.PhoneNo,
+                                m.Surname,
+                                m.OtherNames,
+                                GigId = gig.Id,
+                                GigName = gig.GigName
+                            })
+                            .ToListAsync();
+
+                        members.AddRange(gigMembers);
+                    }
+                }
+
+                return Json(new { success = true, members = members });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting GIG members");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        #endregion
+
+        #region Request DTOs
+
+        public class MemberFilterRequest
+        {
+            public string? MembershipType { get; set; }
+            public string? Status { get; set; }
+            public string? Department { get; set; }
+            public string? Station { get; set; }
+        }
+
+        public class GroupMembersRequest
+        {
+            public List<string> Groups { get; set; } = new List<string>();
+        }
+
+        public class GetGIGMembersRequest
+        {
+            public List<int> GigIds { get; set; } = new List<int>();
+        }
+
+        #endregion
     }
 }

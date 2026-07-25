@@ -1,0 +1,186 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.AssetsRegisterResponseDTO
+@{
+    ViewData["Title"] = "Delete Asset";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <a asp-action="Index" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i> Back to List
+            </a>
+            <h2 class="page-title mb-0">
+                <i class="bi bi-trash me-2"></i>Delete Asset
+            </h2>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Confirm Deletion
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Warning:</strong> You are about to delete this asset. This action cannot be undone.
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title text-danger">Asset Information</h6>
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <td><strong>ID:</strong></td>
+                                            <td>@Model.Id</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Asset Name:</strong></td>
+                                            <td>@Model.AssetName</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Asset Type:</strong></td>
+                                            <td>@Model.AssetType</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Class:</strong></td>
+                                            <td>@(Model.Class ?? "N/A")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Tag No:</strong></td>
+                                            <td>@(Model.TagNo ?? "N/A")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Serial No:</strong></td>
+                                            <td>@(Model.SerialNo ?? "N/A")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Location:</strong></td>
+                                            <td>@(Model.Location ?? "N/A")</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title text-danger">Financial Information</h6>
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <td><strong>Quantity:</strong></td>
+                                            <td>@Model.Quantity</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Actual Value:</strong></td>
+                                            <td>KES @(Model.ActualValue?.ToString("N2") ?? "0.00")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Market Value:</strong></td>
+                                            <td>KES @(Model.MarketValue?.ToString("N2") ?? "0.00")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Total Value:</strong></td>
+                                            <td><strong>KES @(Model.TotalValue?.ToString("N2") ?? "0.00")</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Status:</strong></td>
+                                            <td>
+                                                @if (Model.Posted == true)
+                                                {
+                                                    <span class="badge bg-success">Posted</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Unposted</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Blockchain:</strong></td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(Model.BlockchainTxId))
+                                                {
+                                                    <span class="badge bg-success">Verified</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Not Verified</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title text-danger">Date Information</h6>
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <td><strong>Date Purchased:</strong></td>
+                                            <td>@(Model.DatePurchased?.ToString("dd/MM/yyyy") ?? "N/A")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Date of Manufacture:</strong></td>
+                                            <td>@(Model.DateOfManufacture?.ToString("dd/MM/yyyy") ?? "N/A")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Created By:</strong></td>
+                                            <td>@(Model.CreatedBy ?? "N/A")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Created Date:</strong></td>
+                                            <td>@(Model.CreatedDate ?? "N/A")</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    <form asp-action="DeleteConfirmed" method="post" id="deleteForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a asp-action="Index" class="btn btn-secondary">
+                                <i class="bi bi-x-circle me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger" id="deleteBtn">
+                                <i class="bi bi-trash me-2"></i>Confirm Delete
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#deleteForm').on('submit', function() {
+                var deleteBtn = $('#deleteBtn');
+                deleteBtn.prop('disabled', true);
+                deleteBtn.html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Deleting...');
+                return true;
+            });
+        });
+    </script>
+}

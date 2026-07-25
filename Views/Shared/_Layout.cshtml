@@ -1,4 +1,20 @@
-﻿<!DOCTYPE html>
+﻿@using System.Security.Claims
+@using Radzen.Blazor
+
+@{
+    // ============================================================
+    // USER ROLE VARIABLES - MUST BE DEFINED AT THE TOP
+    // ============================================================
+    var userRole = User.FindFirstValue(ClaimTypes.Role);
+    var isSuperAdmin = userRole == "Super Admin" || userRole == "SuperAdmin";
+    var isCountyAdmin = userRole == "County Admin" || userRole == "CountyAdmin";
+    var userGroupClaim = User.FindFirst("UserGroup")?.Value;
+    var isMember = userGroupClaim == "MEMBER" || userGroupClaim == "Member" || userGroupClaim == "member";
+    var companyCount = ViewBag.CompanyCount ?? 0;
+}
+
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -97,18 +113,9 @@ input:invalid:focus {
                         @using System.Security.Claims
                         @using Radzen.Blazor
 
-                        @{
-                            var userGroupClaim = User.FindFirst("UserGroup")?.Value;
-
-                            var isMember = userGroupClaim == "MEMBER" || userGroupClaim == "Member" || userGroupClaim == "member";
-
-                        }
-
                         @if (User.Identity.IsAuthenticated)
                         {
                             var userGroupClaims = User.FindFirstValue(ClaimTypes.Role);
-                            var isSuperAdmin = userGroupClaims == "Super Admin" || userGroupClaims == "SuperAdmin";
-                            var companyCount = ViewBag.CompanyCount ?? 0;
 
                             <div class="company-info">
                                 <small>
@@ -123,6 +130,15 @@ input:invalid:focus {
                                             <strong>System SACCOs</strong>
                                         }
                                     }
+                                    else if (isCountyAdmin && Model.IsCountyView)
+                                    {
+                                        // County Admin - Show county name and number of SACCOs
+                                        <strong>
+                                            <i class="fas fa-map-marker-alt text-primary me-1"></i>
+                                            @Model.CountyName County
+                                            <span class="badge bg-info ms-1">@(Model.Companies?.Count ?? 0) SACCOs</span>
+                                        </strong>
+                                    }
                                     else if (isMember)
                                     {
                                         // For members, show the Employer field from Members table
@@ -131,12 +147,13 @@ input:invalid:focus {
                                     }
                                     else
                                     {
-                                        // For staff/admin users
+                                        // For staff/admin users (non-county)
                                         <strong>@User.FindFirstValue("CompanyName")</strong>
                                     }
                                 </small>
                             </div>
                         }
+                    </li>
                 </ul>
                 <!--end::Start Navbar Links-->
                 <!--begin::End Navbar Links-->
@@ -264,6 +281,51 @@ input:invalid:focus {
                             </a>
                         </li>
 
+
+                        <!-- ============================================================ -->
+                        <!-- COUNTY REPORTS - ONLY SHOW FOR COUNTY ADMIN AND SUPER ADMIN -->
+                        <!-- ============================================================ -->
+                        @if (isCountyAdmin || isSuperAdmin)
+                        {
+                            <!-- REPORTS -->
+                            <li class="nav-item">
+                                <a href="#" class="nav-link">
+                                    <i class="nav-icon bi bi-bar-chart-fill"></i>
+                                    <p>
+                                        <b>Reports</b>
+                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
+                                    
+                                    @if (isCountyAdmin || isSuperAdmin)
+                                    {
+                                        <li class="nav-item">
+                                            <a class="nav-link" asp-controller="CountyReport" asp-action="CountyContribReport">
+                                                <i class="nav-icon bi bi-map"></i>
+                                                <p>
+                                                    <b>Contribution Reports</b>
+                                                </p>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" asp-controller="CountyReport" asp-action="CountyLoansReport">
+                                                <i class="nav-icon bi bi-cash-stack"></i>
+                                                <p>
+                                                    <b>Loans Report</b>
+                                                </p>
+                                            </a>
+                                        </li>
+
+                                        <!-- Separator for County Reports -->
+                                        <li class="nav-item">
+                                            <hr class="my-2 border-secondary" />
+                                        </li>
+                                    }
+                                </ul>
+                            </li>
+                        }
+
                         @if (isMember)
                         {
                             <li class="nav-item">
@@ -290,12 +352,12 @@ input:invalid:focus {
                                     <p><b>My Loans</b></p>
                                 </a>
                             </li>
-                            <li class="nav-item">
+                            @* <li class="nav-item">
                                 <a class="nav-link" asp-controller="LoanApplication" asp-action="MobileLoan">
                                     <i class="nav-icon bi bi-phone"></i>
                                     <p><b>Mobile Loan</b></p>
                                 </a>
-                            </li>
+                            </li> *@
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="LoanApplication" asp-action="Withdraw">
                                     <i class="nav-icon bi bi-cash-stack"></i> 
@@ -304,7 +366,7 @@ input:invalid:focus {
                             </li>
                         }
 
-                        @if (!isMember)
+                        @if (!isMember && !isCountyAdmin)
                         {
                             <!-- System Setups -->
                             <li class="nav-item">
@@ -433,7 +495,7 @@ input:invalid:focus {
 
                                     <!-- For Super Admin, Admin, and System Administrator only -->
                                     @{
-                                        var userRole = User.FindFirstValue(ClaimTypes.Role);
+                                        //var userRole = User.FindFirstValue(ClaimTypes.Role);
                                         var userGroup = User.FindFirstValue("UserGroup");
                                         var Company = User.FindFirstValue("CompanyCode");
                                         var canManageUsers = userRole == "Super Admin" ||
@@ -486,6 +548,13 @@ input:invalid:focus {
                                             <p>Wallets</p>
                                         </a>
                                     </li>
+                                    @* <li class="nav-item">
+                                        <a asp-controller="Migration" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-person-lines-fill"></i>
+                                            <p>Migration Dashboard</p>
+                                        </a>
+                                    </li> *@
+
                                     <li class="nav-item">
                                         <a asp-controller="NextOfKeen" asp-action="Index" class="nav-link">
                                             <i class="nav-icon bi bi-person-plus-fill"></i>
@@ -588,7 +657,22 @@ input:invalid:focus {
                                                 <li class="nav-item">
                                                     <a asp-controller="LoanMvc" asp-action="PendingDisbursement" class="nav-link">
                                                         <i class="nav-icon bi bi-cash-stack"></i>
-                                                        <p>Disbursement</p>
+                                                        <p>
+                                                            <b>Disbursement</b>
+                                                        </p>
+                                                    </a>
+                                                </li>
+                                            }
+
+                                            @if (User.IsInRole("Finance Officer") || User.IsInRole("Super Admin") || User.IsInRole("Admin"))
+                                            {
+                                                <li class="nav-item">
+                                                    <a class="nav-link" href="@Url.Action("PendingApprovals", "MemberLoanApproval")">
+                                                        <i class="nav-icon bi bi-clock-history"></i>
+                                                        <p>
+                                                            <b>Mobile Approvals</b>
+                                                            <span id="pendingApprovalsBadge" class="badge bg-warning text-dark ms-1"></span>
+                                                        </p>
                                                     </a>
                                                 </li>
                                             }
@@ -631,11 +715,14 @@ input:invalid:focus {
                                         </a>
                                     </li>
 
-                                    <li class="nav-item">
-                                        <a asp-controller="LoanMvc" asp-action="DeleteLoanIndex" class="nav-link">
-                                            <i class="nav-icon bi bi-trash"></i> Delete Loan
-                                        </a>
-                                    </li>
+                                    @if (User.IsInRole("System Administrator") || User.IsInRole("Super Admin") || User.IsInRole("Finance Officer") || User.IsInRole("Loan Officer"))
+                                    {
+                                        <li class="nav-item">
+                                            <a asp-controller="LoanMvc" asp-action="DeleteLoanIndex" class="nav-link">
+                                                <i class="nav-icon bi bi-trash"></i> Delete Loan
+                                            </a>
+                                        </li>
+                                    }
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="EmployeePayment" asp-action="Index">
@@ -643,12 +730,29 @@ input:invalid:focus {
                                         </a>
                                     </li>
 
-                                <li class="nav-item">
-                                    <a asp-controller="ContributionMvc" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-plus-circle-fill"></i>
-                                        <p>Receipt Posting / Shares</p>
-                                    </a>
-                                </li>
+                                   <li class="nav-item">
+                                       <a asp-controller="ContributionMvc" asp-action="Index" class="nav-link">
+                                           <i class="nav-icon bi bi-plus-circle-fill"></i>
+                                           <p>Receipt Posting / Shares</p>
+                                       </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="ContributionMvc" asp-action="Multiple">
+                                            <i class="nav-icon bi bi-collection-fill"></i>Post Multiple Shares
+                                        </a>
+                                    </li>
+
+                                    @if (User.IsInRole("System Administrator") || User.IsInRole("Super Admin") || User.IsInRole("Finance Officer") || User.IsInRole("Loan Officer"))
+                                    {
+                                        <li class="nav-item">
+                                            <a asp-controller="ContributionMvc" asp-action="ReverseSearch" class="nav-link">
+                                                <i class="nav-icon bi bi-trash-fill text-danger"></i>
+                                                <p class="text-danger">Reverse Transaction</p>
+                                            </a>
+                                        </li>
+                                    }
+                                    
                                  <li class="nav-item">
                                     <a href="#" class="nav-link fw-bold">
                                         <i class="nav-icon bi bi-file-text"></i>
@@ -702,7 +806,7 @@ input:invalid:focus {
                                     <li class="nav-item">
                                         <a asp-controller="Inquiry" asp-action="MemberInquiry" class="nav-link">
                                             <i class="nav-icon bi bi-people-fill"></i>
-                                            <p>Member Search</p>
+                                            <p>Member Inquiry</p>
                                         </a>
                                     </li>
 
@@ -730,13 +834,13 @@ input:invalid:focus {
                                         </a>
                                     </li>
 
-                                    <!-- Member Details (Direct Search) -->
+                                    @* <!-- Member Details (Direct Search) -->
                                     <li class="nav-item">
                                         <a asp-controller="Inquiry" asp-action="MemberDetails" asp-route-memberNo="" class="nav-link" onclick="return promptMemberNo(this.href)">
                                             <i class="nav-icon bi bi-person-badge"></i>
                                             <p>Member Details</p>
                                         </a>
-                                    </li>
+                                    </li> *@
 
                                     <!-- Share Variations -->
                                     <li class="nav-item">
@@ -790,62 +894,92 @@ input:invalid:focus {
                                             <p>Financial Reports</p>
                                         </a>
                                     </li>
+
+                                    <li class="nav-item">
+                                        <a asp-controller="Supplier" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-truck"></i>
+                                            <p>Suppliers</p>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a asp-controller="Invoice" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-file-text"></i>
+                                            <p>Invoices</p>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a asp-controller="InvoicePayment" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-credit-card-2-front"></i>
+                                            <p>Payments</p>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a asp-controller="AssetsRegister" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-clipboard-check"></i>
+                                            <p>Assets</p>
+                                        </a>
+                                    </li>
                                 </ul>
                             </li>
 
                         }
 
                             
+                        @if (!isCountyAdmin )
+                        {
+                            <!-- BLOCKCHAIN -->
+                            <li class="nav-item">
+                                <a href="#" class="nav-link">
+                                    <i class="nav-icon bi bi-link-45deg"></i>
+                                    <p>
+                                        <b>Blockchain</b>
+                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                    </p>
+                                </a>
+                                <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
+                                    <li class="nav-item">
+                                        <a asp-controller="Blockchain" asp-action="Dashboard" class="nav-link">
+                                            <i class="nav-icon bi bi-link"></i>
+                                            <p>Blockchain Dashboard</p>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a asp-controller="Blockchain" asp-action="Explorer" class="nav-link">
+                                            <i class="nav-icon bi bi-journal-check"></i>
+                                            <p>Blocks Overview</p>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a asp-controller="Blockchain" asp-action="Blocks" class="nav-link">
+                                            <i class="nav-icon bi bi-list-ul"></i>
+                                            <p>All Blocks</p>
+                                        </a>
+                                    </li>
+
+                                    @* <li class="nav-item">
+                                        <a asp-controller="Blockchain" asp-action="Verify" class="nav-link">
+                                            <i class="nav-icon bi bi-search"></i>
+                                            <p>Verify by ID</p>
+                                        </a>
+                                    </li> *@
+
+                                    <li class="nav-item">
+                                        <a asp-controller="Verification" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-search"></i>
+                                            <p>Varify transaction</p>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                        }
 
                         
-                        <!-- BLOCKCHAIN -->
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="nav-icon bi bi-link-45deg"></i>
-                                <p>
-                                    <b>Blockchain</b>
-                                    <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                </p>
-                            </a>
-                            <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
-                                <li class="nav-item">
-                                    <a asp-controller="Blockchain" asp-action="Dashboard" class="nav-link">
-                                        <i class="nav-icon bi bi-link"></i>
-                                        <p>Blockchain Dashboard</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a asp-controller="Blockchain" asp-action="Explorer" class="nav-link">
-                                        <i class="nav-icon bi bi-journal-check"></i>
-                                        <p>Blocks Overview</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a asp-controller="Blockchain" asp-action="Blocks" class="nav-link">
-                                        <i class="nav-icon bi bi-list-ul"></i>
-                                        <p>All Blocks</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a asp-controller="Blockchain" asp-action="Verify" class="nav-link">
-                                        <i class="nav-icon bi bi-search"></i>
-                                        <p>Verify by ID</p>
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a asp-controller="Verification" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-search"></i>
-                                        <p>Varify transaction</p>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-
-                        @if(!isMember)
+                        @if (!isMember && !isCountyAdmin)
                         {
                             <!-- REPORTS -->
                             <li class="nav-item">
@@ -857,7 +991,7 @@ input:invalid:focus {
                                     </p>
                                 </a>
                                 <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
-                                    <!-- Loan Reports -->
+
                                     <li class="nav-item">
                                         <a asp-controller="LoanReport" asp-action="LoansPerSacco" class="nav-link">
                                             <i class="nav-icon bi bi-file-earmark-diff"></i>
@@ -868,12 +1002,6 @@ input:invalid:focus {
                                         <a asp-controller="LoanReport" asp-action="LoansIssued" class="nav-link">
                                             <i class="nav-icon bi bi-file-earmark-text"></i>
                                             <p>Loans Issued</p>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a asp-controller="LoanReport" asp-action="LoansIssuedPerProduct" class="nav-link">
-                                            <i class="nav-icon bi bi-tags"></i>
-                                            <p>Loans Issued Per Product</p>
                                         </a>
                                     </li>
                                     <li class="nav-item">
@@ -969,12 +1097,14 @@ input:invalid:focus {
                                             <p>Partially Paid Shares</p>
                                         </a>
                                     </li>
+
                                     <li class="nav-item">
                                         <a asp-controller="MemberReport" asp-action="MembersPerSacco" class="nav-link">
                                             <i class="nav-icon bi bi-building"></i>
                                             <p>Members Per SACCO</p>
                                         </a>
                                     </li>
+
                                     <li class="nav-item">
                                         <a asp-controller="MemberReport" asp-action="WithdrawnMembers" class="nav-link">
                                             <i class="nav-icon bi bi-person-x-fill"></i>
@@ -1098,23 +1228,27 @@ input:invalid:focus {
                         }
                         else
                         {
-                           <li class="nav-item">
-                                <a href="#" class="nav-link">
-                                    <i class="nav-icon bi bi-bar-chart-fill"></i>
-                                    <p>
-                                        <b>Reports</b>
-                                        <i class="nav-arrow bi bi-chevron-right float-end"></i>
-                                    </p>
-                                </a>
-                                <ul class="nav nav-teeview ms-2 border-start border-primary border-opacity-25 ps-2">
-                                    <li class="nav-item">
-                                        <a asp-controller="MemberReport" asp-action="SharesLoansMember" class="nav-link">
-                                            <i class="nav-icon bi bi-pie-chart-fill"></i>
-                                            <p>Shares/Loans Report</p>
-                                        </a>
-                                    </li>
-                                </ul>
-                           </li> 
+                            @if (!isCountyAdmin)
+                            {
+                                <li class="nav-item">
+                                    <a href="#" class="nav-link">
+                                        <i class="nav-icon bi bi-bar-chart-fill"></i>
+                                        <p>
+                                            <b>Reports</b>
+                                            <i class="nav-arrow bi bi-chevron-right float-end"></i>
+                                        </p>
+                                    </a>
+                                    <ul class="nav nav-teeview ms-2 border-start border-primary border-opacity-25 ps-2">
+                                        <li class="nav-item">
+                                            <a asp-controller="MemberReport" asp-action="SharesLoansMember" class="nav-link">
+                                                <i class="nav-icon bi bi-pie-chart-fill"></i>
+                                                <p>Shares/Loans Report</p>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </li>
+    
+                            }
                         }
 
                     </ul>
@@ -1171,18 +1305,18 @@ input:invalid:focus {
                 <div class="container-fluid">
                     <div class="row">
                         <div class="col-md-4 text-start">
-                            <span class="badge bg-success">
+                            @* <span class="badge bg-success">
                                 <i class="fas fa-link"></i> Blockchain: <span id="blockchainStatus">Connected</span>
-                            </span>
+                            </span> *@
                         </div>
                         <div class="col-md-4">
                             <strong style="font-size:12px">Copyright &copy; @DateTime.Now.Year <a href="https://amtechafrica.com/">Powered By AmTech Technologies Ltd</a>.All rights reserved. </strong>
                         </div>
                         <div class="col-md-4 text-end">
-                            <span class="text-muted">
+                            @* <span class="text-muted">
                                 <i class="fas fa-database"></i>
                                 <span id="transactionCount">0</span> TX on Chain
-                            </span>
+                            </span> *@
                         </div>
                     </div>
                 </div>
@@ -1450,6 +1584,21 @@ input:invalid:focus {
                 }
             });
         });
+
+        // Add this to your site.js or layout
+        function updatePendingApprovalsCount() {
+            $.get('@Url.Action("GetPendingCount", "MemberLoanApproval")', function(data) {
+                if (data.count > 0) {
+                    $('#pendingApprovalsBadge').text(data.count).show();
+                } else {
+                    $('#pendingApprovalsBadge').hide();
+                }
+            });
+        }
+
+        // Update every 60 seconds
+        setInterval(updatePendingApprovalsCount, 60000);
+        updatePendingApprovalsCount();
         
 
     </script>

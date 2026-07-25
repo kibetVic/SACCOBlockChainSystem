@@ -494,6 +494,7 @@ namespace SACCOBlockChainSystem.Controllers
 
         #endregion
 
+
         #region Withdraw Loan
 
         [HttpGet("Withdraw")]
@@ -518,6 +519,7 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 var memberNo = GetCurrentMemberNo();
+                var companyCode = GetCurrentCompanyCode();
 
                 var loanEntity = await _context.Loans
                     .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.MemberNo == memberNo);
@@ -528,21 +530,58 @@ namespace SACCOBlockChainSystem.Controllers
                     return RedirectToAction("MyLoans");
                 }
 
+                // ============================================================
+                // GET LOAN TYPE TO CHECK APPROVAL REQUIREMENT
+                // ============================================================
+                var loanType = await _context.Loantypes
+                    .FirstOrDefaultAsync(lt => lt.LoanCode == loanEntity.LoanCode && lt.CompanyCode == companyCode);
+
+                bool requiresApproval = loanType?.MobileLoanApproval == true;
+                bool isApproved = loanEntity.Status == 5; // Endorsed
+                bool isPending = loanEntity.Status == 2 && loanEntity.Posted == "PENDING_APPROVAL";
+                bool isRejected = loanEntity.Status == 10;
+
+                _logger.LogInformation($"Loan Status: {loanEntity.Status}, Posted: {loanEntity.Posted}, RequiresApproval: {requiresApproval}, IsApproved: {isApproved}");
+
+                // ============================================================
+                // CHECK APPROVAL STATUS AND SHOW APPROPRIATE MESSAGE
+                // ============================================================
+                if (isRejected)
+                {
+                    TempData["Error"] = "This loan has been rejected. Please contact support for more information.";
+                    return RedirectToAction("MyLoans");
+                }
+
+                if (isPending)
+                {
+                    TempData["Error"] = "⚠️ This loan is waiting for approval. You will be notified once approved.";
+                    return RedirectToAction("MyLoans");
+                }
+
+                if (loanEntity.Status == 6)
+                {
+                    TempData["Error"] = "This loan has already been disbursed.";
+                    return RedirectToAction("MyLoans");
+                }
+
+                if (!isApproved && requiresApproval)
+                {
+                    TempData["Error"] = "This loan requires approval before withdrawal. Please wait for approval.";
+                    return RedirectToAction("MyLoans");
+                }
+
                 if (loanEntity.Status != 5)
                 {
                     TempData["Error"] = $"Loan is not ready for withdrawal. Current status: {GetStatusString(loanEntity.Status)}";
                     return RedirectToAction("MyLoans");
                 }
 
+                // ============================================================
+                // CONTINUE WITH WITHDRAWAL LOGIC
+                // ============================================================
                 var member = await _context.Members.FirstOrDefaultAsync(m => m.MemberNo == memberNo);
-                var loanType = await _context.Loantypes.FirstOrDefaultAsync(lt => lt.LoanCode == loanEntity.LoanCode);
-
-                // Get the cheque record to get the correct amounts
                 var cheque = await _context.Cheques.FirstOrDefaultAsync(c => c.LoanNo == loanNo);
 
-                // ============================================================
-                // CORRECT: Calculate processing fee as PERCENTAGE
-                // ============================================================
                 decimal processingFeePercentage = loanType?.Processingfee ?? 0;
                 decimal grossAmount = loanEntity.LoanAmt ?? 0;
                 decimal processingFeeAmount = (grossAmount * processingFeePercentage) / 100;
@@ -551,8 +590,6 @@ namespace SACCOBlockChainSystem.Controllers
                 _logger.LogInformation($"Withdrawal calculation: Gross={grossAmount:C}, Fee%={processingFeePercentage}%, FeeAmount={processingFeeAmount:C}, Net={netAmount:C}");
 
                 string memberPhone = member?.PhoneNo ?? member?.MobileNo ?? "";
-
-                // Remove 254 prefix for display
                 string displayPhone = memberPhone;
                 if (displayPhone.StartsWith("254") && displayPhone.Length == 12)
                 {
@@ -563,13 +600,18 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     LoanNo = loanNo,
                     Amount = grossAmount,
-                    ProcessingFee = processingFeeAmount,  
-                    ProcessingFeePercentage = processingFeePercentage,  
+                    ProcessingFee = processingFeeAmount,
+                    ProcessingFeePercentage = processingFeePercentage,
                     MemberPhone = displayPhone,
                     MpesaPhoneNumber = displayPhone,
                     MemberAccount = member?.Accno ?? "",
                     WithdrawalMethods = GetAvailableWithdrawalMethods(),
-                    WithdrawalMethod = "MPESA"
+                    WithdrawalMethod = "MPESA",
+                    // SET APPROVAL PROPERTIES
+                    IsApproved = isApproved,
+                    RequiresApproval = requiresApproval,
+                    Status = GetStatusString(loanEntity.Status),
+                    Posted = loanEntity.Posted ?? ""
                 };
 
                 return View(viewModel);
@@ -581,6 +623,118 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("MyLoans");
             }
         }
+
+
+        //[HttpGet("Withdraw/{loanNo}")]
+        //public async Task<IActionResult> Withdraw(string loanNo)
+        //{
+        //    try
+        //    {
+        //        _logger.LogInformation($"=== WITHDRAW GET CALLED ===");
+        //        _logger.LogInformation($"LoanNo: {loanNo}");
+
+        //        if (string.IsNullOrEmpty(loanNo))
+        //        {
+        //            TempData["Error"] = "No loan specified.";
+        //            return RedirectToAction("MyLoans");
+        //        }
+
+        //        var memberNo = GetCurrentMemberNo();
+        //        var companyCode = GetCurrentCompanyCode();
+
+        //        var loanEntity = await _context.Loans
+        //            .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.MemberNo == memberNo);
+
+        //        if (loanEntity == null)
+        //        {
+        //            TempData["Error"] = "Loan not found.";
+        //            return RedirectToAction("MyLoans");
+        //        }
+
+        //        // ============================================================
+        //        // CHECK: If loan is pending approval
+        //        // ============================================================
+        //        if (loanEntity.Status == 2 && loanEntity.Posted == "PENDING_APPROVAL")
+        //        {
+        //            TempData["Error"] = "⚠️ This loan is waiting for approval. You will be notified once approved.";
+        //            return RedirectToAction("MyLoans");
+        //        }
+
+        //        // ============================================================
+        //        // CHECK: If loan is rejected
+        //        // ============================================================
+        //        if (loanEntity.Status == 10)
+        //        {
+        //            TempData["Error"] = "This loan has been rejected. Please contact support for more information.";
+        //            return RedirectToAction("MyLoans");
+        //        }
+
+        //        // ============================================================
+        //        // CHECK: If loan is already disbursed
+        //        // ============================================================
+        //        if (loanEntity.Status == 6)
+        //        {
+        //            TempData["Error"] = "This loan has already been disbursed.";
+        //            return RedirectToAction("MyLoans");
+        //        }
+
+        //        // ============================================================
+        //        // CHECK: If loan is ready for withdrawal (Endorsed status = 5)
+        //        // ============================================================
+        //        if (loanEntity.Status != 5)
+        //        {
+        //            TempData["Error"] = $"Loan is not ready for withdrawal. Current status: {GetStatusString(loanEntity.Status)}";
+        //            return RedirectToAction("MyLoans");
+        //        }
+
+        //        // ============================================================
+        //        // CONTINUE WITH THE REST OF THE WITHDRAW LOGIC
+        //        // ============================================================
+        //        var member = await _context.Members.FirstOrDefaultAsync(m => m.MemberNo == memberNo);
+        //        var loanType = await _context.Loantypes.FirstOrDefaultAsync(lt => lt.LoanCode == loanEntity.LoanCode);
+
+        //        // Get the cheque record to get the correct amounts
+        //        var cheque = await _context.Cheques.FirstOrDefaultAsync(c => c.LoanNo == loanNo);
+
+        //        // CORRECT: Calculate processing fee as PERCENTAGE
+        //        decimal processingFeePercentage = loanType?.Processingfee ?? 0;
+        //        decimal grossAmount = loanEntity.LoanAmt ?? 0;
+        //        decimal processingFeeAmount = (grossAmount * processingFeePercentage) / 100;
+        //        decimal netAmount = grossAmount - processingFeeAmount;
+
+        //        _logger.LogInformation($"Withdrawal calculation: Gross={grossAmount:C}, Fee%={processingFeePercentage}%, FeeAmount={processingFeeAmount:C}, Net={netAmount:C}");
+
+        //        string memberPhone = member?.PhoneNo ?? member?.MobileNo ?? "";
+
+        //        // Remove 254 prefix for display
+        //        string displayPhone = memberPhone;
+        //        if (displayPhone.StartsWith("254") && displayPhone.Length == 12)
+        //        {
+        //            displayPhone = "0" + displayPhone.Substring(3);
+        //        }
+
+        //        var viewModel = new LoanWithdrawalViewModel
+        //        {
+        //            LoanNo = loanNo,
+        //            Amount = grossAmount,
+        //            ProcessingFee = processingFeeAmount,
+        //            ProcessingFeePercentage = processingFeePercentage,
+        //            MemberPhone = displayPhone,
+        //            MpesaPhoneNumber = displayPhone,
+        //            MemberAccount = member?.Accno ?? "",
+        //            WithdrawalMethods = GetAvailableWithdrawalMethods(),
+        //            WithdrawalMethod = "MPESA"
+        //        };
+
+        //        return View(viewModel);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error loading withdrawal page");
+        //        TempData["Error"] = "Unable to process withdrawal request.";
+        //        return RedirectToAction("MyLoans");
+        //    }
+        //}
 
         [HttpPost("Withdraw/{loanNo}")]
         [ValidateAntiForgeryToken]
@@ -647,9 +801,7 @@ namespace SACCOBlockChainSystem.Controllers
                 var cheque = await _context.Cheques.FirstOrDefaultAsync(c => c.LoanNo == loanNo);
                 var loanType = await _context.Loantypes.FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode);
 
-                // ============================================================
                 // CORRECT: Calculate processing fee as PERCENTAGE
-                // ============================================================
                 decimal processingFeePercentage = loanType?.Processingfee ?? 0;
                 decimal grossAmount = cheque?.AmountIssued ?? cheque?.Amount ?? loan.LoanAmt ?? 0;
                 decimal processingFeeAmount = (grossAmount * processingFeePercentage) / 100;
@@ -678,8 +830,195 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-
         #endregion
+
+
+        //#region Withdraw Loan
+
+        //[HttpGet("Withdraw")]
+        //public IActionResult Withdraw()
+        //{
+        //    TempData["Error"] = "Please select a specific loan to withdraw.";
+        //    return RedirectToAction("MyLoans");
+        //}
+
+        //[HttpGet("Withdraw/{loanNo}")]
+        //public async Task<IActionResult> Withdraw(string loanNo)
+        //{
+        //    try
+        //    {
+        //        _logger.LogInformation($"=== WITHDRAW GET CALLED ===");
+        //        _logger.LogInformation($"LoanNo: {loanNo}");
+
+        //        if (string.IsNullOrEmpty(loanNo))
+        //        {
+        //            TempData["Error"] = "No loan specified.";
+        //            return RedirectToAction("MyLoans");
+        //        }
+
+        //        var memberNo = GetCurrentMemberNo();
+
+        //        var loanEntity = await _context.Loans
+        //            .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.MemberNo == memberNo);
+
+        //        if (loanEntity == null)
+        //        {
+        //            TempData["Error"] = "Loan not found.";
+        //            return RedirectToAction("MyLoans");
+        //        }
+
+        //        if (loanEntity.Status != 5)
+        //        {
+        //            TempData["Error"] = $"Loan is not ready for withdrawal. Current status: {GetStatusString(loanEntity.Status)}";
+        //            return RedirectToAction("MyLoans");
+        //        }
+
+        //        var member = await _context.Members.FirstOrDefaultAsync(m => m.MemberNo == memberNo);
+        //        var loanType = await _context.Loantypes.FirstOrDefaultAsync(lt => lt.LoanCode == loanEntity.LoanCode);
+
+        //        // Get the cheque record to get the correct amounts
+        //        var cheque = await _context.Cheques.FirstOrDefaultAsync(c => c.LoanNo == loanNo);
+
+        //        // ============================================================
+        //        // CORRECT: Calculate processing fee as PERCENTAGE
+        //        // ============================================================
+        //        decimal processingFeePercentage = loanType?.Processingfee ?? 0;
+        //        decimal grossAmount = loanEntity.LoanAmt ?? 0;
+        //        decimal processingFeeAmount = (grossAmount * processingFeePercentage) / 100;
+        //        decimal netAmount = grossAmount - processingFeeAmount;
+
+        //        _logger.LogInformation($"Withdrawal calculation: Gross={grossAmount:C}, Fee%={processingFeePercentage}%, FeeAmount={processingFeeAmount:C}, Net={netAmount:C}");
+
+        //        string memberPhone = member?.PhoneNo ?? member?.MobileNo ?? "";
+
+        //        // Remove 254 prefix for display
+        //        string displayPhone = memberPhone;
+        //        if (displayPhone.StartsWith("254") && displayPhone.Length == 12)
+        //        {
+        //            displayPhone = "0" + displayPhone.Substring(3);
+        //        }
+
+        //        var viewModel = new LoanWithdrawalViewModel
+        //        {
+        //            LoanNo = loanNo,
+        //            Amount = grossAmount,
+        //            ProcessingFee = processingFeeAmount,  
+        //            ProcessingFeePercentage = processingFeePercentage,  
+        //            MemberPhone = displayPhone,
+        //            MpesaPhoneNumber = displayPhone,
+        //            MemberAccount = member?.Accno ?? "",
+        //            WithdrawalMethods = GetAvailableWithdrawalMethods(),
+        //            WithdrawalMethod = "MPESA"
+        //        };
+
+        //        return View(viewModel);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error loading withdrawal page");
+        //        TempData["Error"] = "Unable to process withdrawal request.";
+        //        return RedirectToAction("MyLoans");
+        //    }
+        //}
+
+        //[HttpPost("Withdraw/{loanNo}")]
+        //[ValidateAntiForgeryToken]
+        //public async Task<IActionResult> Withdraw(string loanNo, LoanWithdrawalViewModel model)
+        //{
+        //    _logger.LogInformation($"=== WITHDRAW POST CALLED ===");
+        //    _logger.LogInformation($"LoanNo: {loanNo}, Method: {model.WithdrawalMethod}");
+
+        //    try
+        //    {
+        //        // Validate
+        //        if (model.WithdrawalMethod == "MPESA" && string.IsNullOrWhiteSpace(model.MpesaPhoneNumber))
+        //        {
+        //            TempData["Error"] = "M-Pesa phone number is required.";
+        //            return RedirectToAction("Withdraw", new { loanNo });
+        //        }
+
+        //        var memberNo = GetCurrentMemberNo();
+
+        //        // Format phone number for M-Pesa
+        //        string cleanPhoneNumber = null;
+        //        if (model.WithdrawalMethod == "MPESA" && !string.IsNullOrEmpty(model.MpesaPhoneNumber))
+        //        {
+        //            cleanPhoneNumber = FormatPhoneNumber(model.MpesaPhoneNumber);
+        //        }
+
+        //        var result = await _selfServiceLoanService.WithdrawLoanAsync(loanNo, memberNo, model.WithdrawalMethod, cleanPhoneNumber);
+
+        //        if (result.Success)
+        //        {
+        //            TempData["Success"] = result.Message;
+        //            return RedirectToAction("DisbursementConfirmation", new { loanNo });
+        //        }
+        //        else
+        //        {
+        //            TempData["Error"] = result.Message;
+        //            return RedirectToAction("Withdraw", new { loanNo });
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error processing withdrawal");
+        //        TempData["Error"] = $"Withdrawal failed: {ex.Message}";
+        //        return RedirectToAction("Withdraw", new { loanNo });
+        //    }
+        //}
+
+        //[HttpGet("DisbursementConfirmation/{loanNo}")]
+        //public async Task<IActionResult> DisbursementConfirmation(string loanNo)
+        //{
+        //    try
+        //    {
+        //        _logger.LogInformation($"=== DISBURSEMENT CONFIRMATION CALLED ===");
+        //        _logger.LogInformation($"LoanNo: {loanNo}");
+
+        //        var memberNo = GetCurrentMemberNo();
+        //        var loan = await _context.Loans.FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.MemberNo == memberNo);
+
+        //        if (loan == null)
+        //        {
+        //            return RedirectToAction("MyLoans");
+        //        }
+
+        //        var cheque = await _context.Cheques.FirstOrDefaultAsync(c => c.LoanNo == loanNo);
+        //        var loanType = await _context.Loantypes.FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode);
+
+        //        // ============================================================
+        //        // CORRECT: Calculate processing fee as PERCENTAGE
+        //        // ============================================================
+        //        decimal processingFeePercentage = loanType?.Processingfee ?? 0;
+        //        decimal grossAmount = cheque?.AmountIssued ?? cheque?.Amount ?? loan.LoanAmt ?? 0;
+        //        decimal processingFeeAmount = (grossAmount * processingFeePercentage) / 100;
+        //        decimal netAmount = grossAmount - processingFeeAmount;
+
+        //        _logger.LogInformation($"Confirmation calculation: Gross={grossAmount:C}, Fee%={processingFeePercentage}%, FeeAmount={processingFeeAmount:C}, Net={netAmount:C}");
+
+        //        var viewModel = new DisbursementConfirmationViewModel
+        //        {
+        //            LoanNo = loanNo,
+        //            Amount = grossAmount,
+        //            NetAmount = netAmount,
+        //            ProcessingFee = processingFeeAmount,
+        //            ProcessingFeePercentage = processingFeePercentage,
+        //            DisbursementDate = cheque?.DateIssued ?? DateTime.Now,
+        //            ChequeNo = cheque?.ChequeNo,
+        //            WithdrawalMethod = "MPESA"
+        //        };
+
+        //        return View(viewModel);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error loading confirmation");
+        //        return RedirectToAction("MyLoans");
+        //    }
+        //}
+
+
+        //#endregion
 
         private string FormatPhoneNumber(string phoneNumber)
         {

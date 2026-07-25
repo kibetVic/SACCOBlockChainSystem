@@ -44,6 +44,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string Status { get; set; } = null!;
         public DateTime DateJoined { get; set; }
         public decimal ShareBalance { get; set; }
+        public int GuarantorLoansCount { get; set; }
+        public decimal TotalGuaranteeAmount { get; set; }
     }
 
     public class MemberSearchResponseDTO
@@ -125,6 +127,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public List<ShareTypeSummaryDTO> ShareTypeSummaries { get; set; } = new();
         public DateTime InquiryTimestamp { get; set; }
         public string? InquiredBy { get; set; }
+        public string? MemberIdNo { get; set; }
+        public int? MemberPhone { get; set; }
         public decimal TotalRegFees { get; set; }
         public decimal TotalDonations { get; set; }
         public decimal TotalLoanAllocations { get; set; }
@@ -176,6 +180,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public List<LoanDetailDTO> Loans { get; set; } = new();
         public DateTime InquiryTimestamp { get; set; }
         public string? InquiredBy { get; set; }
+        public string? MemberIdNo { get; set; }
+        public int? MemberPhone { get; set; }
     }
 
     public class LoanDetailDTO
@@ -283,4 +289,62 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public int TotalMembers { get; set; }
         public decimal TotalShares { get; set; }
     }
+
+    // DTO for Guarantor Loans List
+    public class GuarantorLoanListResponseDTO
+    {
+        public string MemberNo { get; set; } = null!;
+        public string MemberName { get; set; } = null!;
+        public string MemberPhone { get; set; } = null!;
+        public string MemberIdNo { get; set; } = null!;
+        public decimal TotalShares { get; set; }
+        public decimal LockedForGuarantees { get; set; }
+        public decimal AvailableShares { get; set; }
+        public int TotalGuaranteedLoans { get; set; }
+        public List<GuarantorLoanDetailDTO> GuaranteedLoans { get; set; } = new();
+        public DateTime InquiryTimestamp { get; set; }
+        public string? InquiredBy { get; set; }
+    }
+
+    public class GuarantorLoanDetailDTO
+    {
+        // Loanee (Borrower) Information
+        public string LoaneeMemberNo { get; set; } = null!;
+        public string LoaneeName { get; set; } = null!;
+        public string LoaneePhone { get; set; } = null!;
+        public string LoaneeIdNo { get; set; } = null!;
+
+        // Loan Information
+        public string LoanNo { get; set; } = null!;
+        public string LoanCode { get; set; } = null!;
+        public string LoanType { get; set; } = null!;
+        public decimal PrincipalAmount { get; set; }
+        public decimal OutstandingBalance { get; set; }
+        public decimal InterestRate { get; set; }
+        public int RepaymentPeriod { get; set; }
+        public DateTime ApplicationDate { get; set; }
+        public DateTime? DisbursementDate { get; set; }
+        public DateTime? ExpectedCompletionDate { get; set; }
+        public string LoanStatus { get; set; } = null!;
+        public bool IsActive { get; set; }
+        public bool IsOverdue { get; set; }
+        public int DaysOverdue { get; set; }
+
+        // Guarantor Information (the member who guaranteed)
+        public int GuarantorId { get; set; }
+        public string GuarantorMemberNo { get; set; } = null!;
+        public decimal GuaranteeAmount { get; set; }
+        public decimal GuaranteeBalance { get; set; }
+        public decimal RemainingGuarantee { get; set; }
+        public DateTime GuaranteeDate { get; set; }
+        public string GuaranteeStatus { get; set; } = "Active";
+        public string? GuaranteeDescription { get; set; }
+        public string? CollateralType { get; set; }
+
+        // Member's Share Information (the guarantor)
+        public decimal MemberTotalShares { get; set; }
+        public decimal MemberLockedShares { get; set; }
+        public decimal MemberAvailableShares { get; set; }
+        public decimal ShareBalanceAfterThisGuarantee { get; set; }
+    }    
 }

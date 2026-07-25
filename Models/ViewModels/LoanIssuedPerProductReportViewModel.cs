@@ -19,7 +19,8 @@ namespace SACCOBlockChainSystem.Models.ViewModels
 		public decimal LoanApplied { get; set; }
 		public decimal ApprovedAmount { get; set; }
 		public decimal? InterestRate { get; set; }
-	}
+        public string Status { get; internal set; }
+    }
 
 	public class LoanIssuedPerProductGroupViewModel
 	{
@@ -62,5 +63,8 @@ namespace SACCOBlockChainSystem.Models.ViewModels
 		public string CompanyName { get; set; }
 		public string PrintedBy { get; set; }
 		public DateTime GeneratedOn { get; set; }
-	}
+        public int TotalDisbursedLoans { get; internal set; }
+        public int TotalApprovedLoans { get; internal set; }
+        public decimal TotalDisbursedAmount { get; internal set; }
+    }
 }

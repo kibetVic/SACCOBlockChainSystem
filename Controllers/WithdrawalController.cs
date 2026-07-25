@@ -26,7 +26,8 @@ namespace SACCOBlockChainSystem.Controllers
         public WithdrawalController(
             IWithdrawalService withdrawalService,
             IMemberService memberService,
-            ContributionService contributionService,
+            IContributionService contributionService,
+            //ContributionService contributionService,
             ISaccoService saccoService,
             ICompanyContextService companyContextService,
             ApplicationDbContext context,

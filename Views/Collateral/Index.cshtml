@@ -40,7 +40,7 @@
             <h5 class="mb-0" id="formTitle"><i class="bi bi-plus-circle me-2"></i>Add New Collateral</h5>
         </div>
         <div class="card-body">
-            <form id="collateralForm">
+            <form id="collateralForm" enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
                 <input type="hidden" id="Id" />
 
@@ -60,10 +60,139 @@
                         <small class="text-muted">Value between 0 and 100</small>
                     </div>
                 </div>
+                <!-- Photo Upload Section - Alternative Layout -->
+                <div class="row">
+                    <div class="col-md-5 mb-3">
+                        <label class="form-label fw-bold">Collateral Photo</label>
+                        <div class="input-group">
+                            <input type="file" class="form-control" id="PhotoFile" accept="image/*" />
+                            <button class="btn btn-outline-secondary" type="button" onclick="clearPhoto()">
+                                <i class="bi bi-x-circle"></i> Clear
+                            </button>
+                        </div>
+                        <small class="text-muted">Upload a photo of the collateral (optional). Supported formats: JPG, PNG, GIF</small>
+                        <div class="mt-2">
+                            <div id="uploadInfo" style="display: none;" class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                <span id="uploadStatus">No file selected</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-7 mb-3">
+                        <!-- Photo Preview -->
+                        <div id="photoPreviewContainer" style="display: none;">
+                            <div class="card h-100">
+                                <div class="card-header bg-light py-2">
+                                    <small><i class="bi bi-image me-1"></i> Photo Preview</small>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-4">
+                                            <img id="photoPreviewImg" src="" alt="Collateral Photo"
+                                                 style="width: 100%; max-height: 180px; border: 1px solid #ddd; border-radius: 4px; padding: 4px; object-fit: cover;" />
+                                        </div>
+                                        <div class="col-md-8">
+                                            <div class="d-flex justify-content-between align-items-start flex-column h-100">
+                                                <div class="w-100">
+                                                    <strong id="photoPreviewTitle">Photo Preview</strong>
+                                                    <br />
+                                                    <small id="photoFileName" class="text-muted">No file selected</small>
+                                                    <br />
+                                                    <small id="photoFileSize" class="text-muted"></small>
+                                                </div>
+                                                <div class="mt-2">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearPhoto()">
+                                                        <i class="bi bi-trash"></i> Remove Photo
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+
+                <!-- Member Search Section -->
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label class="form-label fw-bold">Member Owner *</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="memberSearchInput"
+                                   placeholder="Type at least 2 characters to search member..."
+                                   autocomplete="off" />
+                            <button class="btn btn-outline-danger" type="button" onclick="clearMemberSelection()">
+                                <i class="bi bi-x-circle"></i> Clear
+                            </button>
+                        </div>
+                        <small class="text-muted">Search by Member No, Name, ID Number, or Phone</small>
+                    </div>
+                </div>
+
+                <!-- Member Search Results -->
+                <div id="memberSearchResults" style="display: none;" class="mb-3">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-light py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small><i class="bi bi-search me-1"></i> Search Results</small>
+                                <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="closeSearchResults()">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-hover table-sm mb-0">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th style="width: 60px;">Select</th>
+                                            <th>Member No</th>
+                                            <th>Full Name</th>
+                                            <th>ID Number</th>
+                                            <th>Phone</th>
+                                            <th>Email</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="memberResultsBody">
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted py-3">
+                                                <i class="bi bi-search me-2"></i> Type to search...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Selected Member Display -->
+                <div id="selectedMemberDisplay" style="display: none;" class="mb-3">
+                    <div class="alert alert-success d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-person-check-fill me-2"></i>
+                            <strong>Selected Member:</strong>
+                            <span id="selectedMemberName"></span>
+                            <br />
+                            <small>
+                                Member No: <span id="selectedMemberNo"></span> |
+                                ID: <span id="selectedMemberIdNo"></span> |
+                                Phone: <span id="selectedMemberPhone"></span>
+                            </small>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearMemberSelection()">
+                            <i class="bi bi-x-circle"></i> Change
+                        </button>
+                    </div>
+                </div>
+
+                <input type="hidden" id="MemberNo" />               
 
                 <div class="d-flex justify-content-end gap-2">
                     <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
-                    <button type="submit" class="btn btn-primary" id="submitBtn">Save Collateral</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn" disabled>Save Collateral</button>
                 </div>
             </form>
         </div>
@@ -79,7 +208,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="input-group">
-                        <input type="text" class="form-control" id="searchInput" placeholder="Search by code or description..." />
+                        <input type="text" class="form-control" id="searchInput" placeholder="Search by code, description, or member..." />
                         <button class="btn btn-outline-secondary" onclick="filterTable()"><i class="bi bi-search"></i></button>
                     </div>
                 </div>
@@ -103,6 +232,8 @@
                                 <th>Code</th>
                                 <th>Description</th>
                                 <th class="text-end">Percentage (%)</th>
+                                <th>Member No</th>
+                                <th>Member Name</th>
                                 <th>Blockchain Tx</th>
                                 <th class="text-end">Actions</th>
                             </tr>
@@ -114,6 +245,8 @@
                                     <td><strong>@item.ColCode</strong></td>
                                     <td>@item.Coldescription</td>
                                     <td class="text-end">@item.Percentage.ToString("N2")%</td>
+                                    <td>@item.MemberNo</td>
+                                    <td>@(item.MemberName ?? "N/A")</td>
                                     <td>
                                         @if (!string.IsNullOrEmpty(item.BlockchainTxId))
                                         {
@@ -144,7 +277,7 @@
 
 <!-- View Modal -->
 <div class="modal fade" id="viewModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
                 <h5 class="mb-0"><i class="bi bi-eye me-2"></i>Collateral Details</h5>
@@ -164,6 +297,14 @@
                         <label class="fw-bold text-muted">Description:</label>
                         <p id="v_Coldescription">-</p>
                     </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="fw-bold text-muted">Member No:</label>
+                        <p id="v_MemberNo">-</p>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="fw-bold text-muted">Member Name:</label>
+                        <p id="v_MemberName">-</p>
+                    </div>
                     <div class="col-12 mb-2">
                         <label class="fw-bold text-muted">Blockchain Tx ID:</label>
                         <p id="v_BlockchainTxId">-</p>
@@ -172,7 +313,40 @@
                         <label class="fw-bold text-muted">Company Code:</label>
                         <p id="v_CompanyCode">-</p>
                     </div>
+                    @if (Model.Any())
+                    {
+                        var firstItem = Model.FirstOrDefault();
+                        if (firstItem != null && firstItem.HasPhoto && !string.IsNullOrEmpty(firstItem.PhotoBase64))
+                        {
+                            <div class="col-12 mb-2">
+                                <label class="fw-bold text-muted">Photo:</label>
+                                <div class="mt-2">
+                                    <img id="v_Photo" src="data:@(firstItem.PhotoContentType ?? "image/jpeg");base64,@firstItem.PhotoBase64"
+                                         alt="Collateral Photo"
+                                         style="max-width: 100%; max-height: 300px; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />
+                                </div>
+                            </div>
+                        }
+                    }
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Photo View Modal -->
+<div class="modal fade" id="photoViewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="mb-0"><i class="bi bi-image me-2"></i>Collateral Photo</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="photoViewImg" src="" alt="Collateral Photo" style="max-width: 100%; max-height: 80vh; border-radius: 4px;" />
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -183,6 +357,11 @@
 
 @section Scripts {
     <script>
+        let selectedMember = null;
+        let searchTimer = null;
+        let isSearching = false;
+        let currentPhotoFile = null;
+
         $(document).ready(function() {
             loadNewCode();
             if ($.fn.DataTable) {
@@ -198,7 +377,257 @@
                     }
                 });
             }
+
+            // Auto-search for members as user types
+            $('#memberSearchInput').on('input', function() {
+                clearTimeout(searchTimer);
+                var term = $(this).val().trim();
+
+                if (term.length >= 2) {
+                    showSearchLoading();
+                    searchTimer = setTimeout(function() {
+                        searchMember(term);
+                    }, 300);
+                } else {
+                    $('#memberSearchResults').fadeOut(200);
+                    if (term.length === 0 && !selectedMember) {
+                        $('#memberResultsBody').html(`
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-3">
+                                    <i class="bi bi-search me-2"></i> Type at least 2 characters to search...
+                                </td>
+                            </tr>
+                        `);
+                    }
+                }
+            });
+
+            // Photo file change event
+            $('#PhotoFile').on('change', function() {
+                handlePhotoSelection(this);
+            });
+
+            // Handle click outside to close results
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#memberSearchInput, #memberSearchResults').length) {
+                    setTimeout(function() {
+                        if (!selectedMember) {
+                            $('#memberSearchResults').fadeOut(200);
+                        }
+                    }, 200);
+                }
+            });
+
+            // Enter key to search
+            $('#memberSearchInput').on('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    var term = $(this).val().trim();
+                    if (term.length >= 2) {
+                        searchMember(term);
+                    }
+                }
+            });
         });
+
+        function handlePhotoSelection(input) {
+            const file = input.files[0];
+            if (!file) {
+                clearPhoto();
+                return;
+            }
+
+            // Validate file type
+            const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
+            if (!validTypes.includes(file.type)) {
+                showToast('error', 'Please upload a valid image file (JPG, PNG, GIF, WEBP, BMP)');
+                input.value = '';
+                clearPhoto();
+                return;
+            }
+
+            // Validate file size (max 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                showToast('error', 'File size exceeds 5MB limit. Please compress the image.');
+                input.value = '';
+                clearPhoto();
+                return;
+            }
+
+            currentPhotoFile = file;
+
+            // Display preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                $('#photoPreviewImg').attr('src', e.target.result);
+                $('#photoFileName').text('File: ' + file.name);
+                $('#photoFileSize').text('Size: ' + (file.size / 1024).toFixed(1) + ' KB');
+                $('#photoPreviewContainer').fadeIn(200);
+                validateForm();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearPhoto() {
+            currentPhotoFile = null;
+            $('#PhotoFile').val('');
+            $('#photoPreviewContainer').fadeOut(200);
+            $('#photoPreviewImg').attr('src', '');
+            $('#photoFileName').text('');
+            $('#photoFileSize').text('');
+            validateForm();
+        }
+
+        function viewPhoto(photoBase64, contentType) {
+            if (photoBase64) {
+                $('#photoViewImg').attr('src', 'data:' + (contentType || 'image/jpeg') + ';base64,' + photoBase64);
+                $('#photoViewModal').modal('show');
+            }
+        }
+
+        function showSearchLoading() {
+            $('#memberResultsBody').html(`
+                <tr>
+                    <td colspan="6" class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        Searching...
+                    </td>
+                </tr>
+            `);
+            $('#memberSearchResults').fadeIn(200);
+        }
+
+        function searchMember(term) {
+            if (!term || term.length < 2) {
+                $('#memberSearchResults').fadeOut(200);
+                return;
+            }
+
+            isSearching = true;
+
+            $.ajax({
+                url: '/Collateral/SearchMembers',
+                type: 'GET',
+                data: { term: term },
+                success: function(response) {
+                    isSearching = false;
+                    if (response.success && response.data && response.data.length > 0) {
+                        displayMemberResults(response.data);
+                    } else {
+                        $('#memberResultsBody').html(`
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-3">
+                                    <i class="bi bi-info-circle me-2"></i> No members found matching "${escapeHtml(term)}"
+                                </td>
+                            </tr>
+                        `);
+                        $('#memberSearchResults').fadeIn(200);
+                    }
+                },
+                error: function() {
+                    isSearching = false;
+                    $('#memberResultsBody').html(`
+                        <tr>
+                            <td colspan="6" class="text-center text-danger py-3">
+                                <i class="bi bi-exclamation-triangle me-2"></i> Error searching members. Please try again.
+                            </td>
+                        </tr>
+                    `);
+                    $('#memberSearchResults').fadeIn(200);
+                }
+            });
+        }
+
+        function displayMemberResults(members) {
+            var tbody = $('#memberResultsBody');
+            tbody.empty();
+
+            members.forEach(function(member) {
+                var row = `
+                    <tr class="member-result-row" data-memberno="${escapeHtml(member.memberNo)}">
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-success select-member-btn"
+                                    onclick="selectMember('${escapeHtml(member.memberNo)}')">
+                                <i class="bi bi-check"></i> Select
+                            </button>
+                        </td>
+                        <td><strong>${escapeHtml(member.memberNo)}</strong></td>
+                        <td>${escapeHtml(member.fullName)}</td>
+                        <td>${escapeHtml(member.idno || 'N/A')}</td>
+                        <td>${escapeHtml(member.phoneNo || 'N/A')}</td>
+                        <td>${escapeHtml(member.email || 'N/A')}</td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            $('.member-result-row').hover(
+                function() { $(this).addClass('bg-light'); },
+                function() { $(this).removeClass('bg-light'); }
+            );
+
+            $('#memberSearchResults').fadeIn(200);
+        }
+
+        function selectMember(memberNo) {
+            $.ajax({
+                url: '/Collateral/SearchMembers',
+                type: 'GET',
+                data: { term: memberNo },
+                success: function(response) {
+                    if (response.success && response.data) {
+                        var member = response.data.find(m => m.memberNo === memberNo);
+                        if (member) {
+                            selectedMember = member;
+                            $('#selectedMemberName').html(`<strong>${escapeHtml(member.fullName)}</strong>`);
+                            $('#selectedMemberNo').text(member.memberNo);
+                            $('#selectedMemberIdNo').text(member.idno || 'N/A');
+                            $('#selectedMemberPhone').text(member.phoneNo || 'N/A');
+                            $('#selectedMemberDisplay').fadeIn(200);
+                            $('#MemberNo').val(member.memberNo);
+                            $('#memberSearchInput').val(member.fullName + ' (' + member.memberNo + ')');
+                            $('#memberSearchResults').fadeOut(200);
+                            validateForm();
+                            $('.member-result-row').removeClass('table-success');
+                            $('.member-result-row[data-memberno="' + memberNo + '"]').addClass('table-success');
+                        }
+                    }
+                }
+            });
+        }
+
+        function closeSearchResults() {
+            if (!selectedMember) {
+                $('#memberSearchResults').fadeOut(200);
+            }
+        }
+
+        function clearMemberSelection() {
+            selectedMember = null;
+            $('#selectedMemberDisplay').fadeOut(200);
+            $('#memberSearchResults').fadeOut(200);
+            $('#memberSearchInput').val('');
+            $('#MemberNo').val('');
+            $('#memberResultsBody').html(`
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-3">
+                        <i class="bi bi-search me-2"></i> Type at least 2 characters to search...
+                    </td>
+                </tr>
+            `);
+            $('.member-result-row').removeClass('table-success');
+            validateForm();
+            $('#memberSearchInput').focus();
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         function filterTable() {
             var searchText = $('#searchInput').val().toLowerCase();
@@ -214,29 +643,57 @@
             });
         }
 
+        function validateForm() {
+            var hasMember = $('#MemberNo').val() !== '';
+            var hasDescription = $('#Coldescription').val() !== '';
+            var hasPercentage = $('#Percentage').val() !== '';
+
+            if (hasMember && hasDescription && hasPercentage) {
+                $('#submitBtn').prop('disabled', false);
+            } else {
+                $('#submitBtn').prop('disabled', true);
+            }
+        }
+
+        $('#Coldescription, #Percentage').on('input', function() {
+            validateForm();
+        });
+
         $('#collateralForm').on('submit', function(e) {
             e.preventDefault();
 
+            if (!$('#MemberNo').val()) {
+                showToast('error', 'Please select a member owner');
+                $('#memberSearchInput').focus();
+                return;
+            }
+
             if (!$('#Coldescription').val()) {
                 showToast('error', 'Collateral Description is required');
-                $('#Coldescription').addClass('is-invalid');
+                $('#Coldescription').addClass('is-invalid').focus();
                 return;
             }
             $('#Coldescription').removeClass('is-invalid');
 
-            if (!$('#Percentage').val() || parseFloat($('#Percentage').val()) < 0 || parseFloat($('#Percentage').val()) > 100) {
+            var percentage = parseFloat($('#Percentage').val());
+            if (!percentage || percentage < 0 || percentage > 100) {
                 showToast('error', 'Percentage must be between 0 and 100');
-                $('#Percentage').addClass('is-invalid');
+                $('#Percentage').addClass('is-invalid').focus();
                 return;
             }
             $('#Percentage').removeClass('is-invalid');
 
-            var data = {
-                Id: $('#Id').val() || null,
-                ColCode: $('#ColCode').val(),
-                Coldescription: $('#Coldescription').val(),
-                Percentage: parseFloat($('#Percentage').val())
-            };
+            var formData = new FormData();
+            formData.append('Id', $('#Id').val() || null);
+            formData.append('ColCode', $('#ColCode').val());
+            formData.append('Coldescription', $('#Coldescription').val());
+            formData.append('Percentage', percentage);
+            formData.append('MemberNo', $('#MemberNo').val());
+
+            // Append photo file if selected
+            if (currentPhotoFile) {
+                formData.append('PhotoFile', currentPhotoFile);
+            }
 
             var id = $('#Id').val();
             var url = id ? '/Collateral/Edit?id=' + id : '/Collateral/Create';
@@ -246,8 +703,9 @@
             $.ajax({
                 url: url,
                 type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(data),
+                contentType: false,
+                processData: false,
+                data: formData,
                 headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
                 success: function(r) {
                     if (r.success) {
@@ -258,8 +716,12 @@
                         btn.prop('disabled', false).html('<i class="bi bi-save me-2"></i>Save Collateral');
                     }
                 },
-                error: function() {
-                    showToast('error', 'An error occurred');
+                error: function(xhr) {
+                    var errorMsg = 'An error occurred';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showToast('error', errorMsg);
                     btn.prop('disabled', false).html('<i class="bi bi-save me-2"></i>Save Collateral');
                 }
             });
@@ -270,7 +732,11 @@
             $('#Id').val('');
             $('#formTitle').html('<i class="bi bi-plus-circle me-2"></i>Add New Collateral');
             $('#submitBtn').html('<i class="bi bi-save me-2"></i>Save Collateral');
+            clearMemberSelection();
+            clearPhoto();
             loadNewCode();
+            $('#submitBtn').prop('disabled', true);
+            $('#Coldescription, #Percentage').removeClass('is-invalid');
         }
 
         function editCollateral(id) {
@@ -281,8 +747,30 @@
                     $('#ColCode').val(c.colCode);
                     $('#Coldescription').val(c.coldescription);
                     $('#Percentage').val(c.percentage);
+
+                    if (c.memberNo) {
+                        $('#MemberNo').val(c.memberNo);
+                        $('#selectedMemberNo').text(c.memberNo);
+                        $('#selectedMemberName').html(`<strong>${escapeHtml(c.memberName || c.memberNo)}</strong>`);
+                        $('#selectedMemberIdNo').text(c.memberIdNo || 'N/A');
+                        $('#selectedMemberPhone').text(c.memberPhone || 'N/A');
+                        $('#selectedMemberDisplay').fadeIn(200);
+                        $('#memberSearchInput').val(c.memberName || c.memberNo);
+                    }
+
+                    // Show existing photo if available
+                    if (c.hasPhoto && c.photoBase64) {
+                        $('#photoPreviewImg').attr('src', 'data:' + (c.photoContentType || 'image/jpeg') + ';base64,' + c.photoBase64);
+                        $('#photoFileName').text('Existing photo');
+                        $('#photoFileSize').text('');
+                        $('#photoPreviewContainer').fadeIn(200);
+                    } else {
+                        clearPhoto();
+                    }
+
                     $('#formTitle').html('<i class="bi bi-pencil-square me-2"></i>Edit Collateral');
                     $('#submitBtn').html('<i class="bi bi-save me-2"></i>Update Collateral');
+                    $('#submitBtn').prop('disabled', false);
                     $('#formCard')[0].scrollIntoView({ behavior: 'smooth' });
                 }
             });
@@ -295,8 +783,21 @@
                     $('#v_ColCode').text(c.colCode);
                     $('#v_Coldescription').text(c.coldescription);
                     $('#v_Percentage').text(c.percentage + '%');
+                    $('#v_MemberNo').text(c.memberNo || 'N/A');
+                    $('#v_MemberName').text(c.memberName || 'N/A');
                     $('#v_BlockchainTxId').text(c.blockchainTxId || 'Not recorded');
                     $('#v_CompanyCode').text(c.companyCode || 'N/A');
+
+                    // Show photo in modal if available
+                    if (c.hasPhoto && c.photoBase64) {
+                        var imgHtml = `<img src="data:${c.photoContentType || 'image/jpeg'};base64,${c.photoBase64}"
+                                         alt="Collateral Photo"
+                                         style="max-width: 100%; max-height: 300px; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />`;
+                        $('#v_Photo').html(imgHtml);
+                    } else {
+                        $('#v_Photo').html('<span class="text-muted">No photo available</span>');
+                    }
+
                     $('#viewModal').modal('show');
                 }
             });
@@ -322,16 +823,16 @@
 
         function showToast(type, message) {
             var toastHtml = `
-                <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 position-fixed bottom-0 end-0 m-3" role="alert">
+                <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 position-fixed bottom-0 end-0 m-3" role="alert" style="z-index: 9999;">
                     <div class="d-flex">
-                        <div class="toast-body"><i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>${message}</div>
+                        <div class="toast-body"><i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>${escapeHtml(message)}</div>
                         <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
                     </div>
                 </div>
             `;
             $('body').append(toastHtml);
             var toast = $('.toast').last();
-            var bsToast = new bootstrap.Toast(toast[0]);
+            var bsToast = new bootstrap.Toast(toast[0], { delay: 5000 });
             bsToast.show();
             toast.on('hidden.bs.toast', function() { $(this).remove(); });
         }
@@ -355,6 +856,12 @@
                 box-shadow: 0 10px 20px rgba(0, 174, 239, 0.2);
             }
 
+            .btn-primary:disabled {
+                opacity: 0.6;
+                transform: none;
+                box-shadow: none;
+            }
+
         .card {
             border-radius: 10px;
             overflow: hidden;
@@ -375,6 +882,79 @@
 
         .toast {
             z-index: 1050;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .sticky-top {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .member-result-row {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+            .member-result-row:hover {
+                background-color: #f8f9fa !important;
+            }
+
+            .member-result-row.table-success {
+                background-color: #d4edda !important;
+            }
+
+        #memberSearchResults .card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+
+        #memberSearchResults .card-header {
+            border-bottom: 1px solid #dee2e6;
+            background-color: #f8f9fa;
+            border-radius: 8px 8px 0 0;
+        }
+
+        #memberSearchResults .table {
+            margin-bottom: 0;
+        }
+
+            #memberSearchResults .table th {
+                background-color: #f8f9fa;
+                border-bottom: 2px solid #dee2e6;
+            }
+
+        .select-member-btn {
+            transition: all 0.2s;
+        }
+
+            .select-member-btn:hover {
+                transform: scale(1.05);
+            }
+
+        #selectedMemberDisplay .alert {
+            border-left: 4px solid #28a745;
+        }
+
+        #photoPreviewContainer .card {
+            border-left: 4px solid #17a2b8;
+            background-color: #f8f9fa;
+        }
+
+        #photoPreviewImg {
+            object-fit: cover;
+            width: 100%;
+            height: 150px;
+        }
+
+        .modal-body img {
+            max-width: 100%;
+            height: auto;
         }
     </style>
 }

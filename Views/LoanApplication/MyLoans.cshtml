@@ -58,6 +58,9 @@
                                             "Endorsed" => "info",
                                             "Closed" => "secondary",
                                             "Rejected" => "danger",
+                                            "Defaulted" => "danger",
+                                            "WrittenOff" => "secondary",
+                                            "Submitted" => "warning",
                                             _ => "warning"
                                         };
 
@@ -69,6 +72,10 @@
                                             <td>@loan.MonthlyInstallment.ToString("N0")</td>
                                             <td>
                                                 <span class="badge bg-@statusClass">@loan.Status</span>
+                                                @if (loan.Status == "Submitted" && loan.Posted == "PENDING_APPROVAL")
+                                                {
+                                                    <span class="badge bg-warning ms-1">Awaiting Approval</span>
+                                                }
                                             </td>
                                             <td>
                                                 @if (loan.NextPaymentDate.HasValue && loan.Status == "Disbursed")
@@ -96,7 +103,6 @@
                                                     </a>
                                                 }
                                                 
-                                                <!-- FIXED: Use 'loan' not 'Model' -->
                                                 @if (loan.Status == "Disbursed" && loan.OutstandingBalance > 0)
                                                 {
                                                     <a href="@Url.Action("Repay", "LoanApplication", new { loanNo = loan.LoanNo })" class="btn btn-sm btn-primary mt-1">

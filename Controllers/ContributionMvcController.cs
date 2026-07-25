@@ -7,6 +7,7 @@ using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
 using SACCOBlockChainSystem.Models.ViewModels;
 using SACCOBlockChainSystem.Services;
+using System.ComponentModel.DataAnnotations;
 
 namespace SACCOBlockChainSystem.Controllers
 {
@@ -69,31 +70,27 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        // GET: /ContributionMvc/Add
-        public async Task<IActionResult> Add(string? memberNo = null)
+        // Helper method to get recent contributions
+        private async Task<List<ContributionResponseDTO>> GetRecentContributions()
         {
             try
             {
                 var companyCode = GetUserCompanyCode();
-                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
+                var contributions = await _contributionService.SearchContributionsAsync(
+                    DateTime.Now.AddDays(-180),
+                    DateTime.Now,
+                    null,
+                    null);
 
-                ViewBag.ShareTypes = shareTypes;
-                ViewBag.CompanyCode = companyCode;
-
-                var contributionDto = new ContributionDTO
-                {
-                    MemberNo = memberNo ?? string.Empty,
-                    TransactionDate = DateTime.Now,
-                    CreatedBy = User.Identity?.Name ?? "SYSTEM",
-                    CompanyCode = companyCode
-                };
-
-                return View(contributionDto);
+                return contributions
+                    .Where(c => c.CompanyCode == companyCode)
+                    .OrderByDescending(c => c.TransactionDate)
+                    .Take(100)
+                    .ToList();
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError(ex, "Error loading add contribution form");
-                return View("Error");
+                return new List<ContributionResponseDTO>();
             }
         }
 
@@ -123,14 +120,6 @@ namespace SACCOBlockChainSystem.Controllers
 
                 contributionDto.CompanyCode = GetUserCompanyCode();
                 contributionDto.CreatedBy = User.Identity?.Name ?? "SYSTEM";
-                bool prompt = false;
-                if (!string.IsNullOrEmpty(contributionDto.PromptPayment))
-                {
-                    if(contributionDto.PromptPayment.ToLower() == "true" || contributionDto.PromptPayment.ToLower() == "on")
-                    {
-                        prompt = true;
-                    }
-                }
 
                 if (contributionDto.TransactionDate == default)
                 {
@@ -139,7 +128,7 @@ namespace SACCOBlockChainSystem.Controllers
 
                 _logger.LogInformation($"Adding contribution for member: {contributionDto.MemberNo}, Amount: {contributionDto.Amount:C}");
 
-                var result = await _contributionService.AddContributionAsync(contributionDto,prompt);
+                var result = await _contributionService.AddContributionAsync(contributionDto);
 
                 TempData["SuccessMessage"] = $"Contribution of {contributionDto.Amount:C} added successfully! Receipt: {result.ReceiptNo}";
 
@@ -172,13 +161,23 @@ namespace SACCOBlockChainSystem.Controllers
                     return StatusCode(500, new { Success = false, Message = ex.Message });
                 }
 
-                if (ex.Message.Contains("not found in GL Setup"))
+                // ============================================================
+                // FIX: Set error message in TempData and redirect to Index
+                // ============================================================
+                if (ex.Message.Contains("Minimum Share Capital of"))
+                {
+                    TempData["ErrorMessage"] = ex.Message;
+                    // Redirect to Index with the error displayed on the dashboard
+                    return RedirectToAction("Index");
+                }
+                else if (ex.Message.Contains("not found in GL Setup"))
                 {
                     ModelState.AddModelError("", ex.Message + " Please contact the administrator to configure the required accounts.");
                 }
                 else if (ex.Message.Contains("Validation error"))
                 {
-                    ModelState.AddModelError("", ex.Message.Replace("Validation error: ", ""));
+                    TempData["ErrorMessage"] = ex.Message.Replace("Validation error: ", "");
+                    return RedirectToAction("Index");
                 }
                 else if (ex.Message.Contains("cannot be less than minimum") || ex.Message.Contains("cannot exceed maximum"))
                 {
@@ -194,6 +193,84 @@ namespace SACCOBlockChainSystem.Controllers
                 ViewBag.ShareTypes = shareTypes;
 
                 return View(contributionDto);
+            }
+        }
+
+
+        // Add this endpoint to ContributionMvcController.cs
+        [HttpGet("GetMemberShareTypeTotals")]
+        public async Task<IActionResult> GetMemberShareTypeTotals(string memberNo, string sharesCode = null)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(memberNo))
+                {
+                    return Json(new { success = false, message = "Member number is required" });
+                }
+
+                var companyCode = GetUserCompanyCode();
+
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    return Json(new { success = false, message = "Company code not found" });
+                }
+
+                _logger.LogInformation($"Getting share type totals for member: {memberNo}, company: {companyCode}");
+
+                // Get all share type totals for this member
+                var totals = await _contributionService.GetMemberShareTypeTotalsAsync(memberNo, companyCode);
+
+                if (totals == null || totals.ShareTypeTotals == null || !totals.ShareTypeTotals.Any())
+                {
+                    return Json(new
+                    {
+                        success = true,
+                        data = new { ShareTypeTotals = new List<object>() },
+                        allTotals = new List<object>(),
+                        message = "No contributions found for this member"
+                    });
+                }
+
+                // If specific share type requested, filter
+                if (!string.IsNullOrEmpty(sharesCode))
+                {
+                    var specificTotal = totals.ShareTypeTotals.FirstOrDefault(s => s.SharesCode == sharesCode);
+
+                    if (specificTotal == null)
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message = $"Share type {sharesCode} not found for this member"
+                        });
+                    }
+
+                    return Json(new
+                    {
+                        success = true,
+                        data = specificTotal,
+                        allTotals = totals.ShareTypeTotals,
+                        memberNo = memberNo
+                    });
+                }
+
+                return Json(new
+                {
+                    success = true,
+                    data = totals,
+                    allTotals = totals.ShareTypeTotals,
+                    memberNo = memberNo,
+                    count = totals.ShareTypeTotals.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting member share type totals for member {memberNo}");
+                return Json(new
+                {
+                    success = false,
+                    message = "An error occurred while fetching share type totals: " + ex.Message
+                });
             }
         }
 
@@ -649,14 +726,14 @@ namespace SACCOBlockChainSystem.Controllers
 
         // GET: /ContributionMvc/ReverseSearch
         [HttpGet]
-        [Authorize(Roles = "Super Admin")]
+        [Authorize(Roles = "Super Admin, Book Keeper, System Administrator, Finance Officer, Loan Officer")]
         public async Task<IActionResult> ReverseSearch(string searchTerm)
         {
             try
             {
-                if (!User.IsInRole("Super Admin"))
+                if (!UserHasReversalPermission())
                 {
-                    TempData["ErrorMessage"] = "Only Super Administrators can reverse contributions.";
+                    TempData["ErrorMessage"] = "You don't have permission to reverse contributions.";
                     return RedirectToAction("Index");
                 }
 
@@ -729,7 +806,7 @@ namespace SACCOBlockChainSystem.Controllers
         // POST: /ContributionMvc/Reverse
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Super Admin")]
+        [Authorize(Roles = "Super Admin, Book Keeper, System Administrator, Finance Officer, Loan Officer")]
         public async Task<IActionResult> Reverse(ContributionReverseDTO reverseDto)
         {
             try
@@ -742,9 +819,9 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 // Verify Super Admin role again
-                if (!User.IsInRole("Super Admin"))
+                if (!UserHasReversalPermission())
                 {
-                    TempData["ErrorMessage"] = "Only Super Administrators can reverse contributions.";
+                    TempData["ErrorMessage"] = "You don't have permission to reverse contributions.";
                     return RedirectToAction("Index");
                 }
 
@@ -774,6 +851,15 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+
+        private bool UserHasReversalPermission()
+        {
+            return User.IsInRole("Super Admin") ||
+                   //User.IsInRole("Book Keeper") ||
+                   User.IsInRole("System Administrator") ||
+                   User.IsInRole("Finance Officer") ||
+                   User.IsInRole("Loan Officer");
+        }
 
         private string GetUserCompanyCode()
         {

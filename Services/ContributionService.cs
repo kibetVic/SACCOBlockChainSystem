@@ -1,8 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using DocumentFormat.OpenXml.Bibliography;
+using Microsoft.EntityFrameworkCore;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace SACCOBlockChainSystem.Services
@@ -18,6 +20,7 @@ namespace SACCOBlockChainSystem.Services
         Task<MemberContributionHistoryDTO> GetMemberContributionHistoryAsync(string memberNo);
         Task<List<ContributionResponseDTO>> SearchContributionsAsync(DateTime? fromDate, DateTime? toDate, string? memberNo = null, string? shareType = null);
         Task<ContributionDeleteResultDTO> ReverseContributionAsync(int contributionId, string deleteReason, string deletedBy);
+        Task<MemberShareTypeTotalsDTO> GetMemberShareTypeTotalsAsync(string memberNo, string companyCode);
     }
 
     public class ContributionService : IContributionService
@@ -69,7 +72,7 @@ namespace SACCOBlockChainSystem.Services
 
                 trans.TransactionNo = transactionno;
                 trans.TransDate = dt;
-                trans.TransDescription = ld.Remarks+" - " + ld.Sharescode;
+                trans.TransDescription = ld.Remarks + " - " + ld.Sharescode;
                 trans.Status = "Active";
                 trans.Amount = am;
                 trans.Channel = "BLOCKCHAIN";
@@ -108,7 +111,7 @@ namespace SACCOBlockChainSystem.Services
                 //tra
 
                 transb.ContributionDate = ld.ContrDate ?? DateTime.ParseExact(trans.TransDate.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);// trans.TransDate;//DateTime.ParseExact(contribDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
-                transb.DepositedDate = ld.DepositedDate ??  DateTime.ParseExact(trans.TransDate.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);// trans.TransDate; //DateTime.ParseExact(ld.DateDeposited, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                transb.DepositedDate = ld.DepositedDate ?? DateTime.ParseExact(trans.TransDate.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);// trans.TransDate; //DateTime.ParseExact(ld.DateDeposited, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
                 transb.PaymentMode = member?.PhoneNo ?? member?.MobileNo;
                 transb.TransactionType = "DEPOSIT";
                 transb.Status = trans.Status;
@@ -176,9 +179,6 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-
-
-
         public async Task<ContributionResponseDTO> AddContributionAsync(ContributionDTO contributionDto, bool prompt = false)
         {
             _logger.LogInformation($"Starting contribution addition for member: {contributionDto.MemberNo}");
@@ -207,20 +207,69 @@ namespace SACCOBlockChainSystem.Services
                     throw new ValidationException($"Share type {contributionDto.SharesCode} not found");
                 }
 
-                // Validate amount against share type minimum
-                if (contributionDto.Amount < shareType.MinAmount)
+                // Determine contribution type
+                string contributionCategory = DetermineContributionType(shareType, contributionDto);
+
+                // ============================================================
+                // CHECK IF THIS IS A MAJOR SHARE TYPE
+                // ============================================================
+                bool isMajorShareType = contributionCategory != "UNKNOWN";
+
+                _logger.LogInformation($"Contribution Category: {contributionCategory}, IsMajor: {isMajorShareType}");
+
+                // Get existing total for this member + sharetype combination
+                decimal existingTotal = await GetExistingContributionTotalAsync(
+                    contributionDto.MemberNo,
+                    contributionDto.SharesCode,
+                    contributionCategory,
+                    contributionDto.CompanyCode);
+
+                // ============================================================
+                // FIXED: Validate amount against share type minimum
+                // Only enforce minimum if the member has NO contributions for this share type
+                // Once they have reached the minimum, allow any amount
+                // ============================================================
+                if (existingTotal < shareType.MinAmount && contributionDto.Amount < shareType.MinAmount)
                 {
-                    throw new ValidationException($"Amount cannot be less than minimum of {shareType.MinAmount:C}");
+                    // This is the first contribution or they haven't reached minimum yet
+                    // They must contribute at least the minimum amount
+                    throw new ValidationException(
+                        $"Amount cannot be less than minimum of {shareType.MinAmount:C}. " +
+                        $"Current total: {existingTotal:C}. You need to contribute at least {shareType.MinAmount - existingTotal:C} more to reach the minimum."
+                    );
                 }
+
+                // If they already have >= minimum, allow any positive amount
+                // (No minimum validation needed)
+
+                decimal newTotal = existingTotal + contributionDto.Amount;
+
+                // Check maximum contribution limit (using cumulative total)
+                if (shareType.MaxAmount.HasValue && newTotal > shareType.MaxAmount.Value)
+                {
+                    decimal remainingAllowed = shareType.MaxAmount.Value - existingTotal;
+                    if (remainingAllowed <= 0)
+                    {
+                        throw new ValidationException(
+                            $"Maximum {shareType.SharesType} limit of {shareType.MaxAmount.Value:C} has already been reached. " +
+                            $"Current total: {existingTotal:C}. No further contributions allowed.");
+                    }
+                    else
+                    {
+                        throw new ValidationException(
+                            $"Amount {contributionDto.Amount:C} exceeds remaining limit for {shareType.SharesType}. " +
+                            $"Current total: {existingTotal:C}, Maximum: {shareType.MaxAmount.Value:C}, " +
+                            $"Remaining allowed: {remainingAllowed:C}. Please reduce the amount.");
+                    }
+                }
+
+                // ============================================================
+                // STEP: VALIDATE CONTRIBUTION PREREQUISITES ( Share Capital -> Deposit)
+                // ============================================================
+                await ValidateContributionPrerequisitesAsync(contributionDto.MemberNo, contributionDto.SharesCode, contributionDto.CompanyCode);
 
                 // Validate ContrDate (Contribution Date) - can be backdated, now, or future
                 DateTime contributionDate = contributionDto.TransactionDate;
-
-                // Optional: Add validation for future dates (if you want to restrict)
-                // if (contributionDate > DateTime.Now.AddMonths(1))
-                // {
-                //     throw new ValidationException("Contribution date cannot be more than 1 month in the future.");
-                // }
 
                 // 2. DepositedDate (Actual deposit date) - can be backdated or today, NOT future
                 DateTime depositedDate;
@@ -241,19 +290,6 @@ namespace SACCOBlockChainSystem.Services
 
                 // ReceiptDate is the same as DepositedDate (system generated)
                 DateTime receiptDate = depositedDate;
-
-
-                // Determine contribution type
-                string contributionCategory = DetermineContributionType(shareType, contributionDto);
-
-                // Get existing total for this member + sharetype combination (for limit checking only)
-                decimal existingTotal = await GetExistingContributionTotalAsync(
-                    contributionDto.MemberNo,
-                    contributionDto.SharesCode,
-                    contributionCategory,
-                    contributionDto.CompanyCode);
-
-                decimal newTotal = existingTotal + contributionDto.Amount;
 
                 // Check maximum contribution limit (using cumulative total)
                 if (shareType.MaxAmount.HasValue && newTotal > shareType.MaxAmount.Value)
@@ -280,6 +316,7 @@ namespace SACCOBlockChainSystem.Services
 
                 // Generate receipt number
                 var receiptNo = contributionDto.ReceiptNo ?? GenerateReceiptNumber(contributionDto.CompanyCode);
+                var transactionNo = contributionDto.TransactionNo ?? GenerateTransactionNumber(contributionDto.CompanyCode);
 
                 // Create Contrib record (main transaction record)
                 var contrib = new Contrib
@@ -294,7 +331,7 @@ namespace SACCOBlockChainSystem.Services
                     AuditTime = DateTime.Now,
                     AuditDateTime = DateTime.Now,
                     Sharescode = contributionDto.SharesCode,
-                    TransactionNo = Guid.NewGuid().ToString().Substring(0, 20),
+                    TransactionNo = transactionNo,
                     Posted = "Y",
                     Locked = "N",
                     StaffNo = null,
@@ -356,6 +393,7 @@ namespace SACCOBlockChainSystem.Services
                     throw new Exception($"Transaction blocked by fraud detection: {string.Join(", ", fraudResult.Flags)}");
                 }
 
+
                 // =============================================
                 // STEP: SIGN THE TRANSACTION
                 // =============================================
@@ -371,54 +409,103 @@ namespace SACCOBlockChainSystem.Services
                     ContributionCategory = contributionCategory
                 };
 
-                var signingResult = await _cryptoService.SignTransactionAsync(memberRecord.MemberNo, txDataForSigning);
+                // Generate canonical data BEFORE signing - STORE IT
+                var canonicalData = _cryptoService.GetCanonicalData(txDataForSigning);
+                contrib.CanonicalData = canonicalData;  // ← THIS IS CRITICAL
 
-                if (!signingResult.Success)
+                // Sign the canonical data
+                var dataBytes = Encoding.UTF8.GetBytes(canonicalData);
+
+                // Get member's wallet
+                var memberWallet = await _cryptoService.GetWalletByMemberIdAsync(memberRecord.Id);
+
+                if (memberWallet == null)
                 {
-                    throw new Exception($"Failed to sign transaction: {signingResult.Message}");
+                    var walletResult = await _cryptoService.CreateWalletForMemberAsync(
+                        memberRecord.Id,
+                        memberRecord.MemberNo,
+                        contributionDto.CompanyCode);
+
+                    if (!walletResult.Success)
+                    {
+                        throw new Exception($"Failed to create wallet: {walletResult.Message}");
+                    }
+                    memberWallet = walletResult.Wallet;
                 }
 
-                // =============================================
-                // STEP: ATTACH SIGNATURE TO CONTRIB
-                // =============================================
-                contrib.TransactionSignature = signingResult.Signature;
-                contrib.TransactionHash = signingResult.TransactionHash;
-                contrib.TransactionSequence = signingResult.Nonce;
-                contrib.IsSignatureVerified = false;
+                // Decrypt private key
+                var privateKeyBase64 = EncryptionHelper.Decrypt(memberWallet.PrivateKeyEncrypted);
+                var privateKeyBytes = Convert.FromBase64String(privateKeyBase64);
 
-                // Get previous transaction hash for chaining
+                // Sign using ECDSA P-256
+                using var ecdsa = ECDsa.Create();
+                ecdsa.ImportECPrivateKey(privateKeyBytes, out _);
+
+                var signatureBytes = ecdsa.SignData(dataBytes, HashAlgorithmName.SHA256);
+                var signature = Convert.ToBase64String(signatureBytes);
+
+                // Generate transaction hash
+                using var sha = SHA256.Create();
+                var hashBytes = sha.ComputeHash(dataBytes);
+                var transactionHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
+
+                // Get next sequence number
                 var lastContrib = await _context.Contribs
                     .Where(c => c.MemberNo == contributionDto.MemberNo)
                     .OrderByDescending(c => c.Id)
                     .FirstOrDefaultAsync();
 
+                var nonce = (lastContrib?.TransactionSequence ?? 0) + 1;
+
+                // Attach signature to contrib
+                contrib.TransactionSignature = signature;
+                contrib.TransactionHash = transactionHash;
+                contrib.TransactionSequence = nonce;
+                contrib.IsSignatureVerified = false;
+
                 // =============================================
-                // FOR FIRST TRANSACTION: Use RAW Wallet Address as Genesis Hash
+                // CHAIN LINKING
                 // =============================================
                 if (lastContrib != null)
                 {
-                    // Not the first transaction - link to previous transaction
+                    contrib.PreviousTransactionHash = lastContrib.TransactionHash;
+                }
+                else
+                {
+                    // FIRST TRANSACTION - Use WALLET ADDRESS as genesis anchor
+                    if (memberWallet != null && !string.IsNullOrEmpty(memberWallet.Address))
+                    {
+                        contrib.PreviousTransactionHash = memberWallet.Address;
+                        _logger.LogInformation($"✅ FIRST TRANSACTION: Member {contributionDto.MemberNo}");
+                        _logger.LogInformation($"   Wallet Address (Genesis Anchor): {memberWallet.Address}");
+                    }
+                }
+
+
+                // =============================================
+                // CHAIN LINKING - CRITICAL FIX
+                // =============================================
+                if (lastContrib != null)
+                {
+                    // Not first transaction - link to previous transaction hash
                     contrib.PreviousTransactionHash = lastContrib.TransactionHash;
                     _logger.LogDebug($"Member {contributionDto.MemberNo} - Linked to previous transaction: {lastContrib.TransactionHash?.Substring(0, 16)}...");
                 }
                 else
                 {
-                    // FIRST TRANSACTION - Use the RAW wallet address as the genesis anchor
-                    var memberWallet = await _cryptoService.GetWalletByMemberIdAsync(memberRecord.Id);
-
+                    // FIRST TRANSACTION - Use the WALLET ADDRESS as genesis anchor
+                    // This must match what verification expects!
                     if (memberWallet != null && !string.IsNullOrEmpty(memberWallet.Address))
                     {
-                        // IMPORTANT: Store the RAW wallet address directly (not hashed)
-                        // This will be a 42-character string starting with "0x"
+                        // Store the RAW wallet address directly
                         contrib.PreviousTransactionHash = memberWallet.Address;
 
                         _logger.LogInformation($"✅ FIRST TRANSACTION: Member {contributionDto.MemberNo}");
-                        _logger.LogInformation($"   Wallet Address: {memberWallet.Address}");
-                        _logger.LogInformation($"   Genesis Hash (Raw Wallet Address): {memberWallet.Address}");
+                        _logger.LogInformation($"   Wallet Address (Genesis Anchor): {memberWallet.Address}");
                     }
                     else
                     {
-                        // Fallback - create a deterministic genesis hash from member data
+                        // Fallback - should not happen if wallet was created
                         var genesisSource = $"{memberRecord.MemberNo}|{memberRecord.Idno}|{memberRecord.ApplicDate?.ToString("o") ?? DateTime.UtcNow.ToString("o")}";
                         var genesisHash = _cryptoService.ComputeHash(genesisSource);
                         contrib.PreviousTransactionHash = genesisHash;
@@ -435,53 +522,65 @@ namespace SACCOBlockChainSystem.Services
                 var pending_trans = false;
                 if (prompt == true)
                 {
-                    var res = await CreateTransactionDeposit(contrib,contrib.CompanyCode,contrib.AuditId,contrib.ReceiptNo,null);
-                    if(res != null && res.Success == true)
+                    var res = await CreateTransactionDeposit(contrib, contrib.CompanyCode, contrib.AuditId, contrib.ReceiptNo, null);
+                    if (res != null && res.Success == true)
                     {
                         pending_trans = true;
-                    }else if(res != null && res.Success == false)
+                    }
+                    else if (res != null && res.Success == false)
                     {
                         throw new Exception($"Could not process prompt for  {contributionDto.MemberNo}. Try again.");
                     }
                 }
-                
+
                 _context.Contribs.Add(contrib);
                 await _context.SaveChangesAsync();
 
+                ContribShare? contribShare = null;
 
                 // ============================================================
-                // CREATE A NEW CONTRIB SHARE ROW FOR EACH TRANSACTION
-                // Each row stores ONLY this transaction's amount
+                // CREATE CONTRIB SHARE ROW ONLY FOR MAJOR SHARE TYPES
                 // ============================================================
-                var contribShare = new ContribShare
+                if (isMajorShareType)
                 {
-                    LocalId = contrib.Id,  // Link back to the Contrib record
-                    MemberNo = contributionDto.MemberNo,
-                    CompanyCode = contributionDto.CompanyCode,
-                    ReceiptNo = receiptNo,
-                    Sharescode = contributionDto.SharesCode,
-                    Remarks = contributionDto.Remarks,
-                    AuditId = contributionDto.CreatedBy,
-                    AuditTime = DateTime.Now,
-                    AuditDateTime = DateTime.Now,
-                    TransactionNo = contrib.TransactionNo,
-                    ContrDate = contributionDate,  // Contribution date
-                    LoanNo = null,
-                    DepositedDate = depositedDate,  // Actual deposit date
-                    ReceiptDate = receiptDate,      // Same as DepositedDate
-                                                    // Store ONLY this transaction's amount in the appropriate column
-                    ShareCapitalAmount = contributionCategory == "SHARE_CAPITAL" ? contributionDto.Amount : 0,
-                    DepositsAmount = contributionCategory == "DEPOSIT" ? contributionDto.Amount : 0,
-                    PassBookAmount = contributionCategory == "PASSBOOK" ? contributionDto.Amount : 0,
-                    Donor = contributionCategory == "DONOR" ? contributionDto.Amount : 0,
-                    LoanAmount = contributionCategory == "LOAN_REPAYMENT" ? contributionDto.Amount : 0,
-                    RegFeeAmount = contributionCategory == "REGISTRATION_FEE" ? contributionDto.Amount : 0
-                };
+                    // For UNKNOWN types, we skip this entirely
+                    contribShare = new ContribShare
+                    {
+                        LocalId = contrib.Id,
+                        MemberNo = contributionDto.MemberNo,
+                        CompanyCode = contributionDto.CompanyCode,
+                        ReceiptNo = receiptNo,
+                        Sharescode = contributionDto.SharesCode,
+                        Remarks = contributionDto.Remarks,
+                        AuditId = contributionDto.CreatedBy,
+                        AuditTime = DateTime.Now,
+                        AuditDateTime = DateTime.Now,
+                        TransactionNo = contrib.TransactionNo,
+                        ContrDate = contributionDate,
+                        LoanNo = null,
+                        DepositedDate = depositedDate,
+                        ReceiptDate = receiptDate,
+                        // Only set the relevant amount based on category
+                        ShareCapitalAmount = contributionCategory == "SHARE_CAPITAL" ? contributionDto.Amount : 0,
+                        DepositsAmount = contributionCategory == "DEPOSIT" ? contributionDto.Amount : 0,
+                        PassBookAmount = contributionCategory == "PASSBOOK" ? contributionDto.Amount : 0,
+                        Donor = contributionCategory == "DONOR" ? contributionDto.Amount : 0,
+                        LoanAmount = contributionCategory == "LOAN_REPAYMENT" ? contributionDto.Amount : 0,
+                        RegFeeAmount = contributionCategory == "REGISTRATION_FEE" ? contributionDto.Amount : 0
+                    };
 
-                _logger.LogInformation($"Creating new ContribShare row for {contributionCategory}: Amount = {contributionDto.Amount:C}");
+                    _context.ContribShares.Add(contribShare);
+                    await _context.SaveChangesAsync();
 
-                _context.ContribShares.Add(contribShare);
-                await _context.SaveChangesAsync();
+                    _logger.LogInformation($"✅ ContribShare created for: {contributionCategory}, Amount: {contributionDto.Amount:C}");
+                }
+                else
+                {
+                    // ============================================================
+                    // MINOR SHARE TYPE - SKIP ContribShares
+                    // ============================================================
+                    _logger.LogInformation($"⏭️ SKIPPING ContribShares for: {shareType.SharesType} ({shareType.SharesCode}) - Category: UNKNOWN");
+                }
 
                 // Update share balance if needed (for SHARE_CAPITAL or PASSBOOK types)
                 if (contributionCategory == "SHARE_CAPITAL" ||
@@ -762,7 +861,10 @@ namespace SACCOBlockChainSystem.Services
 
                 // Update blockchain references
                 contrib.BlockchainTxId = blockchainTx.TransactionId;
-                contribShare.BlockchainTxId = blockchainTx.TransactionId;
+                if (contribShare != null)
+                {
+                    contribShare.BlockchainTxId = blockchainTx.TransactionId;
+                }
                 glTransaction.BlockchainTxId = blockchainTx.TransactionId;
                 await _context.SaveChangesAsync();
 
@@ -914,6 +1016,186 @@ namespace SACCOBlockChainSystem.Services
                 _context.Shares.Add(newShare);
                 _logger.LogDebug($"Created new share record for {memberNo} - {sharesCode} with amount: {amount:C}");
             }
+        }
+
+        private async Task ValidateContributionPrerequisitesAsync(string memberNo, string sharesCode, string companyCode)
+        {
+            // Get the share type to determine category
+            var shareType = await _context.Sharetypes
+                .FirstOrDefaultAsync(st => st.SharesCode == sharesCode && st.CompanyCode == companyCode);
+
+            if (shareType == null)
+            {
+                throw new ValidationException($"Share type {sharesCode} not found");
+            }
+
+            // Determine the contribution category based on share type
+            string category = DetermineContributionType(shareType, new ContributionDTO { SharesCode = sharesCode });
+
+            // ============================================================
+            // FIX: Use SUM instead of FirstOrDefault to get TOTAL share capital
+            // This gets the SUM of ALL share capital contributions for this member
+            // ============================================================
+            var memberTotals = await _context.ContribShares
+                .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
+                .GroupBy(cs => cs.MemberNo)
+                .Select(g => new
+                {
+                    TotalRegFee = g.Sum(cs => cs.RegFeeAmount ?? 0),
+                    TotalShareCapital = g.Sum(cs => cs.ShareCapitalAmount ?? 0),
+                    TotalDeposits = g.Sum(cs => cs.DepositsAmount ?? 0),
+                    TotalPassBook = g.Sum(cs => cs.PassBookAmount ?? 0),
+                    TotalDonor = g.Sum(cs => cs.Donor ?? 0),
+                    TotalLoan = g.Sum(cs => cs.LoanAmount ?? 0)
+                })
+                .FirstOrDefaultAsync();
+
+            decimal regFeePaid = memberTotals?.TotalRegFee ?? 0;
+            decimal shareCapitalPaid = memberTotals?.TotalShareCapital ?? 0;
+            decimal depositsPaid = memberTotals?.TotalDeposits ?? 0;
+
+            // Get requirements from Sharetype
+            decimal minShareCapital = shareType.MinAmount;
+            decimal? maxShareCapital = shareType.MaxAmount;
+
+            _logger.LogInformation($"=== Contribution Prerequisites Validation ===");
+            _logger.LogInformation($"Member {memberNo} - Total RegFee: {regFeePaid:C}");
+            _logger.LogInformation($"Member {memberNo} - Total ShareCapital: {shareCapitalPaid:C}");
+            _logger.LogInformation($"Member {memberNo} - Total Deposits: {depositsPaid:C}");
+            _logger.LogInformation($"ShareType {sharesCode} - Category: {category}, MinAmount: {minShareCapital:C}, MaxAmount: {maxShareCapital:C}");
+
+            // ============================================================
+            // HIERARCHY VALIDATION
+            // ============================================================
+
+            switch (category)
+            {
+                case "REGISTRATION_FEE":
+                    // Registration fee is always allowed
+                    _logger.LogInformation($"Registration fee contribution allowed for member {memberNo}");
+                    break;
+
+                case "SHARE_CAPITAL":
+                    // Share capital is always allowed (no prerequisites)
+                    _logger.LogInformation($"Share Capital contribution allowed for member {memberNo}");
+                    break;
+
+                case "DEPOSIT":
+                case "PASSBOOK":  // PASSBOOK also requires share capital first
+                                  // Check if share capital is paid (at least the minimum amount)
+                    if (shareCapitalPaid < minShareCapital)
+                    {
+                        _logger.LogWarning($"DEPOSIT BLOCKED: Member {memberNo} has ShareCapital: {shareCapitalPaid:C}, Required: {minShareCapital:C}");
+
+                        throw new ValidationException(
+                            $"Minimum Share Capital of {minShareCapital:C} must be paid before you can make Deposits/Savings. " +
+                            $"Current Share Capital: {shareCapitalPaid:C}. Please complete your share capital first."
+                        );
+                    }
+                    _logger.LogInformation($"Deposit/PASSBOOK contribution allowed for member {memberNo} (ShareCapital: {shareCapitalPaid:C} >= Min: {minShareCapital:C})");
+                    break;
+
+                case "DONOR":
+                case "LOAN_REPAYMENT":
+                    // These are special categories - always allowed
+                    _logger.LogInformation($"{category} contribution allowed for member {memberNo}");
+                    break;
+
+                default:
+                    // SHARE_CAPITAL is the default - always allowed
+                    _logger.LogInformation($"Default share capital contribution allowed for member {memberNo}");
+                    break;
+            }
+        }
+
+        public async Task<MemberShareTypeTotalsDTO> GetMemberShareTypeTotalsAsync(string memberNo, string companyCode)
+        {
+            // Get ALL contributions for this member and group by share type
+            var memberContributions = await _context.ContribShares
+                .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
+                .GroupBy(cs => cs.Sharescode)
+                .Select(g => new
+                {
+                    SharesCode = g.Key,
+                    TotalShareCapitalAmount = g.Sum(cs => cs.ShareCapitalAmount ?? 0),
+                    TotalDepositsAmount = g.Sum(cs => cs.DepositsAmount ?? 0),
+                    TotalRegFeeAmount = g.Sum(cs => cs.RegFeeAmount ?? 0),
+                    TotalPassBookAmount = g.Sum(cs => cs.PassBookAmount ?? 0),
+                    TotalDonor = g.Sum(cs => cs.Donor ?? 0),
+                    TotalLoanAmount = g.Sum(cs => cs.LoanAmount ?? 0),
+                    TransactionCount = g.Count()
+                })
+                .ToListAsync();
+
+            // Get all share types for this company
+            var shareTypes = await _context.Sharetypes
+                .Where(st => st.CompanyCode == companyCode)
+                .ToListAsync();
+
+            var result = new MemberShareTypeTotalsDTO
+            {
+                MemberNo = memberNo,
+                ShareTypeTotals = new List<ShareTypeTotalsDTO>()
+            };
+
+            foreach (var shareType in shareTypes)
+            {
+                // Find the contribution for this share type from the grouped results
+                var contrib = memberContributions.FirstOrDefault(c => c.SharesCode == shareType.SharesCode);
+                string category = DetermineContributionType(shareType, new ContributionDTO { SharesCode = shareType.SharesCode });
+
+                decimal currentAmount = 0;
+                switch (category)
+                {
+                    case "REGISTRATION_FEE":
+                        currentAmount = contrib?.TotalRegFeeAmount ?? 0;
+                        break;
+                    case "SHARE_CAPITAL":
+                        currentAmount = contrib?.TotalShareCapitalAmount ?? 0;
+                        break;
+                    case "DEPOSIT":
+                        currentAmount = contrib?.TotalDepositsAmount ?? 0;
+                        break;
+                    case "PASSBOOK":
+                        currentAmount = contrib?.TotalPassBookAmount ?? 0;
+                        break;
+                    case "DONOR":
+                        currentAmount = contrib?.TotalDonor ?? 0;
+                        break;
+                    case "LOAN_REPAYMENT":
+                        currentAmount = contrib?.TotalLoanAmount ?? 0;
+                        break;
+                    default:
+                        currentAmount = contrib?.TotalShareCapitalAmount ?? 0;
+                        break;
+                }
+
+                decimal maxAmount = shareType.MaxAmount ?? 0;
+                decimal remainingAmount = maxAmount > 0 ? Math.Max(0, maxAmount - currentAmount) : 0;
+
+                result.ShareTypeTotals.Add(new ShareTypeTotalsDTO
+                {
+                    SharesCode = shareType.SharesCode,
+                    SharesType = shareType.SharesType ?? shareType.SharesCode,
+                    Category = category,
+                    CurrentAmount = currentAmount,
+                    MinAmount = shareType.MinAmount,
+                    MaxAmount = maxAmount,
+                    RemainingAmount = remainingAmount,
+                    IsFullyPaid = maxAmount > 0 && currentAmount >= maxAmount,
+                    Priority = shareType.Priority,
+                    IsMainShares = shareType.IsMainShares,
+                    UsedToGuarantee = shareType.UsedToGuarantee,
+                    UsedToOffset = shareType.UsedToOffset,
+                    Withdrawable = shareType.Withdrawable,
+                    TransactionCount = contrib?.TransactionCount ?? 0
+                });
+            }
+
+            // Sort by priority
+            result.ShareTypeTotals = result.ShareTypeTotals.OrderBy(s => s.Priority).ToList();
+
+            return result;
         }
 
         public async Task<List<ContributionResponseDTO>> GetMemberContributionsAsync(string memberNo)
@@ -1346,7 +1628,6 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-        // Updated ReverseShareBalanceAsync (now subtracts)
         private async Task ReverseShareBalanceAsync(string memberNo, string sharesCode, decimal amount, string companyCode)
         {
             var existingShare = await _context.Shares
@@ -1373,164 +1654,6 @@ namespace SACCOBlockChainSystem.Services
                 _logger.LogInformation($"Updated share balance after reversal: {existingShare.TotalShares:C}");
             }
         }
-
-        //public async Task<ContributionDeleteResultDTO> DeleteContributionAsync(int contributionId, string deleteReason, string deletedBy)
-        //{
-        //    _logger.LogInformation($"Starting contribution deletion for ID: {contributionId}");
-
-        //    using var transaction = await _context.Database.BeginTransactionAsync();
-
-        //    try
-        //    {
-        //        var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();
-
-        //        // Find the contribution
-        //        var contribution = await _context.Contribs
-        //            .Include(c => c.MemberNoNavigation)
-        //            .FirstOrDefaultAsync(c => c.Id == contributionId && c.CompanyCode == currentCompanyCode);
-
-        //        if (contribution == null)
-        //        {
-        //            throw new ValidationException($"Contribution with ID {contributionId} not found");
-        //        }
-
-        //        // Store information for response and reversal
-        //        var receiptNo = contribution.ReceiptNo ?? string.Empty;
-        //        var memberNo = contribution.MemberNo;
-        //        var amount = contribution.Amount ?? 0;
-        //        var sharesCode = contribution.Sharescode;
-
-        //        _logger.LogInformation($"Deleting contribution: Receipt {receiptNo}, Member {memberNo}, Amount {amount}");
-
-        //        // Find and delete from ContribShare table if exists
-        //        var contribShare = await _context.ContribShares
-        //            .FirstOrDefaultAsync(cs => cs.TransactionNo == contribution.TransactionNo);
-
-        //        if (contribShare != null)
-        //        {
-        //            _context.ContribShares.Remove(contribShare);
-        //            _logger.LogInformation($"Removed from ContribShare table");
-
-        //            // Reverse the share balance
-        //            await ReverseShareBalanceAsync(memberNo, sharesCode, amount, currentCompanyCode);
-        //        }
-
-        //        // Find GL Transaction if exists (using DocumentNo or TransactionNo)
-        //        var glTransaction = await _context.Gltransactions
-        //            .FirstOrDefaultAsync(gl => gl.DocumentNo == receiptNo && gl.CompanyCode == currentCompanyCode);
-
-        //        if (glTransaction != null)
-        //        {
-        //            // Create reversal GL entry instead of just deleting
-        //            await CreateReversalGLTransactionAsync(contribution, glTransaction, deleteReason, deletedBy);
-
-        //            // Delete the original GL transaction
-        //            _context.Gltransactions.Remove(glTransaction);
-        //            _logger.LogInformation($"Removed original GL Transaction");
-        //        }
-
-        //        // Create blockchain reversal record
-        //        string blockchainTxId = null;
-        //        try
-        //        {
-        //            var blockchainData = new
-        //            {
-        //                Action = "CONTRIBUTION_DELETION",
-        //                ContributionId = contributionId,
-        //                ReceiptNo = receiptNo,
-        //                MemberNo = memberNo,
-        //                MemberName = contribution.MemberNoNavigation != null ?
-        //                    $"{contribution.MemberNoNavigation.Surname} {contribution.MemberNoNavigation.OtherNames}" : memberNo,
-        //                OriginalAmount = amount,
-        //                SharesCode = sharesCode,
-        //                DeleteReason = deleteReason,
-        //                DeletedBy = deletedBy,
-        //                DeletedAt = DateTime.Now,
-        //                OriginalTransactionDate = contribution.ContrDate,
-        //                OriginalCreatedBy = contribution.AuditId
-        //            };
-
-        //            var blockchainTx = await _blockchainService.CreateAndAddTransactionAsync(
-        //                "CONTRIBUTION_DELETION",
-        //                memberNo,
-        //                currentCompanyCode,
-        //                -amount, // Negative amount for deletion
-        //                $"{receiptNo}-DELETED",
-        //                blockchainData
-        //            );
-
-        //            if (blockchainTx != null)
-        //            {
-        //                blockchainTxId = blockchainTx.TransactionId;
-        //            }
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            _logger.LogError(ex, "Error recording blockchain deletion transaction");
-        //            // Continue with deletion even if blockchain fails
-        //        }
-
-        //        // Remove the contribution
-        //        _context.Contribs.Remove(contribution);
-
-        //        await _context.SaveChangesAsync();
-        //        await transaction.CommitAsync();
-
-        //        _logger.LogInformation($"Contribution {receiptNo} deleted successfully");
-
-        //        return new ContributionDeleteResultDTO
-        //        {
-        //            Success = true,
-        //            Message = $"Contribution {receiptNo} has been successfully deleted",
-        //            ContributionId = contributionId,
-        //            ReceiptNo = receiptNo,
-        //            MemberNo = memberNo,
-        //            Amount = amount,
-        //            DeletedAt = DateTime.Now,
-        //            DeletedBy = deletedBy,
-        //            BlockchainTxId = blockchainTxId ?? string.Empty
-        //        };
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        await transaction.RollbackAsync();
-        //        _logger.LogError(ex, $"Error deleting contribution {contributionId}");
-
-        //        if (ex is ValidationException)
-        //        {
-        //            throw new Exception($"Validation error: {ex.Message}");
-        //        }
-
-        //        throw new Exception($"Error deleting contribution: {ex.Message}");
-        //    }
-        //}
-
-        //private async Task ReverseShareBalanceAsync(string memberNo, string sharesCode, decimal amount, string companyCode)
-        //{
-        //    var existingShare = await _context.Shares
-        //        .FirstOrDefaultAsync(s => s.MemberNo == memberNo &&
-        //                                 s.Sharescode == sharesCode &&
-        //                                 s.CompanyCode == companyCode);
-
-        //    if (existingShare != null)
-        //    {
-        //        existingShare.TotalShares -= amount;
-
-        //        // If total shares becomes negative, set to 0
-        //        if (existingShare.TotalShares < 0)
-        //        {
-        //            _logger.LogWarning($"Share balance would become negative for member {memberNo}. Setting to 0.");
-        //            existingShare.TotalShares = 0;
-        //        }
-
-        //        existingShare.TransDate = DateTime.Now;
-        //        existingShare.AuditTime = DateTime.Now;
-        //        existingShare.AuditDateTime = DateTime.Now;
-
-        //        _context.Shares.Update(existingShare);
-        //        _logger.LogInformation($"Updated share balance: {existingShare.TotalShares}");
-        //    }
-        //}
 
         private async Task CreateReversalGLTransactionAsync(Contrib contribution, Gltransaction originalGL, string deleteReason, string deletedBy)
         {
@@ -1570,25 +1693,35 @@ namespace SACCOBlockChainSystem.Services
 
         private string DetermineContributionType(Sharetype shareType, ContributionDTO contributionDto)
         {
-            // Get all searchable text
-            var shareTypeName = (shareType.SharesType ?? shareType.SharesCode ?? "").ToLower();
-            var shareTypeCode = (shareType.SharesCode ?? "").ToLower();
-            var remarks = (contributionDto.Remarks ?? "").ToLower();
-            var referenceNo = (contributionDto.ReferenceNo ?? "").ToLower();
-            var paymentMethod = (contributionDto.PaymentMethod ?? "").ToLower();
+            // Get the ShareType name (THIS IS THE ONLY THING WE CHECK)
+            var shareTypeName = (shareType.SharesType ?? shareType.SharesCode ?? "").Trim().ToLower();
 
-            _logger.LogDebug($"=== Determining Contribution Type (Word Priority Mode) ===");
+            _logger.LogDebug($"=== Determining Contribution Type ===");
             _logger.LogDebug($"ShareType Name: '{shareType.SharesType}'");
             _logger.LogDebug($"ShareType Code: '{shareType.SharesCode}'");
-            _logger.LogDebug($"ShareType Flags: IsMainShares={shareType.IsMainShares}, UsedToGuarantee={shareType.UsedToGuarantee}, UsedToOffset={shareType.UsedToOffset}, Withdrawable={shareType.Withdrawable}, Issharecapital={shareType.Issharecapital}");
-            _logger.LogDebug($"Remarks: '{contributionDto.Remarks}'");
 
             // ============================================================
-            // PRIORITY 1: CHECK WORDS IN SHARETYPE NAME (HIGHEST PRIORITY)
-            // This overrides ANY boolean flag configuration
+            // CHECK SHARE TYPE NAME AGAINST KNOWN CATEGORIES
+            // These should match the actual names in your Sharetypes table
             // ============================================================
 
-            // 1.1 Check for DEPOSIT/SAVINGS words in ShareType name
+            // 1. Check for SHARE CAPITAL
+            string[] shareCapitalKeywords = {
+        "share capital", "share capital", "share", "shares", "capital",
+        "main shares", "equity", "core shares", "compulsory shares",
+        "membership shares", "share", "shares"
+    };
+
+            foreach (var keyword in shareCapitalKeywords)
+            {
+                if (shareTypeName.Contains(keyword))
+                {
+                    _logger.LogInformation($"✓ MATCH: SHARE_CAPITAL - '{shareType.SharesType}' contains '{keyword}'");
+                    return "SHARE_CAPITAL";
+                }
+            }
+
+            // 2. Check for DEPOSIT/SAVINGS
             string[] depositKeywords = {
         "deposit", "savings", "saving", "deposits", "share deposit",
         "voluntary", "welfare", "emergency", "flexible"
@@ -1598,57 +1731,12 @@ namespace SACCOBlockChainSystem.Services
             {
                 if (shareTypeName.Contains(keyword))
                 {
-                    _logger.LogInformation($"✓ WORD MATCH (ShareType Name): DEPOSIT - matched '{keyword}' in '{shareType.SharesType}'");
+                    _logger.LogInformation($"✓ MATCH: DEPOSIT - '{shareType.SharesType}' contains '{keyword}'");
                     return "DEPOSIT";
                 }
             }
 
-            // 1.2 Check for REGISTRATION FEE words in ShareType name
-            string[] regFeeKeywords = {
-        "reg fee", "reg fees", "registration", "registration fee", "entry fee",
-        "joining fee", "admin fee", "processing fee", "fee", "annual fee",
-        "membership fee", "initiation fee", "signup fee", "reg_fee",
-        "regfee", "registration_fee", "member_fee"
-    };
-
-            foreach (var keyword in regFeeKeywords)
-            {
-                if (shareTypeName.Contains(keyword))
-                {
-                    _logger.LogInformation($"✓ WORD MATCH (ShareType Name): REGISTRATION_FEE - matched '{keyword}' in '{shareType.SharesType}'");
-                    return "REGISTRATION_FEE";
-                }
-            }
-
-            // 1.3 Check for DONOR/GIFT words in ShareType name
-            string[] donorKeywords = {
-        "donor", "donation", "gift", "grant", "sponsor", "endowment", "charity"
-    };
-
-            foreach (var keyword in donorKeywords)
-            {
-                if (shareTypeName.Contains(keyword))
-                {
-                    _logger.LogInformation($"✓ WORD MATCH (ShareType Name): DONOR - matched '{keyword}' in '{shareType.SharesType}'");
-                    return "DONOR";
-                }
-            }
-
-            // 1.4 Check for LOAN REPAYMENT words in ShareType name
-            string[] loanKeywords = {
-        "loan", "repayment", "installment", "emi", "loan recovery"
-    };
-
-            foreach (var keyword in loanKeywords)
-            {
-                if (shareTypeName.Contains(keyword))
-                {
-                    _logger.LogInformation($"✓ WORD MATCH (ShareType Name): LOAN_REPAYMENT - matched '{keyword}' in '{shareType.SharesType}'");
-                    return "LOAN_REPAYMENT";
-                }
-            }
-
-            // 1.5 Check for PASSBOOK words in ShareType name
+            // 3. Check for PASSBOOK
             string[] passbookKeywords = {
         "passbook", "pass book", "ledger", "pass_book"
     };
@@ -1657,175 +1745,98 @@ namespace SACCOBlockChainSystem.Services
             {
                 if (shareTypeName.Contains(keyword))
                 {
-                    _logger.LogInformation($"✓ WORD MATCH (ShareType Name): PASSBOOK - matched '{keyword}' in '{shareType.SharesType}'");
+                    _logger.LogInformation($"✓ MATCH: PASSBOOK - '{shareType.SharesType}' contains '{keyword}'");
                     return "PASSBOOK";
                 }
             }
 
-            // 1.6 Check for SHARE CAPITAL words in ShareType name
-            string[] shareCapitalKeywords = {
-        "share capital","share capital", "share", "shares", "capital", "main shares", "equity",
-        "core shares", "compulsory shares", "membership shares"
+            // 4. Check for REGISTRATION FEE
+            string[] regFeeKeywords = {
+        "registration fee", "reg fee", "reg fees", "registration", "entry fee",
+        "joining fee", "admin fee", "processing fee", "membership fee",
+        "initiation fee", "signup fee", "reg_fee", "regfee"
     };
 
-            foreach (var keyword in shareCapitalKeywords)
+            foreach (var keyword in regFeeKeywords)
             {
                 if (shareTypeName.Contains(keyword))
                 {
-                    _logger.LogInformation($"✓ WORD MATCH (ShareType Name): SHARE_CAPITAL - matched '{keyword}' in '{shareType.SharesType}'");
-                    return "SHARE_CAPITAL";
-                }
-            }
-
-            // ============================================================
-            // PRIORITY 2: CHECK WORDS IN REMARKS FIELD (User-specified)
-            // ============================================================
-
-            // 2.1 Check for DEPOSIT words in Remarks
-            foreach (var keyword in depositKeywords)
-            {
-                if (remarks.Contains(keyword))
-                {
-                    _logger.LogInformation($"✓ WORD MATCH (Remarks): DEPOSIT - matched '{keyword}' in remarks: '{contributionDto.Remarks}'");
-                    return "DEPOSIT";
-                }
-            }
-
-            // 2.2 Check for REGISTRATION FEE words in Remarks
-            foreach (var keyword in regFeeKeywords)
-            {
-                if (remarks.Contains(keyword))
-                {
-                    _logger.LogInformation($"✓ WORD MATCH (Remarks): REGISTRATION_FEE - matched '{keyword}' in remarks: '{contributionDto.Remarks}'");
+                    _logger.LogInformation($"✓ MATCH: REGISTRATION_FEE - '{shareType.SharesType}' contains '{keyword}'");
                     return "REGISTRATION_FEE";
                 }
             }
 
-            // 2.3 Check for DONOR words in Remarks
+            // 5. Check for DONOR
+            string[] donorKeywords = {
+        "donor", "donation", "gift", "grant", "sponsor", "endowment", "charity"
+    };
+
             foreach (var keyword in donorKeywords)
             {
-                if (remarks.Contains(keyword))
+                if (shareTypeName.Contains(keyword))
                 {
-                    _logger.LogInformation($"✓ WORD MATCH (Remarks): DONOR - matched '{keyword}' in remarks: '{contributionDto.Remarks}'");
+                    _logger.LogInformation($"✓ MATCH: DONOR - '{shareType.SharesType}' contains '{keyword}'");
                     return "DONOR";
                 }
             }
 
-            // 2.4 Check for LOAN words in Remarks
+            // 6. Check for LOAN REPAYMENT
+            string[] loanKeywords = {
+        "loan repayment", "loan", "repayment", "installment", "emi", "loan recovery"
+    };
+
             foreach (var keyword in loanKeywords)
             {
-                if (remarks.Contains(keyword))
+                if (shareTypeName.Contains(keyword))
                 {
-                    _logger.LogInformation($"✓ WORD MATCH (Remarks): LOAN_REPAYMENT - matched '{keyword}' in remarks: '{contributionDto.Remarks}'");
+                    _logger.LogInformation($"✓ MATCH: LOAN_REPAYMENT - '{shareType.SharesType}' contains '{keyword}'");
                     return "LOAN_REPAYMENT";
                 }
             }
 
-            // 2.5 Check for PASSBOOK words in Remarks
-            foreach (var keyword in passbookKeywords)
-            {
-                if (remarks.Contains(keyword))
-                {
-                    _logger.LogInformation($"✓ WORD MATCH (Remarks): PASSBOOK - matched '{keyword}' in remarks: '{contributionDto.Remarks}'");
-                    return "PASSBOOK";
-                }
-            }
-
-            // 2.6 Check for SHARE CAPITAL words in Remarks
-            foreach (var keyword in shareCapitalKeywords)
-            {
-                if (remarks.Contains(keyword))
-                {
-                    _logger.LogInformation($"✓ WORD MATCH (Remarks): SHARE_CAPITAL - matched '{keyword}' in remarks: '{contributionDto.Remarks}'");
-                    return "SHARE_CAPITAL";
-                }
-            }
-
             // ============================================================
-            // PRIORITY 3: CHECK WORDS IN SHARETYPE CODE (Fallback for codes)
+            // 7. CHECK BOOLEAN FLAGS AS FALLBACK (If name doesn't match keywords)
             // ============================================================
 
-            foreach (var keyword in depositKeywords)
+            // If name contains "fee" but didn't match above, check if it's a fee type
+            if (shareTypeName.Contains("fee"))
             {
-                if (shareTypeCode.Contains(keyword))
-                {
-                    _logger.LogInformation($"✓ WORD MATCH (ShareType Code): DEPOSIT - matched '{keyword}' in code: '{shareType.SharesCode}'");
-                    return "DEPOSIT";
-                }
-            }
-
-            foreach (var keyword in regFeeKeywords)
-            {
-                if (shareTypeCode.Contains(keyword))
-                {
-                    _logger.LogInformation($"✓ WORD MATCH (ShareType Code): REGISTRATION_FEE - matched '{keyword}' in code: '{shareType.SharesCode}'");
-                    return "REGISTRATION_FEE";
-                }
-            }
-
-            // ============================================================
-            // PRIORITY 4: CHECK BOOLEAN FLAGS (Fallback - only if no words matched)
-            // Your database flags are respected here, but only as last resort
-            // ============================================================
-
-            _logger.LogDebug($"No word matches found, falling back to boolean flags...");
-
-            // 4.1 DEPOSIT/SAVINGS based on flags: Withdrawable=true AND (UsedToGuarantee=true OR UsedToOffset=true)
-            if (shareType.Withdrawable == true && (shareType.UsedToGuarantee == true || shareType.UsedToOffset == true))
-            {
-                _logger.LogInformation($"✓ BOOLEAN FALLBACK: DEPOSIT (Withdrawable={shareType.Withdrawable}, UsedToGuarantee={shareType.UsedToGuarantee}, UsedToOffset={shareType.UsedToOffset})");
-                return "DEPOSIT";
-            }
-
-            // 4.2 REGISTRATION FEE based on flags
-            if (shareType.Issharecapital == 0 &&
-                shareType.UsedToGuarantee == false &&
-                shareType.UsedToOffset == false &&
-                shareType.Withdrawable == false)
-            {
-                _logger.LogInformation($"✓ BOOLEAN FALLBACK: REGISTRATION_FEE");
+                _logger.LogInformation($"✓ FLAG FALLBACK: REGISTRATION_FEE - '{shareType.SharesType}' contains 'fee'");
                 return "REGISTRATION_FEE";
             }
 
-            // 4.3 SHARE CAPITAL based on flags
+            // If share capital related flags are true
             if (shareType.IsMainShares == true || shareType.Issharecapital == 1)
             {
-                _logger.LogInformation($"✓ BOOLEAN FALLBACK: SHARE_CAPITAL (IsMainShares={shareType.IsMainShares}, Issharecapital={shareType.Issharecapital})");
+                _logger.LogInformation($"✓ FLAG FALLBACK: SHARE_CAPITAL - IsMainShares={shareType.IsMainShares}, Issharecapital={shareType.Issharecapital}");
                 return "SHARE_CAPITAL";
             }
 
-            // ============================================================
-            // PRIORITY 5: CHECK PAYMENT METHOD & REFERENCE
-            // ============================================================
-
-            if (paymentMethod == "loan" || paymentMethod == "installment" || referenceNo.Contains("loan"))
+            // If withdrawable and used for guarantee/offset -> DEPOSIT
+            if (shareType.Withdrawable == true && (shareType.UsedToGuarantee == true || shareType.UsedToOffset == true))
             {
-                _logger.LogInformation($"✓ PAYMENT METHOD FALLBACK: LOAN_REPAYMENT");
-                return "LOAN_REPAYMENT";
-            }
-
-            if (paymentMethod == "donation" || paymentMethod == "grant")
-            {
-                _logger.LogInformation($"✓ PAYMENT METHOD FALLBACK: DONOR");
-                return "DONOR";
+                _logger.LogInformation($"✓ FLAG FALLBACK: DEPOSIT - Withdrawable={shareType.Withdrawable}");
+                return "DEPOSIT";
             }
 
             // ============================================================
-            // PRIORITY 6: DEFAULT TO SHARE CAPITAL
+            // 8. UNKNOWN - Any share type not matching above
+            // Examples: SINKING FUND, WELFARE FUND, etc.
             // ============================================================
-            _logger.LogWarning($"⚠ No match found for ShareType '{shareType.SharesType}' ({shareType.SharesCode}), defaulting to SHARE_CAPITAL");
-            return "SHARE_CAPITAL";
+            _logger.LogWarning($"⚠ UNKNOWN ShareType: '{shareType.SharesType}' ({shareType.SharesCode}) - Will skip ContribShares");
+            return "UNKNOWN";
         }
 
         private string GenerateReceiptNumber(string companyCode)
         {
             var now = DateTime.Now;
+            var Year = now.ToString("yyyy");
             var day = now.ToString("dd");
             var month = now.ToString("MM");
             var hour = now.ToString("HH");
             var minute = now.ToString("mm");
             var second = now.ToString("ss");
-            var receiptNumber = $"REC{month}{day}{hour}{minute}{second.Substring(0, 1)}";
+            var receiptNumber = $"REC{Year}{month}{day}{hour}{minute}{second.Substring(0, 1)}";
 
             var random = new Random();
             var existingReceipt = _context.Contribs
@@ -1834,12 +1845,37 @@ namespace SACCOBlockChainSystem.Services
             if (existingReceipt != null)
             {
                 // Add a suffix if duplicate occurs
-                receiptNumber = $"REC{month}{day}{hour}{minute}{second.Substring(0, 1)}{random.Next(0, 9)}";
+                receiptNumber = $"REC{Year}{month}{day}{hour}{minute}{second.Substring(0, 1)}{random.Next(0, 9)}";
                 receiptNumber = receiptNumber.Length > 12 ? receiptNumber.Substring(0, 12) : receiptNumber;
             }
 
             return receiptNumber;
         }
+        private string GenerateTransactionNumber(string companyCode)
+        {
+            var now = DateTime.Now;
+            var Year = now.ToString("yyyy");
+            var day = now.ToString("dd");
+            var month = now.ToString("MM");
+            var hour = now.ToString("HH");
+            var minute = now.ToString("mm");
+            var second = now.ToString("ss");
+            var receiptNumber = $"REC{Year}{month}{day}{hour}{minute}{second.Substring(0, 1)}";
+
+            var random = new Random();
+            var existingReceipt = _context.Contribs
+                .FirstOrDefault(c => c.ReceiptNo == receiptNumber);
+
+            if (existingReceipt != null)
+            {
+                // Add a suffix if duplicate occurs
+                receiptNumber = $"TRNAS{Year}{month}{day}{hour}{minute}{second.Substring(0, 1)}{random.Next(0, 9)}";
+                receiptNumber = receiptNumber.Length > 12 ? receiptNumber.Substring(0, 12) : receiptNumber;
+            }
+
+            return receiptNumber;
+        }
+
         public async Task<decimal> GetMemberShareBalanceAsync(string memberNo)
         {
             var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();

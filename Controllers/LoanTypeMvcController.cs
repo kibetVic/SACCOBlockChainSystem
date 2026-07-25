@@ -32,7 +32,6 @@ namespace SACCOBlockChainSystem.Controllers
             _context = context;
         }
 
-
         // GET: /LoanTypeMvc/LoanTypeManagement
         public async Task<IActionResult> LoanTypeManagement(string loanCode = null)
         {
@@ -98,7 +97,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(LoanTypeCreateDTO loanTypeDto)
@@ -106,14 +104,10 @@ namespace SACCOBlockChainSystem.Controllers
             try
             {
                 _logger.LogInformation($"=== CREATE LOAN TYPE DTO VALUES ===");
-                _logger.LogInformation($"Penalty: {loanTypeDto.Penalty}");
-                _logger.LogInformation($"PenaltyMode: {loanTypeDto.PenaltyMode}");
-                _logger.LogInformation($"PenaltyRateType: {loanTypeDto.PenaltyRateType}");
-                _logger.LogInformation($"PenaltyValue: {loanTypeDto.PenaltyValue}");
-                _logger.LogInformation($"PenaltyChargeItem: {loanTypeDto.PenaltyChargeItem}");
+                _logger.LogInformation($"IsProject: {loanTypeDto.IsProject}");
+                _logger.LogInformation($"MobileLoan: {loanTypeDto.MobileLoan}");
+                _logger.LogInformation($"MobileLoanApproval: {loanTypeDto.MobileLoanApproval}");
                 _logger.LogInformation($"====================================");
-
-                _logger.LogInformation("Creating loan type");
 
                 if (!ModelState.IsValid)
                 {
@@ -128,7 +122,7 @@ namespace SACCOBlockChainSystem.Controllers
 
                 var result = await _loanTypeService.CreateLoanTypeAsync(loanTypeDto);
 
-                TempData["SuccessMessage"] = $"Loan type '{result.LoanType}' saved successfully! It is currently PENDING and needs another user to approved before it can be used.";
+                TempData["SuccessMessage"] = $"Loan type '{result.LoanType}' saved successfully! It is currently PENDING and needs another user to approve before it can be used.";
                 return RedirectToAction("LoanTypeManagement");
             }
             catch (Exception ex)
@@ -159,7 +153,11 @@ namespace SACCOBlockChainSystem.Controllers
         {
             try
             {
-                _logger.LogInformation($"Updating loan type: {loanCode}");
+                _logger.LogInformation($"=== UPDATE LOAN TYPE DTO VALUES ===");
+                _logger.LogInformation($"IsProject: {loanTypeDto.IsProject}");
+                _logger.LogInformation($"MobileLoan: {loanTypeDto.MobileLoan}");
+                _logger.LogInformation($"MobileLoanApproval: {loanTypeDto.MobileLoanApproval}");
+                _logger.LogInformation($"====================================");
 
                 if (!ModelState.IsValid)
                 {
@@ -170,10 +168,11 @@ namespace SACCOBlockChainSystem.Controllers
 
                 loanTypeDto.CompanyCode = GetUserCompanyCode();
                 loanTypeDto.UpdatedBy = User.Identity?.Name ?? "SYSTEM";
+                loanTypeDto.LoanCode = loanCode; // Set LoanCode for the update
 
                 var result = await _loanTypeService.UpdateLoanTypeAsync(loanCode, loanTypeDto);
 
-                TempData["SuccessMessage"] = $"Loan type '{result.LoanType}' updated successfully!.";
+                TempData["SuccessMessage"] = $"Loan type '{result.LoanType}' updated successfully!";
                 return RedirectToAction("LoanTypeManagement");
             }
             catch (Exception ex)
@@ -209,13 +208,13 @@ namespace SACCOBlockChainSystem.Controllers
 
                 var result = await _loanTypeService.ApproveLoanTypeAsync(loanCode, companyCode, userName);
 
-                TempData["SuccessMessage"] = $"Loan type '{result.LoanType}' approved successfully! It is now APPROVED and available for use.";
+                TempData["SuccessMessage"] = $"Loan type '{result.LoanType}' approved successfully! It is now ACTIVE and available for use.";
                 return RedirectToAction("LoanTypeManagement");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error approving loan type {loanCode}");
-                TempData["ErrorMessage"] = $"Approving loan type: {ex.Message}";
+                TempData["ErrorMessage"] = $"Approving loan type failed: {ex.Message}";
                 return RedirectToAction("LoanTypeManagement");
             }
         }
@@ -380,8 +379,8 @@ namespace SACCOBlockChainSystem.Controllers
                     .OrderBy(a => a.Glaccname)
                     .Select(a => new SelectListItem
                     {
-                        Value = a.Glaccname,  // This should be the account code/number
-                        Text = a.Glaccname  // This is redundant
+                        Value = a.Glaccname,
+                        Text = $"{a.Glaccname} - {a.Glaccname}"
                     })
                     .ToListAsync();
 
@@ -417,7 +416,7 @@ namespace SACCOBlockChainSystem.Controllers
             var loanTypes = await _loanTypeService.GetLoanTypesByCompanyAsync(companyCode);
             ViewBag.LoanTypes = loanTypes;
             ViewBag.TotalLoanTypes = loanTypes.Count;
-            ViewBag.ActiveLoanTypes = loanTypes.Count(lt => lt.ApprovalStatus == "Approved");
+            ViewBag.ActiveLoanTypes = loanTypes.Count(lt => lt.ApprovalStatus == "Active" || lt.ApprovalStatus == "Approved");
             ViewBag.PendingLoanTypes = loanTypes.Count(lt => lt.ApprovalStatus == "Pending");
             ViewBag.TotalLoans = loanTypes.Sum(lt => lt.TotalLoans);
             ViewBag.TotalLoanAmount = loanTypes.Sum(lt => lt.TotalLoanAmount);
@@ -428,17 +427,18 @@ namespace SACCOBlockChainSystem.Controllers
             var sb = new System.Text.StringBuilder();
 
             // Header
-            sb.AppendLine("Loan Code,Loan Type,Max Amount,Repay Period,Interest,Priority,Status,Total Loans,Approve Loans");
+            sb.AppendLine("Loan Code,Loan Type,Max Amount,Repay Period,Interest,Priority,IsProject,MobileLoan,Status,Total Loans,Active Loans");
 
             // Data
             foreach (var lt in loanTypes)
             {
-                sb.AppendLine($"{lt.LoanCode},{lt.LoanType1},{lt.MaxAmount},{lt.RepayPeriod},{lt.Interest},{lt.Priority},{lt.ApprovalStatus},{lt.TotalLoans},{lt.ActiveLoans}");
+                sb.AppendLine($"{lt.LoanCode},{lt.LoanType1},{lt.MaxAmount},{lt.RepayPeriod},{lt.Interest},{lt.Priority},{lt.IsProject},{lt.MobileLoan},{lt.ApprovalStatus},{lt.TotalLoans},{lt.ActiveLoans}");
             }
 
             return sb.ToString();
         }
 
         #endregion
+
     }
 }

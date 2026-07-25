@@ -21,15 +21,17 @@ namespace SACCOBlockChainSystem.Controllers
 	public class MemberReportController : Controller
 	{
 		private readonly ApplicationDbContext _context;
+        private readonly ILogger<MemberReportController> _logger;
 
-		public MemberReportController(ApplicationDbContext context)
-		{
-			_context = context;
-		}
+        public MemberReportController(ApplicationDbContext context, ILogger<MemberReportController> logger)  
+        {
+            _context = context;
+            _logger = logger;  
+        }
 
-		#region Active Members Report
+        #region Active Members Report
 
-		public IActionResult ActiveMembers()
+        public IActionResult ActiveMembers()
 		{
 			var companyCode = User.FindFirstValue("CompanyCode");
 			var companyName = User.FindFirstValue("CompanyName") ?? "";
@@ -261,207 +263,6 @@ namespace SACCOBlockChainSystem.Controllers
             return View("~/Views/Reports/ActiveMembers.cshtml", viewModel);
         }
 
-       //[HttpPost]
-		//public async Task<IActionResult> ActiveMembers(DateTime reportDate)
-		//{
-		//	var companyCode = User.FindFirstValue("CompanyCode");
-		//	var companyName = User.FindFirstValue("CompanyName") ?? "";
-
-		//	// Get share type requirements
-		//	var mainShareType = await _context.Sharetypes
-		//		.Where(st => st.CompanyCode == companyCode && st.IsMainShares == true)
-		//		.FirstOrDefaultAsync();
-
-		//	decimal minimumShareRequirement = mainShareType?.MinAmount ?? 0;
-		//	decimal registrationFeeRequirement = 0; // Set your registration fee requirement here
-
-		//	// Get all active members (not withdrawn, not archived, status active)
-		//	var allActiveMembers = await _context.Members
-		//		.Where(m => m.CompanyCode == companyCode
-		//			&& (m.Withdrawn == null || m.Withdrawn == false)
-		//			&& (m.Archived == null || m.Archived == false)
-		//			&& (m.Status == 1 || m.Status == null))
-		//		.OrderBy(m => m.MemberNo)
-		//		.ToListAsync();
-
-		//	var memberNos = allActiveMembers.Select(m => m.MemberNo).ToList();
-
-		//	// Get contributions (shares, deposits, reg fees)
-		//	var contribShares = await _context.ContribShares
-		//		.Where(cs => memberNos.Contains(cs.MemberNo)
-		//			&& cs.CompanyCode == companyCode)
-		//		.GroupBy(cs => cs.MemberNo)
-		//		.Select(g => new
-		//		{
-		//			MemberNo = g.Key,
-		//			TotalShareCapital = g.Sum(cs => cs.ShareCapitalAmount ?? 0),
-		//			TotalDeposits = g.Sum(cs => cs.DepositsAmount ?? 0),
-		//			TotalRegFee = g.Sum(cs => cs.RegFeeAmount ?? 0)
-		//		})
-		//		.ToListAsync();
-
-		//	// Get shares from Shares table as fallback
-		//	var shares = await _context.Shares
-		//		.Where(s => memberNos.Contains(s.MemberNo)
-		//			&& s.CompanyCode == companyCode)
-		//		.GroupBy(s => s.MemberNo)
-		//		.Select(g => new
-		//		{
-		//			MemberNo = g.Key,
-		//			TotalShares = g.Sum(s => s.TotalShares ?? 0)
-		//		})
-		//		.ToListAsync();
-
-		//	// Get the date 3 months ago (to check regular contributions)
-		//	var threeMonthsAgo = reportDate.AddMonths(-5);
-
-		//	// Get contributions in the last 3 months to check regular activity
-		//	var recentContributions = await _context.ContribShares
-		//		.Where(cs => memberNos.Contains(cs.MemberNo)
-		//			&& cs.CompanyCode == companyCode
-		//			&& cs.ContrDate >= threeMonthsAgo
-		//			&& cs.ContrDate <= reportDate)
-		//		.GroupBy(cs => cs.MemberNo)
-		//		.Select(g => new
-		//		{
-		//			MemberNo = g.Key,
-		//			RecentShareCapital = g.Sum(cs => cs.ShareCapitalAmount ?? 0),
-		//			RecentDeposits = g.Sum(cs => cs.DepositsAmount ?? 0),
-		//			RecentRegFee = g.Sum(cs => cs.RegFeeAmount ?? 0),
-		//			ContributionCount = g.Count()
-		//		})
-		//		.ToListAsync();
-
-		//	var reportData = new List<MemberReportViewModel>();
-
-		//	foreach (var m in allActiveMembers)
-		//	{
-		//		var memberContrib = contribShares.FirstOrDefault(c => c.MemberNo == m.MemberNo);
-		//		var memberShare = shares.FirstOrDefault(s => s.MemberNo == m.MemberNo);
-		//		var recentContrib = recentContributions.FirstOrDefault(r => r.MemberNo == m.MemberNo);
-
-		//		// Calculate total share capital
-		//		decimal totalShareCapital = 0;
-		//		if (memberContrib != null)
-		//			totalShareCapital = memberContrib.TotalShareCapital;
-		//		else if (memberShare != null)
-		//			totalShareCapital = memberShare.TotalShares;
-		//		else
-		//			totalShareCapital = m.ShareCap ?? 0;
-
-		//		decimal totalSavingsDeposits = memberContrib?.TotalDeposits ?? 0;
-		//		decimal totalRegistrationFee = memberContrib?.TotalRegFee ?? m.RegFee ?? 0;
-
-		//		// Check if member meets the active criteria:
-		//		// 1. Has paid minimum share capital requirement
-		//		// 2. Has paid registration fee requirement
-		//		// 3. Has savings/deposits
-		//		// 4. Has made regular contributions in the last 3 months (at least one contribution)
-
-		//		bool hasMetShareRequirement = minimumShareRequirement == 0 ? true : totalShareCapital >= minimumShareRequirement;
-		//		bool hasPaidRegistrationFee = registrationFeeRequirement == 0 ? true : totalRegistrationFee >= registrationFeeRequirement;
-		//		bool hasSavingsDeposits = totalSavingsDeposits > 0;
-		//		bool hasRegularContributions = recentContrib != null && recentContrib.ContributionCount > 0;
-
-		//		// Only include if ALL criteria are met
-		//		if (hasMetShareRequirement && hasPaidRegistrationFee && hasSavingsDeposits && hasRegularContributions)
-		//		{
-		//			int? age = null;
-		//			if (m.Dob.HasValue)
-		//			{
-		//				age = DateTime.Now.Year - m.Dob.Value.Year;
-		//				if (DateTime.Now < m.Dob.Value.AddYears(age.Value)) age--;
-		//			}
-
-		//			string fullName = "";
-		//			if (m.FullName != null)
-		//			{
-		//				fullName = m.FullName.ToString();
-		//			}
-		//			else
-		//			{
-		//				fullName = $"{m.Surname ?? ""} {m.OtherNames ?? ""}".Trim();
-		//				if (string.IsNullOrWhiteSpace(fullName))
-		//					fullName = "N/A";
-		//			}
-
-		//			string sex = "NOT SPECIFIED";
-		//			if (!string.IsNullOrEmpty(m.Sex))
-		//			{
-		//				string sexUpper = m.Sex.ToUpper();
-		//				if (sexUpper == "M" || sexUpper == "MALE")
-		//					sex = "MALE";
-		//				else if (sexUpper == "F" || sexUpper == "FEMALE")
-		//					sex = "FEMALE";
-		//				else
-		//					sex = sexUpper;
-		//			}
-
-		//			reportData.Add(new MemberReportViewModel
-		//			{
-		//				MemberNo = m.MemberNo,
-		//				FullName = fullName,
-		//				IdNo = m.Idno ?? "-",
-		//				Sex = sex,
-		//				Age = age,
-		//				MembershipType = m.MembershipType ?? "Individual",
-		//				ApplicDate = m.ApplicDate,
-		//				EffectDate = m.EffectDate,
-		//				ShareCapital = totalShareCapital,
-		//				SavingsDeposits = totalSavingsDeposits,
-		//				RegFee = totalRegistrationFee,
-		//				LoanBalance = m.LoanBalance ?? 0,
-		//				PhoneNo = m.PhoneNo ?? m.MobileNo ?? "-",
-		//				Email = m.Email ?? m.EmailAddress,
-		//				Station = m.Station ?? "-",
-		//				Status = "ACTIVE",
-		//				// Add these if your view model has them
-		//				// LastContributionDate = recentContrib?.LastContribDate,
-		//				// TotalActiveContributions = recentContrib?.ContributionCount ?? 0
-		//			});
-		//		}
-		//	}
-
-		//	// Sort by member number
-		//	reportData = reportData.OrderBy(m => m.MemberNo).ToList();
-
-		//	int maleCount = reportData.Count(m => m.Sex == "MALE");
-		//	int femaleCount = reportData.Count(m => m.Sex == "FEMALE");
-		//	int otherCount = reportData.Count(m => m.Sex != "MALE" && m.Sex != "FEMALE"
-		//										&& !string.IsNullOrEmpty(m.Sex) && m.Sex != "NOT SPECIFIED");
-
-		//	var viewModel = new ActiveMembersIndexViewModel
-		//	{
-		//		Members = reportData,
-		//		TotalMembers = reportData.Count,
-		//		MaleCount = maleCount,
-		//		FemaleCount = femaleCount,
-		//		OtherCount = otherCount,
-		//		TotalShareCapital = reportData.Sum(m => m.ShareCapital ?? 0),
-		//		TotalSavingsDeposits = reportData.Sum(m => m.SavingsDeposits ?? 0),
-		//		TotalRegFee = reportData.Sum(m => m.RegFee ?? 0),
-		//		ReportDate = reportDate,
-		//		HasData = reportData.Any(),
-		//		UserCompanyCode = companyCode,
-		//		CompanyName = companyName,
-		//		// Add these if your view model has them
-		//		// MinimumShareRequirement = minimumShareRequirement,
-		//		// RegistrationFeeRequirement = registrationFeeRequirement,
-		//		// ActiveContributionPeriodMonths = 3
-		//	};
-
-		//	ViewBag.ReportDate = reportDate;
-		//	ViewBag.TotalMembers = reportData.Count;
-		//	ViewBag.TotalShareCapital = reportData.Sum(m => m.ShareCapital ?? 0);
-		//	ViewBag.TotalSavingsDeposits = reportData.Sum(m => m.SavingsDeposits ?? 0);
-		//	ViewBag.TotalRegFee = reportData.Sum(m => m.RegFee ?? 0);
-		//	ViewBag.MaleCount = maleCount;
-		//	ViewBag.FemaleCount = femaleCount;
-		//	ViewBag.OtherCount = otherCount;
-		//	ViewBag.HasData = reportData.Any();
-
-		//	return View("~/Views/Reports/ActiveMembers.cshtml", viewModel);
-		//}
 
 		[HttpPost]
 		public async Task<IActionResult> ExportActiveMembersToExcel(DateTime reportDate)
@@ -4820,7 +4621,1038 @@ namespace SACCOBlockChainSystem.Controllers
 
         #endregion
 
+        #region Periodic Registered Members Report
 
+        [HttpGet]
+        public IActionResult PeriodicRegisteredMembers()
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+            var reportDate = DateTime.Now;
+            var startDate = DateTime.Now.AddMonths(-1);
+            var endDate = DateTime.Now;
+
+            var viewModel = new PeriodicRegisteredMembersIndexViewModel
+            {
+                Members = new List<PeriodicRegisteredMembersViewModel>(),
+                StartDate = startDate,
+                EndDate = endDate,
+                ReportDate = reportDate,
+                HasData = false,
+                UserCompanyCode = companyCode,
+                CompanyName = companyName,
+                TotalMembers = 0,
+                MaleCount = 0,
+                FemaleCount = 0,
+                OtherCount = 0
+            };
+
+            ViewBag.StartDate = startDate;
+            ViewBag.EndDate = endDate;
+            ViewBag.ReportDate = reportDate;
+            ViewBag.HasData = false;
+            ViewBag.CompanyName = companyName;
+
+            return View("~/Views/Reports/PeriodicRegisteredMembers.cshtml", viewModel);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> PeriodicRegisteredMembers(DateTime startDate, DateTime endDate)
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+
+            // Validate dates
+            if (startDate > endDate)
+            {
+                TempData["ErrorMessage"] = "Start date cannot be greater than end date";
+                return RedirectToAction("PeriodicRegisteredMembers");
+            }
+
+            // Get members registered within the date range
+            var members = await _context.Members
+                .Where(m => m.CompanyCode == companyCode
+                    && m.ApplicDate.HasValue
+                    && m.ApplicDate.Value.Date >= startDate.Date
+                    && m.ApplicDate.Value.Date <= endDate.Date
+                    && (m.Withdrawn == false || m.Withdrawn == null)
+                    && (m.Archived == false || m.Archived == null))
+                .OrderBy(m => m.MemberNo)
+                .ToListAsync();
+
+            var reportData = new List<PeriodicRegisteredMembersViewModel>();
+
+            foreach (var m in members)
+            {
+                string fullName = "";
+                if (m.FullName != null)
+                {
+                    fullName = m.FullName.ToString();
+                }
+                else
+                {
+                    fullName = $"{m.Surname ?? ""} {m.OtherNames ?? ""}".Trim();
+                    if (string.IsNullOrWhiteSpace(fullName))
+                        fullName = "N/A";
+                }
+
+                string sex = "NOT SPECIFIED";
+                if (!string.IsNullOrEmpty(m.Sex))
+                {
+                    string sexUpper = m.Sex.ToUpper();
+                    if (sexUpper == "M" || sexUpper == "MALE")
+                        sex = "MALE";
+                    else if (sexUpper == "F" || sexUpper == "FEMALE")
+                        sex = "FEMALE";
+                    else
+                        sex = sexUpper;
+                }
+
+                reportData.Add(new PeriodicRegisteredMembersViewModel
+                {
+                    MemberNo = m.MemberNo,
+                    FullName = fullName,
+                    Sex = sex,
+                    RegistrationDate = m.ApplicDate,
+                    MobileNo = m.PhoneNo ?? m.MobileNo ?? "-",
+                    IdNo = m.Idno ?? "-",
+                    Email = m.Email ?? m.EmailAddress,
+                    Station = m.Station ?? "-",
+                    MembershipType = m.MembershipType ?? "Individual"
+                });
+            }
+
+            int maleCount = reportData.Count(m => m.Sex == "MALE");
+            int femaleCount = reportData.Count(m => m.Sex == "FEMALE");
+            int otherCount = reportData.Count(m => m.Sex != "MALE" && m.Sex != "FEMALE" && m.Sex != "NOT SPECIFIED");
+
+            var viewModel = new PeriodicRegisteredMembersIndexViewModel
+            {
+                Members = reportData,
+                TotalMembers = reportData.Count,
+                MaleCount = maleCount,
+                FemaleCount = femaleCount,
+                OtherCount = otherCount,
+                StartDate = startDate,
+                EndDate = endDate,
+                ReportDate = DateTime.Now,
+                HasData = reportData.Any(),
+                UserCompanyCode = companyCode,
+                CompanyName = companyName
+            };
+
+            ViewBag.StartDate = startDate;
+            ViewBag.EndDate = endDate;
+            ViewBag.ReportDate = DateTime.Now;
+            ViewBag.HasData = reportData.Any();
+            ViewBag.CompanyName = companyName;
+            ViewBag.TotalMembers = reportData.Count;
+            ViewBag.MaleCount = maleCount;
+            ViewBag.FemaleCount = femaleCount;
+            ViewBag.OtherCount = otherCount;
+
+            return View("~/Views/Reports/PeriodicRegisteredMembers.cshtml", viewModel);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ExportPeriodicRegisteredMembersToExcel(DateTime startDate, DateTime endDate)
+        {
+            try
+            {
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+
+                var members = await _context.Members
+                    .Where(m => m.CompanyCode == companyCode
+                        && m.ApplicDate.HasValue
+                        && m.ApplicDate.Value.Date >= startDate.Date
+                        && m.ApplicDate.Value.Date <= endDate.Date
+                        && (m.Withdrawn == false || m.Withdrawn == null)
+                        && (m.Archived == false || m.Archived == null))
+                    .OrderBy(m => m.MemberNo)
+                    .ToListAsync();
+
+                var reportData = new List<dynamic>();
+
+                foreach (var m in members)
+                {
+                    string fullName = "";
+                    if (m.FullName != null)
+                        fullName = m.FullName.ToString();
+                    else
+                        fullName = $"{m.Surname ?? ""} {m.OtherNames ?? ""}".Trim();
+
+                    string sex = "NOT SPECIFIED";
+                    if (!string.IsNullOrEmpty(m.Sex))
+                    {
+                        string sexUpper = m.Sex.ToUpper();
+                        if (sexUpper == "M" || sexUpper == "MALE")
+                            sex = "MALE";
+                        else if (sexUpper == "F" || sexUpper == "FEMALE")
+                            sex = "FEMALE";
+                        else
+                            sex = sexUpper;
+                    }
+
+                    reportData.Add(new
+                    {
+                        m.MemberNo,
+                        FullName = fullName,
+                        Sex = sex,
+                        RegistrationDate = m.ApplicDate?.ToString("dd/MM/yyyy") ?? "-",
+                        MobileNo = m.PhoneNo ?? m.MobileNo ?? "-",
+                        IDNo = m.Idno ?? "-",
+                        Email = m.Email ?? m.EmailAddress,
+                        Station = m.Station ?? "-",
+                        MembershipType = m.MembershipType ?? "Individual"
+                    });
+                }
+
+                int maleCount = reportData.Count(m => m.Sex == "MALE");
+                int femaleCount = reportData.Count(m => m.Sex == "FEMALE");
+                int otherCount = reportData.Count(m => m.Sex != "MALE" && m.Sex != "FEMALE" && m.Sex != "NOT SPECIFIED");
+
+                using (var workbook = new XLWorkbook())
+                {
+                    var worksheet = workbook.Worksheets.Add("Periodic Registered Members");
+                    int currentRow = 1;
+
+                    // Header
+                    worksheet.Cell(currentRow, 1).Value = companyName.ToUpper();
+                    worksheet.Range(currentRow, 1, currentRow, 9).Merge();
+                    worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(18);
+                    worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    currentRow += 2;
+
+                    worksheet.Cell(currentRow, 1).Value = $"MEMBERS REGISTERED BETWEEN {startDate:dd/MM/yyyy} AND {endDate:dd/MM/yyyy}";
+                    worksheet.Range(currentRow, 1, currentRow, 9).Merge();
+                    worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                    worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    currentRow += 2;
+
+                    // Statistics
+                    worksheet.Cell(currentRow, 1).Value = "TOTAL MEMBERS:";
+                    worksheet.Cell(currentRow, 1).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 2).Value = reportData.Count;
+                    worksheet.Cell(currentRow, 2).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 3).Value = "MALE:";
+                    worksheet.Cell(currentRow, 3).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 4).Value = maleCount;
+                    worksheet.Cell(currentRow, 4).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 5).Value = "FEMALE:";
+                    worksheet.Cell(currentRow, 5).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 6).Value = femaleCount;
+                    worksheet.Cell(currentRow, 6).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 7).Value = "OTHERS:";
+                    worksheet.Cell(currentRow, 7).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 8).Value = otherCount;
+                    worksheet.Cell(currentRow, 8).Style.Font.SetBold();
+                    currentRow += 2;
+
+                    // Headers
+                    string[] headers = { "MemberNo", "Names", "Sex", "Registration Date", "Mobile No", "ID No", "Email", "Station", "Membership Type" };
+                    for (int i = 0; i < headers.Length; i++)
+                    {
+                        worksheet.Cell(currentRow, i + 1).Value = headers[i];
+                        worksheet.Cell(currentRow, i + 1).Style.Font.SetBold();
+                        worksheet.Cell(currentRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                        worksheet.Cell(currentRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        worksheet.Cell(currentRow, i + 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    }
+                    currentRow++;
+
+                    foreach (var member in reportData)
+                    {
+                        worksheet.Cell(currentRow, 1).Value = member.MemberNo;
+                        worksheet.Cell(currentRow, 2).Value = member.FullName;
+                        worksheet.Cell(currentRow, 3).Value = member.Sex;
+                        worksheet.Cell(currentRow, 4).Value = member.RegistrationDate;
+                        worksheet.Cell(currentRow, 5).Value = member.MobileNo;
+                        worksheet.Cell(currentRow, 6).Value = member.IDNo;
+                        worksheet.Cell(currentRow, 7).Value = member.Email;
+                        worksheet.Cell(currentRow, 8).Value = member.Station;
+                        worksheet.Cell(currentRow, 9).Value = member.MembershipType;
+                        worksheet.Range(currentRow, 1, currentRow, 9).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        currentRow++;
+                    }
+
+                    currentRow += 2;
+                    worksheet.Cell(currentRow, 1).Value = $"Report Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}";
+                    worksheet.Range(currentRow, 1, currentRow, 9).Merge();
+                    worksheet.Cell(currentRow, 1).Style.Font.Italic = true;
+
+                    worksheet.Columns().AdjustToContents();
+
+                    using (var stream = new MemoryStream())
+                    {
+                        workbook.SaveAs(stream);
+                        var content = stream.ToArray();
+                        return File(content,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"PeriodicRegisteredMembers_{startDate:yyyyMMdd}_{endDate:yyyyMMdd}.xlsx");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting periodic registered members to Excel");
+                TempData["ErrorMessage"] = $"Error exporting: {ex.Message}";
+                return RedirectToAction("PeriodicRegisteredMembers");
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ExportPeriodicRegisteredMembersToPdf(DateTime startDate, DateTime endDate)
+        {
+            try
+            {
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+
+                var members = await _context.Members
+                    .Where(m => m.CompanyCode == companyCode
+                        && m.ApplicDate.HasValue
+                        && m.ApplicDate.Value.Date >= startDate.Date
+                        && m.ApplicDate.Value.Date <= endDate.Date
+                        && (m.Withdrawn == false || m.Withdrawn == null)
+                        && (m.Archived == false || m.Archived == null))
+                    .OrderBy(m => m.MemberNo)
+                    .ToListAsync();
+
+                var reportData = new List<PeriodicRegisteredMemberPdfData>();
+
+                foreach (var m in members)
+                {
+                    string fullName = "";
+                    if (m.FullName != null)
+                        fullName = m.FullName.ToString();
+                    else
+                        fullName = $"{m.Surname ?? ""} {m.OtherNames ?? ""}".Trim();
+
+                    string sex = "NOT SPECIFIED";
+                    if (!string.IsNullOrEmpty(m.Sex))
+                    {
+                        string sexUpper = m.Sex.ToUpper();
+                        if (sexUpper == "M" || sexUpper == "MALE")
+                            sex = "MALE";
+                        else if (sexUpper == "F" || sexUpper == "FEMALE")
+                            sex = "FEMALE";
+                        else
+                            sex = sexUpper;
+                    }
+
+                    reportData.Add(new PeriodicRegisteredMemberPdfData
+                    {
+                        MemberNo = m.MemberNo,
+                        FullName = fullName,
+                        Sex = sex,
+                        RegistrationDate = m.ApplicDate,
+                        MobileNo = m.PhoneNo ?? m.MobileNo ?? "-",
+                        IDNo = m.Idno ?? "-"
+                    });
+                }
+
+                int maleCount = reportData.Count(x => x.Sex == "MALE");
+                int femaleCount = reportData.Count(x => x.Sex == "FEMALE");
+                int otherCount = reportData.Count(x => x.Sex != "MALE" && x.Sex != "FEMALE" && x.Sex != "NOT SPECIFIED");
+
+                using var stream = new MemoryStream();
+
+                QuestPDF.Fluent.Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(PageSizes.A4.Landscape());
+                        page.MarginTop(1.5f, Unit.Centimetre);
+                        page.MarginBottom(1.5f, Unit.Centimetre);
+                        page.MarginLeft(1.2f, Unit.Centimetre);
+                        page.MarginRight(1.2f, Unit.Centimetre);
+                        page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
+
+                        page.Header().Column(header =>
+                        {
+                            header.Item().AlignCenter().Text(companyName.ToUpper()).FontSize(16).Bold();
+                            header.Item().AlignCenter().Text($"MEMBERS REGISTERED BETWEEN {startDate:dd/MM/yyyy} AND {endDate:dd/MM/yyyy}").FontSize(12).Bold();
+                            header.Item().AlignCenter().Text($"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}").FontSize(9).Italic();
+                            header.Item().PaddingTop(0.3f, Unit.Centimetre).LineHorizontal(0.5f);
+                            header.Item().PaddingBottom(0.5f, Unit.Centimetre);
+                        });
+
+                        page.Content().Column(contentCol =>
+                        {
+                            // Summary Statistics
+                            contentCol.Item().Table(summaryTable =>
+                            {
+                                summaryTable.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                });
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Members:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).Text(reportData.Count.ToString());
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Male:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).Text(maleCount.ToString());
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Female:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).Text(femaleCount.ToString());
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Others:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).Text(otherCount.ToString());
+                            });
+
+                            contentCol.Item().PaddingTop(1, Unit.Centimetre);
+                            contentCol.Item().Text("REGISTERED MEMBERS DETAILS").FontSize(11).Bold();
+
+                            contentCol.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(2.0f);
+                                    cols.RelativeColumn(0.8f);
+                                    cols.RelativeColumn(1.2f);
+                                    cols.RelativeColumn(1.2f);
+                                    cols.RelativeColumn(1.2f);
+                                });
+
+                                table.Header(header =>
+                                {
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Member No").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Names").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Sex").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Registration Date").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Mobile No").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("ID No").Bold().FontSize(8);
+                                });
+
+                                foreach (var member in reportData)
+                                {
+                                    table.Cell().Border(0.2f).Padding(4).Text(member.MemberNo ?? "").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).Text(member.FullName ?? "").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(member.Sex ?? "").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(member.RegistrationDate?.ToString("dd/MM/yyyy") ?? "-").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).Text(member.MobileNo ?? "").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).Text(member.IDNo ?? "").FontSize(8);
+                                }
+                            });
+                        });
+
+                        page.Footer()
+                            .AlignCenter()
+                            .Text(x =>
+                            {
+                                x.DefaultTextStyle(t => t.FontSize(8));
+                                x.Span("Page ");
+                                x.CurrentPageNumber();
+                                x.Span(" of ");
+                                x.TotalPages();
+                                x.Span($" | Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+                            });
+                    });
+                }).GeneratePdf(stream);
+
+                return File(stream.ToArray(), "application/pdf", $"PeriodicRegisteredMembers_{startDate:yyyyMMdd}_{endDate:yyyyMMdd}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting periodic registered members to PDF");
+                TempData["ErrorMessage"] = $"Error exporting: {ex.Message}";
+                return RedirectToAction("PeriodicRegisteredMembers");
+            }
+        }
+
+        public class PeriodicRegisteredMemberPdfData
+        {
+            public string MemberNo { get; set; }
+            public string FullName { get; set; }
+            public string Sex { get; set; }
+            public DateTime? RegistrationDate { get; set; }
+            public string MobileNo { get; set; }
+            public string IDNo { get; set; }
+        }
+
+        #endregion
+
+
+        #region Withdrawn Members Report
+
+        [HttpGet]
+        public IActionResult WithdrawnMembers()
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+            var reportDate = DateTime.Now;
+
+            var viewModel = new WithdrawnMembersIndexViewModel
+            {
+                Members = new List<WithdrawnMembersViewModel>(),
+                ReportDate = reportDate,
+                HasData = false,
+                UserCompanyCode = companyCode,
+                CompanyName = companyName,
+                TotalMembers = 0,
+                MaleCount = 0,
+                FemaleCount = 0,
+                OtherCount = 0,
+                TotalShareCapital = 0,
+                TotalSavingsDeposits = 0,
+                TotalRegistrationFee = 0,
+                TotalPassbookAmount = 0,
+                GrandTotalAmount = 0
+            };
+
+            ViewBag.ReportDate = reportDate;
+            ViewBag.HasData = false;
+            ViewBag.CompanyName = companyName;
+
+            return View("~/Views/Reports/WithdrawnMembers.cshtml", viewModel);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> WithdrawnMembers(DateTime? startDate, DateTime? endDate)
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+
+            // Build query for withdrawn members
+            var query = _context.Members
+                .Where(m => m.CompanyCode == companyCode
+                    && m.Withdrawn == true);
+
+            // Apply date filters if provided
+            if (startDate.HasValue)
+            {
+                query = query.Where(m => m.AuditDateTime.HasValue && m.AuditDateTime.Value.Date >= startDate.Value.Date);
+            }
+
+            if (endDate.HasValue)
+            {
+                query = query.Where(m => m.AuditDateTime.HasValue && m.AuditDateTime.Value.Date <= endDate.Value.Date);
+            }
+
+            var members = await query
+                .OrderBy(m => m.MemberNo)
+                .ToListAsync();
+
+            var memberNos = members.Select(m => m.MemberNo).ToList();
+
+            // Get contributions
+            var contribShares = await _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo)
+                    && cs.CompanyCode == companyCode)
+                .GroupBy(cs => cs.MemberNo)
+                .Select(g => new
+                {
+                    MemberNo = g.Key,
+                    TotalShareCapital = g.Sum(cs => cs.ShareCapitalAmount ?? 0),
+                    TotalDeposits = g.Sum(cs => cs.DepositsAmount ?? 0),
+                    TotalRegFee = g.Sum(cs => cs.RegFeeAmount ?? 0),
+                    TotalPassbook = g.Sum(cs => cs.PassBookAmount ?? 0)
+                })
+                .ToListAsync();
+
+            // Get shares from Shares table as fallback
+            var shares = await _context.Shares
+                .Where(s => memberNos.Contains(s.MemberNo)
+                    && s.CompanyCode == companyCode)
+                .GroupBy(s => s.MemberNo)
+                .Select(g => new
+                {
+                    MemberNo = g.Key,
+                    TotalShares = g.Sum(s => s.TotalShares ?? 0)
+                })
+                .ToListAsync();
+
+            var reportData = new List<WithdrawnMembersViewModel>();
+
+            foreach (var m in members)
+            {
+                var memberContrib = contribShares.FirstOrDefault(c => c.MemberNo == m.MemberNo);
+                var memberShare = shares.FirstOrDefault(s => s.MemberNo == m.MemberNo);
+
+                decimal shareCapital = 0;
+                if (memberContrib != null)
+                    shareCapital = memberContrib.TotalShareCapital;
+                else if (memberShare != null)
+                    shareCapital = memberShare.TotalShares;
+                else
+                    shareCapital = m.ShareCap ?? 0;
+
+                decimal savingsDeposits = memberContrib?.TotalDeposits ?? 0;
+                decimal registrationFee = memberContrib?.TotalRegFee ?? m.RegFee ?? 0;
+                decimal passbookAmount = memberContrib?.TotalPassbook ?? 0;
+
+                decimal totalAmount = shareCapital + savingsDeposits + registrationFee + passbookAmount;
+
+                string fullName = "";
+                if (m.FullName != null)
+                    fullName = m.FullName.ToString();
+                else
+                    fullName = $"{m.Surname ?? ""} {m.OtherNames ?? ""}".Trim();
+
+                string sex = "NOT SPECIFIED";
+                if (!string.IsNullOrEmpty(m.Sex))
+                {
+                    string sexUpper = m.Sex.ToUpper();
+                    if (sexUpper == "M" || sexUpper == "MALE")
+                        sex = "MALE";
+                    else if (sexUpper == "F" || sexUpper == "FEMALE")
+                        sex = "FEMALE";
+                    else
+                        sex = sexUpper;
+                }
+
+                int? membershipDuration = null;
+                if (m.ApplicDate.HasValue && m.AuditDateTime.HasValue)
+                {
+                    membershipDuration = (int)((m.AuditDateTime.Value - m.ApplicDate.Value).TotalDays / 30);
+                }
+
+                reportData.Add(new WithdrawnMembersViewModel
+                {
+                    MemberNo = m.MemberNo,
+                    FullName = fullName,
+                    WithdrawalDate = m.AuditDateTime,
+                    ShareCapital = shareCapital,
+                    SavingsDeposits = savingsDeposits,
+                    RegistrationFee = registrationFee,
+                    PassbookAmount = passbookAmount,
+                    TotalAmount = totalAmount,
+                    IdNo = m.Idno ?? "-",
+                    Sex = sex,
+                    PhoneNo = m.PhoneNo ?? m.MobileNo ?? "-",
+                    DateJoined = m.ApplicDate,
+                    MembershipDuration = membershipDuration
+                });
+            }
+
+            // Sort by member number
+            reportData = reportData.OrderBy(m => m.MemberNo).ToList();
+
+            int maleCount = reportData.Count(m => m.Sex == "MALE");
+            int femaleCount = reportData.Count(m => m.Sex == "FEMALE");
+            int otherCount = reportData.Count(m => m.Sex != "MALE" && m.Sex != "FEMALE" && m.Sex != "NOT SPECIFIED");
+
+            var viewModel = new WithdrawnMembersIndexViewModel
+            {
+                Members = reportData,
+                TotalMembers = reportData.Count,
+                MaleCount = maleCount,
+                FemaleCount = femaleCount,
+                OtherCount = otherCount,
+                TotalShareCapital = reportData.Sum(m => m.ShareCapital),
+                TotalSavingsDeposits = reportData.Sum(m => m.SavingsDeposits),
+                TotalRegistrationFee = reportData.Sum(m => m.RegistrationFee),
+                TotalPassbookAmount = reportData.Sum(m => m.PassbookAmount),
+                GrandTotalAmount = reportData.Sum(m => m.TotalAmount),
+                StartDate = startDate,
+                EndDate = endDate,
+                ReportDate = DateTime.Now,
+                HasData = reportData.Any(),
+                UserCompanyCode = companyCode,
+                CompanyName = companyName
+            };
+
+            ViewBag.ReportDate = DateTime.Now;
+            ViewBag.HasData = reportData.Any();
+            ViewBag.CompanyName = companyName;
+            ViewBag.TotalMembers = reportData.Count;
+            ViewBag.MaleCount = maleCount;
+            ViewBag.FemaleCount = femaleCount;
+            ViewBag.OtherCount = otherCount;
+            ViewBag.TotalShareCapital = reportData.Sum(m => m.ShareCapital);
+            ViewBag.TotalSavingsDeposits = reportData.Sum(m => m.SavingsDeposits);
+            ViewBag.TotalRegistrationFee = reportData.Sum(m => m.RegistrationFee);
+            ViewBag.TotalPassbookAmount = reportData.Sum(m => m.PassbookAmount);
+            ViewBag.GrandTotalAmount = reportData.Sum(m => m.TotalAmount);
+
+            return View("~/Views/Reports/WithdrawnMembers.cshtml", viewModel);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ExportWithdrawnMembersToExcel(DateTime? startDate, DateTime? endDate)
+        {
+            try
+            {
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+
+                var query = _context.Members
+                    .Where(m => m.CompanyCode == companyCode
+                        && m.Withdrawn == true);
+
+                if (startDate.HasValue)
+                    query = query.Where(m => m.AuditDateTime.HasValue && m.AuditDateTime.Value.Date >= startDate.Value.Date);
+
+                if (endDate.HasValue)
+                    query = query.Where(m => m.AuditDateTime.HasValue && m.AuditDateTime.Value.Date <= endDate.Value.Date);
+
+                var members = await query.OrderBy(m => m.MemberNo).ToListAsync();
+
+                var memberNos = members.Select(m => m.MemberNo).ToList();
+
+                var contribShares = await _context.ContribShares
+                    .Where(cs => memberNos.Contains(cs.MemberNo) && cs.CompanyCode == companyCode)
+                    .GroupBy(cs => cs.MemberNo)
+                    .Select(g => new
+                    {
+                        MemberNo = g.Key,
+                        TotalShareCapital = g.Sum(cs => cs.ShareCapitalAmount ?? 0),
+                        TotalDeposits = g.Sum(cs => cs.DepositsAmount ?? 0),
+                        TotalRegFee = g.Sum(cs => cs.RegFeeAmount ?? 0),
+                        TotalPassbook = g.Sum(cs => cs.PassBookAmount ?? 0)
+                    })
+                    .ToListAsync();
+
+                var reportData = new List<dynamic>();
+
+                foreach (var m in members)
+                {
+                    var memberContrib = contribShares.FirstOrDefault(c => c.MemberNo == m.MemberNo);
+
+                    decimal shareCapital = memberContrib?.TotalShareCapital ?? m.ShareCap ?? 0;
+                    decimal savingsDeposits = memberContrib?.TotalDeposits ?? 0;
+                    decimal registrationFee = memberContrib?.TotalRegFee ?? m.RegFee ?? 0;
+                    decimal passbookAmount = memberContrib?.TotalPassbook ?? 0;
+                    decimal totalAmount = shareCapital + savingsDeposits + registrationFee + passbookAmount;
+
+                    string fullName = "";
+                    if (m.FullName != null)
+                        fullName = m.FullName.ToString();
+                    else
+                        fullName = $"{m.Surname ?? ""} {m.OtherNames ?? ""}".Trim();
+
+                    reportData.Add(new
+                    {
+                        m.MemberNo,
+                        FullName = fullName,
+                        WithdrawalDate = m.AuditDateTime?.ToString("dd/MM/yyyy") ?? "-",
+                        ShareCapital = shareCapital,
+                        SavingsDeposits = savingsDeposits,
+                        RegistrationFee = registrationFee,
+                        PassbookAmount = passbookAmount,
+                        TotalAmount = totalAmount
+                    });
+                }
+
+                using (var workbook = new XLWorkbook())
+                {
+                    var worksheet = workbook.Worksheets.Add("Withdrawn Members");
+                    int currentRow = 1;
+
+                    // Header
+                    worksheet.Cell(currentRow, 1).Value = companyName.ToUpper();
+                    worksheet.Range(currentRow, 1, currentRow, 8).Merge();
+                    worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(18);
+                    worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    currentRow += 2;
+
+                    string dateRange = "ALL TIME";
+                    if (startDate.HasValue && endDate.HasValue)
+                        dateRange = $"{startDate.Value:dd/MM/yyyy} - {endDate.Value:dd/MM/yyyy}";
+                    else if (startDate.HasValue)
+                        dateRange = $"From {startDate.Value:dd/MM/yyyy}";
+                    else if (endDate.HasValue)
+                        dateRange = $"Up to {endDate.Value:dd/MM/yyyy}";
+
+                    worksheet.Cell(currentRow, 1).Value = $"WITHDRAWN MEMBERS - {dateRange}";
+                    worksheet.Range(currentRow, 1, currentRow, 8).Merge();
+                    worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                    worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    currentRow += 2;
+
+                    // Headers
+                    string[] headers = { "MemberNo", "Names", "Withdrawal Date", "Share Capital", "Savings/Deposits", "Reg Fee", "Passbook", "Total Amount" };
+                    for (int i = 0; i < headers.Length; i++)
+                    {
+                        worksheet.Cell(currentRow, i + 1).Value = headers[i];
+                        worksheet.Cell(currentRow, i + 1).Style.Font.SetBold();
+                        worksheet.Cell(currentRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                        worksheet.Cell(currentRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        worksheet.Cell(currentRow, i + 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    }
+                    currentRow++;
+
+                    foreach (var member in reportData)
+                    {
+                        worksheet.Cell(currentRow, 1).Value = member.MemberNo;
+                        worksheet.Cell(currentRow, 2).Value = member.FullName;
+                        worksheet.Cell(currentRow, 3).Value = member.WithdrawalDate;
+                        worksheet.Cell(currentRow, 4).Value = member.ShareCapital;
+                        worksheet.Cell(currentRow, 4).Style.NumberFormat.Format = "#,##0.00";
+                        worksheet.Cell(currentRow, 5).Value = member.SavingsDeposits;
+                        worksheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                        worksheet.Cell(currentRow, 6).Value = member.RegistrationFee;
+                        worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
+                        worksheet.Cell(currentRow, 7).Value = member.PassbookAmount;
+                        worksheet.Cell(currentRow, 7).Style.NumberFormat.Format = "#,##0.00";
+                        worksheet.Cell(currentRow, 8).Value = member.TotalAmount;
+                        worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                        worksheet.Cell(currentRow, 8).Style.Font.SetBold();
+                        worksheet.Range(currentRow, 1, currentRow, 8).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        currentRow++;
+                    }
+
+                    // Grand Total
+                    currentRow++;
+                    worksheet.Cell(currentRow, 3).Value = "GRAND TOTAL:";
+                    worksheet.Cell(currentRow, 3).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 3).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
+
+                    worksheet.Cell(currentRow, 4).Value = reportData.Sum(m => (decimal)m.ShareCapital);
+                    worksheet.Cell(currentRow, 4).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 4).Style.NumberFormat.Format = "#,##0.00";
+
+                    worksheet.Cell(currentRow, 5).Value = reportData.Sum(m => (decimal)m.SavingsDeposits);
+                    worksheet.Cell(currentRow, 5).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
+
+                    worksheet.Cell(currentRow, 6).Value = reportData.Sum(m => (decimal)m.RegistrationFee);
+                    worksheet.Cell(currentRow, 6).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
+
+                    worksheet.Cell(currentRow, 7).Value = reportData.Sum(m => (decimal)m.PassbookAmount);
+                    worksheet.Cell(currentRow, 7).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 7).Style.NumberFormat.Format = "#,##0.00";
+
+                    worksheet.Cell(currentRow, 8).Value = reportData.Sum(m => (decimal)m.TotalAmount);
+                    worksheet.Cell(currentRow, 8).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 8).Style.Fill.SetBackgroundColor(XLColor.LightYellow);
+
+                    currentRow += 2;
+                    worksheet.Cell(currentRow, 1).Value = $"Report Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}";
+                    worksheet.Range(currentRow, 1, currentRow, 8).Merge();
+                    worksheet.Cell(currentRow, 1).Style.Font.Italic = true;
+
+                    worksheet.Columns().AdjustToContents();
+
+                    using (var stream = new MemoryStream())
+                    {
+                        workbook.SaveAs(stream);
+                        return File(stream.ToArray(),
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            $"WithdrawnMembers_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting withdrawn members to Excel");
+                TempData["ErrorMessage"] = $"Error exporting: {ex.Message}";
+                return RedirectToAction("WithdrawnMembers");
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ExportWithdrawnMembersToPdf(DateTime? startDate, DateTime? endDate)
+        {
+            try
+            {
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+
+                var query = _context.Members
+                    .Where(m => m.CompanyCode == companyCode
+                        && m.Withdrawn == true);
+
+                if (startDate.HasValue)
+                    query = query.Where(m => m.AuditDateTime.HasValue && m.AuditDateTime.Value.Date >= startDate.Value.Date);
+
+                if (endDate.HasValue)
+                    query = query.Where(m => m.AuditDateTime.HasValue && m.AuditDateTime.Value.Date <= endDate.Value.Date);
+
+                var members = await query.OrderBy(m => m.MemberNo).ToListAsync();
+
+                var memberNos = members.Select(m => m.MemberNo).ToList();
+
+                var contribShares = await _context.ContribShares
+                    .Where(cs => memberNos.Contains(cs.MemberNo) && cs.CompanyCode == companyCode)
+                    .GroupBy(cs => cs.MemberNo)
+                    .Select(g => new
+                    {
+                        MemberNo = g.Key,
+                        TotalShareCapital = g.Sum(cs => cs.ShareCapitalAmount ?? 0),
+                        TotalDeposits = g.Sum(cs => cs.DepositsAmount ?? 0),
+                        TotalRegFee = g.Sum(cs => cs.RegFeeAmount ?? 0),
+                        TotalPassbook = g.Sum(cs => cs.PassBookAmount ?? 0)
+                    })
+                    .ToListAsync();
+
+                var reportData = new List<WithdrawnMemberPdfData>();
+
+                foreach (var m in members)
+                {
+                    var memberContrib = contribShares.FirstOrDefault(c => c.MemberNo == m.MemberNo);
+
+                    decimal shareCapital = memberContrib?.TotalShareCapital ?? m.ShareCap ?? 0;
+                    decimal savingsDeposits = memberContrib?.TotalDeposits ?? 0;
+                    decimal registrationFee = memberContrib?.TotalRegFee ?? m.RegFee ?? 0;
+                    decimal passbookAmount = memberContrib?.TotalPassbook ?? 0;
+                    decimal totalAmount = shareCapital + savingsDeposits + registrationFee + passbookAmount;
+
+                    string fullName = "";
+                    if (m.FullName != null)
+                        fullName = m.FullName.ToString();
+                    else
+                        fullName = $"{m.Surname ?? ""} {m.OtherNames ?? ""}".Trim();
+
+                    reportData.Add(new WithdrawnMemberPdfData
+                    {
+                        MemberNo = m.MemberNo,
+                        FullName = fullName,
+                        WithdrawalDate = m.AuditDateTime,
+                        ShareCapital = shareCapital,
+                        SavingsDeposits = savingsDeposits,
+                        RegistrationFee = registrationFee,
+                        PassbookAmount = passbookAmount,
+                        TotalAmount = totalAmount
+                    });
+                }
+
+                using var stream = new MemoryStream();
+
+                QuestPDF.Fluent.Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(PageSizes.A4.Landscape());
+                        page.MarginTop(1.5f, Unit.Centimetre);
+                        page.MarginBottom(1.5f, Unit.Centimetre);
+                        page.MarginLeft(1.2f, Unit.Centimetre);
+                        page.MarginRight(1.2f, Unit.Centimetre);
+                        page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
+
+                        page.Header().Column(header =>
+                        {
+                            header.Item().AlignCenter().Text(companyName.ToUpper()).FontSize(16).Bold();
+                            header.Item().AlignCenter().Text("WITHDRAWN MEMBERS").FontSize(12).Bold();
+
+                            string dateRange = "ALL TIME";
+                            if (startDate.HasValue && endDate.HasValue)
+                                dateRange = $"{startDate.Value:dd/MM/yyyy} - {endDate.Value:dd/MM/yyyy}";
+                            else if (startDate.HasValue)
+                                dateRange = $"From {startDate.Value:dd/MM/yyyy}";
+                            else if (endDate.HasValue)
+                                dateRange = $"Up to {endDate.Value:dd/MM/yyyy}";
+
+                            header.Item().AlignCenter().Text($"Period: {dateRange}").FontSize(10).Bold();
+                            header.Item().AlignCenter().Text($"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}").FontSize(9).Italic();
+                            header.Item().PaddingTop(0.3f, Unit.Centimetre).LineHorizontal(0.5f);
+                            header.Item().PaddingBottom(0.5f, Unit.Centimetre);
+                        });
+
+                        page.Content().Column(contentCol =>
+                        {
+                            // Summary Statistics
+                            contentCol.Item().Table(summaryTable =>
+                            {
+                                summaryTable.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                });
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Withdrawn:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).Text(reportData.Count.ToString());
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Amount:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{reportData.Sum(x => x.TotalAmount):N0}");
+                            });
+
+                            contentCol.Item().PaddingTop(1, Unit.Centimetre);
+                            contentCol.Item().Text("WITHDRAWN MEMBERS DETAILS").FontSize(11).Bold();
+
+                            contentCol.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(2.0f);
+                                    cols.RelativeColumn(1.2f);
+                                    cols.RelativeColumn(1.2f);
+                                    cols.RelativeColumn(1.2f);
+                                    cols.RelativeColumn(1.2f);
+                                    cols.RelativeColumn(1.2f);
+                                    cols.RelativeColumn(1.2f);
+                                });
+
+                                table.Header(header =>
+                                {
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Member No").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Names").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Withdrawal Date").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Share Capital").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Savings/Deposits").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Reg Fee").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Passbook").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Total Amount").Bold().FontSize(7);
+                                });
+
+                                foreach (var member in reportData)
+                                {
+                                    table.Cell().Border(0.2f).Padding(4).Text(member.MemberNo ?? "").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).Text(member.FullName ?? "").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(member.WithdrawalDate?.ToString("dd/MM/yyyy") ?? "-").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{member.ShareCapital:N0}").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{member.SavingsDeposits:N0}").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{member.RegistrationFee:N0}").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{member.PassbookAmount:N0}").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{member.TotalAmount:N0}").FontSize(8).Bold();
+                                }
+
+                                // Grand Total Row
+                                table.Cell().ColumnSpan(3).Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text("GRAND TOTAL:").Bold().FontSize(9);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{reportData.Sum(x => x.ShareCapital):N0}").Bold().FontSize(9);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{reportData.Sum(x => x.SavingsDeposits):N0}").Bold().FontSize(9);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{reportData.Sum(x => x.RegistrationFee):N0}").Bold().FontSize(9);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{reportData.Sum(x => x.PassbookAmount):N0}").Bold().FontSize(9);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{reportData.Sum(x => x.TotalAmount):N0}").Bold().FontSize(9).FontColor(QuestPDF.Infrastructure.Color.FromHex("#dc3545"));
+                            });
+                        });
+
+                        page.Footer()
+                            .AlignCenter()
+                            .Text(x =>
+                            {
+                                x.DefaultTextStyle(t => t.FontSize(8));
+                                x.Span("Page ");
+                                x.CurrentPageNumber();
+                                x.Span(" of ");
+                                x.TotalPages();
+                                x.Span($" | Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+                            });
+                    });
+                }).GeneratePdf(stream);
+
+                return File(stream.ToArray(), "application/pdf", $"WithdrawnMembers_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting withdrawn members to PDF");
+                TempData["ErrorMessage"] = $"Error exporting: {ex.Message}";
+                return RedirectToAction("WithdrawnMembers");
+            }
+        }
+
+        public class WithdrawnMemberPdfData
+        {
+            public string MemberNo { get; set; }
+            public string FullName { get; set; }
+            public DateTime? WithdrawalDate { get; set; }
+            public decimal ShareCapital { get; set; }
+            public decimal SavingsDeposits { get; set; }
+            public decimal RegistrationFee { get; set; }
+            public decimal PassbookAmount { get; set; }
+            public decimal TotalAmount { get; set; }
+        }
+
+        #endregion
 
     }
 }

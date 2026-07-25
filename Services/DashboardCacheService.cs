@@ -15,6 +15,8 @@ namespace SACCOBlockChainSystem.Services
     {
         Task<DashboardVM> GetDashboardDataAsync(string? companyCode, bool isSuperAdmin);
         Task InvalidateCacheAsync(string? companyCode = null);
+        Task<DashboardVM> GetDashboardDataForCompaniesAsync(List<string> companyCodes, bool isCountyAdmin);
+        Task InvalidateCacheForCountyAsync(string county);
     }
 
     public class DashboardCacheService : IDashboardCacheService
@@ -713,23 +715,332 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
+
+        // ============================================================
+        // CALCULATE LOANEE STATISTICS (Distinct Members with Loans)
+        // ============================================================
+        private async Task<(int Total, int Women, int Men, int Others)> CalculateLoaneesDataAsync(string? companyCode)
+        {
+            try
+            {
+                var loansQuery = _context.Loans.AsQueryable();
+
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loansQuery = loansQuery.Where(l => l.CompanyCode == companyCode);
+                }
+
+                // Get distinct members who have taken loans (INNER JOIN with Members)
+                var loaneesQuery = from l in loansQuery
+                                   join m in _context.Members on l.MemberNo equals m.MemberNo
+                                   select new { m.MemberNo, m.Sex };
+
+                var loanees = await loaneesQuery
+                    .GroupBy(x => new { x.MemberNo, x.Sex })
+                    .Select(g => new { g.Key.MemberNo, g.Key.Sex })
+                    .ToListAsync();
+
+                int womenLoanees = 0;
+                int menLoanees = 0;
+                int othersLoanees = 0;
+
+                foreach (var l in loanees)
+                {
+                    var gender = NormalizeGender(l.Sex);
+                    if (gender == "FEMALE")
+                        womenLoanees++;
+                    else if (gender == "MALE")
+                        menLoanees++;
+                    else
+                        othersLoanees++;
+                }
+
+                int total = womenLoanees + menLoanees + othersLoanees;
+
+                _logger.LogInformation($"Loanees - Total: {total}, Women: {womenLoanees}, Men: {menLoanees}, Others: {othersLoanees}");
+
+                return (total, womenLoanees, menLoanees, othersLoanees);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calculating loanees data");
+                return (0, 0, 0, 0);
+            }
+        }
+
+        // ============================================================
+        // CALCULATE LOAN COUNT STATISTICS
+        // ============================================================
+        private async Task<(int Total, int Women, int Men, int Others)> CalculateLoanCountDataAsync(string? companyCode)
+        {
+            try
+            {
+                var loansQuery = from l in _context.Loans
+                                 join m in _context.Members on l.MemberNo equals m.MemberNo
+                                 select new { l.LoanNo, l.Status, l.CompanyCode, m.Sex };
+
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loansQuery = loansQuery.Where(x => x.CompanyCode == companyCode);
+                }
+
+                var loans = await loansQuery.ToListAsync();
+
+                int womenCount = 0;
+                int menCount = 0;
+                int othersCount = 0;
+
+                foreach (var loan in loans)
+                {
+                    var gender = NormalizeGender(loan.Sex);
+                    if (gender == "FEMALE")
+                        womenCount++;
+                    else if (gender == "MALE")
+                        menCount++;
+                    else
+                        othersCount++;
+                }
+
+                int total = womenCount + menCount + othersCount;
+
+                _logger.LogInformation($"Loan Count - Total: {total}, Women: {womenCount}, Men: {menCount}, Others: {othersCount}");
+
+                return (total, womenCount, menCount, othersCount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calculating loan count data");
+                return (0, 0, 0, 0);
+            }
+        }
+
+        // ============================================================
+        // CALCULATE LOAN STATUS BREAKDOWN
+        // ============================================================
+        private async Task<(int Completed, int Uncompleted, int Overdue, int Active)> CalculateLoanStatusBreakdownAsync(string? companyCode)
+        {
+            try
+            {
+                var asAtDate = DateTime.Now.Date;
+
+                var loansQuery = _context.Loans.AsQueryable();
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loansQuery = loansQuery.Where(l => l.CompanyCode == companyCode);
+                }
+
+                var loans = await loansQuery
+                    .Select(l => new { l.LoanNo, l.Status, l.MemberNo, l.AuditTime })
+                    .ToListAsync();
+
+                int completed = 0;
+                int uncompleted = 0;
+                int active = 0;
+                int overdue = 0;
+
+                var loanNos = loans.Select(l => l.LoanNo).ToList();
+                var loanBalances = new Dictionary<string, decimal>();
+
+                if (loanNos.Any())
+                {
+                    loanBalances = await _context.Loanbal
+                        .Where(lb => loanNos.Contains(lb.LoanNo))
+                        .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
+                }
+
+                foreach (var loan in loans)
+                {
+                    // Completed loans: Status = Closed
+                    if (loan.Status == (int)Status.Closed)
+                    {
+                        completed++;
+                        continue;
+                    }
+
+                    // Uncompleted: Status != Closed, != Rejected, != WrittenOff
+                    if (loan.Status != (int)Status.Rejected && loan.Status != (int)Status.WrittenOff)
+                    {
+                        uncompleted++;
+                    }
+
+                    // Active loans: Status = Disbursed or Endorsed
+                    if (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
+                    {
+                        active++;
+
+                        // Check if overdue (>30 days)
+                        decimal balance = loanBalances.ContainsKey(loan.LoanNo) ? loanBalances[loan.LoanNo] : 0;
+                        if (balance > 0)
+                        {
+                            // Calculate days overdue based on last payment date
+                            var lastRepayment = await _context.Repay
+                                .Where(r => r.LoanNo == loan.LoanNo && r.DateReceived.HasValue)
+                                .OrderByDescending(r => r.DateReceived)
+                                .Select(r => r.DateReceived)
+                                .FirstOrDefaultAsync();
+
+                            DateTime? lastPaymentDate = lastRepayment ?? loan.AuditTime;
+                            int daysOverdue = 0;
+
+                            if (lastPaymentDate.HasValue)
+                            {
+                                var nextDueDate = lastPaymentDate.Value.AddMonths(1);
+                                if (asAtDate > nextDueDate)
+                                {
+                                    daysOverdue = (asAtDate - nextDueDate).Days;
+                                }
+                            }
+
+                            if (daysOverdue > 30)
+                            {
+                                overdue++;
+                            }
+                        }
+                    }
+                }
+
+                // Overdue loans might already be counted in active, but we keep separate counts
+                // for display purposes
+
+                _logger.LogInformation($"Loan Status - Completed: {completed}, Uncompleted: {uncompleted}, Active: {active}, Overdue: {overdue}");
+
+                return (completed, uncompleted, overdue, active);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calculating loan status breakdown");
+                return (0, 0, 0, 0);
+            }
+        }
+
+        // ============================================================
+        // CALCULATE LOAN STATUS BREAKDOWN BY GENDER
+        // ============================================================
+        private async Task<(int WomenCompleted, int MenCompleted, int OthersCompleted, int WomenActive, int MenActive, int OthersActive, int WomenOverdue, int MenOverdue, int OthersOverdue)>
+            CalculateLoanStatusByGenderAsync(string? companyCode)
+        {
+            try
+            {
+                var asAtDate = DateTime.Now.Date;
+
+                var loansQuery = from l in _context.Loans
+                                 join m in _context.Members on l.MemberNo equals m.MemberNo
+                                 select new { l.LoanNo, l.Status, l.MemberNo, l.AuditTime, m.Sex, l.CompanyCode };
+
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loansQuery = loansQuery.Where(x => x.CompanyCode == companyCode);
+                }
+
+                var loans = await loansQuery.ToListAsync();
+
+                int womenCompleted = 0, menCompleted = 0, othersCompleted = 0;
+                int womenActive = 0, menActive = 0, othersActive = 0;
+                int womenOverdue = 0, menOverdue = 0, othersOverdue = 0;
+
+                var loanNos = loans.Select(l => l.LoanNo).ToList();
+                var loanBalances = new Dictionary<string, decimal>();
+
+                if (loanNos.Any())
+                {
+                    loanBalances = await _context.Loanbal
+                        .Where(lb => loanNos.Contains(lb.LoanNo))
+                        .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
+                }
+
+                foreach (var loan in loans)
+                {
+                    var gender = NormalizeGender(loan.Sex);
+
+                    // Completed loans
+                    if (loan.Status == (int)Status.Closed)
+                    {
+                        if (gender == "FEMALE") womenCompleted++;
+                        else if (gender == "MALE") menCompleted++;
+                        else othersCompleted++;
+                        continue;
+                    }
+
+                    // Active loans: Status = Disbursed or Endorsed
+                    if (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
+                    {
+                        // Count active by gender
+                        if (gender == "FEMALE") womenActive++;
+                        else if (gender == "MALE") menActive++;
+                        else othersActive++;
+
+                        // Check if overdue (>30 days)
+                        decimal balance = loanBalances.ContainsKey(loan.LoanNo) ? loanBalances[loan.LoanNo] : 0;
+                        if (balance > 0)
+                        {
+                            var lastRepayment = await _context.Repay
+                                .Where(r => r.LoanNo == loan.LoanNo && r.DateReceived.HasValue)
+                                .OrderByDescending(r => r.DateReceived)
+                                .Select(r => r.DateReceived)
+                                .FirstOrDefaultAsync();
+
+                            DateTime? lastPaymentDate = lastRepayment ?? loan.AuditTime;
+                            int daysOverdue = 0;
+
+                            if (lastPaymentDate.HasValue)
+                            {
+                                var nextDueDate = lastPaymentDate.Value.AddMonths(1);
+                                if (asAtDate > nextDueDate)
+                                {
+                                    daysOverdue = (asAtDate - nextDueDate).Days;
+                                }
+                            }
+
+                            if (daysOverdue > 30)
+                            {
+                                if (gender == "FEMALE") womenOverdue++;
+                                else if (gender == "MALE") menOverdue++;
+                                else othersOverdue++;
+                            }
+                        }
+                    }
+                }
+
+                _logger.LogInformation($"Loan Status by Gender - Women: Completed={womenCompleted}, Active={womenActive}, Overdue={womenOverdue}");
+
+                return (womenCompleted, menCompleted, othersCompleted,
+                        womenActive, menActive, othersActive,
+                        womenOverdue, menOverdue, othersOverdue);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calculating loan status by gender");
+                return (0, 0, 0, 0, 0, 0, 0, 0, 0);
+            }
+        }
+
         private async Task<DashboardVM> CalculateFullDashboardDataAsync(string? companyCode, bool isSuperAdmin)
         {
             var dashboard = new DashboardVM();
 
-            // Build the member filter
+            // Build the member filter - get members for this company
             var memberQuery = _context.Members.AsQueryable();
-            if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-                memberQuery = memberQuery.Where(m => m.CompanyCode == companyCode);
-            else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+            if (!string.IsNullOrEmpty(companyCode))
                 memberQuery = memberQuery.Where(m => m.CompanyCode == companyCode);
 
             // ============================================================
-            // QUERY #1: Member statistics
+            // QUERY #1: Member statistics - Get ALL members for this company
             // ============================================================
             var memberStats = await memberQuery
-                .Select(m => new { m.Sex, m.Status, m.MemberNo, m.Dob, m.EffectDate })
+                .Select(m => new {
+                    m.Id,
+                    m.MemberNo,
+                    m.Sex,
+                    m.Status,
+                    m.Dob,
+                    m.EffectDate,
+                    m.CompanyCode
+                })
                 .ToListAsync();
+
+            // Store the member IDs for filtering other queries
+            var memberIds = memberStats.Select(m => m.Id).ToList();
+            var memberNos = memberStats.Select(m => m.MemberNo).Distinct().ToList();
 
             dashboard.TotalMembers = memberStats.Count;
             dashboard.TotalWomen = memberStats.Count(m => m.Sex?.ToUpper() == "FEMALE");
@@ -750,17 +1061,12 @@ namespace SACCOBlockChainSystem.Services
             dashboard.YouthMale = membersWithAge.Count(m => CalculateAge(m.Dob.Value) <= 35 && m.Sex?.ToUpper() == "MALE");
             dashboard.YouthFemale = membersWithAge.Count(m => CalculateAge(m.Dob.Value) <= 35 && m.Sex?.ToUpper() == "FEMALE");
 
-            // Get member numbers list for filtering
-            var memberNos = memberStats.Select(m => m.MemberNo).ToList();
-
             // ============================================================
             // QUERY #2: Financial aggregates from ContribShares
+            // FIXED: Use BOTH MemberNo AND CompanyCode
             // ============================================================
-            var contribSharesQuery = _context.ContribShares.AsQueryable();
-            if (memberNos.Any())
-                contribSharesQuery = contribSharesQuery.Where(cs => memberNos.Contains(cs.MemberNo));
-
-            var financialStats = await contribSharesQuery
+            var financialStats = await _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo) && cs.CompanyCode == companyCode)
                 .GroupBy(cs => 1)
                 .Select(g => new
                 {
@@ -781,10 +1087,11 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #3: Gender breakdown for financials
+            // FIXED: Use BOTH MemberNo AND CompanyCode
             // ============================================================
             var genderFinancials = await (from cs in _context.ContribShares
-                                          join m in _context.Members on cs.MemberNo equals m.MemberNo
-                                          where memberNos.Contains(m.MemberNo)
+                                          join m in _context.Members on new { cs.MemberNo, cs.CompanyCode } equals new { m.MemberNo, m.CompanyCode }
+                                          where m.CompanyCode == companyCode
                                           group cs by m.Sex into g
                                           select new
                                           {
@@ -823,11 +1130,13 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #4: Loan stats from Cheques table (Loans Taken)
+            // FIXED: Use CompanyCode in joins
             // ============================================================
             var loanStatsQuery = from c in _context.Cheques
-                                 join l in _context.Loans on c.LoanNo equals l.LoanNo
-                                 join m in _context.Members on l.MemberNo equals m.MemberNo
-                                 where c.Amount > 0 && c.Amount != null && memberNos.Contains(m.MemberNo)
+                                 join l in _context.Loans on new { c.LoanNo, c.CompanyCode } equals new { l.LoanNo, l.CompanyCode }
+                                 join m in _context.Members on new { l.MemberNo, l.CompanyCode } equals new { m.MemberNo, m.CompanyCode }
+                                 where c.Amount > 0 && c.Amount != null
+                                       && m.CompanyCode == companyCode
                                  select new { Amount = c.Amount.Value, Sex = m.Sex };
 
             var loanStats = await loanStatsQuery.ToListAsync();
@@ -839,10 +1148,11 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #5: Loan balances from Loanbal table
+            // FIXED: Use CompanyCode in joins
             // ============================================================
             var loanBalancesQuery = from lb in _context.Loanbal
-                                    join m in _context.Members on lb.MemberNo equals m.MemberNo
-                                    where memberNos.Contains(m.MemberNo)
+                                    join m in _context.Members on new { MemberNo = lb.MemberNo, CompanyCode = lb.Companycode } equals new { m.MemberNo, m.CompanyCode }
+                                    where m.CompanyCode == companyCode
                                     select new { lb.Balance, m.Sex };
 
             var loanBalances = await loanBalancesQuery.ToListAsync();
@@ -854,10 +1164,12 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #6: Loans paid from Repay table
+            // FIXED: Use CompanyCode in joins
             // ============================================================
             var loansPaidQuery = from r in _context.Repay
-                                 join m in _context.Members on r.MemberNo equals m.MemberNo
-                                 where r.Principal > 0 && r.Principal != null && memberNos.Contains(m.MemberNo)
+                                 join m in _context.Members on new { r.MemberNo, r.CompanyCode } equals new { m.MemberNo, m.CompanyCode }
+                                 where r.Principal > 0 && r.Principal != null
+                                       && m.CompanyCode == companyCode
                                  select new { Principal = r.Principal.Value, Sex = m.Sex };
 
             var loansPaid = await loansPaidQuery.ToListAsync();
@@ -869,10 +1181,11 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #7: Total loanees (distinct members with loans)
+            // FIXED: Use CompanyCode
             // ============================================================
             var loaneesQuery = from l in _context.Loans
-                               join m in _context.Members on l.MemberNo equals m.MemberNo
-                               where memberNos.Contains(m.MemberNo)
+                               join m in _context.Members on new { l.MemberNo, l.CompanyCode } equals new { m.MemberNo, m.CompanyCode }
+                               where m.CompanyCode == companyCode
                                select new { m.MemberNo, m.Sex };
 
             var loanees = await loaneesQuery
@@ -887,9 +1200,16 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #8: Blockchain stats
+            // FIXED: Use MemberNo AND CompanyCode
             // ============================================================
-            dashboard.TotalBlockchainTransactions = await _context.BlockchainTransactions.CountAsync();
-            dashboard.PendingBlockchainTransactions = await _context.BlockchainTransactions.CountAsync(t => t.Status.ToUpper() == "PENDING");
+            dashboard.TotalBlockchainTransactions = await _context.BlockchainTransactions
+                .Where(t => memberNos.Contains(t.MemberNo) && t.CompanyCode == companyCode)
+                .CountAsync();
+
+            dashboard.PendingBlockchainTransactions = await _context.BlockchainTransactions
+                .Where(t => t.Status.ToUpper() == "PENDING" && memberNos.Contains(t.MemberNo) && t.CompanyCode == companyCode)
+                .CountAsync();
+
             dashboard.BlocksCreatedToday = await _context.Blocks
                 .Where(b => b.Timestamp.Date == DateTime.Today)
                 .CountAsync();
@@ -899,134 +1219,209 @@ namespace SACCOBlockChainSystem.Services
             // ============================================================
             var grantsQuery = _context.Gltransactions.AsQueryable();
 
-            // Apply company filter if provided
             if (!string.IsNullOrEmpty(companyCode))
                 grantsQuery = grantsQuery.Where(g => g.CompanyCode == companyCode);
 
-            // Inclusion Grant - look for "inclusion grant" in TransDescript
             dashboard.InclusionGrantTotal = await grantsQuery
-                .Where(g => g.TransDescript != null &&
-                            g.TransDescript.ToLower().Contains("inclusion grant"))
+                .Where(g => g.TransDescript != null && g.TransDescript.ToLower().Contains("inclusion grant"))
                 .SumAsync(g => (decimal?)g.Amount) ?? 0;
 
-            // Matching Grant - look for "matching grant" in TransDescript
             dashboard.MatchingGrantTotal = await grantsQuery
-                .Where(g => g.TransDescript != null &&
-                            g.TransDescript.ToLower().Contains("matching grant"))
+                .Where(g => g.TransDescript != null && g.TransDescript.ToLower().Contains("matching grant"))
                 .SumAsync(g => (decimal?)g.Amount) ?? 0;
 
             // ============================================================
-            // QUERY #10: Repayment Rate (Current Month) - Matches Controller Logic
+            // QUERY #10: Loan Metrics (PAR, Arrears, Repayment Rate, etc.)
+            // FIXED: Use CompanyCode in all joins
             // ============================================================
-            try
+
+            // Get all loans for members of this company
+            var loans = await _context.Loans
+                .Where(l => memberNos.Contains(l.MemberNo) && l.CompanyCode == companyCode)
+                .Select(l => new { l.LoanNo, l.MemberNo, l.LoanAmt, l.Aamount, l.AuditTime, l.ApplicDate, l.CompanyCode, l.LoanCode })
+                .ToListAsync();
+
+            var loanNos = loans.Select(l => l.LoanNo).ToList();
+
+            if (loanNos.Any())
             {
+                // Get loan balances - using CompanyCode
+                var loanBalancesDict = await _context.Loanbal
+                    .Where(lb => loanNos.Contains(lb.LoanNo) && lb.Companycode == companyCode)
+                    .Select(lb => new { lb.LoanNo, lb.Balance, lb.LastDate })
+                    .ToDictionaryAsync(lb => lb.LoanNo, lb => new { lb.Balance, lb.LastDate });
+
+                // Get loan disbursement dates - using CompanyCode
+                var loanDisbursements = await _context.Cheques
+                    .Where(c => loanNos.Contains(c.LoanNo) && c.CompanyCode == companyCode && c.Amount > 0)
+                    .Select(c => new { c.LoanNo, c.DateIssued })
+                    .ToDictionaryAsync(c => c.LoanNo, c => c.DateIssued);
+
+                // Get latest repayments - using CompanyCode
+                var latestRepayments = await _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode)
+                    .GroupBy(r => r.LoanNo)
+                    .Select(g => new
+                    {
+                        LoanNo = g.Key,
+                        LastDateReceived = g.Max(r => r.DateReceived),
+                        TotalPrincipal = g.Sum(r => r.Principal ?? 0),
+                        TotalAmount = g.Sum(r => r.Amount ?? 0)
+                    })
+                    .ToDictionaryAsync(r => r.LoanNo, r => new { r.LastDateReceived, r.TotalPrincipal, r.TotalAmount });
+
+                // Get current month repayments - using CompanyCode
                 var currentDate = DateTime.Now;
                 var startOfCurrentMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
                 var endOfCurrentMonth = startOfCurrentMonth.AddMonths(1).AddDays(-1);
 
-                // Get all active loans with balances
-                var activeLoansQuery = from lb in _context.Loanbal
-                                       join l in _context.Loans on lb.LoanNo equals l.LoanNo
-                                       where lb.Balance > 0
-                                       select new { lb.LoanNo, lb.Balance, l.CompanyCode, l.RepayPeriod, l.LoanAmt };
+                var currentMonthRepayments = await _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo)
+                        && r.CompanyCode == companyCode
+                        && r.DateReceived.HasValue
+                        && r.DateReceived >= startOfCurrentMonth
+                        && r.DateReceived <= endOfCurrentMonth)
+                    .GroupBy(r => r.CompanyCode)
+                    .Select(g => new
+                    {
+                        CompanyCode = g.Key,
+                        TotalReceived = g.Sum(r => r.Amount ?? 0)
+                    })
+                    .ToDictionaryAsync(r => r.CompanyCode, r => r.TotalReceived);
 
-                // Apply company filter
-                if (!string.IsNullOrEmpty(companyCode))
+                var asAtDate = DateTime.Now.Date;
+                decimal totalBalance = 0;
+                decimal totalArrears30 = 0;
+                decimal totalArrears60 = 0;
+                decimal totalCurrentMonthReceived = 0;
+
+                foreach (var loan in loans)
                 {
-                    activeLoansQuery = activeLoansQuery.Where(x => x.CompanyCode == companyCode);
+                    decimal balance = 0;
+                    DateTime? lastPaymentDate = null;
+                    DateTime? disbursementDate = null;
+
+                    if (loanBalancesDict.ContainsKey(loan.LoanNo))
+                    {
+                        balance = loanBalancesDict[loan.LoanNo].Balance;
+                        var lastDateFromBal = loanBalancesDict[loan.LoanNo].LastDate;
+                        if (lastDateFromBal != DateTime.MinValue)
+                            lastPaymentDate = lastDateFromBal;
+                    }
+                    else
+                    {
+                        balance = loan.Aamount ?? loan.LoanAmt ?? 0;
+                    }
+
+                    if (balance <= 0) continue;
+                    totalBalance += balance;
+
+                    if (latestRepayments.ContainsKey(loan.LoanNo))
+                    {
+                        lastPaymentDate = latestRepayments[loan.LoanNo].LastDateReceived ?? lastPaymentDate;
+                    }
+
+                    if (loanDisbursements.ContainsKey(loan.LoanNo))
+                    {
+                        disbursementDate = loanDisbursements[loan.LoanNo];
+                    }
+
+                    int daysInArrears = 0;
+                    if (lastPaymentDate.HasValue && lastPaymentDate.Value != DateTime.MinValue)
+                    {
+                        var nextDueDate = lastPaymentDate.Value.AddMonths(1);
+                        if (asAtDate > nextDueDate)
+                            daysInArrears = (asAtDate - nextDueDate).Days;
+                    }
+                    else if (disbursementDate.HasValue)
+                    {
+                        var firstDueDate = disbursementDate.Value.AddMonths(1);
+                        if (asAtDate > firstDueDate)
+                            daysInArrears = (asAtDate - firstDueDate).Days;
+                    }
+                    else
+                    {
+                        var firstDueDate = loan.AuditTime.AddMonths(1);
+                        if (asAtDate > firstDueDate)
+                            daysInArrears = (asAtDate - firstDueDate).Days;
+                    }
+
+                    if (daysInArrears > 30)
+                        totalArrears30 += balance;
+
+                    if (daysInArrears > 60)
+                        totalArrears60 += balance;
+
+                    if (currentMonthRepayments.ContainsKey(loan.CompanyCode ?? ""))
+                    {
+                        totalCurrentMonthReceived += currentMonthRepayments[loan.CompanyCode ?? ""];
+                    }
                 }
 
-                var activeLoans = await activeLoansQuery.ToListAsync();
+                // Get Loanees Statistics (Distinct Members with Loans)
+                var loaneesData = await CalculateLoaneesDataAsync(companyCode);
+                dashboard.TotalLoanees = loaneesData.Total;
+                dashboard.WomenLoanees = loaneesData.Women;
+                dashboard.MenLoanees = loaneesData.Men;
+                dashboard.OthersLoanees = loaneesData.Others;
 
-                if (activeLoans.Any())
-                {
-                    var loanNos = activeLoans.Select(l => l.LoanNo).ToList();
+                // Get Loan Count Statistics
+                var loanCountData = await CalculateLoanCountDataAsync(companyCode);
+                dashboard.TotalLoanCount = loanCountData.Total;
+                dashboard.WomenLoanCount = loanCountData.Women;
+                dashboard.MenLoanCount = loanCountData.Men;
+                dashboard.OthersLoanCount = loanCountData.Others;
 
-                    // Calculate Total Amount Due (Outstanding Balance)
-                    decimal totalAmountDue = activeLoans.Sum(l => l.Balance);
+                // Get Loan Status Breakdown
+                var statusBreakdown = await CalculateLoanStatusBreakdownAsync(companyCode);
+                dashboard.CompletedLoansCount = statusBreakdown.Completed;
+                dashboard.UncompletedLoansCount = statusBreakdown.Uncompleted;
+                dashboard.OverdueLoansCount = statusBreakdown.Overdue;
+                dashboard.ActiveLoansCount = statusBreakdown.Active;
 
-                    // Calculate Amount Received this month
-                    var repaymentsQuery = from r in _context.Repay
-                                          where loanNos.Contains(r.LoanNo)
-                                                && r.DateReceived.HasValue
-                                                && r.DateReceived >= startOfCurrentMonth
-                                                && r.DateReceived <= endOfCurrentMonth
-                                          select r.Amount;
+                // Get Loan Status by Gender
+                var statusByGender = await CalculateLoanStatusByGenderAsync(companyCode);
+                dashboard.WomenCompletedLoans = statusByGender.WomenCompleted;
+                dashboard.MenCompletedLoans = statusByGender.MenCompleted;
+                dashboard.OthersCompletedLoans = statusByGender.OthersCompleted;
+                dashboard.WomenActiveLoans = statusByGender.WomenActive;
+                dashboard.MenActiveLoans = statusByGender.MenActive;
+                dashboard.OthersActiveLoans = statusByGender.OthersActive;
+                dashboard.WomenOverdueLoans = statusByGender.WomenOverdue;
+                dashboard.MenOverdueLoans = statusByGender.MenOverdue;
+                dashboard.OthersOverdueLoans = statusByGender.OthersOverdue;
 
-                    decimal totalAmountReceived = await repaymentsQuery.SumAsync(r => r ?? 0);
+                // Calculate metrics
+                dashboard.PARPercent = totalBalance > 0 ? (totalArrears30 / totalBalance) * 100 : 0;
+                dashboard.PAR60Percent = totalBalance > 0 ? (totalArrears60 / totalBalance) * 100 : 0;
+                dashboard.ArrearsBalance = totalArrears30;
+                dashboard.TotalArrears = totalArrears30;
 
-                    // Repayment Rate = Amount Received this month / Total Outstanding Balance
-                    decimal repaymentRate = totalAmountDue > 0
-                        ? (totalAmountReceived / totalAmountDue) * 100
-                        : 0;
+                dashboard.AmountPastDueRate = dashboard.TotalLoanBalances > 0
+                    ? (dashboard.TotalArrears / dashboard.TotalLoanBalances) * 100
+                    : 0;
 
-                    dashboard.RepaymentRate = Math.Min(repaymentRate, 100);
+                dashboard.RepaymentRate = dashboard.TotalLoanBalances > 0
+                    ? Math.Min((totalCurrentMonthReceived / dashboard.TotalLoanBalances) * 100, 100)
+                    : 0;
 
-                    _logger.LogInformation($"Repayment Rate - Received: {totalAmountReceived:C}, Outstanding: {totalAmountDue:C}, Rate: {dashboard.RepaymentRate:F1}%");
-                }
-                else
-                {
-                    dashboard.RepaymentRate = 0;
-                    _logger.LogInformation("No active loans found for repayment rate calculation");
-                }
+                dashboard.OutstandingLoanPortfolio = dashboard.TotalLoanBalances;
+
+                if (dashboard.PARPercent < 5) dashboard.LoanPortfolioHealth = "Excellent";
+                else if (dashboard.PARPercent < 10) dashboard.LoanPortfolioHealth = "Good";
+                else if (dashboard.PARPercent < 20) dashboard.LoanPortfolioHealth = "Fair";
+                else dashboard.LoanPortfolioHealth = "At Risk";
+
+                dashboard.WomenParticipationRate = dashboard.TotalMembers > 0 ? (dashboard.TotalWomen * 100m / dashboard.TotalMembers) : 0;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error calculating repayment rate in cache service");
-                dashboard.RepaymentRate = 0;
-            }
-
-            // PAR Percent (simplified)
-            var overdueLoans = await _context.Loanbal
-                .Where(lb => memberNos.Contains(lb.MemberNo) && lb.LastDate < DateTime.Now.AddMonths(-1))
-                .SumAsync(lb => lb.Balance);
-                
-            dashboard.PARPercent = dashboard.TotalLoanBalances > 0 ? (overdueLoans / dashboard.TotalLoanBalances) * 100 : 0;
-
-            dashboard.PAR60Percent = await CalculatePAR60PercentAsync(companyCode, isSuperAdmin);
-
-            // Arrears Balance
-            // Calculate both separately
-            dashboard.ArrearsBalance = await CalculateArrearsBalanceAsync(companyCode, isSuperAdmin);
-            dashboard.TotalArrears = await CalculateTotalArrearsAsync(companyCode, isSuperAdmin);
-
-            // Find where you currently have:
-            // dashboard.ArrearsBalance = overdueLoans;
-            // dashboard.TotalArrears = overdueLoans;
-
-            // Outstanding Loan Portfolio
-            dashboard.OutstandingLoanPortfolio = dashboard.TotalLoanBalances;
-
-            // Amount Past Due Rate
-            // Calculate Amount Past Due Rate = (Total Arrears / Outstanding Portfolio) × 100
-            if (dashboard.TotalLoanBalances > 0)
-            {
-                dashboard.AmountPastDueRate = (dashboard.TotalArrears / dashboard.TotalLoanBalances) * 100;
-            }
-            else
-            {
-                dashboard.AmountPastDueRate = 0;
-            }
-
-            // Round to 1 decimal place
-            dashboard.AmountPastDueRate = Math.Round(dashboard.AmountPastDueRate, 1);
-            //dashboard.AmountPastDueRate = dashboard.PARPercent;
-
-            // Women Participation Rate
-            dashboard.WomenParticipationRate = dashboard.TotalMembers > 0 ? (dashboard.TotalWomen * 100m / dashboard.TotalMembers) : 0;
-            
-            // Loan Portfolio Health
-            if (dashboard.PARPercent < 5) dashboard.LoanPortfolioHealth = "Excellent";
-            else if (dashboard.PARPercent < 10) dashboard.LoanPortfolioHealth = "Good";
-            else if (dashboard.PARPercent < 20) dashboard.LoanPortfolioHealth = "Fair";
-            else dashboard.LoanPortfolioHealth = "At Risk";
 
             // ============================================================
             // QUERY #11: Recent transactions
+            // FIXED: Use CompanyCode in joins
             // ============================================================
             var recentTxQuery = from t in _context.Transactions2
-                                join m in _context.Members on t.MemberNo equals m.MemberNo
-                                where t.Status.ToUpper() == "COMPLETED" && memberNos.Contains(m.MemberNo)
+                                join m in _context.Members on new { t.MemberNo, CompanyCode = t.Companycode } equals new { m.MemberNo, m.CompanyCode }
+                                where t.Status.ToUpper() == "COMPLETED" && m.CompanyCode == companyCode
                                 orderby t.ContributionDate descending
                                 select new RecentTransaction
                                 {
@@ -1039,16 +1434,16 @@ namespace SACCOBlockChainSystem.Services
                                     BlockchainTxId = t.BlockchainTxId ?? "Pending"
                                 };
 
-            dashboard.RecentTransactions = await recentTxQuery.Take(10).ToListAsync();
+            //dashboard.RecentTransactions = await recentTxQuery.Take(10).ToListAsync();
 
-
-            // Calculate Profit/Loss
+            // ============================================================
+            // QUERY #12: Profit/Loss from Gltransaction
+            // ============================================================
             var (lastMonthProfitLoss, thisMonthProfitLoss) = await CalculateProfitLossFromGltransactionAsync(companyCode, isSuperAdmin);
 
             dashboard.LastMonthProfitLoss = lastMonthProfitLoss;
             dashboard.ThisMonthProfitLoss = thisMonthProfitLoss;
 
-            // Calculate percentage change
             if (dashboard.LastMonthProfitLoss != 0)
             {
                 dashboard.ProfitLossChange = ((dashboard.ThisMonthProfitLoss - dashboard.LastMonthProfitLoss) / Math.Abs(dashboard.LastMonthProfitLoss)) * 100;
@@ -1058,28 +1453,49 @@ namespace SACCOBlockChainSystem.Services
                 dashboard.ProfitLossChange = dashboard.ThisMonthProfitLoss > 0 ? 100 : 0;
             }
 
-
             // ============================================================
-            // QUERY #12: Quick Stats
+            // QUERY #13: Quick Stats
+            // FIXED: Use same property names in the anonymous type
             // ============================================================
             dashboard.QuickStats = new DashboardQuickStats
             {
                 TransactionsToday = await _context.Transactions2
-                    .CountAsync(t => t.ContributionDate.Date == DateTime.Today && t.Status.ToUpper() == "COMPLETED"),
+                    .Join(_context.Members,
+                          t => new { t.MemberNo, CompanyCode = t.Companycode },
+                          m => new { m.MemberNo, m.CompanyCode },
+                          (t, m) => new { t, m })
+                    .Where(x => x.t.ContributionDate.Date == DateTime.Today
+                                && x.t.Status.ToUpper() == "COMPLETED"
+                                && x.m.CompanyCode == companyCode)
+                    .CountAsync(),
+
                 NewMembersToday = await memberQuery
                     .CountAsync(m => m.EffectDate.HasValue && m.EffectDate.Value.Date == DateTime.Today),
+
                 AverageDeposit = await _context.Transactions2
-                    .Where(t => t.TransactionType.ToUpper() == "DEPOSIT" && t.Status.ToUpper() == "COMPLETED")
-                    .AverageAsync(t => (decimal?)t.Amount) ?? 0,
+                    .Join(_context.Members,
+                          t => new { t.MemberNo, CompanyCode = t.Companycode },
+                          m => new { m.MemberNo, m.CompanyCode },
+                          (t, m) => new { t, m })
+                    .Where(x => x.t.TransactionType.ToUpper() == "DEPOSIT"
+                                && x.t.Status.ToUpper() == "COMPLETED"
+                                && x.m.CompanyCode == companyCode)
+                    .AverageAsync(x => (decimal?)x.t.Amount) ?? 0,
+
                 AverageLoan = await _context.Loans
-                    .Where(l => l.Status == 1)
-                    .AverageAsync(l => (decimal?)l.LoanAmt) ?? 0,
+                    .Join(_context.Members,
+                          l => new { l.MemberNo, l.CompanyCode },
+                          m => new { m.MemberNo, m.CompanyCode },
+                          (l, m) => new { l, m })
+                    .Where(x => x.l.Status == 1 && x.m.CompanyCode == companyCode)
+                    .AverageAsync(x => (decimal?)x.l.LoanAmt) ?? 0,
+
                 BlockchainUptime = 99.9m,
                 LoanApprovalRate = 85.5m
             };
 
             // ============================================================
-            // QUERY #13: Gender distribution
+            // QUERY #14: Gender distribution
             // ============================================================
             dashboard.GenderStats = new GenderDistribution
             {
@@ -1132,6 +1548,649 @@ namespace SACCOBlockChainSystem.Services
 
             _logger.LogInformation($"Dashboard cache invalidated for: {companyCode ?? "ALL"}");
             await Task.CompletedTask;
+        }
+
+
+
+        // ============================================================
+        // NEW: Get dashboard data for multiple companies (County Admin)
+        // ============================================================
+        public async Task<DashboardVM> GetDashboardDataForCompaniesAsync(List<string> companyCodes, bool isCountyAdmin)
+        {
+            if (companyCodes == null || !companyCodes.Any())
+            {
+                return new DashboardVM();
+            }
+
+            // Create a cache key that includes all company codes sorted
+            var sortedCodes = companyCodes.OrderBy(c => c).ToList();
+            var cacheKey = $"DashboardData_County_{string.Join("_", sortedCodes)}";
+
+            if (_cache.TryGetValue(cacheKey, out DashboardVM cachedDashboard))
+            {
+                _logger.LogDebug($"Dashboard data from cache for county with {companyCodes.Count} companies");
+                return cachedDashboard;
+            }
+
+            await _cacheLock.WaitAsync();
+            try
+            {
+                if (_cache.TryGetValue(cacheKey, out cachedDashboard))
+                    return cachedDashboard;
+
+                _logger.LogInformation($"Calculating dashboard for county with {companyCodes.Count} companies");
+
+                var dashboard = await CalculateFullDashboardDataForCompaniesAsync(companyCodes, isCountyAdmin);
+
+                _cache.Set(cacheKey, dashboard, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = _cacheDuration,
+                    Priority = CacheItemPriority.High
+                });
+
+                return dashboard;
+            }
+            finally
+            {
+                _cacheLock.Release();
+            }
+        }
+
+        // ============================================================
+        // NEW: Invalidate cache for a specific county
+        // ============================================================
+        public async Task InvalidateCacheForCountyAsync(string county)
+        {
+            // Get all company codes in this county
+            var companyCodes = await _context.Companies
+                .Where(c => c.County == county)
+                .Select(c => c.CompanyCode)
+                .ToListAsync();
+
+            if (companyCodes.Any())
+            {
+                var sortedCodes = companyCodes.OrderBy(c => c).ToList();
+                var cacheKey = $"DashboardData_County_{string.Join("_", sortedCodes)}";
+                _cache.Remove(cacheKey);
+                _logger.LogInformation($"Dashboard cache invalidated for county: {county}");
+            }
+
+            await Task.CompletedTask;
+        }
+
+        // ============================================================
+        // NEW: Calculate dashboard data for multiple companies
+        // ============================================================
+        private async Task<DashboardVM> CalculateFullDashboardDataForCompaniesAsync(List<string> companyCodes, bool isCountyAdmin)
+        {
+            var dashboard = new DashboardVM();
+
+            // Build member filter for all companies
+            var memberQuery = _context.Members
+                .Where(m => companyCodes.Contains(m.CompanyCode));
+
+            // ============================================================
+            // QUERY #1: Member statistics
+            // ============================================================
+            var memberStats = await memberQuery
+                .Select(m => new { m.Sex, m.Status, m.MemberNo, m.Dob, m.EffectDate, m.CompanyCode })
+                .ToListAsync();
+
+            dashboard.TotalMembers = memberStats.Count;
+            dashboard.TotalWomen = memberStats.Count(m => m.Sex?.ToUpper() == "FEMALE");
+            dashboard.TotalMen = memberStats.Count(m => m.Sex?.ToUpper() == "MALE");
+            dashboard.TotalOthers = memberStats.Count(m => m.Sex?.ToUpper() != "FEMALE" && m.Sex?.ToUpper() != "MALE");
+            dashboard.ActiveMembers = memberStats.Count(m => m.Status == 1);
+            dashboard.ActiveWomen = memberStats.Count(m => m.Sex?.ToUpper() == "FEMALE" && m.Status == 1);
+            dashboard.ActiveMen = memberStats.Count(m => m.Sex?.ToUpper() == "MALE" && m.Status == 1);
+            dashboard.DormantMembers = dashboard.TotalMembers - dashboard.ActiveMembers;
+            dashboard.DormantWomen = dashboard.TotalWomen - dashboard.ActiveWomen;
+            dashboard.DormantMen = dashboard.TotalMen - dashboard.ActiveMen;
+
+            // Youth statistics
+            var today = DateTime.Today;
+            var membersWithAge = memberStats.Where(m => m.Dob.HasValue).ToList();
+            dashboard.YouthTotal = membersWithAge.Count(m => CalculateAge(m.Dob.Value) <= 35);
+            dashboard.YouthMale = membersWithAge.Count(m => CalculateAge(m.Dob.Value) <= 35 && m.Sex?.ToUpper() == "MALE");
+            dashboard.YouthFemale = membersWithAge.Count(m => CalculateAge(m.Dob.Value) <= 35 && m.Sex?.ToUpper() == "FEMALE");
+
+            // Get member numbers list for filtering
+            var memberNos = memberStats.Select(m => m.MemberNo).ToList();
+
+            // ============================================================
+            // QUERY #2: Financial aggregates from ContribShares
+            // ============================================================
+            var contribSharesQuery = _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo) && companyCodes.Contains(cs.CompanyCode));
+
+            var financialStats = await contribSharesQuery
+                .GroupBy(cs => 1)
+                .Select(g => new
+                {
+                    TotalShareCapital = g.Sum(cs => cs.ShareCapitalAmount ?? 0),
+                    TotalDeposits = g.Sum(cs => cs.DepositsAmount ?? 0),
+                    TotalRegFees = g.Sum(cs => cs.RegFeeAmount ?? 0),
+                    TotalContributions = g.Sum(cs => (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0))
+                })
+                .FirstOrDefaultAsync();
+
+            if (financialStats != null)
+            {
+                dashboard.TotalShareCapital = financialStats.TotalShareCapital;
+                dashboard.TotalDeposits = financialStats.TotalDeposits;
+                dashboard.TotalRegistrationFees = financialStats.TotalRegFees;
+                dashboard.TotalContributions = financialStats.TotalContributions;
+            }
+
+            // ============================================================
+            // QUERY #3: Gender breakdown for financials
+            // ============================================================
+            var genderFinancials = await (from cs in _context.ContribShares
+                                          join m in _context.Members on cs.MemberNo equals m.MemberNo
+                                          where memberNos.Contains(m.MemberNo) && companyCodes.Contains(m.CompanyCode)
+                                          group cs by m.Sex into g
+                                          select new
+                                          {
+                                              Gender = g.Key ?? "OTHERS",
+                                              ShareCapital = g.Sum(cs => cs.ShareCapitalAmount ?? 0),
+                                              Deposits = g.Sum(cs => cs.DepositsAmount ?? 0),
+                                              RegFees = g.Sum(cs => cs.RegFeeAmount ?? 0),
+                                              Contributions = g.Sum(cs => (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0))
+                                          }).ToListAsync();
+
+            foreach (var item in genderFinancials)
+            {
+                var gender = NormalizeGender(item.Gender);
+                if (gender == "FEMALE")
+                {
+                    dashboard.WomenShareCapital = item.ShareCapital;
+                    dashboard.WomenDeposits = item.Deposits;
+                    dashboard.WomenRegistrationFees = item.RegFees;
+                    dashboard.WomenContributions = item.Contributions;
+                }
+                else if (gender == "MALE")
+                {
+                    dashboard.MenShareCapital = item.ShareCapital;
+                    dashboard.MenDeposits = item.Deposits;
+                    dashboard.MenRegistrationFees = item.RegFees;
+                    dashboard.MenContributions = item.Contributions;
+                }
+                else
+                {
+                    dashboard.OthersShareCapital = item.ShareCapital;
+                    dashboard.OthersDeposits = item.Deposits;
+                    dashboard.OthersRegistrationFees = item.RegFees;
+                    dashboard.OthersContributions = item.Contributions;
+                }
+            }
+
+            // ============================================================
+            // QUERY #4: Loan stats from Cheques table (Loans Taken)
+            // ============================================================
+            var loanStatsQuery = from c in _context.Cheques
+                                 join l in _context.Loans on c.LoanNo equals l.LoanNo
+                                 join m in _context.Members on l.MemberNo equals m.MemberNo
+                                 where c.Amount > 0 && c.Amount != null
+                                       && memberNos.Contains(m.MemberNo)
+                                       && companyCodes.Contains(m.CompanyCode)
+                                 select new { Amount = c.Amount.Value, Sex = m.Sex };
+
+            var loanStats = await loanStatsQuery.ToListAsync();
+
+            dashboard.TotalLoansTaken = loanStats.Sum(x => x.Amount);
+            dashboard.WomenLoansTaken = loanStats.Where(x => x.Sex?.ToUpper() == "FEMALE").Sum(x => x.Amount);
+            dashboard.MenLoansTaken = loanStats.Where(x => x.Sex?.ToUpper() == "MALE").Sum(x => x.Amount);
+            dashboard.OthersLoansTaken = loanStats.Where(x => x.Sex?.ToUpper() != "FEMALE" && x.Sex?.ToUpper() != "MALE").Sum(x => x.Amount);
+
+            // ============================================================
+            // QUERY #5: Loan balances from Loanbal table
+            // ============================================================
+            var loanBalancesQuery = from lb in _context.Loanbal
+                                    join m in _context.Members on lb.MemberNo equals m.MemberNo
+                                    where memberNos.Contains(m.MemberNo) && companyCodes.Contains(m.CompanyCode)
+                                    select new { lb.Balance, m.Sex };
+
+            var loanBalances = await loanBalancesQuery.ToListAsync();
+
+            dashboard.TotalLoanBalances = loanBalances.Sum(x => x.Balance);
+            dashboard.WomenLoanBalances = loanBalances.Where(x => x.Sex?.ToUpper() == "FEMALE").Sum(x => x.Balance);
+            dashboard.MenLoanBalances = loanBalances.Where(x => x.Sex?.ToUpper() == "MALE").Sum(x => x.Balance);
+            dashboard.OthersLoanBalances = loanBalances.Where(x => x.Sex?.ToUpper() != "FEMALE" && x.Sex?.ToUpper() != "MALE").Sum(x => x.Balance);
+
+            // ============================================================
+            // QUERY #6: Loans paid from Repay table
+            // ============================================================
+            var loansPaidQuery = from r in _context.Repay
+                                 join m in _context.Members on r.MemberNo equals m.MemberNo
+                                 where r.Principal > 0 && r.Principal != null
+                                       && memberNos.Contains(m.MemberNo)
+                                       && companyCodes.Contains(m.CompanyCode)
+                                 select new { Principal = r.Principal.Value, Sex = m.Sex };
+
+            var loansPaid = await loansPaidQuery.ToListAsync();
+
+            dashboard.TotalLoansPaid = loansPaid.Sum(x => x.Principal);
+            dashboard.WomenLoansPaid = loansPaid.Where(x => x.Sex?.ToUpper() == "FEMALE").Sum(x => x.Principal);
+            dashboard.MenLoansPaid = loansPaid.Where(x => x.Sex?.ToUpper() == "MALE").Sum(x => x.Principal);
+            dashboard.OthersLoansPaid = loansPaid.Where(x => x.Sex?.ToUpper() != "FEMALE" && x.Sex?.ToUpper() != "MALE").Sum(x => x.Principal);
+
+            // ============================================================
+            // QUERY #7: Total loanees (distinct members with loans)
+            // ============================================================
+            var loaneesQuery = from l in _context.Loans
+                               join m in _context.Members on l.MemberNo equals m.MemberNo
+                               where memberNos.Contains(m.MemberNo) && companyCodes.Contains(m.CompanyCode)
+                               select new { m.MemberNo, m.Sex };
+
+            var loanees = await loaneesQuery
+                .GroupBy(x => new { x.MemberNo, x.Sex })
+                .Select(g => g.Key)
+                .ToListAsync();
+
+            dashboard.TotalLoanees = loanees.Count;
+            dashboard.WomenLoanees = loanees.Count(x => x.Sex?.ToUpper() == "FEMALE");
+            dashboard.MenLoanees = loanees.Count(x => x.Sex?.ToUpper() == "MALE");
+            dashboard.OthersLoanees = loanees.Count(x => x.Sex?.ToUpper() != "FEMALE" && x.Sex?.ToUpper() != "MALE");
+
+            // ============================================================
+            // QUERY #8: Blockchain stats
+            // ============================================================
+            dashboard.TotalBlockchainTransactions = await _context.BlockchainTransactions
+                .Where(t => companyCodes.Contains(t.CompanyCode))
+                .CountAsync();
+
+            dashboard.PendingBlockchainTransactions = await _context.BlockchainTransactions
+                .Where(t => companyCodes.Contains(t.CompanyCode) && t.Status.ToUpper() == "PENDING")
+                .CountAsync();
+
+            dashboard.BlocksCreatedToday = await _context.Blocks
+                .Where(b => b.Timestamp.Date == DateTime.Today)
+                .CountAsync();
+
+            // ============================================================
+            // QUERY #9: Grants from Gltransactions
+            // ============================================================
+            var grantsQuery = _context.Gltransactions
+                .Where(g => companyCodes.Contains(g.CompanyCode));
+
+            dashboard.InclusionGrantTotal = await grantsQuery
+                .Where(g => g.TransDescript != null && g.TransDescript.ToLower().Contains("inclusion grant"))
+                .SumAsync(g => (decimal?)g.Amount) ?? 0;
+
+            dashboard.MatchingGrantTotal = await grantsQuery
+                .Where(g => g.TransDescript != null && g.TransDescript.ToLower().Contains("matching grant"))
+                .SumAsync(g => (decimal?)g.Amount) ?? 0;
+
+            // ============================================================
+            // QUERY #10: Loan Metrics (PAR, Arrears, Repayment Rate, etc.)
+            // USING SQL APPROACH - NO Posted/Status Filters
+            // ============================================================
+
+            // Get all loans for these companies (NO Status filter)
+            var loans = await _context.Loans
+                .Where(l => companyCodes.Contains(l.CompanyCode))
+                .Select(l => new { l.LoanNo, l.MemberNo, l.LoanAmt, l.Aamount, l.AuditTime, l.ApplicDate, l.CompanyCode, l.LoanCode })
+                .ToListAsync();
+
+            var loanNos = loans.Select(l => l.LoanNo).ToList();
+
+            if (loanNos.Any())
+            {
+                // ============================================================
+                // Get loan balances (NO Posted filter)
+                // ============================================================
+                var loanBalancesDict = await _context.Loanbal
+                    .Where(lb => loanNos.Contains(lb.LoanNo) && companyCodes.Contains(lb.Companycode))
+                    .Select(lb => new { lb.LoanNo, lb.Balance, lb.LastDate })
+                    .ToDictionaryAsync(lb => lb.LoanNo, lb => new { lb.Balance, lb.LastDate });
+
+                // ============================================================
+                // Get loan disbursement dates (NO filter)
+                // ============================================================
+                var loanDisbursements = await _context.Cheques
+                    .Where(c => loanNos.Contains(c.LoanNo) && companyCodes.Contains(c.CompanyCode) && c.Amount > 0)
+                    .Select(c => new { c.LoanNo, c.DateIssued })
+                    .ToDictionaryAsync(c => c.LoanNo, c => c.DateIssued);
+
+                // ============================================================
+                // Get latest repayments (NO Posted filter)
+                // ============================================================
+                var latestRepayments = await _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo) && companyCodes.Contains(r.CompanyCode))
+                    .GroupBy(r => r.LoanNo)
+                    .Select(g => new
+                    {
+                        LoanNo = g.Key,
+                        LastDateReceived = g.Max(r => r.DateReceived),
+                        TotalPrincipal = g.Sum(r => r.Principal ?? 0),
+                        TotalAmount = g.Sum(r => r.Amount ?? 0)
+                    })
+                    .ToDictionaryAsync(r => r.LoanNo, r => new { r.LastDateReceived, r.TotalPrincipal, r.TotalAmount });
+
+                // ============================================================
+                // Get current month repayments (NO Posted filter)
+                // ============================================================
+                var currentDate = DateTime.Now;
+                var startOfCurrentMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
+                var endOfCurrentMonth = startOfCurrentMonth.AddMonths(1).AddDays(-1);
+
+                var currentMonthRepayments = await _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo)
+                        && companyCodes.Contains(r.CompanyCode)
+                        && r.DateReceived.HasValue
+                        && r.DateReceived >= startOfCurrentMonth
+                        && r.DateReceived <= endOfCurrentMonth)
+                    .GroupBy(r => r.CompanyCode)
+                    .Select(g => new
+                    {
+                        CompanyCode = g.Key,
+                        TotalReceived = g.Sum(r => r.Amount ?? 0)
+                    })
+                    .ToDictionaryAsync(r => r.CompanyCode, r => r.TotalReceived);
+
+                var asAtDate = DateTime.Now.Date;
+                decimal totalBalance = 0;
+                decimal totalArrears30 = 0;
+                decimal totalArrears60 = 0;
+                decimal totalCurrentMonthReceived = 0;
+
+                // ============================================================
+                // Calculate PAR, Arrears, and other metrics per loan
+                // ============================================================
+                foreach (var loan in loans)
+                {
+                    decimal balance = 0;
+                    DateTime? lastPaymentDate = null;
+                    DateTime? disbursementDate = null;
+
+                    // Get balance
+                    if (loanBalancesDict.ContainsKey(loan.LoanNo))
+                    {
+                        balance = loanBalancesDict[loan.LoanNo].Balance;
+                        var lastDateFromBal = loanBalancesDict[loan.LoanNo].LastDate;
+                        if (lastDateFromBal != DateTime.MinValue)
+                            lastPaymentDate = lastDateFromBal;
+                    }
+                    else
+                    {
+                        balance = loan.Aamount ?? loan.LoanAmt ?? 0;
+                    }
+
+                    // Skip if balance is zero or negative
+                    if (balance <= 0) continue;
+                    totalBalance += balance;
+
+                    // Get last payment date from repayments
+                    if (latestRepayments.ContainsKey(loan.LoanNo))
+                    {
+                        lastPaymentDate = latestRepayments[loan.LoanNo].LastDateReceived ?? lastPaymentDate;
+                    }
+
+                    // Get disbursement date
+                    if (loanDisbursements.ContainsKey(loan.LoanNo))
+                    {
+                        disbursementDate = loanDisbursements[loan.LoanNo];
+                    }
+
+                    // Calculate days in arrears
+                    int daysInArrears = 0;
+                    if (lastPaymentDate.HasValue && lastPaymentDate.Value != DateTime.MinValue)
+                    {
+                        var nextDueDate = lastPaymentDate.Value.AddMonths(1);
+                        if (asAtDate > nextDueDate)
+                            daysInArrears = (asAtDate - nextDueDate).Days;
+                    }
+                    else if (disbursementDate.HasValue)
+                    {
+                        var firstDueDate = disbursementDate.Value.AddMonths(1);
+                        if (asAtDate > firstDueDate)
+                            daysInArrears = (asAtDate - firstDueDate).Days;
+                    }
+                    else
+                    {
+                        var firstDueDate = loan.AuditTime.AddMonths(1);
+                        if (asAtDate > firstDueDate)
+                            daysInArrears = (asAtDate - firstDueDate).Days;
+                    }
+
+                    // Accumulate arrears
+                    if (daysInArrears > 30)
+                        totalArrears30 += balance;
+
+                    if (daysInArrears > 60)
+                        totalArrears60 += balance;
+
+                    // Accumulate current month received
+                    if (currentMonthRepayments.ContainsKey(loan.CompanyCode))
+                    {
+                        totalCurrentMonthReceived += currentMonthRepayments[loan.CompanyCode];
+                    }
+                }
+
+                // ============================================================
+                // Calculate all metrics
+                // ============================================================
+
+                // PAR > 30
+                dashboard.PARPercent = totalBalance > 0 ? (totalArrears30 / totalBalance) * 100 : 0;
+
+                // PAR > 60
+                dashboard.PAR60Percent = totalBalance > 0 ? (totalArrears60 / totalBalance) * 100 : 0;
+
+                // Arrears Balance (Balance of loans with arrears > 30 days)
+                dashboard.ArrearsBalance = totalArrears30;
+
+                // Total Arrears > 30 Days
+                dashboard.TotalArrears = totalArrears30;
+
+                // Amount Past Due Rate = (Total Arrears / Total Loan Balance) * 100
+                dashboard.AmountPastDueRate = dashboard.TotalLoanBalances > 0
+                    ? (dashboard.TotalArrears / dashboard.TotalLoanBalances) * 100
+                    : 0;
+
+                // Repayment Rate (Current Month)
+                dashboard.RepaymentRate = dashboard.TotalLoanBalances > 0
+                    ? Math.Min((totalCurrentMonthReceived / dashboard.TotalLoanBalances) * 100, 100)
+                    : 0;
+
+                // Outstanding Loan Portfolio
+                dashboard.OutstandingLoanPortfolio = dashboard.TotalLoanBalances;
+
+                // ============================================================
+                // QUERY #11: Profit/Loss from Gltransaction
+                // ============================================================
+                var (lastMonthProfitLoss, thisMonthProfitLoss) = await CalculateProfitLossFromGltransactionForCompaniesAsync(companyCodes);
+                dashboard.LastMonthProfitLoss = lastMonthProfitLoss;
+                dashboard.ThisMonthProfitLoss = thisMonthProfitLoss;
+
+                if (dashboard.LastMonthProfitLoss != 0)
+                {
+                    dashboard.ProfitLossChange = ((dashboard.ThisMonthProfitLoss - dashboard.LastMonthProfitLoss) / Math.Abs(dashboard.LastMonthProfitLoss)) * 100;
+                }
+                else
+                {
+                    dashboard.ProfitLossChange = dashboard.ThisMonthProfitLoss > 0 ? 100 : 0;
+                }
+
+                // ============================================================
+                // QUERY #12: Loan Portfolio Health
+                // ============================================================
+                if (dashboard.PARPercent < 5) dashboard.LoanPortfolioHealth = "Excellent";
+                else if (dashboard.PARPercent < 10) dashboard.LoanPortfolioHealth = "Good";
+                else if (dashboard.PARPercent < 20) dashboard.LoanPortfolioHealth = "Fair";
+                else dashboard.LoanPortfolioHealth = "At Risk";
+
+                // ============================================================
+                // QUERY #13: Women Participation Rate
+                // ============================================================
+                dashboard.WomenParticipationRate = dashboard.TotalMembers > 0 ? (dashboard.TotalWomen * 100m / dashboard.TotalMembers) : 0;
+            }
+
+            // ============================================================
+            // QUERY #14: Recent transactions
+            // ============================================================
+            var recentTxQuery = from t in _context.Transactions2
+                                join m in _context.Members on t.MemberNo equals m.MemberNo
+                                where t.Status.ToUpper() == "COMPLETED"
+                                      && memberNos.Contains(m.MemberNo)
+                                      && companyCodes.Contains(m.CompanyCode)
+                                orderby t.ContributionDate descending
+                                select new RecentTransaction
+                                {
+                                    TransactionId = t.TransactionNo,
+                                    MemberName = m.Surname + " " + m.OtherNames,
+                                    Type = t.TransactionType,
+                                    Amount = t.Amount,
+                                    Date = t.ContributionDate,
+                                    Status = t.Status,
+                                    BlockchainTxId = t.BlockchainTxId ?? "Pending"
+                                };
+
+            dashboard.RecentTransactions = await recentTxQuery.Take(10).ToListAsync();
+
+            // ============================================================
+            // QUERY #15: Quick Stats
+            // ============================================================
+            dashboard.QuickStats = new DashboardQuickStats
+            {
+                TransactionsToday = await _context.Transactions2
+                    .Where(t => t.ContributionDate.Date == DateTime.Today
+                                && t.Status.ToUpper() == "COMPLETED")
+                    .Join(_context.Members,
+                          t => t.MemberNo,
+                          m => m.MemberNo,
+                          (t, m) => new { t, m.CompanyCode })
+                    .Where(x => companyCodes.Contains(x.CompanyCode))
+                    .CountAsync(),
+
+                NewMembersToday = await memberQuery
+                    .CountAsync(m => m.EffectDate.HasValue && m.EffectDate.Value.Date == DateTime.Today),
+
+                AverageDeposit = await _context.Transactions2
+                    .Where(t => t.TransactionType.ToUpper() == "DEPOSIT"
+                                && t.Status.ToUpper() == "COMPLETED")
+                    .Join(_context.Members,
+                          t => t.MemberNo,
+                          m => m.MemberNo,
+                          (t, m) => new { t.Amount, m.CompanyCode })
+                    .Where(x => companyCodes.Contains(x.CompanyCode))
+                    .AverageAsync(x => (decimal?)x.Amount) ?? 0,
+
+                AverageLoan = await _context.Loans
+                    .Where(l => l.Status == 1 && companyCodes.Contains(l.CompanyCode))
+                    .AverageAsync(l => (decimal?)l.LoanAmt) ?? 0,
+
+                BlockchainUptime = 99.9m,
+                LoanApprovalRate = 85.5m
+            };
+
+            // ============================================================
+            // QUERY #16: Gender distribution
+            // ============================================================
+            dashboard.GenderStats = new GenderDistribution
+            {
+                MaleCount = dashboard.TotalMen,
+                FemaleCount = dashboard.TotalWomen,
+                OtherCount = dashboard.TotalOthers
+            };
+
+            // Set selected company name
+            var firstCompany = await _context.Companies
+                .FirstOrDefaultAsync(c => companyCodes.Contains(c.CompanyCode));
+
+            if (firstCompany != null)
+            {
+                dashboard.SelectedCompanyName = $"County: {firstCompany.County}";
+                dashboard.CountyName = firstCompany.County;
+            }
+            else
+            {
+                dashboard.SelectedCompanyName = "County View";
+            }
+
+            dashboard.IsCountyView = true;
+
+            return dashboard;
+        }
+
+        // ============================================================
+        // Helper: Calculate Profit/Loss for multiple companies
+        // ============================================================
+        private async Task<(decimal LastMonthProfitLoss, decimal ThisMonthProfitLoss)> CalculateProfitLossFromGltransactionForCompaniesAsync(List<string> companyCodes)
+        {
+            try
+            {
+                var currentDate = DateTime.Now;
+
+                // Define current month range
+                var startOfCurrentMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
+                var endOfCurrentMonth = startOfCurrentMonth.AddMonths(1).AddDays(-1);
+
+                // Define last month range
+                var startOfLastMonth = startOfCurrentMonth.AddMonths(-1);
+                var endOfLastMonth = startOfCurrentMonth.AddDays(-1);
+
+                // Get income accounts (Revenue/Income type)
+                var incomeAccounts = await _context.GlSetup
+                    .Where(g => g.Glacctype == "INCOME" || g.Glacctype == "REVENUE" || g.GlAccMainGroup == "INCOME")
+                    .Select(g => g.AccNo)
+                    .ToListAsync();
+
+                // Get expense accounts
+                var expenseAccounts = await _context.GlSetup
+                    .Where(g => g.Glacctype == "EXPENSE" || g.Glacctype == "COST" || g.GlAccMainGroup == "EXPENSE")
+                    .Select(g => g.AccNo)
+                    .ToListAsync();
+
+                var query = _context.Gltransactions
+                    .Where(gl => companyCodes.Contains(gl.CompanyCode));
+
+                // Get transactions for last month
+                var lastMonthTransactions = await query
+                    .Where(gl => gl.TransDate >= startOfLastMonth && gl.TransDate <= endOfLastMonth)
+                    .ToListAsync();
+
+                // Get transactions for current month
+                var thisMonthTransactions = await query
+                    .Where(gl => gl.TransDate >= startOfCurrentMonth && gl.TransDate <= endOfCurrentMonth)
+                    .ToListAsync();
+
+                // Calculate Last Month Profit/Loss
+                decimal lastMonthIncome = 0;
+                decimal lastMonthExpenses = 0;
+
+                foreach (var transaction in lastMonthTransactions)
+                {
+                    if (incomeAccounts.Contains(transaction.CrAccNo))
+                        lastMonthIncome += transaction.Amount;
+                    else if (expenseAccounts.Contains(transaction.DrAccNo))
+                        lastMonthExpenses += transaction.Amount;
+                }
+
+                // Calculate This Month Profit/Loss
+                decimal thisMonthIncome = 0;
+                decimal thisMonthExpenses = 0;
+
+                foreach (var transaction in thisMonthTransactions)
+                {
+                    if (incomeAccounts.Contains(transaction.CrAccNo))
+                        thisMonthIncome += transaction.Amount;
+                    else if (expenseAccounts.Contains(transaction.DrAccNo))
+                        thisMonthExpenses += transaction.Amount;
+                }
+
+                decimal lastMonthProfitLoss = lastMonthIncome - lastMonthExpenses;
+                decimal thisMonthProfitLoss = thisMonthIncome - thisMonthExpenses;
+
+                _logger.LogInformation($"Profit/Loss - Last Month: {lastMonthProfitLoss:C}, This Month: {thisMonthProfitLoss:C}");
+
+                return (lastMonthProfitLoss, thisMonthProfitLoss);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calculating profit/loss for companies");
+                return (0, 0);
+            }
         }
     }
 }

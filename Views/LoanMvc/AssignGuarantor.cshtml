@@ -31,8 +31,8 @@
         <div class="col-12 mb-4">
             <div class="d-flex align-items-center justify-content-between">
                 <div class="d-flex align-items-center">
-                    <a asp-action="Details" asp-route-loanNo="@loan?.LoanNo" class="btn btn-outline-secondary me-3">
-                        <i class="bi bi-arrow-left"></i> Back to Loan Details
+                    <a asp-controller="LoanMvc" asp-action="LoansNeedingGuarantors" class="btn btn-outline-secondary me-3">
+                        <i class="bi bi-arrow-left"></i> Back to Guarantorship
                     </a>
                     <h2 class="page-title mb-0">
                         <i class="bi bi-shield-lock me-2"></i>Guarantor & Collateral Assignment
@@ -388,22 +388,54 @@
                                     <label class="form-label fw-bold">Collateral Type *</label>
                                     <select id="colCode" class="form-select" onchange="onCollateralChange()">
                                         <option value="">-- Select Collateral Type --</option>
-                                        @foreach (var collateral in collateralTypes)
+                                        @if (collateralTypes.Any())
                                         {
-                                            <option value="@collateral.ColCode"
-                                                    data-percentage="@collateral.Percentage"
-                                                    data-description="@collateral.Coldescription">
-                                                @collateral.ColCode - @collateral.Coldescription (@collateral.Percentage% of value)
-                                            </option>
+                                            @foreach (var collateral in collateralTypes)
+                                            {
+                                                <option value="@collateral.ColCode"
+                                                        data-percentage="@collateral.Percentage"
+                                                        data-description="@collateral.Coldescription"
+                                                        data-memberno="@collateral.MemberNo">
+                                                    @collateral.ColCode - @collateral.Coldescription (@collateral.Percentage% of value)
+                                                </option>
+                                            }
                                         }
                                     </select>
 
                                     @if (!collateralTypes.Any())
                                     {
                                         <div class="text-danger mt-1">
-                                            <small>No collateral types available. Please contact administrator to add collateral types.</small>
+                                            <small>
+                                                @if (ViewBag.TotalMemberCollaterals > 0)
+                                                {
+                                                    <span>Member has @ViewBag.TotalMemberCollaterals collateral(s) but all are already in use.</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>No collaterals registered for this member. Please contact administrator.</span>
+                                                }
+                                            </small>
                                         </div>
                                     }
+
+                                    <!-- Debug Info -->
+                                    <div class="alert alert-info mt-2">
+                                        <strong>Debug Info:</strong>
+                                        Total collaterals for member: @ViewBag.TotalMemberCollaterals |
+                                        Available (not used): @ViewBag.AvailableCollateralsCount
+                                        @if (ViewBag.AvailableCollateralsCount == 0 && ViewBag.TotalMemberCollaterals > 0)
+                                        {
+                                            <span class="text-warning"> - All collaterals are already in use!</span>
+                                        }
+                                        else if (ViewBag.AvailableCollateralsCount == 0)
+                                        {
+                                            <span class="text-danger"> - No collaterals registered for this member!</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-success"> - @ViewBag.AvailableCollateralsCount collaterals available</span>
+                                        }
+                                    </div>
                                 </div>
 
                                 <div class="col-md-6 mb-3">

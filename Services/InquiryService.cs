@@ -17,6 +17,7 @@ namespace SACCOBlockChainSystem.Services
         Task<LoanInquiryResponseDTO> GetLoanInquiryAsync(string memberNo, string companyCode, string userId);
         Task<TransactionInquiryResponseDTO> GetTransactionInquiryAsync(string memberNo, string companyCode, string userId);
         Task<MemberSearchResponseDTO> SearchMembersAsync(MemberSearchDTO searchDto, string companyCode, string userId);
+        Task<GuarantorLoanListResponseDTO> GetGuarantorLoansAsync(string memberNo, string companyCode, string userId);
     }
 
     public class InquiryService : IInquiryService
@@ -269,135 +270,6 @@ namespace SACCOBlockChainSystem.Services
 
             return response;
         }
-
-
-
-        //public async Task<ShareInquiryResponseDTO> GetShareInquiryAsync(string memberNo, string companyCode, string userId)
-        //{
-        //    var member = await _context.Members
-        //        .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
-
-        //    if (member == null)
-        //    {
-        //        throw new Exception($"Member {memberNo} not found");
-        //    }
-
-        //    // Get all share contributions grouped by share type
-        //    var shareContributions = await _context.ContribShares
-        //        .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
-        //        .Include(cs => cs.SharescodeNavigation)
-        //        .OrderByDescending(cs => cs.ContrDate)
-        //        .ToListAsync();
-
-        //    // Get share purchases from Contrib table
-        //    var sharePurchases = await _context.Contribs
-        //        .Where(c => c.MemberNo == memberNo && c.CompanyCode == companyCode && c.Sharescode != null)
-        //        .Include(c => c.SharescodeNavigation)
-        //        .OrderByDescending(c => c.ContrDate)
-        //        .ToListAsync();
-
-        //    // Calculate totals by share type
-        //    var shareTypeSummaries = new Dictionary<string, ShareTypeSummaryDTO>();
-
-        //    foreach (var cs in shareContributions)
-        //    {
-        //        var code = cs.Sharescode ?? "Unknown";
-        //        if (!shareTypeSummaries.ContainsKey(code))
-        //        {
-        //            shareTypeSummaries[code] = new ShareTypeSummaryDTO
-        //            {
-        //                SharesCode = code,
-        //                SharesType = cs.SharescodeNavigation?.SharesType ?? "Unknown",
-        //                TotalShares = 0,
-        //                ShareCapital = 0,
-        //                Deposits = 0,
-        //                RegFees = 0,
-        //                Donations = 0,
-        //                LoanAllocations = 0,
-        //                PassBook = 0,
-        //                Transactions = new List<ShareTransactionDetailDTO>()
-        //            };
-        //        }
-
-        //        shareTypeSummaries[code].ShareCapital += cs.ShareCapitalAmount ?? 0;
-        //        shareTypeSummaries[code].Deposits += cs.DepositsAmount ?? 0;
-        //        shareTypeSummaries[code].RegFees += cs.RegFeeAmount ?? 0;
-        //        shareTypeSummaries[code].Donations += cs.Donor ?? 0;
-        //        shareTypeSummaries[code].LoanAllocations += cs.LoanAmount ?? 0;
-        //        shareTypeSummaries[code].PassBook += cs.PassBookAmount ?? 0;
-        //        shareTypeSummaries[code].TotalShares = shareTypeSummaries[code].ShareCapital + shareTypeSummaries[code].Deposits;
-
-        //        shareTypeSummaries[code].Transactions.Add(new ShareTransactionDetailDTO
-        //        {
-        //            TransactionDate = cs.ContrDate ?? DateTime.Now,
-        //            TransactionType = "Contribution",
-        //            Amount = (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0),
-        //            ShareCapital = cs.ShareCapitalAmount ?? 0,
-        //            Deposits = cs.DepositsAmount ?? 0,
-        //            ReceiptNo = cs.ReceiptNo,
-        //            Remarks = cs.Remarks,
-        //            BlockchainTxId = cs.BlockchainTxId
-        //        });
-        //    }
-
-        //    foreach (var cp in sharePurchases)
-        //    {
-        //        var code = cp.Sharescode ?? "Unknown";
-        //        if (!shareTypeSummaries.ContainsKey(code))
-        //        {
-        //            shareTypeSummaries[code] = new ShareTypeSummaryDTO
-        //            {
-        //                SharesCode = code,
-        //                SharesType = cp.SharescodeNavigation?.SharesType ?? "Unknown",
-        //                TotalShares = 0,
-        //                ShareCapital = 0,
-        //                Deposits = 0,
-        //                RegFees = 0,
-        //                Donations = 0,
-        //                LoanAllocations = 0,
-        //                PassBook = 0,
-        //                Transactions = new List<ShareTransactionDetailDTO>()
-        //            };
-        //        }
-
-        //        shareTypeSummaries[code].ShareCapital += cp.Amount ?? 0;
-        //        shareTypeSummaries[code].TotalShares = shareTypeSummaries[code].ShareCapital + shareTypeSummaries[code].Deposits;
-
-        //        shareTypeSummaries[code].Transactions.Add(new ShareTransactionDetailDTO
-        //        {
-        //            TransactionDate = cp.ContrDate ?? DateTime.Now,
-        //            TransactionType = "Purchase",
-        //            Amount = cp.Amount ?? 0,
-        //            ShareCapital = cp.Amount ?? 0,
-        //            Deposits = 0,
-        //            ReceiptNo = cp.ReceiptNo,
-        //            Remarks = cp.Remarks,
-        //            BlockchainTxId = cp.BlockchainTxId
-        //        });
-        //    }
-
-        //    // Calculate shares locked for guarantees
-        //    var lockedShares = await _context.Loanguar
-        //        .Where(lg => lg.MemberNo == memberNo && lg.CompanyCode == companyCode)
-        //        .SumAsync(lg => lg.Balance ?? 0);
-
-        //    var response = new ShareInquiryResponseDTO
-        //    {
-        //        MemberNo = member.MemberNo,
-        //        MemberName = $"{member.Surname} {member.OtherNames}",
-        //        TotalShareBalance = shareTypeSummaries.Values.Sum(s => s.TotalShares),
-        //        TotalShareCapital = shareTypeSummaries.Values.Sum(s => s.ShareCapital),
-        //        TotalDeposits = shareTypeSummaries.Values.Sum(s => s.Deposits),
-        //        LockedForGuarantees = lockedShares,
-        //        AvailableShares = shareTypeSummaries.Values.Sum(s => s.TotalShares) - lockedShares,
-        //        ShareTypeSummaries = shareTypeSummaries.Values.ToList(),
-        //        InquiryTimestamp = DateTime.Now,
-        //        InquiredBy = userId
-        //    };
-
-        //    return response;
-        //}
-
 
         public async Task<LoanInquiryResponseDTO> GetLoanInquiryAsync(string memberNo, string companyCode, string userId)
         {
@@ -695,6 +567,171 @@ namespace SACCOBlockChainSystem.Services
                 PageSize = searchDto.PageSize,
                 TotalPages = (int)Math.Ceiling((double)totalCount / searchDto.PageSize),
                 Members = members,
+                InquiryTimestamp = DateTime.Now,
+                InquiredBy = userId
+            };
+
+            return response;
+        }
+
+        // Services/InquiryService.cs - Add this method
+
+        public async Task<GuarantorLoanListResponseDTO> GetGuarantorLoansAsync(string memberNo, string companyCode, string userId)
+        {
+            // 1. Get the member (guarantor) details
+            var member = await _context.Members
+                .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
+
+            if (member == null)
+            {
+                throw new Exception($"Member {memberNo} not found");
+            }
+
+            // 2. Get ALL guarantor records for this member (where they are a guarantor)
+            var guarantorRecords = await _context.Loanguar
+                .Where(g => g.MemberNo == memberNo
+                    && g.CompanyCode == companyCode
+                    && g.Transfered == false) // Only active guarantees
+                .ToListAsync();
+
+            var guaranteedLoans = new List<GuarantorLoanDetailDTO>();
+            decimal totalLockedAmount = 0;
+
+            // 3. For each guarantor record, get the loan details
+            foreach (var guarantor in guarantorRecords)
+            {
+                // Get the loan that was guaranteed
+                var loan = await _context.Loans
+                    .FirstOrDefaultAsync(l => l.LoanNo == guarantor.LoanNo && l.CompanyCode == companyCode);
+
+                if (loan == null) continue;
+
+                // Get the loanee (borrower) details
+                var loanee = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
+
+                // Get loan type
+                var loanType = await _context.Loantypes
+                    .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
+
+                // Get loan balance
+                var loanbal = await _context.Loanbal
+                    .FirstOrDefaultAsync(lb => lb.LoanNo == loan.LoanNo && lb.Companycode == companyCode);
+
+                // Calculate outstanding balances
+                decimal outstandingBalance = loanbal?.Balance ?? 0;
+                decimal outstandingInterest = loanbal?.IntrOwed ?? 0;
+                decimal outstandingPenalty = loanbal?.Penalty ?? 0;
+                decimal totalOutstanding = outstandingBalance + outstandingInterest + outstandingPenalty;
+
+                // Calculate expected completion date
+                DateTime? expectedCompletionDate = null;
+                if (loanbal?.FirstDate != null && loan.RepayPeriod.HasValue)
+                {
+                    expectedCompletionDate = loanbal.FirstDate.AddMonths(loan.RepayPeriod.Value);
+                }
+                else if (loan.ApplicDate != null && loan.RepayPeriod.HasValue)
+                {
+                    expectedCompletionDate = loan.ApplicDate.AddMonths(loan.RepayPeriod.Value);
+                }
+
+                // Check if loan is active
+                bool isActive = loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed;
+
+                // Check if loan is overdue
+                bool isOverdue = false;
+                int daysOverdue = 0;
+                if (loanbal?.Nextduedate != null && loanbal.Nextduedate < DateTime.Now && outstandingBalance > 0)
+                {
+                    isOverdue = true;
+                    daysOverdue = (DateTime.Now - loanbal.Nextduedate.Value).Days;
+                }
+
+                // Get the loan status string
+                string loanStatus = GetLoanStatusString(loan.Status);
+
+                // Calculate remaining guarantee
+                decimal remainingGuarantee = (guarantor.Balance ?? 0);
+                totalLockedAmount += remainingGuarantee;
+
+                // Get member's total shares (the guarantor's shares)
+                var memberShares = await _context.ContribShares
+                    .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
+                    .SumAsync(cs => (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0));
+
+                // Get all locked shares for this member (from ALL loans they guarantee)
+                var totalLockedForMember = await _context.Loanguar
+                    .Where(g => g.MemberNo == memberNo
+                        && g.CompanyCode == companyCode
+                        && g.Transfered == false)
+                    .SumAsync(g => g.Balance ?? 0);
+
+                // Calculate available shares after this guarantee
+                decimal availableShares = memberShares - totalLockedForMember;
+                decimal shareBalanceAfterThisGuarantee = memberShares - totalLockedForMember;
+
+                // Build the detail DTO
+                var detail = new GuarantorLoanDetailDTO
+                {
+                    // Loanee (Borrower) Information
+                    LoaneeMemberNo = loan.MemberNo,
+                    LoaneeName = loanee != null ? $"{loanee.Surname ?? ""} {loanee.OtherNames ?? ""}".Trim() : loan.MemberNo,
+                    LoaneePhone = loanee?.PhoneNo ?? loanee?.MobileNo ?? "N/A",
+                    LoaneeIdNo = loanee?.Idno ?? "N/A",
+
+                    // Loan Information
+                    LoanNo = loan.LoanNo,
+                    LoanCode = loan.LoanCode ?? "N/A",
+                    LoanType = loanType?.LoanType1 ?? loan.LoanCode ?? "Unknown",
+                    PrincipalAmount = loan.LoanAmt ?? 0,
+                    OutstandingBalance = totalOutstanding,
+                    InterestRate = loan.Interest ?? 0,
+                    RepaymentPeriod = loan.RepayPeriod ?? 0,
+                    ApplicationDate = loan.ApplicDate,
+                    DisbursementDate = loan.AuditDateTime,
+                    ExpectedCompletionDate = expectedCompletionDate,
+                    LoanStatus = loanStatus,
+                    IsActive = isActive,
+                    IsOverdue = isOverdue,
+                    DaysOverdue = daysOverdue,
+
+                    // Guarantor Information
+                    GuarantorId = guarantor.Id,
+                    GuarantorMemberNo = guarantor.MemberNo,
+                    GuaranteeAmount = guarantor.Amount ?? 0,
+                    GuaranteeBalance = guarantor.Balance ?? 0,
+                    RemainingGuarantee = remainingGuarantee,
+                    GuaranteeDate = guarantor.AuditTime ?? DateTime.Now,
+                    GuaranteeStatus = guarantor.Transfered ? "Released" : "Active",
+                    GuaranteeDescription = guarantor.Description,
+                    CollateralType = guarantor.Collateral,
+
+                    // Member's Share Information (the guarantor)
+                    MemberTotalShares = memberShares,
+                    MemberLockedShares = totalLockedForMember,
+                    MemberAvailableShares = availableShares,
+                    ShareBalanceAfterThisGuarantee = shareBalanceAfterThisGuarantee
+                };
+
+                guaranteedLoans.Add(detail);
+            }
+
+            // 4. Build the response
+            var response = new GuarantorLoanListResponseDTO
+            {
+                MemberNo = member.MemberNo,
+                MemberName = $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim(),
+                MemberPhone = member.PhoneNo ?? member.MobileNo ?? "N/A",
+                MemberIdNo = member.Idno ?? "N/A",
+                TotalShares = await _context.ContribShares
+                    .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
+                    .SumAsync(cs => (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0)),
+                LockedForGuarantees = totalLockedAmount,
+                AvailableShares = await _context.ContribShares
+                    .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
+                    .SumAsync(cs => (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0)) - totalLockedAmount,
+                TotalGuaranteedLoans = guaranteedLoans.Count,
+                GuaranteedLoans = guaranteedLoans,
                 InquiryTimestamp = DateTime.Now,
                 InquiredBy = userId
             };

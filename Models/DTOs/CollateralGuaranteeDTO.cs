@@ -80,5 +80,14 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal AvailableAmount { get; set; }
         public bool IsActive { get; set; }
         public string? LoanNoGuaranteeing { get; set; }
+        public string? MemberNo { get; set; }
+        public string? PhotoBase64 { get; set; }
+        public bool HasPhoto { get; set; }
+        public bool IsUsed { get; set; }
+        public int UsedCount { get; set; }
+        public List<string> DocumentNumbers { get; set; } = new List<string>();
+        public decimal TotalUsedAmount { get; internal set; }
+        public bool IsAvailable { get; internal set; }
     }
 }
+

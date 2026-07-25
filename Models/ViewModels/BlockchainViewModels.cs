@@ -2,6 +2,16 @@
 
 namespace SACCOBlockChainSystem.ViewModels
 {
+    public class BlocksViewModel
+    {
+        public List<Block> Blocks { get; set; } = new();
+        public int CurrentPage { get; set; }
+        public int PageSize { get; set; }
+        public int TotalBlocks { get; set; }
+        public int TotalPages { get; set; }
+        public string CompanyCode { get; set; } = string.Empty;
+        public bool BlockchainValid { get; set; }
+    }
     public class BlockchainExplorerViewModel
     {
         public List<Block> Blocks { get; set; } = new();

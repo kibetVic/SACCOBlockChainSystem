@@ -45,6 +45,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         // Status Flags
         public bool IsActive { get; set; }
         public bool IsDormant { get; set; }
+        public string? IdFrontImage { get; set; } 
+        public string? IdBackImage { get; set; }
 
         // Additional Fields
         public DateTime? LastTransactionDate { get; set; }
@@ -118,6 +120,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [Range(0, double.MaxValue, ErrorMessage = "Initial shares must be a positive number")]
         public decimal InitialShares { get; set; } = 0;
         public string? Photo { get; set; }
+        public string? IdFrontImage { get; set; }
+        public string? IdBackImage { get; set; }
         public string? CreatedBy { get; set; }
         public string? MaritalStatus { get; set; }
         public string? Status { get; set; }
@@ -142,6 +146,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? Employer { get; internal set; }
         public string? WalletAddress { get; internal set; }
         public string? Photo { get; set; }
+        public string? IdFrontImage { get; set; }
+        public string? IdBackImage { get; set; }
     }
 
     public class MemberUpdateDTO
@@ -167,6 +173,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? RegistrationType { get; set; }
         public string? MaritalStatus { get; set; }
         public string? Photo { get; set; }
+        public string? IdFrontImage { get; set; }
+        public string? IdBackImage { get; set; }
         public string? GroupCig { get; set; }
         public string? UpdatedBy { get; set; }
         public string? CreatedBy { get; set; }
@@ -195,6 +203,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public bool IsActive { get; set; }
         public bool IsDormant { get; set; }
         public string? Photo { get; set; }
+        public string? IdFrontImage { get; set; }
+        public string? IdBackImage { get; set; }
     }
 
     public class MemberTransactionSummary

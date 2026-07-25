@@ -8,19 +8,38 @@
 }
 
 <div class="container-fluid">
-    <!-- Success/Error Messages -->
-    @if (TempData["SuccessMessage"] != null)
+    <!-- Display validation summary -->
+    @if (!ViewData.ModelState.IsValid)
     {
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <h5 class="alert-heading">
+                <i class="fas fa-exclamation-triangle"></i> Please fix the following errors:
+            </h5>
+            <ul class="mb-0">
+                @foreach (var modelState in ViewData.ModelState.Values)
+                {
+                    foreach (var error in modelState.Errors)
+                    {
+                        <li>@error.ErrorMessage</li>
+                    }
+                }
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
     @if (TempData["ErrorMessage"] != null)
     {
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            <strong>Error!</strong> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <strong>Success!</strong> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
 
@@ -148,7 +167,8 @@
                                     }
                                 </select>
                                 <div id="shareTypeInfo" class="small text-muted mt-1"></div>
-                                <span id="sharesCodeError" class="text-danger"></span>
+                                @* <div id="shareTypeStatus" class="mt-2"></div>
+                                <span id="sharesCodeError" class="text-danger"></span> *@
                             </div>
                         </div>
 
@@ -328,7 +348,7 @@
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <a asp-action="PrintReceipt" asp-route-receiptNo="@contribution.ReceiptNo"
-                                               target="_blank" class="btn btn-sm btn-info" title="Print Receipt">
+                                               class="btn btn-sm btn-info" title="Print Receipt">
                                                 <i class="fas fa-print">Print Receipt</i>
                                             </a>
                                         </div>
@@ -462,22 +482,21 @@
 
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         let currentMemberNo = null;
-        let currentMemberTotal = 0;
-        let currentShareTypeMax = 0;
-        let currentShareTypeMin = 0;
-        let currentShareTypeName = '';
+        let currentMemberTotals = null;
+        let selectedShareTypeData = null;
         let selectedMemberData = null;
         let isAmountValid = false;
         let isMemberSelected = false;
 
-        function checkPayment(val){
+        function checkPayment(val) {
             console.log(val);
-            if(val.toLowerCase() == "mpesa"){
-                $("#promptPaymentCheck").css("display","block");
-            }else{
-                 $("#promptPaymentCheck").css("display","none");
+            if (val.toLowerCase() == "mpesa") {
+                $("#promptPaymentCheck").css("display", "block");
+            } else {
+                $("#promptPaymentCheck").css("display", "none");
             }
         }
 
@@ -489,20 +508,31 @@
             // Share type change event
             $('#SharesCode').on('change', function() {
                 const selectedOption = this.options[this.selectedIndex];
-                currentShareTypeMin = parseFloat(selectedOption.getAttribute('data-min')) || 0;
-                currentShareTypeMax = parseFloat(selectedOption.getAttribute('data-max')) || 0;
-                currentShareTypeName = selectedOption.getAttribute('data-name') || '';
+                if (!selectedOption || !selectedOption.value) {
+                    $('#shareTypeInfo').html('');
+                    $('#shareTypeStatus').html('');
+                    return;
+                }
 
-                let infoText = `<i class="fas fa-chart-line"></i> Minimum amount: ${formatCurrency(currentShareTypeMin)}`;
-                if (currentShareTypeMax > 0) {
-                    infoText += `, Maximum total limit: ${formatCurrency(currentShareTypeMax)}`;
+                selectedShareTypeData = {
+                    code: selectedOption.value,
+                    name: selectedOption.getAttribute('data-name') || '',
+                    min: parseFloat(selectedOption.getAttribute('data-min')) || 0,
+                    max: parseFloat(selectedOption.getAttribute('data-max')) || 0
+                };
+
+                // Update share type info
+                let infoText = `<i class="fas fa-chart-line"></i> Minimum amount: ${formatCurrency(selectedShareTypeData.min)}`;
+                if (selectedShareTypeData.max > 0) {
+                    infoText += `, Maximum total limit: ${formatCurrency(selectedShareTypeData.max)}`;
                 } else {
                     infoText += `, Maximum total limit: Unlimited`;
                 }
                 $('#shareTypeInfo').html(infoText);
 
+                // Get member totals for this share type
                 if (currentMemberNo) {
-                    getMemberCurrentTotal(currentMemberNo);
+                    getMemberShareTypeTotals(currentMemberNo);
                 }
                 validateAmount();
             });
@@ -609,7 +639,8 @@
                         $('#searchResults').hide();
                         $('#searchInput').val('');
 
-                        await getMemberCurrentTotal(memberNo);
+                        // Get all share type totals for this member
+                        await getMemberShareTypeTotals(memberNo);
                         updateSubmitButtonState();
 
                         Swal.fire('Success', `Member selected successfully!`, 'success');
@@ -621,67 +652,88 @@
             }
         }
 
-        async function getMemberCurrentTotal(memberNo) {
-            const shareTypeCode = $('#SharesCode').val();
-            if (!shareTypeCode || !memberNo) return;
+        async function getMemberShareTypeTotals(memberNo) {
+            if (!memberNo) return;
 
             try {
-                const response = await fetch(`/api/Contribution/member/${memberNo}/sharetype/${shareTypeCode}/total`);
+                const response = await fetch(`/api/Contribution/member/${memberNo}/sharetype-totals`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success) {
-                        currentMemberTotal = data.currentTotal || 0;
-                        updateContributionStatus();
-                        validateAmount();
+                        currentMemberTotals = data.data;
+                        updateShareTypeStatus();
+                        updateSubmitButtonState();
                     }
                 }
             } catch (error) {
                 console.error('Error:', error);
-                currentMemberTotal = 0;
             }
         }
 
-        function updateContributionStatus() {
-            const statusDiv = $('#contributionStatus');
-            const statusContent = $('#contributionStatusContent');
-            const warningDiv = $('#limitReachedWarning');
-            const limitReachedContent = $('#limitReachedContent');
-
-            if (currentShareTypeMax > 0) {
-                const remaining = currentShareTypeMax - currentMemberTotal;
-                if (remaining <= 0) {
-                    limitReachedContent.html(`
-                        Maximum ${currentShareTypeName} limit of ${formatCurrency(currentShareTypeMax)} has been reached.<br>
-                        Current total: ${formatCurrency(currentMemberTotal)}<br>
-                        <strong>No further contributions allowed for this share type else adjust max at the sharetype</strong>
-                    `);
-                    warningDiv.show();
-                    statusDiv.hide();
-                    $('#Amount').prop('disabled', true);
-                    isAmountValid = false;
-                } else {
-                    warningDiv.hide();
-                    statusDiv.show();
-                    statusContent.html(`
-                        <div class="row">
-                            <div class="col-md-4"><strong>Current Total:</strong> ${formatCurrency(currentMemberTotal)}</div>
-                            <div class="col-md-4"><strong>Maximum Limit:</strong> ${formatCurrency(currentShareTypeMax)}</div>
-                            <div class="col-md-4"><strong>Remaining:</strong> ${formatCurrency(remaining)}</div>
-                        </div>
-                    `);
-                    $('#Amount').prop('disabled', false);
-                }
-            } else {
-                warningDiv.hide();
-                statusDiv.show();
-                statusContent.html(`
-                    <div class="row">
-                        <div class="col-md-6"><strong>Current Total:</strong> ${formatCurrency(currentMemberTotal)}</div>
-                        <div class="col-md-6"><strong>Maximum Limit:</strong> Unlimited</div>
-                    </div>
-                `);
-                $('#Amount').prop('disabled', false);
+        function updateShareTypeStatus() {
+            const statusDiv = $('#shareTypeStatus');
+            if (!currentMemberTotals || !currentMemberTotals.shareTypeTotals) {
+                statusDiv.html('');
+                return;
             }
+
+            // Find the currently selected share type
+            const selectedCode = $('#SharesCode').val();
+            const selectedTotal = currentMemberTotals.shareTypeTotals.find(s => s.sharesCode === selectedCode);
+
+            if (!selectedTotal) {
+                statusDiv.html('');
+                return;
+            }
+
+            let html = `<div class="mt-2 p-2 border rounded">`;
+            html += `<strong>${selectedTotal.sharesType}</strong> (${selectedTotal.category})<br>`;
+
+            // Show current status
+            html += `<span class="badge ${selectedTotal.isFullyPaid ? 'bg-success' : 'bg-warning'}">`;
+            html += selectedTotal.isFullyPaid ? 'FULLY PAID' : 'PARTIALLY PAID';
+            html += `</span><br>`;
+
+            html += `<div class="progress mt-1" style="height: 20px;">`;
+            const percentage = selectedTotal.maxAmount > 0 ? (selectedTotal.currentAmount / selectedTotal.maxAmount * 100) : 0;
+            const progressClass = percentage >= 100 ? 'bg-success' : (percentage >= 70 ? 'bg-info' : (percentage >= 40 ? 'bg-warning' : 'bg-danger'));
+            html += `<div class="progress-bar ${progressClass}" role="progressbar" style="width: ${Math.min(percentage, 100)}%;">`;
+            html += `${selectedTotal.currentAmount.toLocaleString()} / ${selectedTotal.maxAmount > 0 ? selectedTotal.maxAmount.toLocaleString() : '∞'}`;
+            html += `</div></div>`;
+
+            html += `<small class="text-muted">`;
+            html += `Current: ${formatCurrency(selectedTotal.currentAmount)} | `;
+            if (selectedTotal.maxAmount > 0) {
+                html += `Remaining: ${formatCurrency(selectedTotal.remainingAmount)}`;
+            } else {
+                html += `No maximum limit`;
+            }
+            html += `</small>`;
+
+            html += `</div>`;
+
+            // Show prerequisites status
+            const regFeeTotal = currentMemberTotals.shareTypeTotals.find(s => s.category === 'REGISTRATION_FEE');
+            const shareCapitalTotal = currentMemberTotals.shareTypeTotals.find(s => s.category === 'SHARE_CAPITAL');
+
+            if (regFeeTotal && selectedTotal.category !== 'REGISTRATION_FEE') {
+                const regFeePaid = regFeeTotal.currentAmount > 0;
+                html += `<div class="mt-1">`;
+                html += `<i class="fas ${regFeePaid ? 'fa-check-circle text-success' : 'fa-times-circle text-danger'}"></i> `;
+                html += `Registration Fee: ${regFeePaid ? 'Paid ✅' : 'Required ❌'}`;
+                html += `</div>`;
+            }
+
+            if (shareCapitalTotal && (selectedTotal.category === 'DEPOSIT' || selectedTotal.category === 'PASSBOOK')) {
+                const minShareCapital = shareCapitalTotal.minAmount || 0;
+                const shareCapitalPaid = shareCapitalTotal.currentAmount >= minShareCapital;
+                html += `<div class="mt-1">`;
+                html += `<i class="fas ${shareCapitalPaid ? 'fa-check-circle text-success' : 'fa-times-circle text-danger'}"></i> `;
+                html += `Share Capital (Min ${formatCurrency(minShareCapital)}): ${shareCapitalPaid ? 'Paid ✅' : 'Required ❌'}`;
+                html += `</div>`;
+            }
+
+            statusDiv.html(html);
         }
 
         function validateAmount() {
@@ -701,25 +753,42 @@
                 return false;
             }
 
-            if (amount < currentShareTypeMin) {
-                validationDiv.html(`<i class="fas fa-exclamation-triangle"></i> Amount cannot be less than ${formatCurrency(currentShareTypeMin)}`);
-                updateSubmitButtonState();
-                return false;
-            }
+            // Check if amount meets minimum
+            const selectedCode = $('#SharesCode').val();
+            const selectedTotal = currentMemberTotals?.shareTypeTotals?.find(s => s.sharesCode === selectedCode);
 
-            if (currentShareTypeMax > 0 && currentMemberTotal >= currentShareTypeMax) {
-                validationDiv.html(`<i class="fas fa-ban"></i> Maximum limit already reached. No further contributions allowed.`);
-                updateSubmitButtonState();
-                return false;
-            }
-
-            if (currentShareTypeMax > 0) {
-                const potentialNewTotal = currentMemberTotal + amount;
-                const remainingLimit = currentShareTypeMax - currentMemberTotal;
-                if (potentialNewTotal > currentShareTypeMax) {
-                    validationDiv.html(`<i class="fas fa-exclamation-triangle"></i> Amount exceeds remaining limit! You can only add up to ${formatCurrency(remainingLimit)}`);
+            if (selectedTotal) {
+                // Check if fully paid
+                if (selectedTotal.isFullyPaid && selectedTotal.maxAmount > 0) {
+                    validationDiv.html(`<i class="fas fa-ban text-danger"></i> ${selectedTotal.sharesType} is fully paid! Maximum limit of ${formatCurrency(selectedTotal.maxAmount)} reached.`);
                     updateSubmitButtonState();
                     return false;
+                }
+
+                // Check remaining amount
+                if (selectedTotal.maxAmount > 0 && amount > selectedTotal.remainingAmount) {
+                    validationDiv.html(`<i class="fas fa-exclamation-triangle"></i> Amount exceeds remaining limit! You can only add up to ${formatCurrency(selectedTotal.remainingAmount)}`);
+                    updateSubmitButtonState();
+                    return false;
+                }
+
+                // Check prerequisites for deposits
+                if (selectedTotal.category === 'DEPOSIT' || selectedTotal.category === 'PASSBOOK') {
+                    //const regFeeTotal = currentMemberTotals?.shareTypeTotals?.find(s => s.category === 'REGISTRATION_FEE');
+                    const shareCapitalTotal = currentMemberTotals?.shareTypeTotals?.find(s => s.category === 'SHARE_CAPITAL');
+
+                    // if (!regFeeTotal || regFeeTotal.currentAmount <= 0) {
+                    //     validationDiv.html(`<i class="fas fa-ban text-danger"></i> Registration fee must be paid first!`);
+                    //     updateSubmitButtonState();
+                    //     return false;
+                    // }
+
+                    const minShareCapital = shareCapitalTotal?.minAmount || 0;
+                    if (!shareCapitalTotal || shareCapitalTotal.currentAmount < minShareCapital) {
+                        validationDiv.html(`<i class="fas fa-ban text-danger"></i> Minimum Share Capital of ${formatCurrency(minShareCapital)} must be paid first. Current: ${formatCurrency(shareCapitalTotal?.currentAmount || 0)}`);
+                        updateSubmitButtonState();
+                        return false;
+                    }
                 }
             }
 
@@ -733,7 +802,8 @@
             const submitBtn = $('#submitBtn');
             const remarks = $('#Remarks').val().trim();
             const hasRemarks = remarks.length > 0;
-            const canSubmit = isMemberSelected && isAmountValid && hasRemarks;
+            const shareTypeSelected = $('#SharesCode').val() !== '';
+            const canSubmit = isMemberSelected && isAmountValid && hasRemarks && shareTypeSelected;
             submitBtn.prop('disabled', !canSubmit);
         }
 
@@ -742,14 +812,12 @@
             selectedMemberData = null;
             isMemberSelected = false;
             isAmountValid = false;
-            currentMemberTotal = 0;
+            currentMemberTotals = null;
 
             $('#selectedMemberNo').val('');
             $('#selectedMemberCard').hide();
-            $('#contributionStatus').hide();
-            $('#limitReachedWarning').hide();
+            $('#shareTypeStatus').html('');
             $('#Amount').val('');
-            $('#Amount').prop('disabled', false);
             $('#amountValidation').html('');
             updateSubmitButtonState();
         }
@@ -765,9 +833,8 @@
             clearSearch();
             $('#SharesCode').val('');
             $('#shareTypeInfo').html('');
+            $('#shareTypeStatus').html('');
             $('#amountValidation').html('');
-            $('#contributionStatus').hide();
-            $('#limitReachedWarning').hide();
             $('#Amount').val('');
             $('#Remarks').val('');
             $('#ReferenceNo').val('');
@@ -776,8 +843,7 @@
             $('#printReceiptHidden').val('true');
             const today = new Date().toISOString().split('T')[0];
             $('#TransactionDate').val(today);
-            currentShareTypeMax = 0;
-            currentShareTypeMin = 0;
+            selectedShareTypeData = null;
             isAmountValid = false;
             isMemberSelected = false;
             updateSubmitButtonState();
@@ -809,14 +875,6 @@
             submitBtn.prop('disabled', true);
             submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Saving...');
 
-            let receiptWindow = null;
-            if (printReceipt) {
-                receiptWindow = window.open('', '_blank');
-                if (!receiptWindow) {
-                    Swal.fire('Warning', 'Please allow popups to print the receipt automatically', 'warning');
-                }
-            }
-
             try {
                 const formData = new FormData(this);
                 const response = await fetch('@Url.Action("Add", "ContributionMvc")', {
@@ -824,22 +882,18 @@
                     body: formData
                 });
 
+                // Check if it's a redirect (receipt page)
                 if (response.redirected) {
-                    if (printReceipt && receiptWindow) {
-                        receiptWindow.location.href = response.url;
-                    } else if (printReceipt && !receiptWindow) {
-                        window.open(response.url, '_blank');
+                    if (printReceipt) {
+                        // ============================================================
+                        // FIX: Load receipt in the SAME tab instead of opening new window
+                        // ============================================================
+                        window.location.href = response.url;
+                        // Remove the window.open code entirely
+                    } else {
+                        // If not printing, just reload the page to show the contribution
+                        window.location.href = response.url;
                     }
-
-                    Swal.fire({
-                        title: 'Success!',
-                        text: 'Contribution saved successfully!',
-                        icon: 'success',
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => {
-                        location.reload();
-                    });
                     return;
                 }
 
@@ -853,36 +907,28 @@
                             icon: 'success',
                             confirmButtonText: 'OK'
                         }).then(() => {
-                            location.reload();
+                            // Navigate to receipt in SAME tab if print receipt is checked
+                            if (printReceipt && data.RedirectUrl) {
+                                window.location.href = data.RedirectUrl;
+                            } else {
+                                location.reload();
+                            }
                         });
                     } else {
                         Swal.fire('Error', data.message || 'Error saving contribution', 'error');
                         submitBtn.prop('disabled', false);
                         submitBtn.html('<i class="fas fa-save"></i> Save Contribution');
-                        if (receiptWindow) receiptWindow.close();
                     }
                 } else {
                     const html = await response.text();
                     if (html.includes('OFFICIAL RECEIPT') || html.includes('Receipt No:')) {
-                        if (printReceipt && receiptWindow) {
-                            receiptWindow.document.write(html);
-                            receiptWindow.document.close();
-                        } else if (printReceipt && !receiptWindow) {
-                            const newWindow = window.open();
-                            if (newWindow) {
-                                newWindow.document.write(html);
-                                newWindow.document.close();
-                            }
-                        }
-                        Swal.fire({
-                            title: 'Success!',
-                            text: 'Contribution saved successfully!',
-                            icon: 'success',
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(() => {
-                            location.reload();
-                        });
+                        // ============================================================
+                        // FIX: Load receipt in SAME tab
+                        // ============================================================
+                        document.open();
+                        document.write(html);
+                        document.close();
+                        // No new window opening
                     } else {
                         location.reload();
                     }
@@ -892,10 +938,9 @@
                 Swal.fire('Error', 'An error occurred while saving: ' + error.message, 'error');
                 submitBtn.prop('disabled', false);
                 submitBtn.html('<i class="fas fa-save"></i> Save Contribution');
-                if (receiptWindow) receiptWindow.close();
             }
         }
-
+       
 
         function filterTable() {
             const searchTerm = $('#tableSearchInput').val().toLowerCase();

@@ -187,5 +187,259 @@ namespace SACCOBlockChainSystem.Controllers
                 return Json(new { success = false, message = ex.Message });
             }
         }
+
+
+        // GIGsController.cs
+        [HttpGet]
+        public async Task<IActionResult> GetGIGMemberCounts()
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+                var gigs = await _context.CIGs
+                    .Where(g => g.CompanyCode == companyCode && g.Status == "Active")
+                    .ToListAsync();
+
+                var counts = new List<object>();
+                foreach (var gig in gigs)
+                {
+                    var count = await _context.Members
+                        .CountAsync(m => m.Cigcode == gig.GigCode && m.CompanyCode == companyCode);
+
+                    counts.Add(new { id = gig.Id, count = count });
+                }
+
+                return Json(new { success = true, counts = counts });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting GIG member counts");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GetGIGMembers([FromBody] GetGIGMembersRequest request)
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+                var allMembers = new List<object>();
+
+                if (request.GigIds == null || !request.GigIds.Any())
+                {
+                    return Json(new { success = false, message = "No GIGs selected" });
+                }
+
+                foreach (var gigId in request.GigIds)
+                {
+                    // Get the GIG details
+                    var gig = await _context.CIGs
+                        .FirstOrDefaultAsync(g => g.Id == gigId && g.CompanyCode == companyCode);
+
+                    if (gig != null)
+                    {
+                        // Get ALL members for this GIG - NO Status filter to get all members
+                        var gigMembers = await _context.Members
+                            .Where(m => m.Cigcode == gig.GigCode
+                                && m.CompanyCode == companyCode)
+                            .Select(m => new
+                            {
+                                m.MemberNo,
+                                FullName = (m.Surname ?? "") + " " + (m.OtherNames ?? ""),
+                                m.PhoneNo,
+                                m.Surname,
+                                m.OtherNames,
+                                m.Email,
+                                m.Idno,
+                                m.Status,
+                                GigId = gig.Id,
+                                GigName = gig.GigName,
+                                GigCode = gig.GigCode
+                            })
+                            .ToListAsync();
+
+                        if (gigMembers.Any())
+                        {
+                            allMembers.AddRange(gigMembers);
+                        }
+                    }
+                }
+
+                if (!allMembers.Any())
+                {
+                    return Json(new
+                    {
+                        success = true,
+                        members = new List<object>(),
+                        message = "No members found in the selected GIGs"
+                    });
+                }
+
+                return Json(new { success = true, members = allMembers });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting GIG members");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GetGIGMembersByCode([FromBody] GetGIGMembersByCodeRequest request)
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+                var allMembers = new List<object>();
+
+                if (request.GigCodes == null || !request.GigCodes.Any())
+                {
+                    return Json(new { success = false, message = "No GIGs selected" });
+                }
+
+                foreach (var gigCode in request.GigCodes)
+                {
+                    // Get the GIG details
+                    var gig = await _context.CIGs
+                        .FirstOrDefaultAsync(g => g.GigCode == gigCode && g.CompanyCode == companyCode);
+
+                    if (gig != null)
+                    {
+                        // Get ALL members for this GIG using Cigcode - NO Status filter
+                        var gigMembers = await _context.Members
+                            .Where(m => m.Cigcode == gigCode
+                                && m.CompanyCode == companyCode)
+                            .Select(m => new
+                            {
+                                m.MemberNo,
+                                FullName = (m.Surname ?? "") + " " + (m.OtherNames ?? ""),
+                                m.PhoneNo,
+                                m.Surname,
+                                m.OtherNames,
+                                m.Email,
+                                m.Idno,
+                                m.Status,
+                                GigId = gig.Id,
+                                GigName = gig.GigName,
+                                GigCode = gig.GigCode
+                            })
+                            .ToListAsync();
+
+                        if (gigMembers.Any())
+                        {
+                            allMembers.AddRange(gigMembers);
+                        }
+                    }
+                }
+
+                if (!allMembers.Any())
+                {
+                    return Json(new
+                    {
+                        success = true,
+                        members = new List<object>(),
+                        message = "No members found in the selected GIGs"
+                    });
+                }
+
+                return Json(new { success = true, members = allMembers });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting GIG members by code");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+       
+
+        //// Alternative: Get members with their GIG information
+        //[HttpGet]
+        //public async Task<IActionResult> GetMembersWithGIGInfo()
+        //{
+        //    try
+        //    {
+        //        var companyCode = _companyContextService.GetCurrentCompanyCode();
+
+        //        var members = await _context.Members
+        //            .Where(m => m.CompanyCode == companyCode)
+        //            .Select(m => new
+        //            {
+        //                m.MemberNo,
+        //                FullName = (m.Surname ?? "") + " " + (m.OtherNames ?? ""),
+        //                m.PhoneNo,
+        //                m.Email,
+        //                m.Idno,
+        //                m.Cigcode,
+        //                GigName = _context.CIGs
+        //                    .Where(g => g.GigCode == m.Cigcode && g.CompanyCode == companyCode)
+        //                    .Select(g => g.GigName)
+        //                    .FirstOrDefault(),
+        //                m.Status
+        //            })
+        //            .OrderBy(m => m.MemberNo)
+        //            .ToListAsync();
+
+        //        return Json(new { success = true, members = members });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error getting members with GIG info");
+        //        return Json(new { success = false, message = ex.Message });
+        //    }
+        //}
+
+        //// Debug: Check GIG data
+        //[HttpGet]
+        //public async Task<IActionResult> CheckGIGData(string gigCode = null)
+        //{
+        //    try
+        //    {
+        //        var companyCode = _companyContextService.GetCurrentCompanyCode();
+        //        var result = new Dictionary<string, object>();
+
+        //        // Get all GIGs
+        //        var gigs = await _context.CIGs
+        //            .Where(g => g.CompanyCode == companyCode)
+        //            .Select(g => new { g.Id, g.GigCode, g.GigName, g.Status })
+        //            .ToListAsync();
+        //        result["GIGs"] = gigs;
+
+        //        // Get members with Cigcode
+        //        var membersWithGIG = await _context.Members
+        //            .Where(m => m.CompanyCode == companyCode && m.Cigcode != null && m.Cigcode != "")
+        //            .Select(m => new { m.MemberNo, m.Surname, m.OtherNames, m.Cigcode })
+        //            .Take(100)
+        //            .ToListAsync();
+        //        result["MembersWithGIG"] = membersWithGIG;
+
+        //        // If specific GIG code provided, get members for that GIG
+        //        if (!string.IsNullOrEmpty(gigCode))
+        //        {
+        //            var members = await _context.Members
+        //                .Where(m => m.Cigcode == gigCode && m.CompanyCode == companyCode)
+        //                .Select(m => new { m.MemberNo, m.Surname, m.OtherNames, m.PhoneNo })
+        //                .ToListAsync();
+        //            result["MembersForGIG"] = members;
+        //        }
+
+        //        return Json(new { success = true, data = result });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error checking GIG data");
+        //        return Json(new { success = false, message = ex.Message });
+        //    }
+        //}
+
+        public class GetGIGMembersRequest
+        {
+            public List<int> GigIds { get; set; } = new List<int>();
+        }
+
+        public class GetGIGMembersByCodeRequest
+        {
+            public List<string> GigCodes { get; set; } = new List<string>();
+        }
     }
 }

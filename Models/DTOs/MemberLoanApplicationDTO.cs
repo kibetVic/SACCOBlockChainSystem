@@ -1,8 +1,67 @@
 ﻿// Models/DTOs/MemberLoanApplicationDTO.cs
 using System.ComponentModel.DataAnnotations;
 
+// Models/DTOs/MemberLoanApprovalDTOs.cs
+
 namespace SACCOBlockChainSystem.Models.DTOs
 {
+    public class PendingLoanApprovalDTO
+    {
+        public string LoanNo { get; set; } = string.Empty;
+        public string MemberNo { get; set; } = string.Empty;
+        public string MemberName { get; set; } = string.Empty;
+        public string IdNo { get; set; } = string.Empty;
+        public string PhoneNo { get; set; } = string.Empty;
+        public string LoanType { get; set; } = string.Empty;
+        public decimal LoanAmount { get; set; }
+        public DateTime ApplicationDate { get; set; }
+        public bool IsMobileLoan { get; set; }
+        public bool RequiresGuarantor { get; set; }
+        public bool HasGuarantors { get; set; }
+        public object GuarantorDetails { get; set; } = new List<object>();
+        public decimal TotalDeposits { get; set; }
+        public decimal TotalShares { get; set; }
+        public decimal MonthlyIncome { get; set; }
+        public decimal RepaymentCapacity { get; set; }
+        public decimal MonthlyInstallment { get; set; }
+        public decimal CapacityRatio { get; set; }
+        public int ExistingLoansCount { get; set; }
+        public bool IsSelfGuarantee { get; set; }
+        public string Purpose { get; set; } = string.Empty;
+        public int RepayPeriod { get; set; }
+        public decimal InterestRate { get; set; }
+        public decimal DepositsAmount { get; set; }
+    }
+
+    public class PendingApprovalDetailViewModel
+    {
+        public string LoanNo { get; set; } = string.Empty;
+        public string MemberNo { get; set; } = string.Empty;
+        public string MemberName { get; set; } = string.Empty;
+        public string IdNo { get; set; } = string.Empty;
+        public string PhoneNo { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string LoanType { get; set; } = string.Empty;
+        public decimal LoanAmount { get; set; }
+        public DateTime ApplicationDate { get; set; }
+        public string Purpose { get; set; } = string.Empty;
+        public int RepayPeriod { get; set; }
+        public decimal InterestRate { get; set; }
+        public decimal MonthlyInstallment { get; set; }
+        public bool IsMobileLoan { get; set; }
+        public bool RequiresGuarantor { get; set; }
+        public bool IsSelfGuarantee { get; set; }
+        public decimal TotalDeposits { get; set; }
+        public decimal TotalShares { get; set; }
+        public decimal MonthlyIncome { get; set; }
+        public decimal RepaymentCapacity { get; set; }
+        public decimal CapacityRatio { get; set; }
+        public int ExistingLoansCount { get; set; }
+        public object ExistingLoans { get; set; } = new List<object>();
+        public object Guarantors { get; set; } = new List<object>();
+        public object ContributionHistory { get; set; } = new List<object>();
+        public object PreviousRepayments { get; set; } = new List<object>();
+    }
     public class WithdrawalMethodDTO
     {
         public string Code { get; set; }
@@ -51,6 +110,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public DateTime? NextPaymentDate { get; set; }
         public decimal MonthlyInstallment { get; set; }
         public bool CanWithdraw { get; internal set; }
+        public string? Posted { get; set; } = string.Empty;
     }
 
     public class LoanProductDTO
@@ -102,6 +162,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal AvailableSharesForGuarantee { get; set; } 
         public decimal RequiredGuaranteeAmount { get; set; }
         public decimal ProcessingFeeAmount { get; internal set; }
+        public decimal MaxAmountPercentage { get; internal set; }
     }
 
     public class SelfLoanApplicationDTO
@@ -126,6 +187,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal? Amount { get; set; }
         public DateTime? ApplicationDate { get; set; }
         public string BlockchainTxId { get; set; }
+        public bool RequiresApproval { get; internal set; }
     }
 
     public class LoanDisbursementResultDTO
@@ -182,6 +244,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal NewBalance { get; set; }
         public bool IsFullyPaid { get; set; }
         public string BlockchainTxId { get; set; }
+        public bool IsFullBalancePayment { get; internal set; }
+        public int InstallmentsCovered { get; internal set; }
     }
 
     public class RepaymentHistoryDTO

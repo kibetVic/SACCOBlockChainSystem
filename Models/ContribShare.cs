@@ -13,11 +13,11 @@ public partial class ContribShare
 
     public string? LoanNo { get; set; }
 
-    public DateTime? ContrDate { get; set; } // this can be bacdated, now or future, should be in view
+    public DateTime? ContrDate { get; set; } 
 
-    public DateTime? DepositedDate { get; set; } // can be today now and go back to the, should be in view
+    public DateTime? DepositedDate { get; set; } 
 
-    public DateTime? ReceiptDate { get; set; } // this is the same as DepositedDate, system generated
+    public DateTime? ReceiptDate { get; set; } 
 
     public decimal? ShareCapitalAmount { get; set; }
 

@@ -112,9 +112,9 @@ public partial class Loantype
     public bool? IsFimg { get; set; }
 
     public string? ApprovalStatus { get; set; }
-
+    public bool? IsProject { get; set; }
     public bool? MobileLoan { get; set; }
-
+    public bool? MobileLoanApproval { get; set; }
     public DateTime? MobileCreatedOn { get; set; }
 
     public string? MobileCreatedBy { get; set; }

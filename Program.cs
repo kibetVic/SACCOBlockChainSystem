@@ -79,11 +79,23 @@ builder.Services.AddAuthorization(options =>
 });
 
 // Database Context
+var commandTimeout = builder.Configuration.GetValue<int>("CommandTimeout", 1800);
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("BlockchainDb")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("BlockchainDb"),
+        sqlOptions => sqlOptions.CommandTimeout(commandTimeout)));
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("Connection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("Connection"),
+        sqlOptions => sqlOptions.CommandTimeout(commandTimeout)));
+
+//builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//    options.UseSqlServer(builder.Configuration.GetConnectionString("BlockchainDb")));
+
+//builder.Services.AddDbContext<AppDbContext>(options =>
+//    options.UseSqlServer(builder.Configuration.GetConnectionString("Connection")));
 
 // Register Repository Pattern
 builder.Services.AddScoped<IMemberRepository, MemberRepository>();
@@ -125,11 +137,18 @@ builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<IEmployeePaymentService, EmployeePaymentService>();
 builder.Services.AddScoped<IPaymentTypeService, PaymentTypeService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IInvoicePaymentService, InvoicePaymentService>();
 //builder.Services.AddHostedService<BlockchainSyncService>();
 //builder.Services.AddHostedService<TransactionProcessorService>();
 //builder.Services.AddHostedService<LoanOverdueUpdateService>();
+builder.Services.AddScoped<IMigrationService, MigrationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ISelfServiceLoanService, SelfServiceLoanService>();
+builder.Services.AddScoped<IOtpService, OtpService>();
+builder.Services.AddScoped<ICountyReportService, CountyReportService>();
+builder.Services.AddScoped<IAssetsRegisterService, AssetsRegisterService>();
 
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IDashboardCacheService, DashboardCacheService>();

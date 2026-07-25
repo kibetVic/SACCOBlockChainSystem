@@ -29,10 +29,13 @@
             <h4><i class="fas fa-users"></i> Member Management</h4>
         </div>
         <div class="card-body">
-            <form id="memberForm">
+            <form id="memberForm" enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
                 <input type="hidden" id="MemberNo" name="MemberNo" />
                 <input type="hidden" id="CompanyCode" name="CompanyCode" value="@Model.UserCompanyCode" />
+                <input type="hidden" id="IdFrontImage" name="IdFrontImage" />
+                <input type="hidden" id="IdBackImage" name="IdBackImage" />
+                <input type="hidden" id="Photo" name="Photo" />
 
                 <div class="row">
                     <!-- LEFT SIDE - Form Fields -->
@@ -89,8 +92,8 @@
                             </div>
                         </div>
 
-                        <!-- Personal Details Row -->
-                        <div class="row mb-3">
+                        <!-- Personal Details Row - HIDE FOR CORPORATE -->
+                        <div class="row mb-3" id="personalDetailsRow">
                             <div class="col-md-3">
                                 <label>Gender</label>
                                 <select id="Gender" class="form-control">
@@ -145,9 +148,61 @@
                                 <textarea id="PresentAddress" class="form-control" rows="1"></textarea>
                             </div>
                         </div>
+
+                        <!-- IMAGES UPLOAD SECTION - All in one row -->
+                        <div class="card bg-light mb-3">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0"><i class="fas fa-images"></i> Document Upload</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <!-- Passport Photo - col-md-4 -->
+                                    <div class="col-md-4">
+                                        <div class="mb-2">
+                                            <label class="form-label">Passport Photo</label>
+                                            <input type="file" id="photoUpload" class="form-control" accept="image/*" onchange="previewPhoto(event)" />
+                                            <div id="photoPreview" class="mt-2" style="display: none;">
+                                                <img id="photoPreviewImg" src="#" alt="Passport Photo" style="max-width: 100%; max-height: 120px; border: 1px solid #ddd; border-radius: 4px;" />
+                                                <button type="button" class="btn btn-sm btn-danger mt-1 w-100" onclick="clearPhoto()">
+                                                    <i class="fas fa-times"></i> Remove
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- ID Front - col-md-4 -->
+                                    <div class="col-md-4">
+                                        <div class="mb-2">
+                                            <label class="form-label">ID Front</label>
+                                            <input type="file" id="idFrontUpload" class="form-control" accept="image/*" onchange="previewIdFront(event)" />
+                                            <div id="idFrontPreview" class="mt-2" style="display: none;">
+                                                <img id="idFrontPreviewImg" src="#" alt="ID Front" style="max-width: 100%; max-height: 120px; border: 1px solid #ddd; border-radius: 4px;" />
+                                                <button type="button" class="btn btn-sm btn-danger mt-1 w-100" onclick="clearIdFront()">
+                                                    <i class="fas fa-times"></i> Remove
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- ID Back - col-md-4 -->
+                                    <div class="col-md-4">
+                                        <div class="mb-2">
+                                            <label class="form-label">ID Back</label>
+                                            <input type="file" id="idBackUpload" class="form-control" accept="image/*" onchange="previewIdBack(event)" />
+                                            <div id="idBackPreview" class="mt-2" style="display: none;">
+                                                <img id="idBackPreviewImg" src="#" alt="ID Back" style="max-width: 100%; max-height: 120px; border: 1px solid #ddd; border-radius: 4px;" />
+                                                <button type="button" class="btn btn-sm btn-danger mt-1 w-100" onclick="clearIdBack()">
+                                                    <i class="fas fa-times"></i> Remove
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- RIGHT SIDE - Checkboxes and Dropdowns -->
+                    <!-- RIGHT SIDE - Membership Settings & Photo Upload -->
                     <div class="col-md-4">
                         <div class="card bg-light mb-3">
                             <div class="card-header bg-secondary text-white">
@@ -168,11 +223,11 @@
                                 <div class="mb-3">
                                     <label>Membership Type</label><br />
                                     <div class="form-check form-check-inline">
-                                        <input type="radio" id="MembershipType_Individual" name="MembershipType" value="Individual" class="form-check-input" checked />
+                                        <input type="radio" id="MembershipType_Individual" name="MembershipType" value="Individual" class="form-check-input" checked onchange="toggleCorporateFields()" />
                                         <label class="form-check-label" for="MembershipType_Individual">Individual</label>
                                     </div>
                                     <div class="form-check form-check-inline">
-                                        <input type="radio" id="MembershipType_Corporate" name="MembershipType" value="Corporate" class="form-check-input" />
+                                        <input type="radio" id="MembershipType_Corporate" name="MembershipType" value="Corporate" class="form-check-input" onchange="toggleCorporateFields()" />
                                         <label class="form-check-label" for="MembershipType_Corporate">Corporate</label>
                                     </div>
                                 </div>
@@ -305,7 +360,10 @@
                                 data-status="@member.Status"
                                 data-status-text="@statusText"
                                 data-regdate="@member.ApplicDate?.ToString("yyyy-MM-dd")"
-                                data-initialshares="@member.InitShares">
+                                data-initialshares="@member.InitShares"
+                                data-photo="@member.Photo"
+                                data-idfront="@member.IdFrontImage"
+                                data-idback="@member.IdBackImage">
                                 <td class="row-number">@counter</td>
                                 <td>
                                     <strong>@member.MemberNo</strong>
@@ -485,136 +543,243 @@
         padding: 0 2px;
         border-radius: 3px;
     }
+
+    #photoPreview img, #idFrontPreview img, #idBackPreview img {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 5px;
+        max-width: 100%;
+        max-height: 120px;
+        object-fit: contain;
+    }
+
+    .btn-danger {
+        font-size: 12px;
+        padding: 2px 8px;
+    }
+
+    .btn-sm {
+        font-size: 12px;
+    }
 </style>
 
 @section Scripts {
     <script>
-    let currentMemberNo = null;
-    let deleteMemberNo = null;
-    let deleteMemberName = null;
+        let currentMemberNo = null;
+        let deleteMemberNo = null;
+        let deleteMemberName = null;
 
-    $(document).ready(function() {
-        // Set default registration date to today
-        const today = new Date().toISOString().split('T')[0];
-        $('#RegistrationDate').val(today);
+        // Store image data
+        let photoData = null;
+        let idFrontData = null;
+        let idBackData = null;
+
+        // Toggle corporate fields - HIDE Gender, DOB, Age, Marital Status
+        function toggleCorporateFields() {
+            const isCorporate = $('#MembershipType_Corporate').is(':checked');
+            const personalDetailsRow = $('#personalDetailsRow');
+
+            if (isCorporate) {
+                personalDetailsRow.hide();
+                // Clear corporate fields
+                $('#Gender').val('');
+                $('#DateOfBirth').val('');
+                $('#Age').val('');
+                $('#MaritalStatus').val('');
+                $('#ageError').text('');
+            } else {
+                personalDetailsRow.show();
+                // If Individual, validate age
+                validateAge();
+            }
+        }
+
+        // Photo preview
+        function previewPhoto(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    photoData = e.target.result;
+                    $('#photoPreviewImg').attr('src', photoData);
+                    $('#photoPreview').show();
+                    $('#Photo').val(photoData);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function clearPhoto() {
+            photoData = null;
+            $('#photoUpload').val('');
+            $('#photoPreview').hide();
+            $('#photoPreviewImg').attr('src', '#');
+            $('#Photo').val('');
+        }
+
+        // ID Front preview
+        function previewIdFront(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    idFrontData = e.target.result;
+                    $('#idFrontPreviewImg').attr('src', idFrontData);
+                    $('#idFrontPreview').show();
+                    $('#IdFrontImage').val(idFrontData);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function clearIdFront() {
+            idFrontData = null;
+            $('#idFrontUpload').val('');
+            $('#idFrontPreview').hide();
+            $('#idFrontPreviewImg').attr('src', '#');
+            $('#IdFrontImage').val('');
+        }
+
+        // ID Back preview
+        function previewIdBack(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    idBackData = e.target.result;
+                    $('#idBackPreviewImg').attr('src', idBackData);
+                    $('#idBackPreview').show();
+                    $('#IdBackImage').val(idBackData);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function clearIdBack() {
+            idBackData = null;
+            $('#idBackUpload').val('');
+            $('#idBackPreview').hide();
+            $('#idBackPreviewImg').attr('src', '#');
+            $('#IdBackImage').val('');
+        }
+
+        $(document).ready(function() {
+            // Set default registration date to today
+            const today = new Date().toISOString().split('T')[0];
+            $('#RegistrationDate').val(today);
+
+            // Generate preview member number for new registration
+            generatePreviewMemberNumber();
+
+            // Initialize corporate toggle
+            toggleCorporateFields();
+
+            // Search functionality
+            $('#memberSearchInput').on('keyup', function() {
+                performSearch();
+            });
+
+            $('#statusFilter').on('change', function() {
+                performSearch();
+            });
+
+            $('#sortBy').on('change', function() {
+                sortMembers();
+                performSearch();
+            });
+
+            $('#clearSearchBtn').on('click', function() {
+                clearAllFilters();
+            });
+
+            // Save button click
+            $('#btnSave').on('click', function() {
+                saveMember();
+            });
+
+            // Update button click
+            $('#btnUpdate').on('click', function() {
+                updateMember();
+            });
+
+            // Delete button click
+            $('#btnDelete').on('click', function() {
+                if (currentMemberNo) {
+                    deleteMember(currentMemberNo, $('#Surname').val() + ' ' + $('#OtherNames').val());
+                }
+            });
+
+            // New button click
+            $('#btnNew').on('click', function() {
+                resetForm();
+            });
+
+            // Confirm delete button
+            $('#confirmDeleteBtn').on('click', function() {
+                confirmDelete();
+            });
+
+            // Membership type change - triggers age validation and corporate toggle
+            $('input[name="MembershipType"]').on('change', function() {
+                toggleCorporateFields();
+                validateAge();
+            });
+
+            // Date of birth change
+            $('#DateOfBirth').on('change', function() {
+                calculateAge();
+            });
+
+            // Registration date change
+            $('#RegistrationDate').on('change', function() {
+                validateRegistrationDate();
+            });
+
+            // Select existing member from table
+            $(document).on('click', '.select-btn', function() {
+                const row = $(this).closest('tr');
+                let memberNo = $(this).data('memberno');
+
+                if (!memberNo || memberNo === '') {
+                    memberNo = $(this).attr('data-memberno');
+                }
+
+                if (!memberNo || memberNo === '') {
+                    memberNo = row.find('td:eq(1)').text().trim();
+                }
+
+                if (!memberNo || memberNo === '') {
+                    memberNo = row.data('memberno');
+                }
+
+                if (memberNo && memberNo !== '' && memberNo !== 'undefined' && memberNo !== 'null') {
+                    memberNo = memberNo.toString().trim();
+                    loadMemberForEdit(memberNo);
+                } else {
+                    showNotification('Could not identify member number. Please refresh the page and try again.', 'error');
+                }
+            });
+        });
 
         // Generate preview member number for new registration
-        generatePreviewMemberNumber();
+        function generatePreviewMemberNumber() {
+            const now = new Date();
+            const months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+            const monthInitial = months[now.getMonth()];
+            const year = now.getFullYear().toString().slice(-2);
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hour = String(now.getHours()).padStart(2, '0');
+            const minute = String(now.getMinutes()).padStart(2, '0');
+            const second = String(now.getSeconds()).padStart(2, '0');
 
-        // Search functionality
-        $('#memberSearchInput').on('keyup', function() {
-            performSearch();
-        });
-
-        $('#statusFilter').on('change', function() {
-            performSearch();
-        });
-
-        $('#sortBy').on('change', function() {
-            sortMembers();
-            performSearch();
-        });
-
-        $('#clearSearchBtn').on('click', function() {
-            clearAllFilters();
-        });
-
-        // Save button click
-        $('#btnSave').on('click', function() {
-            saveMember();
-        });
-
-        // Update button click
-        $('#btnUpdate').on('click', function() {
-            updateMember();
-        });
-
-        // Delete button click
-        $('#btnDelete').on('click', function() {
-            if (currentMemberNo) {
-                deleteMember(currentMemberNo, $('#Surname').val() + ' ' + $('#OtherNames').val());
-            }
-        });
-
-        // New button click
-        $('#btnNew').on('click', function() {
-            resetForm();
-        });
-
-        // Confirm delete button
-        $('#confirmDeleteBtn').on('click', function() {
-            confirmDelete();
-        });
-
-        // Membership type change - triggers age validation
-        $('input[name="MembershipType"]').on('change', function() {
-            validateAge();
-        });
-
-        // Date of birth change
-        $('#DateOfBirth').on('change', function() {
-            calculateAge();
-        });
-
-        // Registration date change
-        $('#RegistrationDate').on('change', function() {
-            validateRegistrationDate();
-        });
-
-        // Select existing member from table
-        $(document).on('click', '.select-btn', function() {
-            console.log('=== Select button clicked ===');
-
-            const row = $(this).closest('tr');
-            let memberNo = $(this).data('memberno');
-
-            if (!memberNo || memberNo === '') {
-                memberNo = $(this).attr('data-memberno');
-            }
-
-            if (!memberNo || memberNo === '') {
-                memberNo = row.find('td:eq(1)').text().trim();
-            }
-
-            if (!memberNo || memberNo === '') {
-                memberNo = row.data('memberno');
-            }
-
-            console.log('Final member number:', memberNo);
-
-            if (memberNo && memberNo !== '' && memberNo !== 'undefined' && memberNo !== 'null') {
-                memberNo = memberNo.toString().trim();
-                loadMemberForEdit(memberNo);
-            } else {
-                console.error('Could not find member number');
-                showNotification('Could not identify member number. Please refresh the page and try again.', 'error');
-            }
-        });
-    });
-
-    // Generate preview member number for new registration
-    function generatePreviewMemberNumber() {
-        const now = new Date();
-        const months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-        const monthInitial = months[now.getMonth()];
-        const year = now.getFullYear().toString().slice(-2);
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hour = String(now.getHours()).padStart(2, '0');
-        const minute = String(now.getMinutes()).padStart(2, '0');
-        const second = String(now.getSeconds()).padStart(2, '0');
-
-        const preview = `${monthInitial}${year}${month}${day}${hour}${minute}${second}`;
-        $('#DisplayMemberNo').val(preview);
-        $('#MemberNo').val(preview);
-    }
-
+            const preview = `${monthInitial}${year}${month}${day}${hour}${minute}${second}`;
+            $('#DisplayMemberNo').val(preview);
+            $('#MemberNo').val(preview);
+        }
 
         // Load member for editing
         function loadMemberForEdit(memberNo) {
-            console.log('=== loadMemberForEdit START ===');
-            console.log('Received memberNo:', memberNo);
-
             if (!memberNo || memberNo === 'undefined' || memberNo === 'null' || memberNo === '') {
                 showNotification('Invalid member number. Please try again.', 'error');
                 return;
@@ -623,106 +788,62 @@
             memberNo = memberNo.toString().trim();
             showLoading(true);
 
-            // Store the member number globally for update/delete operations
             currentMemberNo = memberNo;
-
-            // Set the hidden fields
             $('#MemberNo').val(memberNo);
             $('#DisplayMemberNo').val(memberNo);
-            console.log("SETTING MemberNo:", memberNo);
-
-            console.log('Hidden MemberNo set to:', $('#MemberNo').val());
-            console.log('currentMemberNo set to:', currentMemberNo);
-
-            // Make Member Number field READ-ONLY in edit mode
             $('#DisplayMemberNo').prop('readonly', true);
 
             const apiUrl = `/MemberMvc/GetMember/${encodeURIComponent(memberNo)}`;
-            console.log('Calling API:', apiUrl);
 
             $.ajax({
                 url: apiUrl,
                 type: 'GET',
                 dataType: 'json',
                 success: function(response) {
-                    console.log('API Response:', response);
                     showLoading(false);
 
                     if (response.success && response.member) {
                         const m = response.member;
 
-                        // ============================================
-                        // POPULATE BASIC INFORMATION
-                        // ============================================
+                        // Basic Information
                         $('#IdNo').val(m.idNo || '');
-
-                        // Registration Date
                         if (m.registrationDate) {
                             $('#RegistrationDate').val(m.registrationDate);
                         } else {
                             $('#RegistrationDate').val(new Date().toISOString().split('T')[0]);
                         }
 
-                        // ============================================
-                        // POPULATE NAME SECTION
-                        // ============================================
+                        // Name Section
                         $('#Surname').val(m.surname || '');
                         $('#OtherNames').val(m.otherNames || '');
 
-                        // ============================================
-                        // POPULATE CONTACT SECTION
-                        // ============================================
+                        // Contact Section
                         $('#PhoneNo').val(m.phoneNo || '');
                         $('#LandLine').val(m.landLine || '');
                         $('#Email').val(m.email || '');
 
-                        // ============================================
-                        // POPULATE PERSONAL DETAILS SECTION
-                        // ============================================
-                        // Gender
-                        if (m.gender) {
-                            $('#Gender').val(m.gender);
+                        // Personal Details - Only for Individual
+                        if (m.membershipType !== 'Corporate') {
+                            $('#personalDetailsRow').show();
+                            $('#Gender').val(m.gender || '');
+                            if (m.dateOfBirth) {
+                                $('#DateOfBirth').val(m.dateOfBirth);
+                                $('#Age').val(m.age || '');
+                            }
+                            $('#MaritalStatus').val(m.maritalStatus || '');
                         } else {
-                            $('#Gender').val('');
+                            $('#personalDetailsRow').hide();
                         }
 
-                        // Date of Birth and Age
-                        if (m.dateOfBirth) {
-                            $('#DateOfBirth').val(m.dateOfBirth);
-                            $('#Age').val(m.age || '');
-                        } else {
-                            $('#DateOfBirth').val('');
-                            $('#Age').val('');
-                        }
-
-                        // Marital Status
-                        if (m.maritalStatus) {
-                            $('#MaritalStatus').val(m.maritalStatus);
-                        } else {
-                            $('#MaritalStatus').val('');
-                        }
-
-                        // ============================================
-                        // POPULATE LOCATION SECTION
-                        // ============================================
+                        // Location
                         $('#Department').val(m.department || '');
                         $('#Station').val(m.station || '');
                         $('#PresentAddress').val(m.presentAddress || '');
 
-                        // ============================================
-                        // POPULATE MEMBERSHIP SETTINGS SECTION
-                        // ============================================
-                        // CIG Group
-                        if (m.cigcode) {
-                            $('#Cigcode').val(m.cigcode);
-                        } else {
-                            $('#Cigcode').val('');
-                        }
-
-                        // Member Status
+                        // Membership Settings
+                        $('#Cigcode').val(m.cigcode || '');
                         $('#Status').val(m.status || 'Active');
 
-                        // Membership Type Radio Buttons
                         if (m.membershipType === 'Corporate') {
                             $('#MembershipType_Corporate').prop('checked', true);
                             $('#MembershipType_Individual').prop('checked', false);
@@ -731,7 +852,6 @@
                             $('#MembershipType_Corporate').prop('checked', false);
                         }
 
-                        // Registration Type Radio Buttons
                         if (m.registrationType === 'Board Member') {
                             $('#RegistrationType_Board').prop('checked', true);
                             $('#RegistrationType_Ordinary').prop('checked', false);
@@ -740,72 +860,93 @@
                             $('#RegistrationType_Board').prop('checked', false);
                         }
 
-                        // ============================================
-                        // UPDATE UI STATE
-                        // ============================================
-                        // Show/hide buttons
+                        // ============================================================
+                        // PHOTO - Load if exists
+                        // ============================================================
+                        if (m.photo && m.photo !== '') {
+                            photoData = m.photo;
+                            $('#photoPreviewImg').attr('src', photoData);
+                            $('#photoPreview').show();
+                            $('#Photo').val(photoData);
+                        } else {
+                            clearPhoto();
+                        }
+
+                        // ============================================================
+                        // ID FRONT - Load if exists
+                        // ============================================================
+                        if (m.idFrontImage && m.idFrontImage !== '') {
+                            idFrontData = m.idFrontImage;
+                            $('#idFrontPreviewImg').attr('src', idFrontData);
+                            $('#idFrontPreview').show();
+                            $('#IdFrontImage').val(idFrontData);
+                        } else {
+                            clearIdFront();
+                        }
+
+                        // ============================================================
+                        // ID BACK - Load if exists
+                        // ============================================================
+                        if (m.idBackImage && m.idBackImage !== '') {
+                            idBackData = m.idBackImage;
+                            $('#idBackPreviewImg').attr('src', idBackData);
+                            $('#idBackPreview').show();
+                            $('#IdBackImage').val(idBackData);
+                        } else {
+                            clearIdBack();
+                        }
+
+                        // Update UI
                         $('#btnSave').hide();
                         $('#btnUpdate').show();
                         $('#btnDelete').show();
 
-                        // Highlight selected row
                         $('.select-btn').closest('tr').removeClass('table-primary');
                         $(`.select-btn[data-memberno="${memberNo}"]`).closest('tr').addClass('table-primary');
 
-                        // Scroll to form
                         $('html, body').animate({
                             scrollTop: $('.card-header.bg-success').offset().top - 20
                         }, 500);
 
                         showNotification('Member loaded for editing', 'success');
-
-                        // Verify values were populated
-                        console.log('Form populated - IdNo:', $('#IdNo').val());
-                        console.log('Form populated - Surname:', $('#Surname').val());
-                        console.log('Form populated - PhoneNo:', $('#PhoneNo').val());
-                        console.log('Hidden MemberNo:', $('#MemberNo').val());
-
                     } else {
-                        console.error('API returned error:', response);
                         showNotification(response.message || 'Member not found.', 'error');
                         resetForm();
                     }
                 },
                 error: function(xhr, status, error) {
                     showLoading(false);
-                    console.error('AJAX Error:', xhr.status, error);
-                    console.error('Response:', xhr.responseText);
-
                     let errorMsg = 'Error loading member data. ';
                     if (xhr.status === 404) {
                         errorMsg += 'Member not found.';
                     } else {
                         errorMsg += 'Please try again.';
                     }
-
                     showNotification(errorMsg, 'error');
                     resetForm();
                 }
             });
         }
 
-
-    // Helper function to calculate age from DOB
-    function calculateAgeFromDOB(dateOfBirth) {
-        if (!dateOfBirth) return null;
-        const birthDate = new Date(dateOfBirth);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const monthDiff = today.getMonth() - birthDate.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
+        // Helper function to calculate age from DOB
+        function calculateAgeFromDOB(dateOfBirth) {
+            if (!dateOfBirth) return null;
+            const birthDate = new Date(dateOfBirth);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age;
         }
-        return age;
-    }
 
-    // Reset form for new member
-             function resetForm() {
+        // Reset form for new member
+        function resetForm() {
             currentMemberNo = null;
+            photoData = null;
+            idFrontData = null;
+            idBackData = null;
 
             // Clear all form fields
             $('#MemberNo').val('');
@@ -825,6 +966,11 @@
             $('#PresentAddress').val('');
             $('#Cigcode').val('');
             $('#Status').val('Active');
+
+            // Clear photos
+            clearPhoto();
+            clearIdFront();
+            clearIdBack();
 
             // Make Member Number field EDITABLE for new registration
             $('#DisplayMemberNo').prop('readonly', false);
@@ -849,144 +995,150 @@
             $('#btnUpdate').hide();
             $('#btnDelete').hide();
 
+            // Show personal details (Individual is default)
+            $('#personalDetailsRow').show();
+
             // Generate a preview member number for new registration
             generatePreviewMemberNumber();
         }
 
-    // Calculate age from date of birth
-    function calculateAge() {
-        const dob = $('#DateOfBirth').val();
-        if (dob) {
-            const birthDate = new Date(dob);
-            const today = new Date();
-            let age = today.getFullYear() - birthDate.getFullYear();
-            const monthDiff = today.getMonth() - birthDate.getMonth();
-            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                age--;
+        // Calculate age from date of birth
+        function calculateAge() {
+            const dob = $('#DateOfBirth').val();
+            if (dob) {
+                const birthDate = new Date(dob);
+                const today = new Date();
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const monthDiff = today.getMonth() - birthDate.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                $('#Age').val(age);
+                validateAge();
+            } else {
+                $('#Age').val('');
             }
-            $('#Age').val(age);
-            validateAge();
-        } else {
-            $('#Age').val('');
         }
-    }
 
-    // Validate age based on Membership Type
-    function validateAge() {
-        const age = parseInt($('#Age').val());
-        const membershipType = $('input[name="MembershipType"]:checked').val();
-        const ageErrorSpan = $('#ageError');
+        // Validate age based on Membership Type
+        function validateAge() {
+            const isCorporate = $('#MembershipType_Corporate').is(':checked');
+            if (isCorporate) {
+                $('#ageError').text('');
+                return true;
+            }
 
-        if (isNaN(age) || age <= 0) {
+            const age = parseInt($('#Age').val());
+            const ageErrorSpan = $('#ageError');
+
+            if (isNaN(age) || age <= 0) {
+                ageErrorSpan.text('');
+                return true;
+            }
+
+            if (age < 18) {
+                ageErrorSpan.text('Individual members must be 18 years or older.');
+                return false;
+            }
+
             ageErrorSpan.text('');
             return true;
         }
 
-        if (membershipType === 'Individual' && age < 18) {
-            ageErrorSpan.text('Individual members must be 18 years or older.');
-            return false;
-        }
+        // Validate registration date (cannot be future)
+        function validateRegistrationDate() {
+            const regDate = $('#RegistrationDate').val();
+            const regDateError = $('#regDateError');
 
-        ageErrorSpan.text('');
-        return true;
-    }
+            if (regDate) {
+                const selectedDate = new Date(regDate);
+                const today = new Date();
+                selectedDate.setHours(0, 0, 0, 0);
+                today.setHours(0, 0, 0, 0);
 
-    // Validate registration date (cannot be future)
-    function validateRegistrationDate() {
-        const regDate = $('#RegistrationDate').val();
-        const regDateError = $('#regDateError');
-
-        if (regDate) {
-            const selectedDate = new Date(regDate);
-            const today = new Date();
-            selectedDate.setHours(0, 0, 0, 0);
-            today.setHours(0, 0, 0, 0);
-
-            if (selectedDate > today) {
-                regDateError.text('Registration date cannot be in the future.');
-                return false;
-            } else {
-                regDateError.text('');
-                return true;
+                if (selectedDate > today) {
+                    regDateError.text('Registration date cannot be in the future.');
+                    return false;
+                } else {
+                    regDateError.text('');
+                    return true;
+                }
             }
-        }
-        return true;
-    }
-
-    // Validate entire form
-    function validateForm() {
-        let isValid = true;
-
-        // Clear previous errors
-        $('.text-danger').text('');
-        $('.input-validation-error').removeClass('input-validation-error');
-
-        // Validate surname
-        if (!$('#Surname').val().trim()) {
-            $('#surnameError').text('Surname is required');
-            $('#Surname').addClass('input-validation-error');
-            isValid = false;
+            return true;
         }
 
-        // Validate other names
-        if (!$('#OtherNames').val().trim()) {
-            $('#othernamesError').text('Other Names are required');
-            $('#OtherNames').addClass('input-validation-error');
-            isValid = false;
+        // Validate entire form
+        function validateForm() {
+            let isValid = true;
+
+            // Clear previous errors
+            $('.text-danger').text('');
+            $('.input-validation-error').removeClass('input-validation-error');
+
+            // Validate surname
+            if (!$('#Surname').val().trim()) {
+                $('#surnameError').text('Surname is required');
+                $('#Surname').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            // Validate other names
+            if (!$('#OtherNames').val().trim()) {
+                $('#othernamesError').text('Other Names are required');
+                $('#OtherNames').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            // Validate ID number
+            if (!$('#IdNo').val().trim()) {
+                $('#idNoError').text('ID Number is required');
+                $('#IdNo').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            // Validate phone number
+            const phone = $('#PhoneNo').val().trim();
+            if (!phone) {
+                $('#phoneError').text('Phone Number is required');
+                $('#PhoneNo').addClass('input-validation-error');
+                isValid = false;
+            } else if (!/^[0-9]{10,12}$/.test(phone.replace(/\D/g, ''))) {
+                $('#phoneError').text('Please enter a valid phone number (10-12 digits)');
+                $('#PhoneNo').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            // Validate email format if provided
+            const email = $('#Email').val().trim();
+            if (email && !/^[^\s@@]+@@[^\s@@]+\.[^\s@@]+$/.test(email)) {
+                $('#emailError').text('Please enter a valid email address');
+                $('#Email').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            // Validate registration date
+            if (!validateRegistrationDate()) {
+                isValid = false;
+            }
+
+            // Validate age based on membership type (only for Individual)
+            if (!$('#MembershipType_Corporate').is(':checked')) {
+                if (!validateAge()) {
+                    isValid = false;
+                }
+            }
+
+            return isValid;
         }
 
-        // Validate ID number
-        if (!$('#IdNo').val().trim()) {
-            $('#idNoError').text('ID Number is required');
-            $('#IdNo').addClass('input-validation-error');
-            isValid = false;
-        }
-
-        // Validate phone number
-        const phone = $('#PhoneNo').val().trim();
-        if (!phone) {
-            $('#phoneError').text('Phone Number is required');
-            $('#PhoneNo').addClass('input-validation-error');
-            isValid = false;
-        } else if (!/^[0-9]{10,12}$/.test(phone.replace(/\D/g, ''))) {
-            $('#phoneError').text('Please enter a valid phone number (10-12 digits)');
-            $('#PhoneNo').addClass('input-validation-error');
-            isValid = false;
-        }
-
-        // Validate email format if provided
-        const email = $('#Email').val().trim();
-        if (email && !/^[^\s@@]+@@[^\s@@]+\.[^\s@@]+$/.test(email)) {
-            $('#emailError').text('Please enter a valid email address');
-            $('#Email').addClass('input-validation-error');
-            isValid = false;
-        }
-
-        // Validate registration date
-        if (!validateRegistrationDate()) {
-            isValid = false;
-        }
-
-        // Validate age based on membership type
-        if (!validateAge()) {
-            isValid = false;
-        }
-
-        return isValid;
-    }
-
-       // Save new member (CREATE)
+        // Save new member (CREATE)
         function saveMember() {
-            console.log("SAVE clicked → calling CREATE");
-
             if (!validateForm()) return;
 
             showLoading(true);
 
             const formData = {
-                // ❌ DO NOT SEND MemberNo for new member
-                // MemberNo: null,
-
+                MemberNo: $('#MemberNo').val() || null,
                 IdNo: $('#IdNo').val(),
                 Surname: $('#Surname').val(),
                 OtherNames: $('#OtherNames').val(),
@@ -1006,101 +1158,22 @@
                 Status: $('#Status').val(),
                 RegistrationDate: $('#RegistrationDate').val(),
                 InitialShares: parseFloat($('#InitialShares').val()) || 0,
-                CompanyCode: $('#CompanyCode').val()
+                CompanyCode: $('#CompanyCode').val(),
+                Photo: photoData || null,
+                IdFrontImage: idFrontData || null,
+                IdBackImage: idBackData || null
             };
 
-            console.log("CREATE FormData:", formData);
-
             $.ajax({
-                url: '/MemberMvc/Create', 
+                url: '/MemberMvc/Create',
                 type: 'POST',
-                contentType: 'application/json', 
+                contentType: 'application/json',
                 data: JSON.stringify(formData),
-
-                headers: {
-                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-                },
-
-                success: function (response) {
-                    showLoading(false);
-                    console.log('Create response:', response);
-
-                    if (response.success) {
-                        showNotification(response.message, 'success');
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showNotification(response.message, 'error');
-                    }
-                },
-
-                error: function (xhr) {
-                    showLoading(false);
-                    console.error('Create error:', xhr.responseText);
-
-                    let errorMsg = 'Error creating member';
-
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        errorMsg = xhr.responseJSON.message;
-                    }
-
-                    showNotification(errorMsg, 'error');
-                }
-            });
-        }
-
-        // Update existing member
-        function updateMember() {
-
-            if (!validateForm()) return;
-
-            // 🔥 FORCE GET MEMBER NUMBER FROM HIDDEN FIELD ONLY
-            let memberNumber = $('#MemberNo').val();
-
-            console.log("MemberNo from hidden field:", memberNumber);
-
-            if (!memberNumber || memberNumber.trim() === '') {
-                showNotification('Member number is missing. Please re-select the member.', 'error');
-                return;
-            }
-
-            showLoading(true);
-
-            const formData = {
-                MemberNo: memberNumber, // 🔥 guaranteed source
-                IdNo: $('#IdNo').val(),
-                RegistrationDate: $('#RegistrationDate').val(),
-                Surname: $('#Surname').val(),
-                OtherNames: $('#OtherNames').val(),
-                PhoneNo: $('#PhoneNo').val(),
-                LandLine: $('#LandLine').val(),
-                Email: $('#Email').val(),
-                Gender: $('#Gender').val(),
-                DateOfBirth: $('#DateOfBirth').val() || null,
-                Age: parseInt($('#Age').val()) || 0,
-                MaritalStatus: $('#MaritalStatus').val(),
-                Department: $('#Department').val(),
-                Station: $('#Station').val(),
-                PresentAddress: $('#PresentAddress').val(),
-                Cigcode: $('#Cigcode').val(),
-                MembershipType: $('input[name="MembershipType"]:checked').val(),
-                RegistrationType: $('input[name="RegistrationType"]:checked').val(),
-                Status: $('#Status').val(),
-                CompanyCode: $('#CompanyCode').val()
-            };
-
-            console.log("FINAL DATA SENT:", formData);
-
-            $.ajax({
-                url: '/MemberMvc/Update',
-                type: 'POST',
-                data: formData,
                 headers: {
                     'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
                 },
                 success: function(response) {
                     showLoading(false);
-                    console.log('Response:', response);
-
                     if (response.success) {
                         showNotification(response.message, 'success');
                         setTimeout(() => location.reload(), 1500);
@@ -1110,162 +1183,253 @@
                 },
                 error: function(xhr) {
                     showLoading(false);
-                    console.error(xhr.responseText);
-                    showNotification('Error updating member', 'error');
+                    let errorMsg = 'Error creating member';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error');
                 }
             });
         }
 
-    function deleteMember(memberNo, memberName) {
-        deleteMemberNo = memberNo;
-        deleteMemberName = memberName;
-        $('#deleteMemberName').text(memberName);
-        const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
-        modal.show();
-    }
+        // Using FormData for multipart/form-data
+        function updateMember() {
+            if (!validateForm()) return;
 
-    // Confirm delete
-    function confirmDelete() {
-        showLoading(true);
+            let memberNumber = $('#MemberNo').val();
+            if (!memberNumber || memberNumber.trim() === '') {
+                showNotification('Member number is missing. Please re-select the member.', 'error');
+                return;
+            }
 
-        $.ajax({
-            url: `/MemberMvc/Delete/${deleteMemberNo}`,
-            type: 'DELETE',
-            headers: {
-                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-            },
-            success: function(response) {
-                showLoading(false);
-                $('#deleteModal').modal('hide');
-                if (response.success) {
-                    showNotification(response.message, 'success');
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showNotification(response.message, 'error');
+            showLoading(true);
+
+            // Create FormData object for multipart/form-data submission
+            var formData = new FormData();
+
+            // Add all fields to FormData
+            formData.append('MemberNo', memberNumber);
+            formData.append('IdNo', $('#IdNo').val() || '');
+            formData.append('RegistrationDate', $('#RegistrationDate').val() || new Date().toISOString().split('T')[0]);
+            formData.append('Surname', $('#Surname').val() || '');
+            formData.append('OtherNames', $('#OtherNames').val() || '');
+            formData.append('PhoneNo', $('#PhoneNo').val() || '');
+            formData.append('LandLine', $('#LandLine').val() || '');
+            formData.append('Email', $('#Email').val() || '');
+            formData.append('Gender', $('#Gender').val() || '');
+            formData.append('DateOfBirth', $('#DateOfBirth').val() || '');
+            formData.append('Age', parseInt($('#Age').val()) || 0);
+            formData.append('MaritalStatus', $('#MaritalStatus').val() || '');
+            formData.append('Department', $('#Department').val() || '');
+            formData.append('Station', $('#Station').val() || '');
+            formData.append('PresentAddress', $('#PresentAddress').val() || '');
+            formData.append('Cigcode', $('#Cigcode').val() || '');
+            formData.append('MembershipType', $('input[name="MembershipType"]:checked').val() || 'Individual');
+            formData.append('RegistrationType', $('input[name="RegistrationType"]:checked').val() || 'Ordinary Member');
+            formData.append('Status', $('#Status').val() || 'Active');
+            formData.append('CompanyCode', $('#CompanyCode').val() || '');
+
+            // Add images if they exist
+            if (photoData) {
+                formData.append('Photo', photoData);
+            }
+            if (idFrontData) {
+                formData.append('IdFrontImage', idFrontData);
+            }
+            if (idBackData) {
+                formData.append('IdBackImage', idBackData);
+            }
+
+            console.log('UPDATE FormData fields:');
+            for (var pair of formData.entries()) {
+                console.log(pair[0] + ': ' + (pair[1] ? (pair[1].length > 100 ? pair[1].substring(0, 100) + '...' : pair[1]) : 'null'));
+            }
+
+            $.ajax({
+                url: '/MemberMvc/Update',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    console.log('Update response:', response);
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    console.error('Update error:', xhr);
+                    let errorMsg = 'Error updating member';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    } else if (xhr.responseText) {
+                        try {
+                            const json = JSON.parse(xhr.responseText);
+                            if (json.message) errorMsg = json.message;
+                        } catch (e) {
+                            errorMsg = xhr.responseText.substring(0, 100);
+                        }
+                    }
+                    showNotification(errorMsg, 'error');
                 }
-            },
-            error: function(xhr) {
-                showLoading(false);
-                $('#deleteModal').modal('hide');
-                let errorMsg = 'Error deleting member';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    errorMsg = xhr.responseJSON.message;
-                }
-                showNotification(errorMsg, 'error');
-            }
-        });
-    }
-
-    // Search functionality
-    function performSearch() {
-        const searchTerm = $('#memberSearchInput').val().toLowerCase().trim();
-        const statusFilter = $('#statusFilter').val();
-        let visibleCount = 0;
-        let totalMembers = 0;
-
-        $('#membersTableBody tr').each(function() {
-            const row = $(this);
-            if (row.attr('id') === 'noMembersRow') return;
-
-            totalMembers++;
-
-            const memberNo = row.find('td:eq(1)').text().toLowerCase();
-            const name = row.find('td.member-name').text().toLowerCase();
-            const idNo = row.find('td.member-idno').text().toLowerCase();
-            const phone = row.find('td.member-phone').text().toLowerCase();
-            const email = row.find('td.member-email').text().toLowerCase();
-            const statusValue = row.data('status') || '';
-            const statusText = row.find('td.member-status .status-badge').text().toLowerCase();
-
-            let matchesSearch = true;
-            if (searchTerm) {
-                matchesSearch = memberNo.includes(searchTerm) ||
-                               name.includes(searchTerm) ||
-                               idNo.includes(searchTerm) ||
-                               phone.includes(searchTerm) ||
-                               email.includes(searchTerm);
-            }
-
-            let matchesStatus = true;
-            if (statusFilter === 'active') {
-                matchesStatus = statusValue === '1' || statusText === 'active';
-            } else if (statusFilter === 'inactive') {
-                matchesStatus = statusValue !== '1' && statusText !== 'active';
-            }
-
-            if (matchesSearch && matchesStatus) {
-                row.show();
-                visibleCount++;
-            } else {
-                row.hide();
-            }
-        });
-    }
-
-    // Sort members
-    function sortMembers() {
-        const sortBy = $('#sortBy').val();
-        const tbody = $('#membersTableBody');
-        const rows = tbody.find('tr:visible:not(#noMembersRow)').get();
-
-        rows.sort(function(a, b) {
-            let aVal, bVal;
-            switch(sortBy) {
-                case 'name':
-                    aVal = $(a).find('td.member-name').text();
-                    bVal = $(b).find('td.member-name').text();
-                    break;
-                case 'memberNo':
-                    aVal = $(a).find('td:eq(1)').text();
-                    bVal = $(b).find('td:eq(1)').text();
-                    break;
-                case 'date':
-                    aVal = $(a).data('regdate') || '9999-12-31';
-                    bVal = $(b).data('regdate') || '9999-12-31';
-                    break;
-                default:
-                    aVal = $(a).find('td.member-name').text();
-                    bVal = $(b).find('td.member-name').text();
-            }
-            return aVal.localeCompare(bVal);
-        });
-
-        $.each(rows, function(index, row) {
-            tbody.append(row);
-            $(row).find('.row-number').text(index + 1);
-        });
-    }
-
-    // Clear all filters
-    function clearAllFilters() {
-        $('#memberSearchInput').val('');
-        $('#statusFilter').val('all');
-        $('#sortBy').val('name');
-        performSearch();
-        $('#memberSearchInput').focus();
-    }
-
-    // Show notification
-    function showNotification(message, type) {
-        const alertDiv = $(`
-            <div class="alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed top-0 end-0 m-3"
-                 style="z-index: 9999; min-width: 300px;" role="alert">
-                <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info'} me-2"></i>
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        `);
-        $('body').append(alertDiv);
-        setTimeout(() => alertDiv.fadeOut('slow', function() { $(this).remove(); }), 5000);
-    }
-
-    // Show/hide loading overlay
-    function showLoading(show) {
-        if (show) {
-            $('#loadingOverlay').fadeIn(200);
-        } else {
-            $('#loadingOverlay').fadeOut(200);
+            });
         }
-    }
-</script>
+
+        function deleteMember(memberNo, memberName) {
+            deleteMemberNo = memberNo;
+            deleteMemberName = memberName;
+            $('#deleteMemberName').text(memberName);
+            const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            modal.show();
+        }
+
+        // Confirm delete
+        function confirmDelete() {
+            showLoading(true);
+
+            $.ajax({
+                url: `/MemberMvc/Delete/${deleteMemberNo}`,
+                type: 'DELETE',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    $('#deleteModal').modal('hide');
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    $('#deleteModal').modal('hide');
+                    let errorMsg = 'Error deleting member';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error');
+                }
+            });
+        }
+
+        // Search functionality
+        function performSearch() {
+            const searchTerm = $('#memberSearchInput').val().toLowerCase().trim();
+            const statusFilter = $('#statusFilter').val();
+            let visibleCount = 0;
+
+            $('#membersTableBody tr').each(function() {
+                const row = $(this);
+                if (row.attr('id') === 'noMembersRow') return;
+
+                const memberNo = row.find('td:eq(1)').text().toLowerCase();
+                const name = row.find('td.member-name').text().toLowerCase();
+                const idNo = row.find('td.member-idno').text().toLowerCase();
+                const phone = row.find('td.member-phone').text().toLowerCase();
+                const email = row.find('td.member-email').text().toLowerCase();
+                const statusValue = row.data('status') || '';
+                const statusText = row.find('td.member-status .status-badge').text().toLowerCase();
+
+                let matchesSearch = true;
+                if (searchTerm) {
+                    matchesSearch = memberNo.includes(searchTerm) ||
+                                   name.includes(searchTerm) ||
+                                   idNo.includes(searchTerm) ||
+                                   phone.includes(searchTerm) ||
+                                   email.includes(searchTerm);
+                }
+
+                let matchesStatus = true;
+                if (statusFilter === 'active') {
+                    matchesStatus = statusValue === '1' || statusText === 'active';
+                } else if (statusFilter === 'inactive') {
+                    matchesStatus = statusValue !== '1' && statusText !== 'active';
+                }
+
+                if (matchesSearch && matchesStatus) {
+                    row.show();
+                    visibleCount++;
+                } else {
+                    row.hide();
+                }
+            });
+        }
+
+        // Sort members
+        function sortMembers() {
+            const sortBy = $('#sortBy').val();
+            const tbody = $('#membersTableBody');
+            const rows = tbody.find('tr:visible:not(#noMembersRow)').get();
+
+            rows.sort(function(a, b) {
+                let aVal, bVal;
+                switch(sortBy) {
+                    case 'name':
+                        aVal = $(a).find('td.member-name').text();
+                        bVal = $(b).find('td.member-name').text();
+                        break;
+                    case 'memberNo':
+                        aVal = $(a).find('td:eq(1)').text();
+                        bVal = $(b).find('td:eq(1)').text();
+                        break;
+                    case 'date':
+                        aVal = $(a).data('regdate') || '9999-12-31';
+                        bVal = $(b).data('regdate') || '9999-12-31';
+                        break;
+                    default:
+                        aVal = $(a).find('td.member-name').text();
+                        bVal = $(b).find('td.member-name').text();
+                }
+                return aVal.localeCompare(bVal);
+            });
+
+            $.each(rows, function(index, row) {
+                tbody.append(row);
+                $(row).find('.row-number').text(index + 1);
+            });
+        }
+
+        // Clear all filters
+        function clearAllFilters() {
+            $('#memberSearchInput').val('');
+            $('#statusFilter').val('all');
+            $('#sortBy').val('name');
+            performSearch();
+            $('#memberSearchInput').focus();
+        }
+
+        // Show notification
+        function showNotification(message, type) {
+            const alertDiv = $(`
+                <div class="alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed top-0 end-0 m-3"
+                     style="z-index: 9999; min-width: 300px;" role="alert">
+                    <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info'} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `);
+            $('body').append(alertDiv);
+            setTimeout(() => alertDiv.fadeOut('slow', function() { $(this).remove(); }), 5000);
+        }
+
+        // Show/hide loading overlay
+        function showLoading(show) {
+            if (show) {
+                $('#loadingOverlay').fadeIn(200);
+            } else {
+                $('#loadingOverlay').fadeOut(200);
+            }
+        }
+    </script>
 }

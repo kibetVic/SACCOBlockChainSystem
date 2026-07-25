@@ -27,109 +27,6 @@ namespace SACCOBlockChainSystem.Utils
             Update,
             Delete
         }
-        //public enum Databases
-        //{
-        //    BOSA = "BOSA",
-        //    MORINGA = "MORINGA",
-        //    SLOPES = "SLOPES",
-        //}
-        //public class Securities
-        //{
-        //    private IDbContextFactory<LogContext> _context;
-        //    //private LogContext _context;
-        //    //public Securities(LogContext context)
-        //    //{
-        //    //    _context = context;
-        //    //}
-
-        //    public Securities(IDbContextFactory<LogContext> context)
-        //    {
-        //        _context = context;
-        //    }
-        //    public void SetUpPrivileges(Controller controller)
-        //    {
-        //    }
-
-        //    public async Task SaveLogAsync(
-        //        AuditActionType actionType,
-        //        object? oldModel = null,
-        //        object? newModel = null,
-        //        string? tableName = null,
-        //        string? recordId = null,
-        //        string? userId = null,
-        //        string? userName = null,
-        //        string? companyCode = null,
-        //        string? ipAddress = null,
-        //        string? browserAgent = null,
-        //        string? module = null,
-        //        string? database = null,
-        //        string? correlationId = null)
-        //    {
-        //        try
-        //        {
-        //            var audit = new AuditTrail
-        //            {
-        //                AuditTime = DateTime.UtcNow,
-        //                ActionType = actionType.ToString(),
-        //                TableName = tableName,
-        //                RecordId = recordId,
-        //                UserId = userId ?? "SYSTEM",
-        //                //AuditId = userId,
-        //                UserName = userName,
-        //                CompanyCode = companyCode,
-        //                IpAddress = ipAddress,
-        //                BrowserAgent = browserAgent,
-        //                Module = module,
-        //                Database = database,
-        //                CorrelationId = correlationId
-        //            };
-
-        //            switch (actionType)
-        //            {
-        //                case AuditActionType.Insert:
-        //                    audit.ActionDescription = $"Record inserted into {tableName}";
-        //                    audit.NewValue = newModel != null ? JsonSerializer.Serialize(newModel) : null;
-        //                    break;
-
-        //                case AuditActionType.Update:
-        //                    audit.ActionDescription = $"Record updated in {tableName}";
-        //                    audit.OldValue = oldModel != null ? JsonSerializer.Serialize(oldModel) : null;
-        //                    audit.NewValue = newModel != null ? JsonSerializer.Serialize(newModel) : null;
-        //                    break;
-
-        //                case AuditActionType.Delete:
-        //                    audit.ActionDescription = $"Record deleted from {tableName}";
-        //                    audit.OldValue = oldModel != null ? JsonSerializer.Serialize(oldModel) : null;
-        //                    break;
-        //            }
-        //            var context = await _context.CreateDbContextAsync();
-        //            // Save asynchronously to database (non-blocking)
-        //            await context.AuditTrail.AddAsync(audit);
-        //            await context.SaveChangesAsync();
-
-        //        }
-        //        catch (Exception ex)
-        //        {
-
-        //        }
-
-        //    }
-
-        //    public static string GetLocalIPAddress()
-        //    {
-        //        var host = Dns.GetHostEntry(Dns.GetHostName());
-        //        foreach (var ip in host.AddressList)
-        //        {
-        //            if (ip.AddressFamily == AddressFamily.InterNetwork)
-        //            {
-        //                return ip.ToString();
-        //            }
-        //        }
-        //        return string.Empty;
-        //        //throw new Exception("No network adapters with an IPv4 address in the system!");
-        //    }
-
-        //}
 
 
         public class Utilities
@@ -164,6 +61,8 @@ namespace SACCOBlockChainSystem.Utils
                         CreatedBy = "system",
 
                         OrganizationCode = sacco,
+
+                        DateCreated = DateTime.UtcNow,
 
                     };
 
@@ -255,8 +154,6 @@ namespace SACCOBlockChainSystem.Utils
                 //}
 
             }
-
-
 
             public string GetLocalIPAddress()
             {

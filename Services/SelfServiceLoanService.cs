@@ -189,7 +189,7 @@ namespace SACCOBlockChainSystem.Services
                 }
 
                 string repayMethod = loanType.Repaymethod ?? "AMT";
-                decimal processingFeePercentage = loanType.Processingfee ?? 0; // This is a PERCENTAGE (e.g., 5 = 5%)
+                decimal processingFeePercentage = loanType.Processingfee ?? 0;
                 bool isMobileLoan = loanType.MobileLoan == true;
                 bool selfGuarantee = loanType.SelfGuarantee == true;
 
@@ -225,27 +225,45 @@ namespace SACCOBlockChainSystem.Services
                 decimal minAmount = 500;
                 decimal availableSharesForGuarantee = totalShares;
                 decimal requiredGuaranteeAmount = 0;
+                decimal maxAmountPercentage = 0;
 
                 // ============================================================
-                // FOR MOBILE LOANS WITH SELF-GUARANTEE
-                // Loan amount is limited by shares (not deposits × multiplier)
-                // The loan amount itself becomes the self-guarantee amount
+                // MOBILE LOAN - Use Percentage from MaxAmount
+                // MaxAmount stores the percentage (e.g., 80 means 80% of shares)
                 // ============================================================
-                if (isMobileLoan && selfGuarantee)
+                if (isMobileLoan)
                 {
-                    // Maximum loan = Total shares (100% of shares)
-                    eligibleAmount = totalShares;
-                    maxAmount = loanType.MaxAmount.HasValue ? Math.Min(loanType.MaxAmount.Value, totalShares) : totalShares;
+                    // Get the percentage from MaxAmount (e.g., if MaxAmount = 80, it means 80%)
+                    maxAmountPercentage = loanType.MaxAmount ?? 0;
 
-                    // For self-guarantee, the loan amount applied for becomes the guarantee amount
-                    requiredGuaranteeAmount = 0;
-                    availableSharesForGuarantee = totalShares;
+                    if (maxAmountPercentage > 0)
+                    {
+                        // Calculate eligible amount as percentage of shares for mobile loans
+                        // Using shares as the base for mobile loans
+                        eligibleAmount = (totalShares * maxAmountPercentage) / 100;
+                    }
+                    else
+                    {
+                        // If no percentage set, default to 100% of shares
+                        eligibleAmount = totalShares;
+                        maxAmountPercentage = 100;
+                    }
 
-                    _logger.LogInformation($"Mobile Self-Guarantee Loan: Max based on shares={eligibleAmount:C}");
+                    // For mobile loans, the max amount is the calculated eligible amount
+                    maxAmount = eligibleAmount;
+
+                    // For self-guarantee mobile loans, the loan amount is guaranteed by shares
+                    if (selfGuarantee)
+                    {
+                        requiredGuaranteeAmount = 0; // No additional guarantee needed
+                        availableSharesForGuarantee = totalShares;
+                    }
+
+                    _logger.LogInformation($"Mobile Loan: Percentage={maxAmountPercentage}% of Shares={totalShares:C} => Eligible={eligibleAmount:C}");
                 }
                 else
                 {
-                    // Regular loan calculation using multiplier
+                    // REGULAR LOAN - Use MaxAmount as fixed value
                     decimal multiplier = 3m;
                     var shareTypes = await _context.Sharetypes
                         .Where(s => s.CompanyCode == companyCode && s.LoanToShareRatio.HasValue && s.LoanToShareRatio.Value > 0)
@@ -256,7 +274,10 @@ namespace SACCOBlockChainSystem.Services
                         multiplier = (decimal)shareTypes.Max(s => s.LoanToShareRatio.Value);
                     }
 
+                    // Regular loans based on deposits × multiplier
                     eligibleAmount = totalDeposits * multiplier;
+
+                    // MaxAmount is a fixed value for regular loans
                     maxAmount = loanType.MaxAmount ?? eligibleAmount;
 
                     // Regular self-guarantee uses percentage of loan amount
@@ -268,7 +289,7 @@ namespace SACCOBlockChainSystem.Services
                         availableSharesForGuarantee = totalShares;
                     }
 
-                    _logger.LogInformation($"Regular Loan: Multiplier={multiplier}, Eligible={eligibleAmount:C}");
+                    _logger.LogInformation($"Regular Loan: Multiplier={multiplier}, Eligible={eligibleAmount:C}, Max={maxAmount:C}");
                 }
 
                 // Check for defaulted loans
@@ -286,16 +307,22 @@ namespace SACCOBlockChainSystem.Services
                     messages.Add("You have defaulted on a previous loan. Please clear the default first.");
                 }
 
-                if (totalDeposits <= 0 && !isMobileLoan)
+                if (isMobileLoan && totalShares <= 0)
+                {
+                    isEligible = false;
+                    messages.Add("You have no shares. Please acquire shares first to qualify for a mobile loan.");
+                }
+
+                if (!isMobileLoan && totalDeposits <= 0)
                 {
                     isEligible = false;
                     messages.Add("You have no deposits. Please make a deposit first.");
                 }
 
-                if (isMobileLoan && selfGuarantee && totalShares <= 0)
+                if (isMobileLoan && maxAmountPercentage == 0)
                 {
                     isEligible = false;
-                    messages.Add("You have no shares. Please acquire shares first to qualify for a mobile loan.");
+                    messages.Add("Loan product configuration error: Maximum amount percentage not set.");
                 }
 
                 // Parse interest rate
@@ -330,12 +357,12 @@ namespace SACCOBlockChainSystem.Services
                     interestRate,
                     defaultRepayPeriod,
                     repayMethod,
-                    processingFeeAmount,  // Pass the calculated amount, not the percentage
+                    processingFeeAmount,
                     true);
 
                 string message = isEligible
                     ? BuildEligibilityMessage(loanType, isMobileLoan, selfGuarantee, eligibleAmountForCalc, repayMethod,
-                        calculation.MonthlyInstallment, totalShares, totalDeposits, processingFeePercentage)
+                        calculation.MonthlyInstallment, totalShares, totalDeposits, processingFeePercentage, maxAmountPercentage)
                     : string.Join(" ", messages);
 
                 return new LoanEligibilityDTO
@@ -347,7 +374,7 @@ namespace SACCOBlockChainSystem.Services
                     MinAmount = minAmount,
                     CurrentDeposits = totalDeposits,
                     CurrentShares = totalShares,
-                    Multiplier = isMobileLoan && selfGuarantee ? 1m : 3m,
+                    Multiplier = isMobileLoan ? maxAmountPercentage : 3m,
                     IsMobileLoan = isMobileLoan,
                     RequiresGuarantor = requiresGuarantor,
                     SelfGuarantee = selfGuarantee,
@@ -356,12 +383,13 @@ namespace SACCOBlockChainSystem.Services
                     InterestRate = interestRate,
                     RepaymentPeriodMonths = defaultRepayPeriod,
                     RepayMethod = repayMethod,
-                    ProcessingFee = processingFeePercentage,  
-                    ProcessingFeeAmount = processingFeeAmount, 
+                    ProcessingFee = processingFeePercentage,
+                    ProcessingFeeAmount = processingFeeAmount,
                     EstimatedMonthlyInstallment = calculation.MonthlyInstallment,
                     TotalInterest = calculation.TotalInterest,
                     TotalRepayment = calculation.TotalRepayment,
-                    NetDisbursement = calculation.NetDisbursement
+                    NetDisbursement = calculation.NetDisbursement,
+                    MaxAmountPercentage = maxAmountPercentage
                 };
             }
             catch (Exception ex)
@@ -373,16 +401,16 @@ namespace SACCOBlockChainSystem.Services
 
         private string BuildEligibilityMessage(Loantype loanType, bool isMobileLoan, bool selfGuarantee,
             decimal eligibleAmount, string repayMethod, decimal monthlyInstallment,
-            decimal totalShares, decimal totalDeposits, decimal processingFeePercentage)
+            decimal totalShares, decimal totalDeposits, decimal processingFeePercentage, decimal maxAmountPercentage = 0)
         {
             string processingFeeText = processingFeePercentage > 0
                 ? $" Processing fee: {processingFeePercentage}% of loan amount."
                 : "";
 
-            if (isMobileLoan && selfGuarantee)
+            if (isMobileLoan)
             {
-                return $"You are eligible for a {loanType.LoanType1} mobile loan up to {eligibleAmount:C}. " +
-                       $"This loan uses your shares ({totalShares:C}) as self-guarantee. " +
+                return $"You are eligible for a mobile loan up to {eligibleAmount:C}. " +
+                       $"This is calculated as {maxAmountPercentage}% of your shares ({totalShares:C}). " +
                        $"Repayment method: {repayMethod}. " +
                        $"Monthly payment: {monthlyInstallment:C}.{processingFeeText}";
             }
@@ -400,7 +428,6 @@ namespace SACCOBlockChainSystem.Services
                        $"Monthly payment: {monthlyInstallment:C}.{processingFeeText}";
             }
         }
-        
 
         public async Task<List<LoanProductDTO>> GetAvailableLoanProductsAsync(string memberNo, string companyCode)
         {
@@ -501,6 +528,403 @@ namespace SACCOBlockChainSystem.Services
 
         #region Loan Application
 
+        //public async Task<LoanApplicationResultDTO> ApplyForLoanAsync(SelfLoanApplicationDTO application, string memberNo)
+        //{
+        //    _logger.LogInformation($"=== STARTING LOAN APPLICATION ===");
+        //    _logger.LogInformation($"Member: {memberNo}");
+        //    _logger.LogInformation($"LoanCode: {application.LoanCode}");
+        //    _logger.LogInformation($"PrincipalAmount: {application.PrincipalAmount}");
+        //    _logger.LogInformation($"RepayPeriod: {application.RepayPeriod}");
+        //    _logger.LogInformation($"CompanyCode: {application.CompanyCode}");
+
+        //    using var transaction = await _context.Database.BeginTransactionAsync();
+
+        //    try
+        //    {
+        //        string loanNo = GenerateLoanNumber();
+        //        _logger.LogInformation($"Generated Loan Number: {loanNo}");
+
+        //        var member = await _context.Members
+        //            .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == application.CompanyCode);
+
+        //        if (member == null)
+        //        {
+        //            _logger.LogError($"Member not found: {memberNo}");
+        //            return new LoanApplicationResultDTO
+        //            {
+        //                Success = false,
+        //                Message = $"Member not found: {memberNo}. Please contact support."
+        //            };
+        //        }
+
+        //        var loanType = await _context.Loantypes
+        //            .FirstOrDefaultAsync(lt => lt.LoanCode == application.LoanCode && lt.CompanyCode == application.CompanyCode);
+        //        bool requiresApproval = loanType.MobileLoanApproval == true;
+
+        //        if (loanType == null)
+        //        {
+        //            _logger.LogError($"Loan product not found: {application.LoanCode}");
+        //            return new LoanApplicationResultDTO
+        //            {
+        //                Success = false,
+        //                Message = $"Loan product '{application.LoanCode}' not found."
+        //            };
+        //        }
+
+        //        // ***** GET REPAYMENT METHOD AND PROCESSING FEE PERCENTAGE FROM LOANTYPE *****
+        //        string repayMethod = loanType.Repaymethod ?? "AMT";
+        //        decimal processingFeePercentage = loanType.Processingfee ?? 0; 
+        //        bool isMobileLoan = loanType.MobileLoan == true;
+
+        //        // Parse interest rate
+        //        decimal interestRate = 12;
+        //        if (!string.IsNullOrEmpty(loanType.Interest))
+        //        {
+        //            string interestStr = loanType.Interest.ToString().Replace("%", "");
+        //            if (decimal.TryParse(interestStr, out decimal parsedRate))
+        //            {
+        //                interestRate = parsedRate;
+        //            }
+        //        }
+
+        //        // Validate repayment period against loan type maximum
+        //        int maxRepayPeriod = loanType.RepayPeriod ?? 360;
+        //        if (application.RepayPeriod > maxRepayPeriod)
+        //        {
+        //            _logger.LogWarning($"Repayment period {application.RepayPeriod} exceeds maximum {maxRepayPeriod}");
+        //            return new LoanApplicationResultDTO
+        //            {
+        //                Success = false,
+        //                Message = $"Maximum repayment period for this loan is {maxRepayPeriod} months."
+        //            };
+        //        }
+
+        //        // ============================================================
+        //        // CORRECT: Calculate processing fee as PERCENTAGE of loan amount
+        //        // ============================================================
+        //        decimal principalAmount = application.PrincipalAmount;
+        //        decimal processingFeeAmount = (principalAmount * processingFeePercentage) / 100;
+        //        decimal netDisbursement = principalAmount - processingFeeAmount;
+
+        //        _logger.LogInformation($"Processing Fee Calculation: {processingFeePercentage}% of {principalAmount:C} = {processingFeeAmount:C}");
+        //        _logger.LogInformation($"Net Disbursement: {principalAmount:C} - {processingFeeAmount:C} = {netDisbursement:C}");
+
+        //        // Calculate loan details using the repayment method (pass the calculated fee amount)
+        //        var calculation = LoanCalculationHelper.CalculateLoan(
+        //            principalAmount,
+        //            interestRate,
+        //            application.RepayPeriod,
+        //            repayMethod,
+        //            processingFeeAmount,  // Pass the calculated amount, not the percentage
+        //            true);
+
+        //        _logger.LogInformation($"Loan Calculation: Method={repayMethod}, Monthly={calculation.MonthlyInstallment:C}, " +
+        //                               $"TotalInterest={calculation.TotalInterest:C}, ProcessingFee={calculation.ProcessingFee:C}, " +
+        //                               $"NetDisbursement={calculation.NetDisbursement:C}");
+
+        //        // ============================================================
+        //        // 1. CREATE BLOCK (for blockchain)
+        //        // ============================================================
+        //        string blockHash = GenerateBlockHash();
+        //        var lastBlock = await _context.Blocks
+        //            .OrderByDescending(b => b.BlockId)
+        //            .FirstOrDefaultAsync();
+        //        string previousHash = lastBlock?.BlockHash ?? "0".PadLeft(64, '0');
+
+        //        var block = new Block
+        //        {
+        //            BlockHash = blockHash,
+        //            PreviousHash = previousHash,
+        //            Timestamp = DateTime.Now,
+        //            Nonce = 0,
+        //            MerkleRoot = Guid.NewGuid().ToString(),
+        //            Confirmed = true,
+        //            CreatedAt = DateTime.Now
+        //        };
+
+        //        _context.Blocks.Add(block);
+        //        await _context.SaveChangesAsync();
+        //        _logger.LogInformation($"Block created with hash: {blockHash}");
+
+        //        // ============================================================
+        //        // 2. CREATE LOAN RECORD
+        //        // ============================================================
+        //        var loan = new Loan
+        //        {
+        //            LoanNo = loanNo,
+        //            MemberNo = memberNo,
+        //            LoanCode = application.LoanCode,
+        //            LoanAmt = principalAmount,
+        //            MaxLoanamt = principalAmount,
+        //            Aamount = principalAmount,
+        //            IdNo = member.Idno,
+        //            RepayPeriod = application.RepayPeriod,
+        //            ApplicDate = DateTime.Now,
+        //            CompanyCode = application.CompanyCode,
+        //            Purpose = application.Purpose ?? "Applied via self-service portal",
+        //            Status = isMobileLoan ? 2 : 1, // 2=Submitted, 1=Draft
+        //            Posted = isMobileLoan ? "SUBMITTED" : "DRAFT",
+        //            UserName = memberNo,
+        //            AuditDateTime = DateTime.Now,
+        //            AuditId = memberNo + " (Self-Service)",
+        //            Guaranteed = loanType.SelfGuarantee == true ? "SELF" : "NONE",
+        //            AuditTime = DateTime.Now,
+        //            Interest = interestRate,
+        //            RepayMethod = repayMethod,
+        //            Repayrate = calculation.MonthlyInstallment,
+        //            BasicSalary = 0,
+        //            Sharecapital = 0,
+        //            Run = 0,
+        //            Run2 = 0,
+        //            BlockchainTxId = null,
+        //        };
+
+        //        _context.Loans.Add(loan);
+        //        await _context.SaveChangesAsync();
+        //        _logger.LogInformation($"Loan record created successfully with ID: {loan.Id}");
+
+        //        // ============================================================
+        //        // CREATE AUTO SELF-GUARANTEE (if enabled for this loan type)
+        //        // ============================================================
+        //        if (loanType.SelfGuarantee == true)
+        //        {
+        //            _logger.LogInformation($"Creating auto self-guarantee for loan {loanNo}");
+        //            var guaranteeResult = await CreateAutoGuaranteeAsync(loanNo, memberNo, application.CompanyCode, principalAmount);
+
+        //            if (guaranteeResult)
+        //            {
+        //                await UpdateLoanWithSelfGuaranteeAsync(loanNo, principalAmount * 0.1m);
+        //                _logger.LogInformation($"Self-guarantee created successfully for loan {loanNo}");
+        //            }
+        //            else
+        //            {
+        //                _logger.LogWarning($"Failed to create self-guarantee for loan {loanNo}");
+        //            }
+        //        }
+
+        //        // ============================================================
+        //        // 3. CREATE BLOCKCHAIN TRANSACTION DATA
+        //        // ============================================================
+        //        var blockchainData = new
+        //        {
+        //            TransactionType = "LOAN_APPLICATION",
+        //            LoanNo = loanNo,
+        //            MemberNo = memberNo,
+        //            MemberIdNo = member.Idno,
+        //            MemberName = $"{member.Surname} {member.OtherNames}".Trim(),
+        //            MemberPhone = member.PhoneNo ?? member.MobileNo,
+        //            LoanCode = application.LoanCode,
+        //            LoanTypeName = loanType.LoanType1,
+        //            LoanTypeDescription = loanType.LoanProduct,
+        //            PrincipalAmount = principalAmount,
+        //            InterestRate = interestRate,
+        //            RepayPeriod = application.RepayPeriod,
+        //            MaxRepayPeriodAllowed = maxRepayPeriod,
+        //            RepayMethod = repayMethod,
+        //            IsMobileLoan = isMobileLoan,
+        //            ProcessingFeePercentage = processingFeePercentage,
+        //            ProcessingFeeAmount = processingFeeAmount,
+        //            NetDisbursement = netDisbursement,
+        //            MonthlyInstallment = calculation.MonthlyInstallment,
+        //            TotalInterest = calculation.TotalInterest,
+        //            TotalRepayment = calculation.TotalRepayment,
+        //            ApplicationDate = DateTime.Now,
+        //            Purpose = application.Purpose ?? "General purpose",
+        //            Remarks = application.Remarks ?? "Applied via self-service portal",
+        //            IpAddress = application.IpAddress,
+        //            Status = isMobileLoan ? "Submitted" : "Draft",
+        //            BlockHash = blockHash,
+        //            PreviousBlockHash = previousHash,
+        //            CreatedBy = memberNo,
+        //            CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+        //        };
+
+        //        // Generate data hash for blockchain
+        //        string dataHash = await GenerateTransactionHashAsync(blockchainData);
+
+        //        // ============================================================
+        //        // 4. CREATE BLOCKCHAIN TRANSACTION
+        //        // ============================================================
+        //        var blockchainTx = new BlockchainTransaction
+        //        {
+        //            TransactionId = Guid.NewGuid().ToString(),
+        //            TransactionType = "LOAN_APPLICATION",
+        //            MemberNo = memberNo,
+        //            CompanyCode = application.CompanyCode,
+        //            Amount = principalAmount,
+        //            Timestamp = DateTime.Now,
+        //            DataHash = dataHash,
+        //            PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData),
+        //            OffChainReferenceId = loanNo,
+        //            Status = "CONFIRMED",
+        //            BlockHash = block.BlockHash,
+        //            CreatedAt = DateTime.Now
+        //        };
+
+        //        _context.BlockchainTransactions.Add(blockchainTx);
+        //        await _context.SaveChangesAsync();
+        //        _logger.LogInformation($"Blockchain transaction created: {blockchainTx.TransactionId}");
+
+        //        // ============================================================
+        //        // 5. UPDATE LOAN WITH BLOCKCHAIN TRANSACTION ID
+        //        // ============================================================
+        //        loan.BlockchainTxId = blockchainTx.TransactionId;
+        //        await _context.SaveChangesAsync();
+        //        _logger.LogInformation($"Loan updated with BlockchainTxId: {blockchainTx.TransactionId}");
+
+        //        // ============================================================
+        //        // 6. SAVE AUDIT TRAIL
+        //        // ============================================================
+        //        var auditExtraData = new
+        //        {
+        //            loanNo = loanNo,
+        //            memberNumber = memberNo,
+        //            memberName = $"{member.Surname} {member.OtherNames}".Trim(),
+        //            memberIdNo = member.Idno,
+        //            loanCode = application.LoanCode,
+        //            loanTypeName = loanType.LoanType1,
+        //            principalAmount = principalAmount,
+        //            interestRate = interestRate,
+        //            repayPeriod = application.RepayPeriod,
+        //            maxRepayPeriodAllowed = maxRepayPeriod,
+        //            repayMethod = repayMethod,
+        //            isMobileLoan = isMobileLoan,
+        //            processingFeePercentage = processingFeePercentage,
+        //            processingFeeAmount = processingFeeAmount,
+        //            netDisbursement = netDisbursement,
+        //            monthlyInstallment = calculation.MonthlyInstallment,
+        //            totalInterest = calculation.TotalInterest,
+        //            totalRepayment = calculation.TotalRepayment,
+        //            applicationDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+        //            purpose = application.Purpose ?? "General purpose",
+        //            remarks = application.Remarks ?? "Applied via self-service portal",
+        //            ipAddress = application.IpAddress,
+        //            status = isMobileLoan ? "Submitted" : "Draft",
+        //            blockHash = blockHash,
+        //            previousBlockHash = previousHash,
+        //            blockchainTxId = blockchainTx.TransactionId,
+        //            createdBy = memberNo
+        //        };
+
+        //        var loanForAudit = new
+        //        {
+        //            loan.LoanNo,
+        //            loan.MemberNo,
+        //            loan.LoanCode,
+        //            loan.LoanAmt,
+        //            loan.MaxLoanamt,
+        //            loan.IdNo,
+        //            loan.Interest,
+        //            loan.RepayPeriod,
+        //            loan.ApplicDate,
+        //            loan.Status,
+        //            loan.Purpose,
+        //            loan.RepayMethod,
+        //            loan.Repayrate,
+        //            loan.Posted,
+        //            loan.UserName,
+        //            loan.CompanyCode,
+        //            ProcessingFeePercentage = processingFeePercentage,
+        //            BlockchainTxId = blockchainTx.TransactionId,
+        //            BlockHash = blockHash,
+        //            CreatedAt = DateTime.Now,
+        //            CreatedBy = memberNo
+        //        };
+
+        //        await _auditService.SaveLogAsync(
+        //            actionType: AuditActionType.Insert,
+        //            oldModel: null,
+        //            newModel: loanForAudit,
+        //            tableName: "Loans",
+        //            recordId: loanNo,
+        //            userId: memberNo,
+        //            userName: memberNo,
+        //            companyCode: application.CompanyCode,
+        //            module: "LoanManagement",
+        //            extraData: System.Text.Json.JsonSerializer.Serialize(auditExtraData),
+        //            blockchainTxId: blockchainTx.TransactionId
+        //        );
+
+        //        // ============================================================
+        //        // 7. FOR MOBILE LOANS - AUTO APPROVE
+        //        // ============================================================
+        //        if (isMobileLoan)
+        //        {
+        //            _logger.LogInformation($"Processing mobile loan auto-approval for {loanNo}");
+
+        //            loan.Status = 2; // Submitted
+        //            loan.Posted = "SUBMITTED";
+        //            await _context.SaveChangesAsync();
+
+        //            // Auto-appraise with the correct calculation
+        //            var appraisalResult = await AutoAppraiseLoanInternalAsync(loanNo, calculation);
+        //            _logger.LogInformation($"Auto-appraisal result: {appraisalResult}");
+
+        //            if (appraisalResult)
+        //            {
+        //                await AutoEndorseLoanInternalAsync(loanNo);
+        //                _logger.LogInformation($"Loan {loanNo} auto-endorsed successfully");
+        //            }
+        //        }
+
+        //        await transaction.CommitAsync();
+
+        //        _logger.LogInformation($"=== LOAN APPLICATION COMPLETED SUCCESSFULLY ===");
+        //        _logger.LogInformation($"Blockchain Tx ID: {blockchainTx.TransactionId}");
+        //        _logger.LogInformation($"Block Hash: {block.BlockHash}");
+        //        _logger.LogInformation($"Processing Fee: {processingFeePercentage}% = {processingFeeAmount:C}");
+
+        //        string processingFeeMessage = processingFeePercentage > 0
+        //            ? $"Processing fee: {processingFeePercentage}% ({processingFeeAmount:C}). "
+        //            : "";
+
+        //        return new LoanApplicationResultDTO
+        //        {
+        //            Success = true,
+        //            LoanNo = loanNo,
+        //            Message = isMobileLoan
+        //                ? $"Your {repayMethod} mobile loan of {principalAmount:C} has been approved! " +
+        //                  $"{processingFeeMessage}" +
+        //                  $"Net disbursement: {netDisbursement:C}. " +
+        //                  $"Monthly payment: {calculation.MonthlyInstallment:C}\n\n" +
+        //                  $"Blockchain Reference: {blockchainTx.TransactionId.Substring(0, 8)}..."
+        //                : $"Your {repayMethod} loan application for {principalAmount:C} has been submitted. " +
+        //                  $"{processingFeeMessage}" +
+        //                  $"Application ID: {loanNo}\n\n" +
+        //                  $"Blockchain Reference: {blockchainTx.TransactionId.Substring(0, 8)}...",
+        //            Status = isMobileLoan ? "Ready for Withdrawal" : "Submitted",
+        //            IsMobileLoan = isMobileLoan,
+        //            CanWithdrawNow = isMobileLoan,
+        //            Amount = netDisbursement,
+        //            ApplicationDate = DateTime.Now,
+        //            BlockchainTxId = blockchainTx.TransactionId
+        //        };
+        //    }
+        //    catch (DbException dbEx)
+        //    {
+        //        await transaction.RollbackAsync();
+        //        _logger.LogError(dbEx, $"Database error in loan application for member {memberNo}");
+        //        return new LoanApplicationResultDTO
+        //        {
+        //            Success = false,
+        //            Message = $"Database error: {dbEx.Message}. Please try again or contact support."
+        //        };
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        await transaction.RollbackAsync();
+        //        _logger.LogError(ex, $"Unexpected error in loan application for member {memberNo}");
+        //        _logger.LogError($"Stack trace: {ex.StackTrace}");
+        //        return new LoanApplicationResultDTO
+        //        {
+        //            Success = false,
+        //            Message = $"Application failed: {ex.Message}. Please try again."
+        //        };
+        //    }
+        //}
+
+
+
         public async Task<LoanApplicationResultDTO> ApplyForLoanAsync(SelfLoanApplicationDTO application, string memberNo)
         {
             _logger.LogInformation($"=== STARTING LOAN APPLICATION ===");
@@ -543,10 +967,17 @@ namespace SACCOBlockChainSystem.Services
                     };
                 }
 
+                // ============================================================
+                // CHECK IF MOBILE LOAN REQUIRES APPROVAL
+                // ============================================================
+                bool isMobileLoan = loanType.MobileLoan == true;
+                bool requiresApproval = loanType.MobileLoanApproval == true;
+
+                _logger.LogInformation($"Mobile Loan: {isMobileLoan}, Requires Approval: {requiresApproval}");
+
                 // ***** GET REPAYMENT METHOD AND PROCESSING FEE PERCENTAGE FROM LOANTYPE *****
                 string repayMethod = loanType.Repaymethod ?? "AMT";
-                decimal processingFeePercentage = loanType.Processingfee ?? 0; 
-                bool isMobileLoan = loanType.MobileLoan == true;
+                decimal processingFeePercentage = loanType.Processingfee ?? 0;
 
                 // Parse interest rate
                 decimal interestRate = 12;
@@ -581,13 +1012,13 @@ namespace SACCOBlockChainSystem.Services
                 _logger.LogInformation($"Processing Fee Calculation: {processingFeePercentage}% of {principalAmount:C} = {processingFeeAmount:C}");
                 _logger.LogInformation($"Net Disbursement: {principalAmount:C} - {processingFeeAmount:C} = {netDisbursement:C}");
 
-                // Calculate loan details using the repayment method (pass the calculated fee amount)
+                // Calculate loan details using the repayment method
                 var calculation = LoanCalculationHelper.CalculateLoan(
                     principalAmount,
                     interestRate,
                     application.RepayPeriod,
                     repayMethod,
-                    processingFeeAmount,  // Pass the calculated amount, not the percentage
+                    processingFeeAmount,
                     true);
 
                 _logger.LogInformation($"Loan Calculation: Method={repayMethod}, Monthly={calculation.MonthlyInstallment:C}, " +
@@ -619,8 +1050,40 @@ namespace SACCOBlockChainSystem.Services
                 _logger.LogInformation($"Block created with hash: {blockHash}");
 
                 // ============================================================
-                // 2. CREATE LOAN RECORD
+                // 2. CREATE LOAN RECORD WITH CORRECT STATUS BASED ON APPROVAL
                 // ============================================================
+                int loanStatus;
+                string loanPosted;
+                bool canWithdrawNow = false;
+
+                // ============================================================
+                // FIXED: Logic for mobile loans with approval requirement
+                // ============================================================
+                if (isMobileLoan && requiresApproval)
+                {
+                    // Mobile loan requires approval - set to Submitted (2) with PENDING_APPROVAL
+                    loanStatus = 2; // Submitted
+                    loanPosted = "PENDING_APPROVAL";
+                    canWithdrawNow = false;
+                    _logger.LogInformation($"Mobile loan requires approval. Status: Submitted, Posted: PENDING_APPROVAL");
+                }
+                else if (isMobileLoan && !requiresApproval)
+                {
+                    // Mobile loan does NOT require approval - set to Endorsed (5) ready for withdrawal
+                    loanStatus = 5; // Endorsed
+                    loanPosted = "ENDORSED";
+                    canWithdrawNow = true;
+                    _logger.LogInformation($"Mobile loan auto-approved. Status: Endorsed, Posted: ENDORSED");
+                }
+                else
+                {
+                    // Regular loan - Draft (1)
+                    loanStatus = 1; // Draft
+                    loanPosted = "DRAFT";
+                    canWithdrawNow = false;
+                    _logger.LogInformation($"Regular loan. Status: Draft, Posted: DRAFT");
+                }
+
                 var loan = new Loan
                 {
                     LoanNo = loanNo,
@@ -634,8 +1097,8 @@ namespace SACCOBlockChainSystem.Services
                     ApplicDate = DateTime.Now,
                     CompanyCode = application.CompanyCode,
                     Purpose = application.Purpose ?? "Applied via self-service portal",
-                    Status = isMobileLoan ? 2 : 1, // 2=Submitted, 1=Draft
-                    Posted = isMobileLoan ? "SUBMITTED" : "DRAFT",
+                    Status = loanStatus,
+                    Posted = loanPosted,
                     UserName = memberNo,
                     AuditDateTime = DateTime.Now,
                     AuditId = memberNo + " (Self-Service)",
@@ -694,6 +1157,7 @@ namespace SACCOBlockChainSystem.Services
                     MaxRepayPeriodAllowed = maxRepayPeriod,
                     RepayMethod = repayMethod,
                     IsMobileLoan = isMobileLoan,
+                    RequiresApproval = requiresApproval,
                     ProcessingFeePercentage = processingFeePercentage,
                     ProcessingFeeAmount = processingFeeAmount,
                     NetDisbursement = netDisbursement,
@@ -704,7 +1168,7 @@ namespace SACCOBlockChainSystem.Services
                     Purpose = application.Purpose ?? "General purpose",
                     Remarks = application.Remarks ?? "Applied via self-service portal",
                     IpAddress = application.IpAddress,
-                    Status = isMobileLoan ? "Submitted" : "Draft",
+                    Status = loanPosted,
                     BlockHash = blockHash,
                     PreviousBlockHash = previousHash,
                     CreatedBy = memberNo,
@@ -761,6 +1225,7 @@ namespace SACCOBlockChainSystem.Services
                     maxRepayPeriodAllowed = maxRepayPeriod,
                     repayMethod = repayMethod,
                     isMobileLoan = isMobileLoan,
+                    requiresApproval = requiresApproval,
                     processingFeePercentage = processingFeePercentage,
                     processingFeeAmount = processingFeeAmount,
                     netDisbursement = netDisbursement,
@@ -771,11 +1236,12 @@ namespace SACCOBlockChainSystem.Services
                     purpose = application.Purpose ?? "General purpose",
                     remarks = application.Remarks ?? "Applied via self-service portal",
                     ipAddress = application.IpAddress,
-                    status = isMobileLoan ? "Submitted" : "Draft",
+                    status = loanPosted,
                     blockHash = blockHash,
                     previousBlockHash = previousHash,
                     blockchainTxId = blockchainTx.TransactionId,
-                    createdBy = memberNo
+                    createdBy = memberNo,
+                    canWithdrawNow = canWithdrawNow
                 };
 
                 var loanForAudit = new
@@ -800,7 +1266,9 @@ namespace SACCOBlockChainSystem.Services
                     BlockchainTxId = blockchainTx.TransactionId,
                     BlockHash = blockHash,
                     CreatedAt = DateTime.Now,
-                    CreatedBy = memberNo
+                    CreatedBy = memberNo,
+                    RequiresApproval = requiresApproval,
+                    CanWithdrawNow = canWithdrawNow
                 };
 
                 await _auditService.SaveLogAsync(
@@ -818,15 +1286,11 @@ namespace SACCOBlockChainSystem.Services
                 );
 
                 // ============================================================
-                // 7. FOR MOBILE LOANS - AUTO APPROVE
+                // 7. FOR MOBILE LOANS WITHOUT APPROVAL - AUTO ENDORSE
                 // ============================================================
-                if (isMobileLoan)
+                if (isMobileLoan && !requiresApproval)
                 {
-                    _logger.LogInformation($"Processing mobile loan auto-approval for {loanNo}");
-
-                    loan.Status = 2; // Submitted
-                    loan.Posted = "SUBMITTED";
-                    await _context.SaveChangesAsync();
+                    _logger.LogInformation($"Processing auto-approval for mobile loan {loanNo} (no approval required)");
 
                     // Auto-appraise with the correct calculation
                     var appraisalResult = await AutoAppraiseLoanInternalAsync(loanNo, calculation);
@@ -836,7 +1300,13 @@ namespace SACCOBlockChainSystem.Services
                     {
                         await AutoEndorseLoanInternalAsync(loanNo);
                         _logger.LogInformation($"Loan {loanNo} auto-endorsed successfully");
+                        canWithdrawNow = true;
                     }
+                }
+                else if (isMobileLoan && requiresApproval)
+                {
+                    _logger.LogInformation($"Mobile loan {loanNo} submitted for approval. Status: PENDING_APPROVAL");
+                    // No auto-endorsement - waiting for Finance Officer approval
                 }
 
                 await transaction.CommitAsync();
@@ -845,31 +1315,50 @@ namespace SACCOBlockChainSystem.Services
                 _logger.LogInformation($"Blockchain Tx ID: {blockchainTx.TransactionId}");
                 _logger.LogInformation($"Block Hash: {block.BlockHash}");
                 _logger.LogInformation($"Processing Fee: {processingFeePercentage}% = {processingFeeAmount:C}");
+                _logger.LogInformation($"Requires Approval: {requiresApproval}, Can Withdraw Now: {canWithdrawNow}");
 
                 string processingFeeMessage = processingFeePercentage > 0
                     ? $"Processing fee: {processingFeePercentage}% ({processingFeeAmount:C}). "
                     : "";
 
+                // ============================================================
+                // 8. RETURN APPROPRIATE MESSAGE BASED ON APPROVAL STATUS
+                // ============================================================
+                string statusMessage;
+                if (isMobileLoan && requiresApproval)
+                {
+                    statusMessage = $"Your {repayMethod} mobile loan of {principalAmount:C} has been submitted for approval. " +
+                                    $"{processingFeeMessage}" +
+                                    $"You will be notified once approved.\n" +
+                                    $"Application ID: {loanNo}";
+                }
+                else if (isMobileLoan && !requiresApproval)
+                {
+                    statusMessage = $"Your {repayMethod} mobile loan of {principalAmount:C} has been approved! " +
+                                    $"{processingFeeMessage}" +
+                                    $"Net disbursement: {netDisbursement:C}. " +
+                                    $"Monthly payment: {calculation.MonthlyInstallment:C}\n" +
+                                    $"Application ID: {loanNo}";
+                }
+                else
+                {
+                    statusMessage = $"Your {repayMethod} loan application for {principalAmount:C} has been submitted. " +
+                                    $"{processingFeeMessage}" +
+                                    $"Application ID: {loanNo}";
+                }
+
                 return new LoanApplicationResultDTO
                 {
                     Success = true,
                     LoanNo = loanNo,
-                    Message = isMobileLoan
-                        ? $"Your {repayMethod} mobile loan of {principalAmount:C} has been approved! " +
-                          $"{processingFeeMessage}" +
-                          $"Net disbursement: {netDisbursement:C}. " +
-                          $"Monthly payment: {calculation.MonthlyInstallment:C}\n\n" +
-                          $"Blockchain Reference: {blockchainTx.TransactionId.Substring(0, 8)}..."
-                        : $"Your {repayMethod} loan application for {principalAmount:C} has been submitted. " +
-                          $"{processingFeeMessage}" +
-                          $"Application ID: {loanNo}\n\n" +
-                          $"Blockchain Reference: {blockchainTx.TransactionId.Substring(0, 8)}...",
-                    Status = isMobileLoan ? "Ready for Withdrawal" : "Submitted",
+                    Message = statusMessage,
+                    Status = loanPosted,
                     IsMobileLoan = isMobileLoan,
-                    CanWithdrawNow = isMobileLoan,
+                    CanWithdrawNow = canWithdrawNow,
                     Amount = netDisbursement,
                     ApplicationDate = DateTime.Now,
-                    BlockchainTxId = blockchainTx.TransactionId
+                    BlockchainTxId = blockchainTx.TransactionId,
+                    RequiresApproval = requiresApproval
                 };
             }
             catch (DbException dbEx)
@@ -3315,7 +3804,298 @@ namespace SACCOBlockChainSystem.Services
         #endregion
 
 
-        #region Loan Repayment - Complete Implementation
+        #region Loan Repayment
+
+        //public async Task<RepaymentResultDTO> MakeRepaymentAsync(LoanRepaymentDTO repayment, string memberNo)
+        //{
+        //    _logger.LogInformation($"=== REPAYMENT REQUEST ===");
+        //    _logger.LogInformation($"LoanNo: {repayment.LoanNo}, Amount: {repayment.Amount}, Method: {repayment.PaymentMethod}");
+
+        //    using var transaction = await _context.Database.BeginTransactionAsync();
+
+        //    try
+        //    {
+        //        // 1. Get loan details
+        //        var loan = await _context.Loans
+        //            .FirstOrDefaultAsync(l => l.LoanNo == repayment.LoanNo && l.MemberNo == memberNo);
+
+        //        if (loan == null)
+        //        {
+        //            return new RepaymentResultDTO { Success = false, Message = "Loan not found" };
+        //        }
+
+        //        // 2. Get loan type for GL accounts and penalty configuration
+        //        var loanType = await _context.Loantypes
+        //            .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == loan.CompanyCode);
+
+        //        if (loanType == null)
+        //        {
+        //            return new RepaymentResultDTO { Success = false, Message = "Loan product configuration not found" };
+        //        }
+
+        //        decimal remainingAmount = repayment.Amount;
+        //        decimal totalPrincipalPaid = 0;
+        //        decimal totalInterestPaid = 0;
+        //        decimal totalPenaltyPaid = 0;
+        //        string lastReceiptNo = null;
+        //        string lastTransactionNo = null;
+        //        BlockchainTransaction lastBlockchainTx = null;
+
+        //        bool isFullyPaid = false;
+
+        //        // Loop through pending installments until payment amount is exhausted or loan is fully paid
+        //        while (remainingAmount > 0 && !isFullyPaid)
+        //        {
+        //            // Get current pending installment
+        //            var currentSchedule = await _context.LoanSchedules
+        //                .Where(s => s.LoanNo == repayment.LoanNo && (s.Status == "Pending" || s.Status == "Partial"))
+        //                .OrderBy(s => s.InstallmentNo)
+        //                .FirstOrDefaultAsync();
+
+        //            if (currentSchedule == null)
+        //            {
+        //                // No more pending installments - loan is fully paid
+        //                isFullyPaid = true;
+        //                break;
+        //            }
+
+        //            // Calculate outstanding amounts for this installment
+        //            decimal outstandingPrincipal = currentSchedule.OutstandingPrincipal;
+        //            decimal outstandingInterest = currentSchedule.OutstandingInterest;
+
+        //            // If OutstandingPrincipal is 0, use the original principal amount
+        //            if (outstandingPrincipal <= 0)
+        //            {
+        //                outstandingPrincipal = currentSchedule.PrincipalAmount - currentSchedule.PaidPrincipal;
+        //            }
+        //            if (outstandingInterest <= 0)
+        //            {
+        //                outstandingInterest = currentSchedule.InterestAmount - currentSchedule.PaidInterest;
+        //            }
+
+        //            decimal installmentTotalDue = outstandingPrincipal + outstandingInterest;
+
+        //            _logger.LogInformation($"Processing Installment #{currentSchedule.InstallmentNo}: Due={installmentTotalDue:C}, Remaining Payment={remainingAmount:C}");
+
+        //            // Calculate penalty if overdue
+        //            decimal penaltyAmount = 0;
+        //            bool isOverdue = currentSchedule.DueDate < DateTime.Now.Date && currentSchedule.Status != "Paid";
+        //            int daysOverdue = isOverdue ? (DateTime.Now.Date - currentSchedule.DueDate.Date).Days : 0;
+        //            int gracePeriod = loanType.GracePeriod;
+
+        //            if (isOverdue && daysOverdue > gracePeriod)
+        //            {
+        //                var penaltyConfig = await _context.Penalties
+        //                    .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == loan.CompanyCode);
+
+        //                if (penaltyConfig != null)
+        //                {
+        //                    int overdueDaysForPenalty = daysOverdue - gracePeriod;
+        //                    penaltyAmount = CalculatePenalty(currentSchedule.TotalInstallment, overdueDaysForPenalty, penaltyConfig);
+        //                    _logger.LogInformation($"Penalty for installment #{currentSchedule.InstallmentNo}: {penaltyAmount:C}");
+        //                }
+        //            }
+
+        //            decimal totalWithPenalty = installmentTotalDue + penaltyAmount;
+        //            decimal amountForThisInstallment = Math.Min(remainingAmount, totalWithPenalty);
+
+        //            // Allocate payment for this installment: Penalty first -> Interest -> Principal
+        //            decimal penaltyPaid = Math.Min(amountForThisInstallment, penaltyAmount);
+        //            decimal remainingAfterPenalty = amountForThisInstallment - penaltyPaid;
+
+        //            decimal interestPaid = Math.Min(remainingAfterPenalty, outstandingInterest);
+        //            decimal remainingAfterInterest = remainingAfterPenalty - interestPaid;
+
+        //            decimal principalPaid = Math.Min(remainingAfterInterest, outstandingPrincipal);
+
+        //            // Round to 2 decimal places
+        //            penaltyPaid = Math.Round(penaltyPaid, 2, MidpointRounding.AwayFromZero);
+        //            interestPaid = Math.Round(interestPaid, 2, MidpointRounding.AwayFromZero);
+        //            principalPaid = Math.Round(principalPaid, 2, MidpointRounding.AwayFromZero);
+
+        //            _logger.LogInformation($"Installment #{currentSchedule.InstallmentNo} Allocation: Penalty={penaltyPaid:C}, Interest={interestPaid:C}, Principal={principalPaid:C}");
+
+        //            // Update totals
+        //            totalPrincipalPaid += principalPaid;
+        //            totalInterestPaid += interestPaid;
+        //            totalPenaltyPaid += penaltyPaid;
+
+        //            // Update the schedule
+        //            currentSchedule.PaidPrincipal += principalPaid;
+        //            currentSchedule.PaidInterest += interestPaid;
+        //            currentSchedule.PaidTotal += amountForThisInstallment;
+        //            currentSchedule.OutstandingPrincipal -= principalPaid;
+        //            currentSchedule.OutstandingInterest -= interestPaid;
+        //            currentSchedule.OutstandingTotal = currentSchedule.OutstandingPrincipal + currentSchedule.OutstandingInterest;
+
+        //            // Check if this installment is fully paid
+        //            if (currentSchedule.OutstandingPrincipal <= 0 && currentSchedule.OutstandingInterest <= 0)
+        //            {
+        //                currentSchedule.Status = "Paid";
+        //                currentSchedule.PaidDate = DateTime.Now;
+        //                _logger.LogInformation($"Installment #{currentSchedule.InstallmentNo} fully paid");
+        //            }
+        //            else
+        //            {
+        //                currentSchedule.Status = "Partial";
+        //                _logger.LogInformation($"Installment #{currentSchedule.InstallmentNo} partially paid");
+        //            }
+
+        //            remainingAmount -= amountForThisInstallment;
+
+        //            // Check if loan is fully paid (no more pending installments)
+        //            var anyPending = await _context.LoanSchedules
+        //                .AnyAsync(s => s.LoanNo == repayment.LoanNo && (s.Status == "Pending" || s.Status == "Partial"));
+
+        //            if (!anyPending)
+        //            {
+        //                isFullyPaid = true;
+        //                loan.Status = 7; // Closed
+        //                loan.Posted = "CLOSED";
+        //                _logger.LogInformation($"Loan {repayment.LoanNo} is now fully paid!");
+        //            }
+        //        }
+
+        //        if (totalPrincipalPaid == 0 && totalInterestPaid == 0 && totalPenaltyPaid == 0)
+        //        {
+        //            return new RepaymentResultDTO { Success = false, Message = "No payment was applied" };
+        //        }
+
+        //        // Update LoanBal table
+        //        var loanBalance = await _context.Loanbal
+        //            .FirstOrDefaultAsync(lb => lb.LoanNo == repayment.LoanNo);
+
+        //        if (loanBalance == null)
+        //        {
+        //            loanBalance = new Loanbal
+        //            {
+        //                LoanNo = repayment.LoanNo,
+        //                LoanCode = loan.LoanCode,
+        //                MemberNo = memberNo,
+        //                Balance = loan.LoanAmt ?? 0,
+        //                IntrOwed = 0,
+        //                Installments = loan.RepayPeriod ?? 12,
+        //                FirstDate = DateTime.Now,
+        //                Companycode = loan.CompanyCode,
+        //                Interest = loan.Interest ?? 0,
+        //                RepayMethod = loan.RepayMethod ?? "AMT",
+        //                Cleared = false,
+        //                AutoCalc = true,
+        //                RepayPeriod = loan.RepayPeriod ?? 12,
+        //                AuditId = memberNo,
+        //                AuditTime = DateTime.Now,
+        //                Nextduedate = DateTime.Now.AddMonths(1),
+        //                TransactionNo = GenerateTransactionNumber(),
+        //                Year = DateTime.Now.Year.ToString(),
+        //                Month = DateTime.Now.Month.ToString(),
+        //                UserName = memberNo,
+        //                AuditDateTime = DateTime.Now
+        //            };
+        //            _context.Loanbal.Add(loanBalance);
+        //        }
+
+        //        // Get the next pending installment to set next due date
+        //        var nextSchedule = await _context.LoanSchedules
+        //            .Where(s => s.LoanNo == repayment.LoanNo && (s.Status == "Pending" || s.Status == "Partial"))
+        //            .OrderBy(s => s.InstallmentNo)
+        //            .FirstOrDefaultAsync();
+
+        //        loanBalance.Balance = await _context.LoanSchedules
+        //            .Where(s => s.LoanNo == repayment.LoanNo)
+        //            .SumAsync(s => s.OutstandingPrincipal);
+        //        loanBalance.IntrOwed = await _context.LoanSchedules
+        //            .Where(s => s.LoanNo == repayment.LoanNo)
+        //            .SumAsync(s => s.OutstandingInterest);
+        //        loanBalance.Nextduedate = nextSchedule?.DueDate ?? (isFullyPaid ? null : DateTime.Now.AddMonths(1));
+
+        //        // Create a single repayment record for the total payment
+        //        string receiptNo = GenerateReceiptNumber();
+        //        string transactionNo = GenerateTransactionNumber();
+
+        //        var repay = new Repay
+        //        {
+        //            LoanNo = repayment.LoanNo,
+        //            MemberNo = memberNo,
+        //            CompanyCode = loan.CompanyCode,
+        //            SerialNo = receiptNo,
+        //            DateReceived = DateTime.Now,
+        //            Amount = repayment.Amount,
+        //            Principal = totalPrincipalPaid,
+        //            Interest = totalInterestPaid,
+        //            Penalty = totalPenaltyPaid,
+        //            LoanBalance = loanBalance.Balance + loanBalance.IntrOwed,
+        //            ReceiptNo = receiptNo,
+        //            Chequeno = repayment.PaymentMethod == "MPESA" ? $"MPESA_{repayment.MpesaPhoneNumber}" : repayment.ChequeNumber,
+        //            Remarks = repayment.Remarks ?? $"Payment via {repayment.PaymentMethod}" +
+        //                      (repayment.Amount > (totalPrincipalPaid + totalInterestPaid + totalPenaltyPaid)
+        //                          ? $" (Overpayment of {repayment.Amount - (totalPrincipalPaid + totalInterestPaid + totalPenaltyPaid):C} will be credited to deposit)"
+        //                          : ""),
+        //            AuditId = memberNo,
+        //            AuditTime = DateTime.Now,
+        //            TransactionNo = transactionNo,
+        //            TransDate = DateTime.Now,
+        //            Transby = memberNo,
+        //            UserName = memberNo,
+        //            AuditDateTime = DateTime.Now
+        //        };
+
+        //        _context.Repay.Add(repay);
+        //        await _context.SaveChangesAsync();
+
+        //        // Handle overpayment (if any)
+        //        if (remainingAmount > 0)
+        //        {
+        //            _logger.LogInformation($"Overpayment of {remainingAmount:C} will be credited to member's deposit account");
+        //            // TODO: Credit overpayment to member's deposit account
+        //            // This would require creating a deposit transaction
+        //        }
+
+        //        // Create GL transactions
+        //        await CreateRepaymentGLTransactionsAsync(loan, loanType, repayment, totalPrincipalPaid, totalInterestPaid, totalPenaltyPaid, transactionNo);
+
+        //        // Create blockchain record
+        //        var blockchainTx = await CreateRepaymentBlockchainRecordAsync(
+        //            repayment.LoanNo, memberNo, loan.CompanyCode,
+        //            repayment.Amount, totalPrincipalPaid, totalInterestPaid, totalPenaltyPaid,
+        //            loanBalance.Balance + loanBalance.IntrOwed, transactionNo);
+
+        //        repay.BlockchainTxId = blockchainTx.TransactionId;
+        //        await _context.SaveChangesAsync();
+
+        //        await transaction.CommitAsync();
+
+        //        _logger.LogInformation($"=== REPAYMENT COMPLETED SUCCESSFULLY ===");
+        //        _logger.LogInformation($"Receipt: {receiptNo}, Amount: {repayment.Amount:C}, Principal Paid: {totalPrincipalPaid:C}, Interest Paid: {totalInterestPaid:C}");
+        //        _logger.LogInformation($"Blockchain Tx: {blockchainTx.TransactionId}");
+
+        //        return new RepaymentResultDTO
+        //        {
+        //            Success = true,
+        //            Message = $"Payment of {repayment.Amount:N0} KES received successfully. Receipt No: {receiptNo}" +
+        //                      (remainingAmount > 0 ? $" Overpayment of {remainingAmount:N0} KES credited to your deposit account." : ""),
+        //            ReceiptNo = receiptNo,
+        //            TransactionReference = transactionNo,
+        //            PrincipalPaid = totalPrincipalPaid,
+        //            InterestPaid = totalInterestPaid,
+        //            PenaltyPaid = totalPenaltyPaid,
+        //            NewBalance = loanBalance.Balance + loanBalance.IntrOwed,
+        //            IsFullyPaid = isFullyPaid,
+        //            BlockchainTxId = blockchainTx.TransactionId
+        //        };
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        await transaction.RollbackAsync();
+        //        _logger.LogError(ex, $"Error making repayment for loan {repayment.LoanNo}");
+        //        return new RepaymentResultDTO
+        //        {
+        //            Success = false,
+        //            Message = $"Repayment failed: {ex.Message}"
+        //        };
+        //    }
+        //}
+
+
         public async Task<LoanRepaymentViewModel> GetRepaymentDetailsAsync(string loanNo, string memberNo)
         {
             try
@@ -3563,125 +4343,190 @@ namespace SACCOBlockChainSystem.Services
                     return new RepaymentResultDTO { Success = false, Message = "Loan product configuration not found" };
                 }
 
+                // 3. Get total outstanding balance (principal + interest + penalty)
+                var loanBalance = await _context.Loanbal
+                    .FirstOrDefaultAsync(lb => lb.LoanNo == repayment.LoanNo);
+
+                decimal totalPrincipalOutstanding = loanBalance?.Balance ?? 0;
+                decimal totalInterestOutstanding = loanBalance?.IntrOwed ?? 0;
+                decimal totalPenaltyOutstanding = loanBalance?.Penalty ?? 0;
+                decimal totalFullBalance = totalPrincipalOutstanding + totalInterestOutstanding + totalPenaltyOutstanding;
+
+                _logger.LogInformation($"Total Outstanding: Principal={totalPrincipalOutstanding:C}, Interest={totalInterestOutstanding:C}, Penalty={totalPenaltyOutstanding:C}, Total={totalFullBalance:C}");
+
+                // 4. Get all pending schedules
+                var pendingSchedules = await _context.LoanSchedules
+                    .Where(s => s.LoanNo == repayment.LoanNo && s.Status != "Paid")
+                    .OrderBy(s => s.InstallmentNo)
+                    .ToListAsync();
+
+                if (!pendingSchedules.Any() && totalFullBalance <= 0)
+                {
+                    return new RepaymentResultDTO { Success = false, Message = "Loan is already fully paid" };
+                }
+
                 decimal remainingAmount = repayment.Amount;
                 decimal totalPrincipalPaid = 0;
                 decimal totalInterestPaid = 0;
                 decimal totalPenaltyPaid = 0;
-                string lastReceiptNo = null;
-                string lastTransactionNo = null;
-                BlockchainTransaction lastBlockchainTx = null;
-
                 bool isFullyPaid = false;
+                string receiptNo = GenerateReceiptNumber();
+                string transactionNo = GenerateTransactionNumber();
+                int installmentsCovered = 0;
 
-                // Loop through pending installments until payment amount is exhausted or loan is fully paid
-                while (remainingAmount > 0 && !isFullyPaid)
+                // ============================================================
+                // CHECK IF THIS IS A FULL BALANCE PAYMENT
+                // ============================================================
+                bool isFullBalancePayment = remainingAmount >= totalFullBalance - 0.01m;
+
+                if (isFullBalancePayment)
                 {
-                    // Get current pending installment
-                    var currentSchedule = await _context.LoanSchedules
-                        .Where(s => s.LoanNo == repayment.LoanNo && (s.Status == "Pending" || s.Status == "Partial"))
-                        .OrderBy(s => s.InstallmentNo)
-                        .FirstOrDefaultAsync();
+                    _logger.LogInformation($"FULL BALANCE PAYMENT: {remainingAmount:C} >= {totalFullBalance:C}");
 
-                    if (currentSchedule == null)
+                    // Allocate payment to ALL pending schedules
+                    foreach (var schedule in pendingSchedules)
                     {
-                        // No more pending installments - loan is fully paid
-                        isFullyPaid = true;
-                        break;
+                        if (remainingAmount <= 0) break;
+
+                        // Calculate remaining for this schedule
+                        decimal schedulePrincipal = schedule.OutstandingPrincipal;
+                        decimal scheduleInterest = schedule.OutstandingInterest;
+                        decimal scheduleTotal = schedulePrincipal + scheduleInterest;
+
+                        // For full balance payment, pay all remaining on this schedule
+                        totalPrincipalPaid += schedulePrincipal;
+                        totalInterestPaid += scheduleInterest;
+                        remainingAmount -= scheduleTotal;
+
+                        // Mark schedule as paid
+                        schedule.PaidPrincipal += schedulePrincipal;
+                        schedule.PaidInterest += scheduleInterest;
+                        schedule.PaidTotal += scheduleTotal;
+                        schedule.OutstandingPrincipal = 0;
+                        schedule.OutstandingInterest = 0;
+                        schedule.OutstandingTotal = 0;
+                        schedule.Status = "Paid";
+                        schedule.PaidDate = DateTime.Now;
+                        installmentsCovered++;
+
+                        _logger.LogInformation($"Full payment: Schedule #{schedule.InstallmentNo} paid - Principal={schedulePrincipal:C}, Interest={scheduleInterest:C}");
                     }
 
-                    // Calculate outstanding amounts for this installment
-                    decimal outstandingPrincipal = currentSchedule.OutstandingPrincipal;
-                    decimal outstandingInterest = currentSchedule.OutstandingInterest;
-
-                    // If OutstandingPrincipal is 0, use the original principal amount
-                    if (outstandingPrincipal <= 0)
+                    // Also pay penalty
+                    if (remainingAmount > 0 && totalPenaltyOutstanding > 0)
                     {
-                        outstandingPrincipal = currentSchedule.PrincipalAmount - currentSchedule.PaidPrincipal;
-                    }
-                    if (outstandingInterest <= 0)
-                    {
-                        outstandingInterest = currentSchedule.InterestAmount - currentSchedule.PaidInterest;
+                        decimal penaltyToPay = Math.Min(remainingAmount, totalPenaltyOutstanding);
+                        totalPenaltyPaid = penaltyToPay;
+                        remainingAmount -= penaltyToPay;
+                        _logger.LogInformation($"Full payment: Penalty paid = {penaltyToPay:C}");
                     }
 
-                    decimal installmentTotalDue = outstandingPrincipal + outstandingInterest;
+                    isFullyPaid = true;
 
-                    _logger.LogInformation($"Processing Installment #{currentSchedule.InstallmentNo}: Due={installmentTotalDue:C}, Remaining Payment={remainingAmount:C}");
-
-                    // Calculate penalty if overdue
-                    decimal penaltyAmount = 0;
-                    bool isOverdue = currentSchedule.DueDate < DateTime.Now.Date && currentSchedule.Status != "Paid";
-                    int daysOverdue = isOverdue ? (DateTime.Now.Date - currentSchedule.DueDate.Date).Days : 0;
-                    int gracePeriod = loanType.GracePeriod;
-
-                    if (isOverdue && daysOverdue > gracePeriod)
+                    // Update loan status
+                    loan.Status = 7; // Closed
+                    loan.Posted = "CLOSED";
+                    loan.Aamount = 0;
+                }
+                else
+                {
+                    // ============================================================
+                    // REGULAR PAYMENT - Process installments one by one
+                    // ============================================================
+                    foreach (var schedule in pendingSchedules)
                     {
-                        var penaltyConfig = await _context.Penalties
-                            .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == loan.CompanyCode);
+                        if (remainingAmount <= 0) break;
 
-                        if (penaltyConfig != null)
+                        decimal schedulePrincipal = schedule.OutstandingPrincipal;
+                        decimal scheduleInterest = schedule.OutstandingInterest;
+                        decimal scheduleTotal = schedulePrincipal + scheduleInterest;
+
+                        if (scheduleTotal <= 0) continue;
+
+                        // Check if this installment has penalty
+                        decimal penaltyForThisInstallment = 0;
+                        if (schedule.InstallmentNo == 1 && totalPenaltyOutstanding > 0)
                         {
-                            int overdueDaysForPenalty = daysOverdue - gracePeriod;
-                            penaltyAmount = CalculatePenalty(currentSchedule.TotalInstallment, overdueDaysForPenalty, penaltyConfig);
-                            _logger.LogInformation($"Penalty for installment #{currentSchedule.InstallmentNo}: {penaltyAmount:C}");
+                            penaltyForThisInstallment = Math.Min(totalPenaltyOutstanding, remainingAmount);
+                        }
+
+                        if (remainingAmount >= scheduleTotal + penaltyForThisInstallment)
+                        {
+                            // Fully pay this installment
+                            totalPrincipalPaid += schedulePrincipal;
+                            totalInterestPaid += scheduleInterest;
+                            totalPenaltyPaid += penaltyForThisInstallment;
+                            remainingAmount -= (scheduleTotal + penaltyForThisInstallment);
+
+                            schedule.PaidPrincipal += schedulePrincipal;
+                            schedule.PaidInterest += scheduleInterest;
+                            schedule.PaidTotal += scheduleTotal;
+                            schedule.OutstandingPrincipal = 0;
+                            schedule.OutstandingInterest = 0;
+                            schedule.OutstandingTotal = 0;
+                            schedule.Status = "Paid";
+                            schedule.PaidDate = DateTime.Now;
+                            schedule.PenaltyAmount = schedule.PenaltyAmount + penaltyForThisInstallment;
+                            installmentsCovered++;
+
+                            _logger.LogInformation($"Installment #{schedule.InstallmentNo} fully paid");
+                        }
+                        else
+                        {
+                            // Partially pay this installment
+                            decimal amountForThisInstallment = remainingAmount;
+                            decimal principalPaid = 0;
+                            decimal interestPaid = 0;
+                            decimal penaltyPaid = 0;
+
+                            // Allocate: Penalty first, then Interest, then Principal
+                            if (amountForThisInstallment > 0 && penaltyForThisInstallment > 0)
+                            {
+                                penaltyPaid = Math.Min(amountForThisInstallment, penaltyForThisInstallment);
+                                amountForThisInstallment -= penaltyPaid;
+                            }
+
+                            if (amountForThisInstallment > 0 && scheduleInterest > 0)
+                            {
+                                interestPaid = Math.Min(amountForThisInstallment, scheduleInterest);
+                                amountForThisInstallment -= interestPaid;
+                            }
+
+                            if (amountForThisInstallment > 0 && schedulePrincipal > 0)
+                            {
+                                principalPaid = Math.Min(amountForThisInstallment, schedulePrincipal);
+                                amountForThisInstallment -= principalPaid;
+                            }
+
+                            totalPrincipalPaid += principalPaid;
+                            totalInterestPaid += interestPaid;
+                            totalPenaltyPaid += penaltyPaid;
+                            remainingAmount = 0;
+
+                            schedule.PaidPrincipal += principalPaid;
+                            schedule.PaidInterest += interestPaid;
+                            schedule.PaidTotal += (principalPaid + interestPaid);
+                            schedule.OutstandingPrincipal -= principalPaid;
+                            schedule.OutstandingInterest -= interestPaid;
+                            schedule.OutstandingTotal = schedule.OutstandingPrincipal + schedule.OutstandingInterest;
+                            schedule.Status = "Partial";
+                            schedule.PenaltyAmount = schedule.PenaltyAmount + penaltyPaid;
+
+                            _logger.LogInformation($"Installment #{schedule.InstallmentNo} partially paid - Principal={principalPaid:C}, Interest={interestPaid:C}");
+                            break; // No more money left
                         }
                     }
 
-                    decimal totalWithPenalty = installmentTotalDue + penaltyAmount;
-                    decimal amountForThisInstallment = Math.Min(remainingAmount, totalWithPenalty);
-
-                    // Allocate payment for this installment: Penalty first -> Interest -> Principal
-                    decimal penaltyPaid = Math.Min(amountForThisInstallment, penaltyAmount);
-                    decimal remainingAfterPenalty = amountForThisInstallment - penaltyPaid;
-
-                    decimal interestPaid = Math.Min(remainingAfterPenalty, outstandingInterest);
-                    decimal remainingAfterInterest = remainingAfterPenalty - interestPaid;
-
-                    decimal principalPaid = Math.Min(remainingAfterInterest, outstandingPrincipal);
-
-                    // Round to 2 decimal places
-                    penaltyPaid = Math.Round(penaltyPaid, 2, MidpointRounding.AwayFromZero);
-                    interestPaid = Math.Round(interestPaid, 2, MidpointRounding.AwayFromZero);
-                    principalPaid = Math.Round(principalPaid, 2, MidpointRounding.AwayFromZero);
-
-                    _logger.LogInformation($"Installment #{currentSchedule.InstallmentNo} Allocation: Penalty={penaltyPaid:C}, Interest={interestPaid:C}, Principal={principalPaid:C}");
-
-                    // Update totals
-                    totalPrincipalPaid += principalPaid;
-                    totalInterestPaid += interestPaid;
-                    totalPenaltyPaid += penaltyPaid;
-
-                    // Update the schedule
-                    currentSchedule.PaidPrincipal += principalPaid;
-                    currentSchedule.PaidInterest += interestPaid;
-                    currentSchedule.PaidTotal += amountForThisInstallment;
-                    currentSchedule.OutstandingPrincipal -= principalPaid;
-                    currentSchedule.OutstandingInterest -= interestPaid;
-                    currentSchedule.OutstandingTotal = currentSchedule.OutstandingPrincipal + currentSchedule.OutstandingInterest;
-
-                    // Check if this installment is fully paid
-                    if (currentSchedule.OutstandingPrincipal <= 0 && currentSchedule.OutstandingInterest <= 0)
-                    {
-                        currentSchedule.Status = "Paid";
-                        currentSchedule.PaidDate = DateTime.Now;
-                        _logger.LogInformation($"Installment #{currentSchedule.InstallmentNo} fully paid");
-                    }
-                    else
-                    {
-                        currentSchedule.Status = "Partial";
-                        _logger.LogInformation($"Installment #{currentSchedule.InstallmentNo} partially paid");
-                    }
-
-                    remainingAmount -= amountForThisInstallment;
-
-                    // Check if loan is fully paid (no more pending installments)
+                    // Check if loan is fully paid after processing all schedules
                     var anyPending = await _context.LoanSchedules
-                        .AnyAsync(s => s.LoanNo == repayment.LoanNo && (s.Status == "Pending" || s.Status == "Partial"));
+                        .AnyAsync(s => s.LoanNo == repayment.LoanNo && s.Status != "Paid");
 
                     if (!anyPending)
                     {
                         isFullyPaid = true;
                         loan.Status = 7; // Closed
                         loan.Posted = "CLOSED";
+                        loan.Aamount = 0;
                         _logger.LogInformation($"Loan {repayment.LoanNo} is now fully paid!");
                     }
                 }
@@ -3691,10 +4536,9 @@ namespace SACCOBlockChainSystem.Services
                     return new RepaymentResultDTO { Success = false, Message = "No payment was applied" };
                 }
 
-                // Update LoanBal table
-                var loanBalance = await _context.Loanbal
-                    .FirstOrDefaultAsync(lb => lb.LoanNo == repayment.LoanNo);
-
+                // ============================================================
+                // UPDATE LOAN BALANCE
+                // ============================================================
                 if (loanBalance == null)
                 {
                     loanBalance = new Loanbal
@@ -3715,7 +4559,7 @@ namespace SACCOBlockChainSystem.Services
                         AuditId = memberNo,
                         AuditTime = DateTime.Now,
                         Nextduedate = DateTime.Now.AddMonths(1),
-                        TransactionNo = GenerateTransactionNumber(),
+                        TransactionNo = transactionNo,
                         Year = DateTime.Now.Year.ToString(),
                         Month = DateTime.Now.Month.ToString(),
                         UserName = memberNo,
@@ -3724,24 +4568,33 @@ namespace SACCOBlockChainSystem.Services
                     _context.Loanbal.Add(loanBalance);
                 }
 
-                // Get the next pending installment to set next due date
-                var nextSchedule = await _context.LoanSchedules
-                    .Where(s => s.LoanNo == repayment.LoanNo && (s.Status == "Pending" || s.Status == "Partial"))
-                    .OrderBy(s => s.InstallmentNo)
-                    .FirstOrDefaultAsync();
+                // Recalculate loan balance from schedules
+                var remainingSchedules = await _context.LoanSchedules
+                    .Where(s => s.LoanNo == repayment.LoanNo && s.Status != "Paid")
+                    .ToListAsync();
 
-                loanBalance.Balance = await _context.LoanSchedules
-                    .Where(s => s.LoanNo == repayment.LoanNo)
-                    .SumAsync(s => s.OutstandingPrincipal);
-                loanBalance.IntrOwed = await _context.LoanSchedules
-                    .Where(s => s.LoanNo == repayment.LoanNo)
-                    .SumAsync(s => s.OutstandingInterest);
-                loanBalance.Nextduedate = nextSchedule?.DueDate ?? (isFullyPaid ? null : DateTime.Now.AddMonths(1));
+                loanBalance.Balance = remainingSchedules.Sum(s => s.OutstandingPrincipal);
+                loanBalance.IntrOwed = remainingSchedules.Sum(s => s.OutstandingInterest);
+                loanBalance.Penalty = Math.Max(0, totalPenaltyOutstanding - totalPenaltyPaid);
 
-                // Create a single repayment record for the total payment
-                string receiptNo = GenerateReceiptNumber();
-                string transactionNo = GenerateTransactionNumber();
+                // Get next pending installment for due date
+                var nextSchedule = remainingSchedules.OrderBy(s => s.InstallmentNo).FirstOrDefault();
+                if (nextSchedule != null)
+                {
+                    loanBalance.Nextduedate = nextSchedule.DueDate;
+                    loanBalance.Duedate = nextSchedule.DueDate;
+                    loanBalance.RepayRate = nextSchedule.TotalInstallment;
+                }
+                else if (isFullyPaid)
+                {
+                    loanBalance.Cleared = true;
+                    loanBalance.Nextduedate = null;
+                    loanBalance.Duedate = DateTime.Now;
+                }
 
+                // ============================================================
+                // CREATE REPAYMENT RECORD
+                // ============================================================
                 var repay = new Repay
                 {
                     LoanNo = repayment.LoanNo,
@@ -3757,9 +4610,8 @@ namespace SACCOBlockChainSystem.Services
                     ReceiptNo = receiptNo,
                     Chequeno = repayment.PaymentMethod == "MPESA" ? $"MPESA_{repayment.MpesaPhoneNumber}" : repayment.ChequeNumber,
                     Remarks = repayment.Remarks ?? $"Payment via {repayment.PaymentMethod}" +
-                              (repayment.Amount > (totalPrincipalPaid + totalInterestPaid + totalPenaltyPaid)
-                                  ? $" (Overpayment of {repayment.Amount - (totalPrincipalPaid + totalInterestPaid + totalPenaltyPaid):C} will be credited to deposit)"
-                                  : ""),
+                              (isFullBalancePayment ? " - FULL BALANCE SETTLEMENT" : "") +
+                              (remainingAmount > 0.01m ? $" (Overpayment of {remainingAmount:C})" : ""),
                     AuditId = memberNo,
                     AuditTime = DateTime.Now,
                     TransactionNo = transactionNo,
@@ -3772,22 +4624,27 @@ namespace SACCOBlockChainSystem.Services
                 _context.Repay.Add(repay);
                 await _context.SaveChangesAsync();
 
-                // Handle overpayment (if any)
-                if (remainingAmount > 0)
+                // ============================================================
+                // HANDLE OVERPAYMENT (if any)
+                // ============================================================
+                if (remainingAmount > 0.01m)
                 {
                     _logger.LogInformation($"Overpayment of {remainingAmount:C} will be credited to member's deposit account");
                     // TODO: Credit overpayment to member's deposit account
-                    // This would require creating a deposit transaction
                 }
 
-                // Create GL transactions
+                // ============================================================
+                // CREATE GL TRANSACTIONS
+                // ============================================================
                 await CreateRepaymentGLTransactionsAsync(loan, loanType, repayment, totalPrincipalPaid, totalInterestPaid, totalPenaltyPaid, transactionNo);
 
-                // Create blockchain record
+                // ============================================================
+                // CREATE BLOCKCHAIN RECORD
+                // ============================================================
                 var blockchainTx = await CreateRepaymentBlockchainRecordAsync(
                     repayment.LoanNo, memberNo, loan.CompanyCode,
                     repayment.Amount, totalPrincipalPaid, totalInterestPaid, totalPenaltyPaid,
-                    loanBalance.Balance + loanBalance.IntrOwed, transactionNo);
+                    loanBalance.Balance + loanBalance.IntrOwed, transactionNo, isFullBalancePayment);
 
                 repay.BlockchainTxId = blockchainTx.TransactionId;
                 await _context.SaveChangesAsync();
@@ -3795,14 +4652,29 @@ namespace SACCOBlockChainSystem.Services
                 await transaction.CommitAsync();
 
                 _logger.LogInformation($"=== REPAYMENT COMPLETED SUCCESSFULLY ===");
-                _logger.LogInformation($"Receipt: {receiptNo}, Amount: {repayment.Amount:C}, Principal Paid: {totalPrincipalPaid:C}, Interest Paid: {totalInterestPaid:C}");
+                _logger.LogInformation($"Receipt: {receiptNo}, Amount: {repayment.Amount:C}");
+                _logger.LogInformation($"Principal Paid: {totalPrincipalPaid:C}, Interest Paid: {totalInterestPaid:C}, Penalty Paid: {totalPenaltyPaid:C}");
+                _logger.LogInformation($"Installments Covered: {installmentsCovered}, IsFullBalance: {isFullBalancePayment}, IsFullyPaid: {isFullyPaid}");
                 _logger.LogInformation($"Blockchain Tx: {blockchainTx.TransactionId}");
+
+                string message = isFullBalancePayment
+                    ? $"Full balance payment of {repayment.Amount:N0} KES received successfully. Loan is now fully settled!"
+                    : $"Payment of {repayment.Amount:N0} KES received successfully. Receipt No: {receiptNo}";
+
+                if (isFullyPaid)
+                {
+                    message += " 🎉 Congratulations! Your loan is fully paid!";
+                }
+
+                if (remainingAmount > 0.01m)
+                {
+                    message += $" Overpayment of {remainingAmount:N0} KES will be credited to your deposit account.";
+                }
 
                 return new RepaymentResultDTO
                 {
                     Success = true,
-                    Message = $"Payment of {repayment.Amount:N0} KES received successfully. Receipt No: {receiptNo}" +
-                              (remainingAmount > 0 ? $" Overpayment of {remainingAmount:N0} KES credited to your deposit account." : ""),
+                    Message = message,
                     ReceiptNo = receiptNo,
                     TransactionReference = transactionNo,
                     PrincipalPaid = totalPrincipalPaid,
@@ -3810,6 +4682,8 @@ namespace SACCOBlockChainSystem.Services
                     PenaltyPaid = totalPenaltyPaid,
                     NewBalance = loanBalance.Balance + loanBalance.IntrOwed,
                     IsFullyPaid = isFullyPaid,
+                    IsFullBalancePayment = isFullBalancePayment,
+                    InstallmentsCovered = installmentsCovered,
                     BlockchainTxId = blockchainTx.TransactionId
                 };
             }
@@ -3948,9 +4822,9 @@ namespace SACCOBlockChainSystem.Services
         /// Create blockchain record for repayment
         /// </summary>
         private async Task<BlockchainTransaction> CreateRepaymentBlockchainRecordAsync(
-            string loanNo, string memberNo, string companyCode,
-            decimal amount, decimal principalPaid, decimal interestPaid, decimal penaltyPaid,
-            decimal newBalance, string transactionNo)
+           string loanNo, string memberNo, string companyCode,
+           decimal amount, decimal principalPaid, decimal interestPaid, decimal penaltyPaid,
+           decimal newBalance, string transactionNo, bool isFullBalancePayment = false)
         {
             // Create block
             string blockHash = GenerateBlockHash();
@@ -3976,7 +4850,7 @@ namespace SACCOBlockChainSystem.Services
             // Create blockchain data
             var blockchainData = new
             {
-                TransactionType = "LOAN_REPAYMENT",
+                TransactionType = isFullBalancePayment ? "LOAN_FULL_SETTLEMENT" : "LOAN_REPAYMENT",
                 LoanNo = loanNo,
                 MemberNo = memberNo,
                 PaymentAmount = amount,
@@ -3985,6 +4859,7 @@ namespace SACCOBlockChainSystem.Services
                 PenaltyPaid = penaltyPaid,
                 NewBalance = newBalance,
                 TransactionNo = transactionNo,
+                IsFullBalancePayment = isFullBalancePayment,
                 PaymentDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                 BlockHash = blockHash,
                 PreviousBlockHash = previousHash
@@ -3995,7 +4870,7 @@ namespace SACCOBlockChainSystem.Services
             var blockchainTx = new BlockchainTransaction
             {
                 TransactionId = Guid.NewGuid().ToString(),
-                TransactionType = "LOAN_REPAYMENT",
+                TransactionType = isFullBalancePayment ? "LOAN_FULL_SETTLEMENT" : "LOAN_REPAYMENT",
                 MemberNo = memberNo,
                 CompanyCode = companyCode,
                 Amount = amount,
@@ -4011,7 +4886,7 @@ namespace SACCOBlockChainSystem.Services
             _context.BlockchainTransactions.Add(blockchainTx);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation($"Blockchain transaction created for repayment: {blockchainTx.TransactionId}");
+            _logger.LogInformation($"Blockchain transaction created for {(isFullBalancePayment ? "full settlement" : "repayment")}: {blockchainTx.TransactionId}");
 
             return blockchainTx;
         }

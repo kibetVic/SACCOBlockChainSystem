@@ -68,6 +68,24 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
         public string? Description { get; set; }
         public bool IsActive { get; set; } = true;
+
+        [Display(Name = "AGM Date")]
+        [DataType(DataType.Date)]
+        public DateTime? AGMDate { get; set; }
+
+        [Display(Name = "AGM Time")]
+        [DataType(DataType.Time)]
+        public TimeSpan? AGMTime { get; set; }
+
+        [StringLength(200)]
+        [Display(Name = "AGM Venue")]
+        public string? AGMVenue { get; set; }
+
+        // Audit Fields (for display only)
+        public string? CreatedBy { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public string? ModifiedBy { get; set; }
+        public DateTime? ModifiedAt { get; set; }
     }
 
     public class SmsSettingDTO

@@ -1,22 +1,51 @@
-﻿@model IEnumerable<SACCOBlockChainSystem.Models.Block>
+﻿@model SACCOBlockChainSystem.ViewModels.BlocksViewModel
 
 @{
     ViewData["Title"] = "All Blocks";
+    var companyName = ViewBag.CompanyName ?? Model?.CompanyCode ?? "Current";
 }
 
 <div class="container-fluid">
     <div class="row mb-4">
         <div class="col-md-12">
+            <!-- Company Info Card -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-0"><i class="fas fa-building"></i> Company: <strong>@companyName</strong></h5>
+                            <small class="text-muted">Company Code: @Model?.CompanyCode</small>
+                        </div>
+                        <div>
+                           @*  @if (Model?.BlockchainValid == true)
+                            {
+                                <span class="badge bg-success fs-6"><i class="fas fa-check-circle"></i> Blockchain Valid</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger fs-6"><i class="fas fa-exclamation-circle"></i> Blockchain Invalid</span>
+                            } *@
+                            <span class="badge bg-info fs-6 ms-2"><i class="fas fa-cubes"></i> @Model?.TotalBlocks Blocks</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Blocks Table Card -->
             <div class="card">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h4 class="mb-0"><i class="fas fa-cubes"></i> All Blocks</h4>
+                    <div>
+                        <span class="badge bg-light text-dark me-2">Total: @Model?.TotalBlocks</span>
+                        <span class="badge bg-light text-dark">Page @Model?.CurrentPage of @Model?.TotalPages</span>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
                         <table class="table table-striped table-hover" id="blocksTable">
                             <thead>
                                 <tr>
-                                    <th>Block No</th>
+                                    <th>#</th>
                                     <th>Block Hash</th>
                                     <th>Previous Hash</th>
                                     <th>Merkle Root</th>
@@ -28,50 +57,179 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @{
-                                    int blockNumber = 1;
+                                @if (Model?.Blocks != null && Model.Blocks.Any())
+                                {
+                                    var startIndex = (Model.CurrentPage - 1) * Model.PageSize;
+                                    var blockNumber = startIndex + 1;
+
+                                    foreach (var block in Model.Blocks)
+                                    {
+                                        <tr>
+                                            <td>@blockNumber</td>
+                                            <td>
+                                                <code class="hash-text" title="@block.BlockHash">
+                                                    @block.BlockHash?.Substring(0, Math.Min(16, block.BlockHash?.Length ?? 0))...
+                                                </code>
+                                                <button class="btn btn-sm btn-outline-secondary copy-hash"
+                                                        data-hash="@block.BlockHash"
+                                                        title="Copy full hash">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                            </td>
+                                            <td>
+                                                <code class="hash-text" title="@block.PreviousHash">
+                                                    @(block.PreviousHash?.Substring(0, Math.Min(8, block.PreviousHash?.Length ?? 0)) ?? "0")...
+                                                </code>
+                                            </td>
+                                            <td>
+                                                <code title="@block.MerkleRoot">
+                                                    @(block.MerkleRoot?.Substring(0, Math.Min(8, block.MerkleRoot?.Length ?? 0)) ?? "...")
+                                                </code>
+                                            </td>
+                                            <td>@block.Timestamp.ToString("dd MMM yyyy HH:mm:ss")</td>
+                                            <td>@block.Nonce.ToString("N0")</td>
+                                            <td>
+                                                <span class="badge bg-info">@(block.Transactions?.Count ?? 0)</span>
+                                                @if (block.Transactions != null && block.Transactions.Any())
+                                                {
+                                                    <span class="badge bg-secondary">@block.Transactions.Sum(t => t.Amount).ToString("C")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (block.Confirmed)
+                                                {
+                                                    <span class="badge bg-success">Confirmed</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning">Pending</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a asp-action="BlockDetails" asp-route-blockHash="@block.BlockHash"
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-search"></i> View
+                                                </a>
+                                                <button class="btn btn-sm btn-outline-success verify-block"
+                                                        data-blockhash="@block.BlockHash">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        blockNumber++;
+                                    }
                                 }
-                                @foreach (var block in Model)
+                                else
                                 {
                                     <tr>
-                                        <td>@blockNumber</td>
-                                        <td><code>@block.BlockHash.Substring(0, Math.Min(16, block.BlockHash?.Length ?? 0))...</code></td>
-                                        <td><code>@(block.PreviousHash?.Substring(0, Math.Min(8, block.PreviousHash?.Length ?? 0)) ?? "0")...</code></td>
-                                        <td><code>@(block.MerkleRoot?.Substring(0, Math.Min(8, block.MerkleRoot?.Length ?? 0)) ?? "...")</code></td>
-                                        <td>@block.Timestamp.ToString("dd MMM yyyy HH:mm:ss")</td>
-                                        <td>@block.Nonce</td>
-                                        <td>
-                                            <span class="badge bg-info">@(block.Transactions?.Count ?? 0)</span>
-                                        </td>
-                                        <td>
-                                            @if (block.Confirmed)
-                                            {
-                                                <span class="badge bg-success">Confirmed</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge bg-warning">Pending</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            <a asp-action="BlockDetails" asp-route-blockHash="@block.BlockHash"
-                                               class="btn btn-sm btn-outline-primary">
-                                                <i class="fas fa-search"></i> View
-                                            </a>
+                                        <td colspan="9">
+                                            <div class="text-center py-4">
+                                                <i class="fas fa-cubes fa-3x text-muted mb-3"></i>
+                                                <h5>No blocks found</h5>
+                                                <p>The blockchain is empty. Create a genesis block to start.</p>
+                                                <a asp-action="CreateGenesisBlock" class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-plus"></i> Create Genesis Block
+                                                </a>
+                                            </div>
                                         </td>
                                     </tr>
-                                    blockNumber++;
                                 }
                             </tbody>
                         </table>
                     </div>
 
-                    @if (!Model.Any())
+                    <!-- Pagination -->
+                    @if (Model?.TotalPages > 1)
                     {
-                        <div class="text-center py-4">
-                            <i class="fas fa-cubes fa-3x text-muted mb-3"></i>
-                            <h5>No blocks found</h5>
-                            <p>The blockchain is empty. Create a genesis block to start.</p>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div>
+                                Showing @((Model.CurrentPage - 1) * Model.PageSize + 1) to
+                                @(Math.Min(Model.CurrentPage * Model.PageSize, Model.TotalBlocks))
+                                of @Model.TotalBlocks blocks
+                            </div>
+                            <nav aria-label="Page navigation">
+                                <ul class="pagination pagination-sm mb-0">
+                                    @if (Model.CurrentPage > 1)
+                                    {
+                                        <li class="page-item">
+                                            <a class="page-link" asp-action="Blocks" asp-route-page="@(Model.CurrentPage - 1)" asp-route-pageSize="@Model.PageSize">
+                                                <i class="fas fa-chevron-left"></i>
+                                            </a>
+                                        </li>
+                                    }
+                                    else
+                                    {
+                                        <li class="page-item disabled">
+                                            <span class="page-link"><i class="fas fa-chevron-left"></i></span>
+                                        </li>
+                                    }
+
+                                    @{
+                                        var startPage = Math.Max(1, Model.CurrentPage - 2);
+                                        var endPage = Math.Min(Model.TotalPages, Model.CurrentPage + 2);
+                                    }
+
+                                    @if (startPage > 1)
+                                    {
+                                        <li class="page-item">
+                                            <a class="page-link" asp-action="Blocks" asp-route-page="1" asp-route-pageSize="@Model.PageSize">1</a>
+                                        </li>
+                                        @if (startPage > 2)
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        }
+                                    }
+
+                                    @for (var i = startPage; i <= endPage; i++)
+                                    {
+                                        if (i == Model.CurrentPage)
+                                        {
+                                            <li class="page-item active"><span class="page-link">@i</span></li>
+                                        }
+                                        else
+                                        {
+                                            <li class="page-item">
+                                                <a class="page-link" asp-action="Blocks" asp-route-page="@i" asp-route-pageSize="@Model.PageSize">@i</a>
+                                            </li>
+                                        }
+                                    }
+
+                                    @if (endPage < Model.TotalPages)
+                                    {
+                                        @if (endPage < Model.TotalPages - 1)
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        }
+                                        <li class="page-item">
+                                            <a class="page-link" asp-action="Blocks" asp-route-page="@Model.TotalPages" asp-route-pageSize="@Model.PageSize">@Model.TotalPages</a>
+                                        </li>
+                                    }
+
+                                    @if (Model.CurrentPage < Model.TotalPages)
+                                    {
+                                        <li class="page-item">
+                                            <a class="page-link" asp-action="Blocks" asp-route-page="@(Model.CurrentPage + 1)" asp-route-pageSize="@Model.PageSize">
+                                                <i class="fas fa-chevron-right"></i>
+                                            </a>
+                                        </li>
+                                    }
+                                    else
+                                    {
+                                        <li class="page-item disabled">
+                                            <span class="page-link"><i class="fas fa-chevron-right"></i></span>
+                                        </li>
+                                    }
+                                </ul>
+                            </nav>
+                            <div>
+                                <select class="form-select form-select-sm" id="pageSizeSelect" style="width: auto; display: inline-block;">
+                                    <option value="10" selected="@(Model.PageSize == 10)">10</option>
+                                    <option value="20" selected="@(Model.PageSize == 20)">20</option>
+                                    <option value="50" selected="@(Model.PageSize == 50)">50</option>
+                                    <option value="100" selected="@(Model.PageSize == 100)">100</option>
+                                </select>
+                                <label class="form-label ms-1">per page</label>
+                            </div>
                         </div>
                     }
                 </div>
@@ -80,20 +238,143 @@
     </div>
 </div>
 
+<!-- Toast Notification -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="verificationToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto"><i class="fas fa-shield-alt"></i> Block Verification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toastMessage">
+            Verifying block...
+        </div>
+    </div>
+</div>
+
 @section Styles {
     <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css" />
+    <style>
+        .hash-text {
+            font-size: 0.85rem;
+            background-color: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .copy-hash {
+            padding: 0px 4px;
+            font-size: 0.7rem;
+            margin-left: 4px;
+        }
+
+        .verify-block {
+            padding: 0px 6px;
+            font-size: 0.7rem;
+            margin-left: 2px;
+        }
+
+        .pagination .page-link {
+            padding: 0.25rem 0.6rem;
+            font-size: 0.875rem;
+        }
+
+        #pageSizeSelect {
+            padding: 0.2rem 1.5rem 0.2rem 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .table td {
+            vertical-align: middle;
+        }
+    </style>
 }
 
 @section Scripts {
     <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
     <script>
         $(document).ready(function() {
+            // Initialize DataTable
             $('#blocksTable').DataTable({
                 pageLength: 25,
                 order: [[0, 'desc']],
                 language: {
-                    emptyTable: "No blocks found"
-                }
+                    emptyTable: "No blocks found",
+                    search: "Search blocks: "
+                },
+                searching: true,
+                paging: false, // We handle pagination server-side
+                info: false,
+                dom: '<"row"<"col-sm-6"l><"col-sm-6"f>>' +
+                     '<"row"<"col-sm-12"tr>>' +
+                     '<"row"<"col-sm-5"i><"col-sm-7"p>>'
+            });
+
+            // Copy hash functionality
+            $('.copy-hash').on('click', function() {
+                const hash = $(this).data('hash');
+                navigator.clipboard.writeText(hash).then(() => {
+                    const icon = $(this).find('i');
+                    icon.removeClass('fa-copy').addClass('fa-check text-success');
+                    setTimeout(() => {
+                        icon.removeClass('fa-check text-success').addClass('fa-copy');
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                });
+            });
+
+            // Verify block functionality
+            $('.verify-block').on('click', function() {
+                const button = $(this);
+                const blockHash = button.data('blockhash');
+                const toast = new bootstrap.Toast(document.getElementById('verificationToast'));
+
+                button.prop('disabled', true);
+                button.html('<i class="fas fa-spinner fa-spin"></i>');
+
+                $.ajax({
+                    url: '@Url.Action("VerifyBlock", "Blockchain")/' + encodeURIComponent(blockHash),
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.success) {
+                            $('#toastMessage').html(
+                                '<i class="fas fa-check-circle text-success"></i> ' +
+                                response.message
+                            );
+                            button.removeClass('btn-outline-success')
+                                  .addClass('btn-success')
+                                  .html('<i class="fas fa-check"></i>');
+                        } else {
+                            $('#toastMessage').html(
+                                '<i class="fas fa-exclamation-circle text-danger"></i> ' +
+                                (response.message || 'Block verification failed')
+                            );
+                            button.removeClass('btn-outline-success')
+                                  .addClass('btn-danger')
+                                  .html('<i class="fas fa-times"></i>');
+                        }
+                        toast.show();
+                    },
+                    error: function(xhr) {
+                        $('#toastMessage').html(
+                            '<i class="fas fa-exclamation-circle text-danger"></i> ' +
+                            'Error verifying block: ' + (xhr.responseJSON?.message || xhr.statusText)
+                        );
+                        toast.show();
+                    },
+                    complete: function() {
+                        setTimeout(() => {
+                            button.prop('disabled', false);
+                        }, 3000);
+                    }
+                });
+            });
+
+            // Page size change handler
+            $('#pageSizeSelect').on('change', function() {
+                const pageSize = $(this).val();
+                const currentPage = @Model?.CurrentPage ?? 1;
+                window.location.href = '@Url.Action("Blocks", "Blockchain")?page=' + currentPage + '&pageSize=' + pageSize;
             });
         });
     </script>

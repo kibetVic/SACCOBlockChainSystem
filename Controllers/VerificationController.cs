@@ -129,15 +129,19 @@ namespace SACCOBlockChainSystem.Controllers
                     return Json(new { success = false, message = "Transaction not found" });
                 }
 
+                // Get member and wallet info
                 var member = transaction.MemberNoNavigation;
                 var wallet = await _cryptoService.GetWalletByMemberNoAsync(transaction.MemberNo);
 
+                // Build response
                 var verificationResult = new
                 {
                     success = true,
                     isValid = result.IsValid,
                     signatureValid = result.SignatureValid,
                     chainValid = result.ChainValid,
+                    isGenesisTransaction = result.IsGenesisTransaction,
+                    genesisAnchor = result.GenesisAnchor,
                     message = result.Message,
                     transaction = new
                     {
@@ -159,7 +163,8 @@ namespace SACCOBlockChainSystem.Controllers
                         name = member != null ? $"{member.Surname} {member.OtherNames}" : "Unknown",
                         idNo = member?.Idno,
                         phone = member?.PhoneNo,
-                        walletAddress = wallet?.Address
+                        walletAddress = wallet?.Address,
+                        hasWallet = wallet != null
                     }
                 };
 
@@ -171,6 +176,152 @@ namespace SACCOBlockChainSystem.Controllers
                 return Json(new { success = false, message = ex.Message });
             }
         }
+
+        // POST: /Verification/VerifyMemberChain
+        [HttpPost]
+        public async Task<IActionResult> VerifyMemberChain([FromBody] VerifyChainRequest request)
+        {
+            try
+            {
+                _logger.LogInformation($"Verifying member chain for: {request.MemberNo}");
+
+                var result = await _cryptoService.VerifyMemberChainWithGenesisAsync(request.MemberNo);
+
+                // Get detailed transaction status
+                var transactions = await _context.Contribs
+                    .Where(c => c.MemberNo == request.MemberNo)
+                    .OrderBy(c => c.Id)
+                    .ToListAsync();
+
+                var transactionStatuses = new List<object>();
+                string previousHash = null;
+                bool isFirst = true;
+                var wallet = await _cryptoService.GetWalletByMemberNoAsync(request.MemberNo);
+
+                for (int i = 0; i < transactions.Count; i++)
+                {
+                    var tx = transactions[i];
+
+                    // Check chain link
+                    bool chainLinked;
+                    if (isFirst)
+                    {
+                        // First transaction - link to wallet address
+                        chainLinked = tx.PreviousTransactionHash == wallet?.Address;
+                    }
+                    else
+                    {
+                        // Subsequent transactions - link to previous hash
+                        chainLinked = tx.PreviousTransactionHash == previousHash;
+                    }
+
+                    bool sigValid = tx.IsSignatureVerified ?? false;
+
+                    transactionStatuses.Add(new
+                    {
+                        id = tx.Id,
+                        receiptNo = tx.ReceiptNo,
+                        amount = tx.Amount,
+                        date = tx.ContrDate,
+                        previousHash = tx.PreviousTransactionHash,
+                        transactionHash = tx.TransactionHash,
+                        isSignatureValid = sigValid,
+                        isChainLinked = chainLinked,
+                        isGenesis = isFirst,
+                        status = (sigValid && chainLinked) ? "✅ Valid" :
+                                 (sigValid ? "⚠️ Chain Broken" :
+                                 (chainLinked ? "❌ Invalid Signature" : "❌ Both Invalid")),
+                        statusColor = (sigValid && chainLinked) ? "success" :
+                                     (sigValid ? "warning" : "danger")
+                    });
+
+                    previousHash = tx.TransactionHash;
+                    isFirst = false;
+                }
+
+                return Json(new
+                {
+                    success = true,
+                    isValid = result.IsValid,
+                    totalTransactions = result.TotalTransactions,
+                    validSignatures = result.ValidSignatures,
+                    failedTransactionIds = result.FailedTransactionIds,
+                    brokenChainIds = result.BrokenChainIds,
+                    genesisAnchor = result.GenesisAnchor,
+                    isFirstTransactionValid = result.IsFirstTransactionValid,
+                    message = result.Message,
+                    transactions = transactionStatuses
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error verifying member chain for {request.MemberNo}");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        //// POST: /Verification/VerifyTransaction
+        //[HttpPost]
+        //public async Task<IActionResult> VerifyTransaction([FromBody] VerifyTransactionRequest request)
+        //{
+        //    try
+        //    {
+        //        _logger.LogInformation($"Verifying transaction ID: {request.TransactionId}");
+
+        //        var result = await _cryptoService.VerifyTransactionAsync(request.TransactionId);
+
+        //        // Get transaction details for response
+        //        var transaction = await _context.Contribs
+        //            .Include(c => c.MemberNoNavigation)
+        //            .FirstOrDefaultAsync(c => c.Id == request.TransactionId);
+
+        //        if (transaction == null)
+        //        {
+        //            return Json(new { success = false, message = "Transaction not found" });
+        //        }
+
+        //        var member = transaction.MemberNoNavigation;
+        //        var wallet = await _cryptoService.GetWalletByMemberNoAsync(transaction.MemberNo);
+
+        //        var verificationResult = new
+        //        {
+        //            success = true,
+        //            isValid = result.IsValid,
+        //            signatureValid = result.SignatureValid,
+        //            chainValid = result.ChainValid,
+        //            message = result.Message,
+        //            transaction = new
+        //            {
+        //                id = transaction.Id,
+        //                receiptNo = transaction.ReceiptNo,
+        //                amount = transaction.Amount,
+        //                date = transaction.ContrDate,
+        //                shareType = transaction.Sharescode,
+        //                signature = transaction.TransactionSignature?.Substring(0, Math.Min(50, transaction.TransactionSignature?.Length ?? 0)) + "...",
+        //                hash = transaction.TransactionHash,
+        //                previousHash = transaction.PreviousTransactionHash,
+        //                sequence = transaction.TransactionSequence,
+        //                isVerified = transaction.IsSignatureVerified,
+        //                verifiedAt = transaction.SignatureVerifiedAt
+        //            },
+        //            member = new
+        //            {
+        //                memberNo = member?.MemberNo,
+        //                name = member != null ? $"{member.Surname} {member.OtherNames}" : "Unknown",
+        //                idNo = member?.Idno,
+        //                phone = member?.PhoneNo,
+        //                walletAddress = wallet?.Address
+        //            }
+        //        };
+
+        //        return Json(verificationResult);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"Error verifying transaction {request.TransactionId}");
+        //        return Json(new { success = false, message = ex.Message });
+        //    }
+        //}
 
         // GET: /Verification/Transaction/{id}
         public async Task<IActionResult> Transaction(int id)
@@ -292,63 +443,63 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
 
-        // POST: /Verification/VerifyMemberChain
-        [HttpPost]
-        public async Task<IActionResult> VerifyMemberChain([FromBody] VerifyChainRequest request)
-        {
-            try
-            {
-                _logger.LogInformation($"Verifying member chain for: {request.MemberNo}");
+        //// POST: /Verification/VerifyMemberChain
+        //[HttpPost]
+        //public async Task<IActionResult> VerifyMemberChain([FromBody] VerifyChainRequest request)
+        //{
+        //    try
+        //    {
+        //        _logger.LogInformation($"Verifying member chain for: {request.MemberNo}");
 
-                var result = await _cryptoService.VerifyMemberChainWithGenesisAsync(request.MemberNo);
+        //        var result = await _cryptoService.VerifyMemberChainWithGenesisAsync(request.MemberNo);
 
-                // Get detailed transaction status
-                var transactions = await _context.Contribs
-                    .Where(c => c.MemberNo == request.MemberNo)
-                    .OrderBy(c => c.Id)
-                    .ToListAsync();
+        //        // Get detailed transaction status
+        //        var transactions = await _context.Contribs
+        //            .Where(c => c.MemberNo == request.MemberNo)
+        //            .OrderBy(c => c.Id)
+        //            .ToListAsync();
 
-                var transactionStatuses = new List<object>();
-                string previousHash = null;
+        //        var transactionStatuses = new List<object>();
+        //        string previousHash = null;
 
-                for (int i = 0; i < transactions.Count; i++)
-                {
-                    var tx = transactions[i];
-                    bool chainLinked = (i == 0) || (tx.PreviousTransactionHash == previousHash);
-                    bool sigValid = tx.IsSignatureVerified ?? false;
+        //        for (int i = 0; i < transactions.Count; i++)
+        //        {
+        //            var tx = transactions[i];
+        //            bool chainLinked = (i == 0) || (tx.PreviousTransactionHash == previousHash);
+        //            bool sigValid = tx.IsSignatureVerified ?? false;
 
-                    transactionStatuses.Add(new
-                    {
-                        id = tx.Id,
-                        receiptNo = tx.ReceiptNo,
-                        amount = tx.Amount,
-                        date = tx.ContrDate,
-                        isSignatureValid = sigValid,
-                        isChainLinked = chainLinked,
-                        status = (sigValid && chainLinked) ? "✅ Valid" : (sigValid ? "⚠️ Chain Broken" : "❌ Invalid"),
-                        statusColor = (sigValid && chainLinked) ? "success" : (sigValid ? "warning" : "danger")
-                    });
+        //            transactionStatuses.Add(new
+        //            {
+        //                id = tx.Id,
+        //                receiptNo = tx.ReceiptNo,
+        //                amount = tx.Amount,
+        //                date = tx.ContrDate,
+        //                isSignatureValid = sigValid,
+        //                isChainLinked = chainLinked,
+        //                status = (sigValid && chainLinked) ? "✅ Valid" : (sigValid ? "⚠️ Chain Broken" : "❌ Invalid"),
+        //                statusColor = (sigValid && chainLinked) ? "success" : (sigValid ? "warning" : "danger")
+        //            });
 
-                    previousHash = tx.TransactionHash;
-                }
+        //            previousHash = tx.TransactionHash;
+        //        }
 
-                return Json(new
-                {
-                    success = true,
-                    isValid = result.IsValid,
-                    totalTransactions = result.TotalTransactions,
-                    validSignatures = result.ValidSignatures,
-                    failedTransactionIds = result.FailedTransactionIds,
-                    message = result.Message,
-                    transactions = transactionStatuses
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error verifying member chain for {request.MemberNo}");
-                return Json(new { success = false, message = ex.Message });
-            }
-        }
+        //        return Json(new
+        //        {
+        //            success = true,
+        //            isValid = result.IsValid,
+        //            totalTransactions = result.TotalTransactions,
+        //            validSignatures = result.ValidSignatures,
+        //            failedTransactionIds = result.FailedTransactionIds,
+        //            message = result.Message,
+        //            transactions = transactionStatuses
+        //        });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"Error verifying member chain for {request.MemberNo}");
+        //        return Json(new { success = false, message = ex.Message });
+        //    }
+        //}
     }
 
     public class VerifyTransactionRequest

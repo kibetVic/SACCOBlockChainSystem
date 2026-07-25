@@ -17,7 +17,7 @@
                 </div>
 
                 <div class="card-body">
-                    <!-- Display validation summary -->
+                    @* <!-- Display validation summary -->
                     @if (!ViewData.ModelState.IsValid)
                     {
                         <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -35,7 +35,7 @@
                             </ul>
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
-                    }
+                    } *@
 
                     <!-- Success Message -->
                     @if (TempData["SuccessMessage"] != null)

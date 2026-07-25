@@ -61,7 +61,7 @@
 
                         <div class="mb-3">
                             <label asp-for="TemplateContent" class="form-label fw-bold">Template Content *</label>
-                            <textarea asp-for="TemplateContent" class="form-control" rows="4"
+                            <textarea asp-for="TemplateContent" class="form-control" rows="4" id="TemplateContent"
                                       placeholder="Enter your SMS template with placeholders like {{FullName}}, {{MemberNo}}, etc."></textarea>
                             <span asp-validation-for="TemplateContent" class="text-danger"></span>
                             <small class="text-muted">
@@ -69,6 +69,39 @@
                                 Use <code>{{PlaceholderName}}</code> for dynamic content. Character count: <span id="charCount">0</span> / 160
                                 <span id="smsCount" class="ms-2"></span>
                             </small>
+                        </div>
+
+                        <!-- AGM Custom Fields (Hidden by default) -->
+                        <div id="agmCustomFields" style="display: none;" class="mb-3">
+                            <div class="card bg-light">
+                                <div class="card-header bg-info text-white">
+                                    <i class="bi bi-calendar-event me-2"></i>AGM Details
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-bold">AGM Date</label>
+                                            <input type="date" id="agmDate" class="form-control" />
+                                        </div>
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-bold">AGM Time</label>
+                                            <input type="time" id="agmTime" class="form-control" />
+                                        </div>
+                                        <div class="col-md-12 mb-2">
+                                            <label class="form-label fw-bold">Venue</label>
+                                            <input type="text" id="agmVenue" class="form-control" placeholder="Enter AGM venue" />
+                                        </div>
+                                        <div class="col-md-12">
+                                            <button type="button" class="btn btn-success btn-sm" onclick="insertAGMPlaceholders()">
+                                                <i class="bi bi-check-circle"></i> Insert AGM Details into Template
+                                            </button>
+                                            <button type="button" class="btn btn-secondary btn-sm" onclick="clearAGMFields()">
+                                                <i class="bi bi-x-circle"></i> Clear
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -282,6 +315,9 @@
                 updateCharacterCount();
             });
             updateCharacterCount();
+
+            // Hide AGM fields initially
+            $('#agmCustomFields').hide();
         });
 
         function updateCharacterCount() {
@@ -304,6 +340,9 @@
             let templateName = '';
             let templateContent = '';
             let description = '';
+
+            // Hide AGM fields by default
+            $('#agmCustomFields').hide();
 
             switch(type) {
                 case 'welcome':
@@ -372,8 +411,20 @@
                 case 'agm_notification':
                     templateCode = 'AGM_NOTIFICATION';
                     templateName = 'AGM Notification';
-                    description = 'Notification for Annual General Meeting';
-                    templateContent = 'Dear {{FullName}}, you are invited to the {{CompanyName}} Annual General Meeting on {{Date}} at {{Time}}. Venue: {{Venue}}. Your attendance is highly valued.';
+                    description = 'Notification for Annual General Meeting - Enter date, time, and venue';
+                    templateContent = 'Dear {{FullName}}, you are invited to the {{CompanyName}} Annual General Meeting on {{AGMDate}} at {{AGMTime}}. Venue: {{AGMVenue}}. Your attendance is highly valued.';
+
+                    // Show AGM custom fields and pre-fill with current date/time for convenience
+                    $('#agmCustomFields').show();
+
+                    // Pre-fill with current date and time (user can change these)
+                    const now = new Date();
+                    const today = now.toISOString().split('T')[0];
+                    const currentTime = now.toTimeString().substring(0, 5);
+
+                    $('#agmDate').val(today);
+                    $('#agmTime').val(currentTime);
+                    $('#agmVenue').val('{{CompanyName}} Main Hall');
                     break;
 
                 case 'dividend':
@@ -402,6 +453,87 @@
 
             // Highlight the template content
             $('#TemplateContent').focus();
+        }
+
+        // Function to insert AGM placeholders into the template
+        function insertAGMPlaceholders() {
+            const agmDate = $('#agmDate').val();
+            const agmTime = $('#agmTime').val();
+            const agmVenue = $('#agmVenue').val();
+
+            if (!agmDate || !agmTime || !agmVenue) {
+                alert('Please fill in all AGM details (Date, Time, and Venue)');
+                return;
+            }
+
+            // Format date for display (e.g., 25th December 2024)
+            const formattedDate = formatDate(agmDate);
+
+            // Get current template content
+            let content = $('#TemplateContent').val();
+
+            // Replace placeholders with actual values (or keep as placeholders)
+            // Option 1: Replace with actual values
+            // content = content.replace('{{AGMDate}}', formattedDate);
+            // content = content.replace('{{AGMTime}}', agmTime);
+            // content = content.replace('{{AGMVenue}}', agmVenue);
+
+            // Option 2: Keep as placeholders (recommended - so they can be replaced dynamically when sending)
+            // The template will keep {{AGMDate}}, {{AGMTime}}, {{AGMVenue}}
+            // and they will be replaced when the SMS is sent
+
+            // Show a message to the user
+            alert(`AGM Details set:\nDate: ${formattedDate}\nTime: ${agmTime}\nVenue: ${agmVenue}\n\nThese will be used as placeholders {{AGMDate}}, {{AGMTime}}, {{AGMVenue}} in the template.`);
+
+            // Update the template content to include the placeholders if they don't exist
+            if (!content.includes('{{AGMDate}}')) {
+                // Append a note or update content
+                content = content + '\n\nAGM Details: {{AGMDate}} at {{AGMTime}}, Venue: {{AGMVenue}}';
+                $('#TemplateContent').val(content);
+                updateCharacterCount();
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString + 'T00:00:00');
+            const day = date.getDate();
+            const month = date.toLocaleString('default', { month: 'long' });
+            const year = date.getFullYear();
+
+            // Add ordinal suffix to day
+            let suffix = 'th';
+            if (day === 1 || day === 21 || day === 31) suffix = 'st';
+            else if (day === 2 || day === 22) suffix = 'nd';
+            else if (day === 3 || day === 23) suffix = 'rd';
+
+            return `${day}${suffix} ${month} ${year}`;
+        }
+
+        function clearAGMFields() {
+            $('#agmDate').val('');
+            $('#agmTime').val('');
+            $('#agmVenue').val('');
+            alert('AGM fields cleared');
+        }
+
+        // Function to insert placeholders into template
+        function insertPlaceholder(placeholder) {
+            const textarea = $('#TemplateContent');
+            const cursorPos = textarea.prop('selectionStart');
+            const content = textarea.val();
+
+            const before = content.substring(0, cursorPos);
+            const after = content.substring(cursorPos);
+
+            textarea.val(before + placeholder + after);
+            textarea.focus();
+
+            // Set cursor position after the inserted text
+            const newPos = cursorPos + placeholder.length;
+            textarea.prop('selectionStart', newPos);
+            textarea.prop('selectionEnd', newPos);
+
+            updateCharacterCount();
         }
     </script>
 }

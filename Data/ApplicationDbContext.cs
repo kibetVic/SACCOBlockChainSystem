@@ -67,7 +67,10 @@ namespace SACCOBlockChainSystem.Data
         public DbSet<SmsTemplate> SmsTemplates { get; set; }
         public DbSet<SmsSetting> SmsSettings { get; set; }
         public DbSet<JournalsListing> JournalsListings { get; set; }
-        public DbSet<AssetsRegister> AssetsRegisters { get; set; }
+        public DbSet<AssetsRegister> AssetsRegister { get; set; }
+        public DbSet<Supplier> Suppliers { get; set; }
+        public DbSet<InvoiceReceive> InvoiceReceive { get; set; }
+        public DbSet<InvoicePayment> InvoicePayments { get; set; }
         public DbSet<County> Counties { get; set; }
         public DbSet<SubCounty> SubCounties { get; set; }
         public DbSet<Ward> Wards { get; set; }
@@ -220,6 +223,15 @@ namespace SACCOBlockChainSystem.Data
                 .HasForeignKey(n => new { n.MemberNo, n.CompanyCode })
                 .HasPrincipalKey(m => new { m.MemberNo, m.CompanyCode });
 
+            modelBuilder.Entity<Collateral>(entity =>
+            {
+                entity.HasOne(c => c.Member)
+                    .WithMany() // Member doesn't have a collection of Collaterals
+                    .HasForeignKey(c => new { c.MemberNo, c.CompanyCode })
+                    .HasPrincipalKey(m => new { m.MemberNo, m.CompanyCode })
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
             // Configure GIGs - Company relationship
             modelBuilder.Entity<GIGs>(entity =>
             {
@@ -357,6 +369,32 @@ namespace SACCOBlockChainSystem.Data
                 entity.Property(e => e.Interest).HasPrecision(5, 4); // For percentages like 0.1250
                 entity.Property(e => e.ElseRatio).HasPrecision(5, 4);
             });
+
+            // Supplier - InvoiceReceive relationship
+            modelBuilder.Entity<InvoiceReceive>()
+                .HasOne(i => i.Supplier)
+                .WithMany(s => s.Invoices)
+                .HasForeignKey(i => i.SupplierCode)
+                .HasPrincipalKey(s => s.SupplierCode)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // InvoiceReceive - InvoicePayment relationship
+            // FIX: Configure the relationship using InvoiceNo as the principal key
+            modelBuilder.Entity<InvoicePayment>()
+                .HasOne(p => p.Invoice)
+                .WithMany(i => i.Payments)
+                .HasForeignKey(p => p.InvoiceNo)
+                .HasPrincipalKey(i => i.InvoiceNo)  
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Supplier - InvoicePayment relationship
+            modelBuilder.Entity<InvoicePayment>()
+                .HasOne(p => p.Supplier)
+                .WithMany(s => s.Payments)
+                .HasForeignKey(p => p.SupplierId)
+                .HasPrincipalKey(s => s.SupplierCode)
+                .OnDelete(DeleteBehavior.Restrict);
+
 
             // Add indexes for performance
             modelBuilder.Entity<Member>().HasIndex(m => m.MemberNo).IsUnique();

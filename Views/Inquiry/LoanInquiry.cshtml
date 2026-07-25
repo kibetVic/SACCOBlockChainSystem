@@ -1,39 +1,1160 @@
-﻿@{
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanInquiryResponseDTO
+
+@{
     ViewData["Title"] = "Loan Inquiry";
     Layout = "~/Views/Shared/_Layout.cshtml";
+    var hasResults = Model != null && Model.MemberNo != null;
+}
+
+<!-- Error Messages -->
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
 }
 
 <div class="card">
-    <div class="card-header">
+    <div class="card-header bg-primary text-white">
         <h3 class="card-title">
             <i class="bi bi-cash-stack"></i> Loan Portfolio Inquiry
         </h3>
         <div class="card-tools">
-            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+            <button type="button" class="btn btn-tool text-white" data-card-widget="collapse">
                 <i class="bi bi-dash"></i>
             </button>
         </div>
     </div>
     <div class="card-body">
-        <form asp-action="LoanInquiry" method="post">
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label for="memberNo" class="control-label">Member Number</label>
-                        <input type="text" id="memberNo" name="memberNo" class="form-control"
-                               placeholder="Enter Member Number" required />
-                        <span class="text-muted">Enter the member number to view loan details</span>
-                    </div>
+        <!-- Member Search Section -->
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <label class="fw-bold">Search Member</label>
+                <div class="input-group">
+                    <input type="text" id="searchInput" class="form-control form-control-lg"
+                           placeholder="Search by Member Number, Name, ID Number, or Phone Number..." />
+                    <button type="button" class="btn btn-primary" onclick="searchMembers()">
+                        <i class="bi bi-search"></i> Search
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="clearSearch()">
+                        <i class="bi bi-x-lg"></i> Clear
+                    </button>
                 </div>
-                <div class="col-md-3">
-                    <div class="form-group">
-                        <label>&nbsp;</label>
-                        <button type="submit" class="btn btn-primary form-control">
-                            <i class="bi bi-search"></i> Search
+                <small class="text-muted">Enter at least 3 characters to search</small>
+            </div>
+        </div>
+
+        <!-- Search Results -->
+        <div id="searchResults" style="display: none;" class="mb-3">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Select</th>
+                            <th>Member No</th>
+                            <th>Full Name</th>
+                            <th>ID Number</th>
+                            <th>Phone Number</th>
+                        </tr>
+                    </thead>
+                    <tbody id="searchResultsBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="searchLoading" style="display: none;" class="text-center p-3">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Searching for members...</p>
+        </div>
+
+        <!-- Selected Member Display -->
+        <div id="selectedMemberCard" style="display: @(hasResults ? "block" : "none");" class="mb-3">
+            <div class="alert alert-success">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-check-circle-fill"></i>
+                        <strong>Selected Member:</strong>
+                        <span id="selectedMemberName">@(hasResults ? Model.MemberName : "")</span>
+                        <br />
+                        <small>
+                            <span id="selectedMemberNoDisplay">@(hasResults ? Model.MemberNo : "")</span> |
+                            ID: <span id="selectedMemberIdNo">@(hasResults ? Model.MemberIdNo : "N/A")</span> |
+                            Phone: <span id="selectedMemberPhone">@(hasResults ? Model.MemberPhone : "N/A")</span>
+                        </small>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-primary me-1" onclick="inquireLoans()">
+                            <i class="bi bi-search"></i> Inquire Loans
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearSelectedMember()">
+                            <i class="bi bi-arrow-left"></i> Change
                         </button>
                     </div>
                 </div>
             </div>
-        </form>
+        </div>
+
+        <input type="hidden" id="selectedMemberNo" name="memberNo" value="@(hasResults ? Model.MemberNo : "")" />
     </div>
 </div>
+
+<!-- Results Section -->
+<div id="loanResultsContainer">
+    @if (hasResults)
+    {
+        <div id="loanResults">
+            @await Html.PartialAsync("_LoanInquiryResults", Model)
+        </div>
+    }
+    else
+    {
+        <div id="loanResults" style="display: none;"></div>
+    }
+</div>
+
+<!-- Loan Details Modal -->
+<div class="modal fade" id="loanDetailsModal" tabindex="-1" aria-labelledby="loanDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="loanDetailsModalLabel">
+                    <i class="bi bi-file-text"></i> Loan Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="loanDetailsBody">
+                <div class="text-center p-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading loan details...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+               @*  <button type="button" class="btn btn-primary" onclick="window.print()">
+                    <i class="bi bi-printer"></i> Print
+                </button> *@
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let selectedMemberData = null;
+        let isMemberSelected = @(hasResults ? "true" : "false");
+        let isLoading = false;
+
+        // Status mapping - handles both integer and string status values
+        function getStatusBadge(status) {
+            // Define the status mapping
+            const statusMap = {
+                // Integer values from enum
+                1: { text: 'Draft', class: 'bg-secondary' },
+                2: { text: 'Submitted', class: 'bg-info' },
+                3: { text: 'Under Appraisal', class: 'bg-warning' },
+                4: { text: 'Approved', class: 'bg-primary' },
+                5: { text: 'Endorsed', class: 'bg-success' },
+                6: { text: 'Disbursed', class: 'bg-success' },
+                7: { text: 'Closed', class: 'bg-secondary' },
+                8: { text: 'Defaulted', class: 'bg-danger' },
+                9: { text: 'Written Off', class: 'bg-danger' },
+                10: { text: 'Rejected', class: 'bg-danger' },
+                // String values that might come from API
+                'Draft': { text: 'Draft', class: 'bg-secondary' },
+                'Submitted': { text: 'Submitted', class: 'bg-info' },
+                'Under Appraisal': { text: 'Under Appraisal', class: 'bg-warning' },
+                'UnderAppraisal': { text: 'Under Appraisal', class: 'bg-warning' },
+                'Approved': { text: 'Approved', class: 'bg-primary' },
+                'Endorsed': { text: 'Endorsed', class: 'bg-success' },
+                'Disbursed': { text: 'Disbursed', class: 'bg-success' },
+                'Closed': { text: 'Closed', class: 'bg-secondary' },
+                'Defaulted': { text: 'Defaulted', class: 'bg-danger' },
+                'Written Off': { text: 'Written Off', class: 'bg-danger' },
+                'WrittenOff': { text: 'Written Off', class: 'bg-danger' },
+                'Rejected': { text: 'Rejected', class: 'bg-danger' }
+            };
+
+            // Try to match the status
+            let info = null;
+            
+            // If status is null or undefined
+            if (status == null) {
+                info = { text: 'Unknown', class: 'bg-secondary' };
+            }
+            // Try as integer
+            else if (typeof status === 'number') {
+                info = statusMap[status] || { text: 'Unknown (' + status + ')', class: 'bg-secondary' };
+            }
+            // Try as string
+            else if (typeof status === 'string') {
+                // Try exact match
+                info = statusMap[status] || 
+                       // Try with spaces removed
+                       statusMap[status.replace(/\s/g, '')] ||
+                       // Try to parse as integer
+                       (function() {
+                           const num = parseInt(status);
+                           if (!isNaN(num)) {
+                               return statusMap[num] || null;
+                           }
+                           return null;
+                       })() ||
+                       { text: status, class: 'bg-secondary' };
+            }
+            // Fallback
+            else {
+                info = { text: 'Unknown', class: 'bg-secondary' };
+            }
+
+            return `<span class="badge ${info.class}">${info.text}</span>`;
+        }
+
+        function getStatusText(status) {
+            const statusMap = {
+                1: 'Draft',
+                2: 'Submitted',
+                3: 'Under Appraisal',
+                4: 'Approved',
+                5: 'Endorsed',
+                6: 'Disbursed',
+                7: 'Closed',
+                8: 'Defaulted',
+                9: 'Written Off',
+                10: 'Rejected',
+                'Draft': 'Draft',
+                'Submitted': 'Submitted',
+                'Under Appraisal': 'Under Appraisal',
+                'Approved': 'Approved',
+                'Endorsed': 'Endorsed',
+                'Disbursed': 'Disbursed',
+                'Closed': 'Closed',
+                'Defaulted': 'Defaulted',
+                'Written Off': 'Written Off',
+                'Rejected': 'Rejected'
+            };
+
+            if (status == null) return 'Unknown';
+            if (typeof status === 'number') return statusMap[status] || 'Unknown';
+            if (typeof status === 'string') {
+                return statusMap[status] || statusMap[status.replace(/\s/g, '')] || status;
+            }
+            return 'Unknown';
+        }
+
+        function formatDate(dateValue) {
+            if (!dateValue) return 'N/A';
+            try {
+                if (typeof dateValue === 'string') {
+                    // Check if it's a date string like "2018-04-26T00:00:00"
+                    const parsed = new Date(dateValue);
+                    if (!isNaN(parsed.getTime())) {
+                        return parsed.toLocaleDateString('en-US', { 
+                            year: 'numeric', 
+                            month: 'short', 
+                            day: '2-digit' 
+                        });
+                    }
+                    return dateValue;
+                }
+                if (dateValue instanceof Date) {
+                    return dateValue.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: '2-digit' 
+                    });
+                }
+                return 'N/A';
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+
+        function isActiveStatus(status) {
+            const statusText = getStatusText(status);
+            // Active loans: Disbursed (6) or Endorsed (5)
+            return statusText === 'Disbursed' || statusText === 'Endorsed';
+        }
+
+        function isClosedStatus(status) {
+            const statusText = getStatusText(status);
+            return statusText === 'Closed';
+        }
+
+        $(document).ready(function() {
+            // Initialize DataTables for tables with many rows
+            @if (hasResults)
+            {
+                <text>
+                try {
+                    if ($.fn.DataTable.isDataTable('#loanTable')) {
+                        $('#loanTable').DataTable().destroy();
+                    }
+                    $('#loanTable').DataTable({
+                        "order": [[5, "desc"]],
+                        "pageLength": 10,
+                        "responsive": true,
+                        "language": {
+                            "search": "Search Loans:"
+                        }
+                    });
+                } catch (e) {
+                    console.log('DataTable initialization error:', e);
+                }
+                </text>
+            }
+
+            // Auto-search when typing (debounced)
+            let searchTimeout;
+            $('#searchInput').on('input', function() {
+                clearTimeout(searchTimeout);
+                const searchTerm = $(this).val().trim();
+                if (searchTerm.length >= 3) {
+                    searchTimeout = setTimeout(function() {
+                        searchMembers();
+                    }, 500);
+                } else if (searchTerm.length === 0) {
+                    clearSearch();
+                }
+            });
+
+            // Search input enter key
+            $('#searchInput').on('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchMembers();
+                }
+            });
+
+            // If member is pre-selected (from URL or model), load data
+            @if (hasResults)
+            {
+                <text>
+                // Data is already loaded from server
+                console.log('Pre-loaded member data available');
+                </text>
+            }
+            else
+            {
+                <text>
+                // Check if memberNo is in URL query string
+                const urlParams = new URLSearchParams(window.location.search);
+                const memberNoParam = urlParams.get('memberNo');
+                if (memberNoParam) {
+                    $('#selectedMemberNo').val(memberNoParam);
+                    selectMember(memberNoParam);
+                }
+                </text>
+            }
+        });
+
+        async function searchMembers() {
+            const searchTerm = $('#searchInput').val().trim();
+            if (searchTerm.length < 3) {
+                Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
+                return;
+            }
+
+            $('#searchLoading').show();
+            $('#searchResults').hide();
+            $('#searchResultsBody').html('');
+
+            try {
+                const response = await fetch(`/api/Member/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    $('#searchResultsBody').html(`<tr><td colspan="7" class="text-center text-danger">Error: ${errorData.message || 'Error searching members'}</td></tr>`);
+                    $('#searchResults').show();
+                    $('#searchLoading').hide();
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Search results:', data);
+
+                if (data.success && data.data && data.data.length > 0) {
+                    displaySearchResults(data.data);
+                } else {
+                    $('#searchResultsBody').html('<tr><td colspan="7" class="text-center text-warning">No members found matching your search</td></tr>');
+                    $('#searchResults').show();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                $('#searchResultsBody').html(`<tr><td colspan="7" class="text-center text-danger">Error searching members: ${error.message}</td></tr>`);
+                $('#searchResults').show();
+            } finally {
+                $('#searchLoading').hide();
+            }
+        }
+
+        function displaySearchResults(members) {
+            const tbody = $('#searchResultsBody');
+            tbody.empty();
+
+            members.forEach(member => {
+                const statusBadge = member.status == 1 ?
+                    '<span class="badge bg-success">Active</span>' :
+                    '<span class="badge bg-danger">Inactive</span>';
+
+                const fullName = (member.surname || '') + ' ' + (member.otherNames || '');
+                const phone = member.phoneNo || 'N/A';
+
+                const row = `
+                    <tr>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-success" onclick="selectMember('${member.memberNo}')">
+                                <i class="bi bi-check-lg"></i> Select
+                            </button>
+                        </td>
+                        <td><strong>${escapeHtml(member.memberNo)}</strong></td>
+                        <td>${escapeHtml(fullName.trim() || member.memberNo)}</td>
+                        <td>${escapeHtml(member.idno || 'N/A')}</td>
+                        <td>${escapeHtml(phone)}</td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            $('#searchResults').show();
+        }
+
+        async function selectMember(memberNo) {
+            if (isLoading) return;
+            isLoading = true;
+
+            try {
+                // First, get member details
+                const response = await fetch(`/api/Member/${memberNo}`);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    Swal.fire('Error', `Failed to fetch member details: ${response.status}`, 'error');
+                    isLoading = false;
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Member data:', data);
+
+                if (data.success && data.data) {
+                    selectedMemberData = data.data;
+                    isMemberSelected = true;
+
+                    $('#selectedMemberNo').val(memberNo);
+
+                    const fullName = (selectedMemberData.surname || '') + ' ' + (selectedMemberData.otherNames || '');
+                    $('#selectedMemberName').html(`<strong>${escapeHtml(fullName.trim() || memberNo)}</strong>`);
+                    $('#selectedMemberNoDisplay').html(memberNo);
+                    $('#selectedMemberIdNo').html(selectedMemberData.idno || 'N/A');
+                    $('#selectedMemberPhone').html(selectedMemberData.phoneNo || 'N/A');
+
+                    $('#selectedMemberCard').show();
+                    $('#searchResults').hide();
+                    $('#searchInput').val('');
+
+                    Swal.fire('Success', 'Member selected successfully!', 'success');
+
+                    // LOAD LOAN DATA VIA AJAX
+                    await loadLoanDataAjax(memberNo);
+                } else {
+                    Swal.fire('Error', data.message || 'Failed to load member details', 'error');
+                }
+            } catch (error) {
+                console.error('Error selecting member:', error);
+                Swal.fire('Error', 'Error selecting member: ' + error.message, 'error');
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        async function loadLoanDataAjax(memberNo) {
+            if (!memberNo) {
+                Swal.fire('Error', 'Please select a member first', 'error');
+                return;
+            }
+
+            // Show loading
+            $('#loanResults').html(`
+                <div class="text-center p-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading loan information...</p>
+                </div>
+            `).show();
+
+            try {
+                // Fetch loan data via API
+                const response = await fetch(`/api/Inquiry/loan/${encodeURIComponent(memberNo)}`);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    $('#loanResults').html(`
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            Failed to load loan information: ${response.status}
+                        </div>
+                    `);
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Loan data from API:', data);
+
+                if (data.success && data.data) {
+                    displayLoanResults(data.data);
+                } else {
+                    $('#loanResults').html(`
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            ${data.message || 'No loan information found for this member'}
+                        </div>
+                    `);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                $('#loanResults').html(`
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        Error loading loan information: ${error.message}
+                    </div>
+                `);
+            }
+        }
+
+        function displayLoanResults(data) {
+            // Build HTML for loan results
+            let html = buildLoanResultsHtml(data);
+            $('#loanResults').html(html).show();
+
+            // Initialize DataTable
+            try {
+                if ($.fn.DataTable.isDataTable('#loanTable')) {
+                    $('#loanTable').DataTable().destroy();
+                }
+                $('#loanTable').DataTable({
+                    "order": [[5, "desc"]],
+                    "pageLength": 10,
+                    "responsive": true,
+                    "language": {
+                        "search": "Search Loans:"
+                    }
+                });
+            } catch (e) {
+                console.log('DataTable initialization error:', e);
+            }
+        }
+
+        function buildLoanResultsHtml(data) {
+            // Calculate totals from loans data
+            let totalLoanAmount = 0;
+            let activeLoanCount = 0;
+            let closedLoanCount = 0;
+            let totalOutstandingBalance = 0;
+
+            if (data.loans && data.loans.length > 0) {
+                data.loans.forEach(loan => {
+                    totalLoanAmount += parseFloat(loan.loanAmt || loan.principalAmount || 0);
+                    totalOutstandingBalance += parseFloat(loan.aamount || loan.outstandingBalance || 0);
+                    
+                    // Check if status is active (Disbursed or Endorsed)
+                    if (isActiveStatus(loan.status)) {
+                        activeLoanCount++;
+                    }
+                    // Check if status is closed
+                    if (isClosedStatus(loan.status)) {
+                        closedLoanCount++;
+                    }
+                });
+            }
+
+            let html = `
+                <!-- Member Information Card -->
+                <div class="card mt-3">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="card-title mb-0">
+                            <i class="bi bi-person-badge"></i> Member Information
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="info-box bg-light">
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Member Number</span>
+                                        <span class="info-box-number">${escapeHtml(data.memberNo || 'N/A')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="info-box bg-light">
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Member Name</span>
+                                        <span class="info-box-number">${escapeHtml(data.memberName || 'N/A')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="info-box bg-light">
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Inquiry Date</span>
+                                        <span class="info-box-number">${new Date().toLocaleString()}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Statistics -->
+                <div class="row mt-3">
+                    <div class="col-md-3">
+                        <div class="small-box bg-info">
+                            <div class="inner">
+                                <h3>${formatCurrency(totalLoanAmount)}</h3>
+                                <p>Total Loan Amount</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-cash-stack"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-warning">
+                            <div class="inner">
+                                <h3>${activeLoanCount}</h3>
+                                <p>Active Loans</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-clock-history"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-success">
+                            <div class="inner">
+                                <h3>${closedLoanCount}</h3>
+                                <p>Closed Loans</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-check-circle"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-danger">
+                            <div class="inner">
+                                <h3>${formatCurrency(totalOutstandingBalance)}</h3>
+                                <p>Outstanding Balance</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-exclamation-circle"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            // Loan Summary Table
+            if (data.loans && data.loans.length > 0) {
+                html += `
+                    <div class="card mt-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-table"></i> Loan Summary (${data.loans.length} loans)
+                            </h5>
+                            <div class="card-tools">
+                                <button type="button" class="btn btn-tool text-white" data-card-widget="collapse">
+                                    <i class="bi bi-dash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover" id="loanTable">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Loan No</th>
+                                            <th>Loan Type</th>
+                                            <th class="text-end">Principal</th>
+                                            <th class="text-end">Balance</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+
+                data.loans.forEach(loan => {
+                    const statusBadge = getStatusBadge(loan.status);
+                    const principal = loan.loanAmt || loan.principalAmount || 0;
+                    const balance = loan.aamount || loan.outstandingBalance || 0;
+                    // Format the application date
+                    const applicDate = formatDate(loan.applicDate);
+
+                    html += `
+                        <tr>
+                            <td><strong>${escapeHtml(loan.loanNo || 'N/A')}</strong></td>
+                            <td>${escapeHtml(loan.loanType || loan.loanCode || 'N/A')}</td>
+                            <td class="text-end">${formatCurrency(principal)}</td>
+                            <td class="text-end">${formatCurrency(balance)}</td>
+                            <td>${statusBadge}</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-info" onclick="viewLoanDetails('${loan.loanNo}')">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
+                            </td>
+                        </tr>`;
+                });
+
+                html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+            } else {
+                html += `
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle"></i> No loans found for this member.
+                    </div>`;
+            }
+
+            html += `</div>`;
+            return html;
+        }
+
+        async function viewLoanDetails(loanNo) {
+            // Show the modal with loading spinner
+            $('#loanDetailsModal').modal('show');
+            $('#loanDetailsBody').html(`
+                <div class="text-center p-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading loan details...</p>
+                </div>
+            `);
+
+            try {
+                const memberNo = $('#selectedMemberNo').val();
+                if (!memberNo) {
+                    $('#loanDetailsBody').html(`
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            Member not selected. Please select a member first.
+                        </div>
+                    `);
+                    return;
+                }
+
+                // Fetch loan details via API
+                const response = await fetch(`/api/Inquiry/loan/${encodeURIComponent(memberNo)}/${encodeURIComponent(loanNo)}`);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    $('#loanDetailsBody').html(`
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            Failed to load loan details: ${response.status}
+                        </div>
+                    `);
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Loan details:', data);
+
+                if (data.success && data.data) {
+                    displayLoanDetails(data.data);
+                } else {
+                    $('#loanDetailsBody').html(`
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            ${data.message || 'Loan details not found'}
+                        </div>
+                    `);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                $('#loanDetailsBody').html(`
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        Error loading loan details: ${error.message}
+                    </div>
+                `);
+            }
+        }
+
+        function displayLoanDetails(data) {
+            // Format application date
+            const applicDate = formatDate(data.applicDate);
+
+            let html = `
+                <!-- Loan Information -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="card-title mb-0"><i class="bi bi-info-circle"></i> Loan Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td width="40%"><strong>Loan Number:</strong></td>
+                                        <td>${escapeHtml(data.loanNo || 'N/A')}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Loan Type:</strong></td>
+                                        <td>${escapeHtml(data.loanType || data.loanCode || 'N/A')}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Member Number:</strong></td>
+                                        <td>${escapeHtml(data.memberNo || 'N/A')}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Member Name:</strong></td>
+                                        <td>${escapeHtml(data.memberName || 'N/A')}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Application Date:</strong></td>
+                                        <td>${applicDate}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Status:</strong></td>
+                                        <td>${getStatusBadge(data.status)}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="card-title mb-0"><i class="bi bi-cash"></i> Financial Details</h6>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td width="40%"><strong>Principal Amount:</strong></td>
+                                        <td class="text-end">${formatCurrency(data.loanAmt || 0)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Outstanding Balance:</strong></td>
+                                        <td class="text-end text-danger">${formatCurrency(data.aamount || 0)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Interest Rate:</strong></td>
+                                        <td class="text-end">${data.interest || 0}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Repayment Period:</strong></td>
+                                        <td class="text-end">${data.repayPeriod || 0} months</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Premium Payable:</strong></td>
+                                        <td class="text-end">${formatCurrency(data.premiumPayable || 0)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Insurance:</strong></td>
+                                        <td class="text-end">${formatCurrency(data.insurance || 0)}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Details -->
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="card-title mb-0"><i class="bi bi-clipboard-data"></i> Additional Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <strong>Purpose:</strong>
+                                        <p>${escapeHtml(data.purpose || 'N/A')}</p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Source of Repayment:</strong>
+                                        <p>${escapeHtml(data.sourceofrepayment || 'N/A')}</p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Repayment Method:</strong>
+                                        <p>${escapeHtml(data.repayMethod || 'N/A')}</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Prepared By:</strong>
+                                        <p>${escapeHtml(data.preparedBy || 'N/A')}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Additional Security:</strong>
+                                        <p>${escapeHtml(data.addSecurity || 'N/A')}</p>
+                                    </div>
+                                </div>
+                                ${data.blockchainTxId ? `
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <strong>Blockchain Transaction ID:</strong>
+                                        <p><code>${escapeHtml(data.blockchainTxId)}</code></p>
+                                    </div>
+                                </div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            // Guarantors Section
+            if (data.guarantors && data.guarantors.length > 0) {
+                html += `
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="card-title mb-0"><i class="bi bi-people"></i> Guarantors (${data.guarantors.length})</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Member No</th>
+                                                    <th>Full Name</th>
+                                                    <th class="text-end">Guarantee Amount</th>
+                                                    <th class="text-end">Balance</th>
+                                                    <th>Collateral</th>
+                                                    <th>Blockchain Tx</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>`;
+
+                data.guarantors.forEach((guarantor, index) => {
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td><strong>${escapeHtml(guarantor.memberNo || 'N/A')}</strong></td>
+                            <td>${escapeHtml(guarantor.fullNames || 'N/A')}</td>
+                            <td class="text-end">${formatCurrency(guarantor.amount || 0)}</td>
+                            <td class="text-end">${formatCurrency(guarantor.balance || 0)}</td>
+                            <td>${escapeHtml(guarantor.collateral || 'N/A')}</td>
+                            <td><code class="small">${guarantor.blockchainTxId ? (guarantor.blockchainTxId.length > 12 ? guarantor.blockchainTxId.substring(0, 12) + '...' : guarantor.blockchainTxId) : 'N/A'}</code></td>
+                        </tr>`;
+                });
+
+                html += `
+                                            </tbody>
+                                            <tfoot class="table-dark">
+                                                <tr>
+                                                    <th colspan="3" class="text-end">Totals:</th>
+                                                    <th class="text-end">${formatCurrency(data.guarantors.reduce((sum, g) => sum + (g.amount || 0), 0))}</th>
+                                                    <th class="text-end">${formatCurrency(data.guarantors.reduce((sum, g) => sum + (g.balance || 0), 0))}</th>
+                                                    <th colspan="2"></th>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            } else {
+                html += `
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header bg-secondary text-white">
+                                    <h6 class="card-title mb-0"><i class="bi bi-people"></i> Guarantors</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-info mb-0">
+                                        <i class="bi bi-info-circle"></i> No guarantors recorded for this loan.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+
+            $('#loanDetailsBody').html(html);
+        }
+
+        async function inquireLoans() {
+            const memberNo = $('#selectedMemberNo').val();
+            if (!memberNo) {
+                Swal.fire('Error', 'Please select a member first', 'error');
+                return;
+            }
+
+            await loadLoanDataAjax(memberNo);
+        }
+
+        function clearSelectedMember() {
+            selectedMemberData = null;
+            isMemberSelected = false;
+
+            $('#selectedMemberNo').val('');
+            $('#selectedMemberCard').hide();
+            $('#loanResults').hide();
+            $('#loanResults').html('');
+        }
+
+        function clearSearch() {
+            $('#searchInput').val('');
+            $('#searchResults').hide();
+            $('#searchResultsBody').empty();
+            clearSelectedMember();
+        }
+
+        function formatCurrency(amount) {
+            if (!amount || isNaN(amount)) return 'Ksh 0.00';
+            return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+
+    <style>
+        .small-box {
+            border-radius: 0.25rem;
+            box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+            display: block;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+            .small-box .inner {
+                padding: 10px;
+            }
+
+            .small-box h3 {
+                font-size: 2.2rem;
+                font-weight: bold;
+                margin: 0 0 10px 0;
+                white-space: nowrap;
+                padding: 0;
+            }
+
+            .small-box .icon {
+                color: rgba(0,0,0,0.15);
+                position: absolute;
+                right: 10px;
+                top: 5px;
+                z-index: 0;
+                font-size: 5rem;
+            }
+
+        .info-box {
+            display: flex;
+            min-height: 90px;
+            background: #fff;
+            width: 100%;
+            box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+            border-radius: 0.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .info-box-content {
+            padding: 1rem;
+            flex: 1;
+        }
+
+        .info-box-text {
+            display: block;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .info-box-number {
+            display: block;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .modal-xl {
+            max-width: 1200px;
+        }
+
+        .bg-info {
+            background-color: #17a2b8 !important;
+            color: white;
+        }
+
+        .bg-success {
+            background-color: #28a745 !important;
+            color: white;
+        }
+
+        .bg-warning {
+            background-color: #ffc107 !important;
+            color: #1f2d3d;
+        }
+
+        .bg-danger {
+            background-color: #dc3545 !important;
+            color: white;
+        }
+
+        .bg-secondary {
+            background-color: #6c757d !important;
+            color: white;
+        }
+
+        .bg-light {
+            background-color: #f8f9fa !important;
+            color: #1f2d3d;
+        }
+
+        .bg-primary {
+            background-color: #007bff !important;
+            color: white;
+        }
+
+        .btn-tool {
+            background: transparent;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            font-size: 1.25rem;
+            line-height: 1;
+            border-radius: 0.25rem;
+            opacity: 0.8;
+        }
+
+            .btn-tool:hover {
+                opacity: 1;
+            }
+
+        .table-borderless td {
+            padding: 0.3rem 0;
+        }
+
+        .table-borderless tr {
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+            .table-borderless tr:last-child {
+                border-bottom: none;
+            }
+    </style>
+}

@@ -149,7 +149,54 @@
                             </div>
                             <div class="card-body">
                                 <!-- Loan Type Selection -->
+                                <!-- Loan Type Selection -->
                                 <div class="row mb-3">
+                                    <label asp-for="LoanCode" class="col-sm-3 col-form-label fw-bold">Loan Type *</label>
+                                    <div class="col-sm-9">
+                                        <select asp-for="LoanCode" class="form-select" id="loanType" disabled required>
+                                            <option value="">-- Select Loan Type --</option>
+                                            @if (loanTypes != null)
+                                            {
+                                                foreach (var loanType in loanTypes)
+                                                {
+                                                    // Build the display text with tags
+                                                    string displayText = loanType.LoanType;
+                                                    List<string> tags = new List<string>();
+
+                                                    if (loanType.MobileLoan == true)
+                                                    {
+                                                        tags.Add("Mobile");
+                                                    }
+
+                                                    if (loanType.IsProject == true)
+                                                    {
+                                                        tags.Add("Project");
+                                                    }
+
+                                                    if (tags.Any())
+                                                    {
+                                                        displayText += $" ({string.Join(", ", tags)})";
+                                                    }
+
+                                                    <option value="@loanType.LoanCode"
+                                                            data-max-amount="@loanType.MaxAmount"
+                                                            data-interest="@loanType.Interest"
+                                                            data-repay-period="@loanType.RepayPeriod"
+                                                            data-guarantor="@loanType.Guarantor"
+                                                            data-self-guarantee="@loanType.SelfGuarantee"
+                                                            data-processing-fee="@loanType.ProcessingFee"
+                                                            data-repay-method="@loanType.RepayMethod"
+                                                            data-mobile="@loanType.MobileLoan"
+                                                            data-project="@loanType.IsProject">
+                                                        @displayText
+                                                    </option>
+                                                }
+                                            }
+                                        </select>
+                                        <span asp-validation-for="LoanCode" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                @* <div class="row mb-3">
                                     <label asp-for="LoanCode" class="col-sm-3 col-form-label fw-bold">Loan Type *</label>
                                     <div class="col-sm-9">
                                         <select asp-for="LoanCode" class="form-select" id="loanType" disabled required>
@@ -173,7 +220,7 @@
                                         </select>
                                         <span asp-validation-for="LoanCode" class="text-danger"></span>
                                     </div>
-                                </div>
+                                </div> *@
 
                                 <!-- Loan Amount -->
                                 <div class="row mb-3">
@@ -182,7 +229,7 @@
                                         <div class="input-group">
                                             <span class="input-group-text">KES</span>
                                             <input asp-for="PrincipalAmount" class="form-control" id="principalAmount"
-                                                   type="number" step="1000" min="0" disabled required />
+                                                   type="number" min="0" disabled required />
                                         </div>
                                         <span asp-validation-for="PrincipalAmount" class="text-danger"></span>
                                         <div id="maxAmountHint" class="form-text"></div>
@@ -837,7 +884,7 @@
                 return false;
             }
 
-            if (amount < 1000) {
+            if (amount < 100) {
                 e.preventDefault();
                 Swal.fire('Error', 'Minimum loan amount is KES 1,00', 'error');
                 return false;

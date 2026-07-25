@@ -76,6 +76,11 @@ namespace SACCOBlockChainSystem.Models
 
         [Column(TypeName = "nvarchar(max)")]
         public string? Photo { get; set; }
+        [Column(TypeName = "nvarchar(max)")]
+        public string? IdFrontImage { get; set; } 
+
+        [Column(TypeName = "nvarchar(max)")]
+        public string? IdBackImage { get; set; }
 
         public decimal? ShareCap { get; set; }
 

@@ -34,7 +34,7 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 return RedirectToAction("Login", "Account");
             }
-            utilities.SetUpPrivileges(this);
+            utilities.SetUpPrivileges(this);    
             var companyCode = User.FindFirst("CompanyCode")?.Value;
             var wallets = _context.Wallets.AsNoTracking().Where(c=>c.CompanyCode == companyCode).ToList();
             var members = await _memberService.GetAllMembersAsync();

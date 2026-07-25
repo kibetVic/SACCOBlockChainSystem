@@ -298,6 +298,134 @@
     </div>
 </div>
 
+<!-- NEW ROW: Loanees & Loan Statistics -->
+<div class="row g-3 mb-4">
+    <!-- Total Loans Card -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">TOTAL LOANS:</small>
+                    <strong>@Model.TotalLoanCount.ToString("N0")</strong>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center mt-1">
+                    <small class="text-primary fw-semibold">WOMEN:</small>
+                    <strong class="text-warning">@Model.WomenLoanCount.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between ms-2">
+                    <small class="text-primary fw-semibold">MEN:</small>
+                    <small>@Model.MenLoanCount.ToString("N0")</small>
+                </div>
+                <div class="d-flex justify-content-between ms-2">
+                    <small class="text-primary fw-semibold">OTHERS:</small>
+                    <small>@Model.OthersLoanCount.ToString("N0")</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loan Status - Completed vs Uncompleted Card -->
+    @* <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">LOAN STATUS:</small>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">COMPLETED:</small>
+                    <strong class="text-success">@Model.CompletedLoansCount.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">ACTIVE:</small>
+                    <strong class="text-primary">@Model.ActiveLoansCount.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">UNCOMPLETED:</small>
+                    <strong class="text-warning">@Model.UncompletedLoansCount.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">OVERDUE (>30 days):</small>
+                    <strong class="text-danger">@Model.OverdueLoansCount.ToString("N0")</strong>
+                </div>
+            </div>
+        </div>
+    </div> *@
+
+    <!-- Completed Loans by Gender Card -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">COMPLETED LOANS BY GENDER:</small>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">WOMEN:</small>
+                    <strong class="text-warning">@Model.WomenCompletedLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">MEN:</small>
+                    <strong>@Model.MenCompletedLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">OTHERS:</small>
+                    <strong>@Model.OthersCompletedLoans.ToString("N0")</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Loans by Gender Card -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">ACTIVE LOANS BY GENDER:</small>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">WOMEN:</small>
+                    <strong class="text-warning">@Model.WomenActiveLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">MEN:</small>
+                    <strong>@Model.MenActiveLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">OTHERS:</small>
+                    <strong>@Model.OthersActiveLoans.ToString("N0")</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overdue Loans by Gender Card -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">OVERDUE LOANS BY GENDER > 30 DAYS:</small>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">WOMEN:</small>
+                    <strong class="text-warning">@Model.WomenOverdueLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">MEN:</small>
+                    <strong>@Model.MenOverdueLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">OTHERS:</small>
+                    <strong>@Model.OthersOverdueLoans.ToString("N0")</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Repayment & Risk Card -->
 <div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">

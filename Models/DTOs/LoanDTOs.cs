@@ -187,6 +187,11 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal TotalDeductions { get; set; }
         public decimal NetDisbursementAmount { get; set; }
         public decimal GrossAmount { get; set; }
+        public int? EndmainId { get; set; }
+        public string? VoucherNo { get; set; }
+        public string? ChequeNo { get; set; }
+        public string? MinuteNo { get; set; }
+        public bool IsEndorsed { get; set; }
     }
 
     public class LoanDeductionDTO
@@ -260,8 +265,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? ReceivedBy { get; set; }
         public string CompanyCode { get; set; } = null!;
         public string? ReferenceNumber { get; set; }
-        public string ChequeNumber { get; set; }
-        public string IpAddress { get; set; }
+        public string? ChequeNumber { get; set; }
+        public string? IpAddress { get; set; }
     }
 
     public class LoanOffsetDTO
@@ -394,7 +399,6 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal? MinimumPayment { get; set; }
     }
 
-    // Loan Dashboard DTO - Updated to use Status enum
     public class LoanDashboardDTO
     {
         public int TotalLoans { get; set; }
@@ -556,5 +560,51 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string EarlyClosureMessage { get; set; }
         public string Recommendation { get; set; }
         public string Status { get; set; }
+    }
+
+    public class EndorsementDetailsDTO
+    {
+        public string LoanNo { get; set; } = null!;
+        public string MemberNo { get; set; } = null!;
+        public string MemberName { get; set; } = null!;
+        public string LoanTypeName { get; set; } = null!;
+        public decimal GrossAmount { get; set; }
+        public decimal NetAmount { get; set; }
+        public decimal TotalDeductions { get; set; }
+        public string Status { get; set; } = null!;
+        public DateTime EndorsementDate { get; set; }
+        public string EndorsedBy { get; set; } = null!;
+        public string? Remarks { get; set; }
+        public string? PhoneNo { get; set; }
+        public string MinuteNo { get; set; } = null!;
+        public string VoucherNo { get; set; } = null!;
+        public string ChequeNo { get; set; } = null!;
+        public string SourceAccountNo { get; set; } = null!;
+        public List<EndorsementDeductionDetailDTO> Deductions { get; set; } = new();
+        public List<EndorsementGLTransactionDTO> GLTransactions { get; set; } = new();
+    }
+
+    public class EndorsementDeductionDetailDTO
+    {
+        public string DeductionCode { get; set; } = null!;
+        public string DeductionName { get; set; } = null!;
+        public decimal Amount { get; set; }
+        public string GlAccountNo { get; set; } = null!;
+        public string GlAccountName { get; set; } = null!;
+        public string? Description { get; set; }
+        public bool IsPercentage { get; set; }
+        public decimal? PercentageValue { get; set; }
+    }
+
+    public class EndorsementGLTransactionDTO
+    {
+        public long Id { get; set; }
+        public decimal Amount { get; set; }
+        public string DrAccNo { get; set; } = null!;
+        public string CrAccNo { get; set; } = null!;
+        public string DrAccountName { get; set; } = null!;
+        public string CrAccountName { get; set; } = null!;
+        public string Description { get; set; } = null!;
+        public string DocumentNo { get; set; } = null!;
     }
 }

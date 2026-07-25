@@ -2,6 +2,13 @@
 @{
     ViewData["Title"] = "Withdraw Loan";
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    // Check if the loan is approved and ready for withdrawal
+    bool isApproved = Model.IsApproved ?? false;
+    bool requiresApproval = Model.RequiresApproval ?? false;
+
+    // Button is active only if loan is approved OR doesn't require approval
+    bool canWithdraw = isApproved || !requiresApproval;
 }
 
 <div class="container">
@@ -18,14 +25,24 @@
             <div class="card">
                 <div class="card-body">
                     <div class="text-center mb-4">
-                        <i class="fa fa-check-circle text-success" style="font-size: 64px;"></i>
+                        @if (canWithdraw)
+                        {
+                            <i class="fa fa-check-circle text-success" style="font-size: 64px;"></i>
+                            <h4 class="text-success">Your Loan is Ready for Disbursement!</h4>
+                        }
+                        else
+                        {
+                            <i class="fa fa-clock text-warning" style="font-size: 64px;"></i>
+                            <h4 class="text-warning">Loan Awaiting Approval</h4>
+                            <p class="text-muted">This loan requires approval before withdrawal.</p>
+                        }
                     </div>
-                    <h4 class="text-center">Your Loan is Ready for Disbursement!</h4>
+
                     <p class="text-center lead">Loan Number: <strong>@Model.LoanNo</strong></p>
 
-                    <div class="alert alert-success text-center">
+                    <div class="alert @(canWithdraw ? "alert-success" : "alert-warning") text-center">
                         <h2 class="mb-0">@Model.Amount.ToString("N0") KES</h2>
-                        <small>Approved Loan Amount</small>
+                        <small>@(canWithdraw ? "Approved Loan Amount" : "Pending Approval Amount")</small>
                     </div>
 
                     @if (Model.ProcessingFee > 0)
@@ -37,6 +54,17 @@
                         </div>
                     }
 
+                    @if (!canWithdraw)
+                    {
+                        <div class="alert alert-info text-center">
+                            <i class="fa fa-info-circle"></i>
+                            <strong>Status: Pending Approval</strong><br />
+                            <small>Your loan application has been submitted and is waiting for approval from a Finance Officer.</small>
+                            <br />
+                            <small>You will be notified once approved.</small>
+                        </div>
+                    }
+
                     <p class="text-center mb-4">Choose how you want to receive your funds:</p>
 
                     <form method="post" id="withdrawalForm">
@@ -44,6 +72,8 @@
                         <input type="hidden" asp-for="LoanNo" />
                         <input type="hidden" asp-for="Amount" />
                         <input type="hidden" asp-for="ProcessingFee" />
+                        <input type="hidden" asp-for="IsApproved" />
+                        <input type="hidden" asp-for="RequiresApproval" />
 
                         <div class="row">
                             @foreach (var method in Model.WithdrawalMethods)
@@ -69,7 +99,8 @@
                                             <div class="form-check mt-2">
                                                 <input type="radio" name="WithdrawalMethod" value="@method.Code"
                                                        class="form-check-input" id="method_@method.Code"
-                                                       @(method.Code == "MPESA" ? "checked" : "") />
+                                                       @(method.Code == "MPESA" ? "checked" : "")
+                                                       @(!canWithdraw ? "disabled" : "") />
                                             </div>
                                         </div>
                                     </div>
@@ -87,7 +118,8 @@
                                         <div class="input-group">
                                             <span class="input-group-text">+254</span>
                                             <input type="tel" class="form-control" id="MpesaPhoneNumber" name="MpesaPhoneNumber"
-                                                   placeholder="712345678" value="@Model.MpesaPhoneNumber" />
+                                                   placeholder="712345678" value="@Model.MpesaPhoneNumber"
+                                                   @(!canWithdraw ? "disabled" : "") />
                                         </div>
                                         <small class="text-muted">Enter the phone number registered with M-Pesa</small>
                                     </div>
@@ -122,7 +154,7 @@
                         </div>
 
                         <!-- Summary Card -->
-                        <div class="card bg-success text-white mt-3">
+                        <div class="card @(canWithdraw ? "bg-success" : "bg-secondary") text-white mt-3">
                             <div class="card-body">
                                 <div class="row">
                                     <div class="col-6">
@@ -148,9 +180,28 @@
                             </div>
                         </div>
 
-                        <button type="submit" class="btn btn-success btn-lg w-100 mt-3" id="submitBtn">
-                            <i class="fa fa-check-circle"></i> Confirm Withdrawal
-                        </button>
+                        @if (canWithdraw)
+                        {
+                            <button type="submit" class="btn btn-success btn-lg w-100 mt-3" id="submitBtn">
+                                <i class="fa fa-check-circle"></i> Confirm Withdrawal
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-secondary btn-lg w-100 mt-3" id="submitBtn" disabled>
+                                <i class="fa fa-clock"></i> Awaiting Approval
+                            </button>
+                            <div class="text-center mt-2">
+                                <small class="text-muted">
+                                    <i class="fa fa-info-circle"></i>
+                                    This loan requires approval before withdrawal.
+                                    <br />
+                                    <a href="@Url.Action("Status", new { loanNo = Model.LoanNo })" class="btn btn-link btn-sm">
+                                        Check Status
+                                    </a>
+                                </small>
+                            </div>
+                        }
                     </form>
                 </div>
             </div>
@@ -161,6 +212,17 @@
 @section Scripts {
     <script>
         $(document).ready(function() {
+            // Check if withdrawal is allowed
+            var canWithdraw = @(canWithdraw ? "true" : "false");
+
+            if (!canWithdraw) {
+                // Disable all interactive elements
+                $('.withdrawal-method').css('cursor', 'not-allowed').css('opacity', '0.6');
+                $('.form-check-input').prop('disabled', true);
+                $('#MpesaPhoneNumber').prop('disabled', true);
+                return;
+            }
+
             // Initialize
             let initialMethod = $('input[name="WithdrawalMethod"]:checked').val();
             selectMethod(initialMethod);
@@ -266,6 +328,15 @@
 
         .card.bg-success {
             background: linear-gradient(135deg, #198754 0%, #0d6efd 100%);
+        }
+
+        .card.bg-secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        }
+
+        .disabled-method {
+            cursor: not-allowed !important;
+            opacity: 0.6;
         }
     </style>
 }

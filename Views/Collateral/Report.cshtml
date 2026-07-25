@@ -52,6 +52,7 @@
                                 <th>Member No</th>
                                 <th>Names</th>
                                 <th>Loan No</th>
+                                <th>Collateral Code</th>
                                 <th>Collateral Description</th>
                                 <th class="text-right">Market Value (KES)</th>
                                 <th class="text-right">Balance (KES)</th>
@@ -65,6 +66,7 @@
                                     <td>@item.MemberNo</td>
                                     <td>@item.Names</td>
                                     <td>@item.LoanNo</td>
+                                    <td>@item.ColCode</td>
                                     <td>@item.Coldescription</td>
                                     <td class="text-right">@item.Mktvalue.ToString("N2")</td>
                                     <td class="text-right">@item.Balance.ToString("N2")</td>
@@ -74,7 +76,7 @@
                         </tbody>
                         <tfoot>
                             <tr class="bg-light font-weight-bold">
-                                <td colspan="4" class="text-right">TOTAL:</td>
+                                <td colspan="5" class="text-right">TOTAL:</td>
                                 <td class="text-right">@Model.Sum(x => x.Mktvalue).ToString("N2")</td>
                                 <td class="text-right">@Model.Sum(x => x.Balance).ToString("N2")</td>
                                 <td></td>

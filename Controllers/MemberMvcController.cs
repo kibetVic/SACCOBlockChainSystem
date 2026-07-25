@@ -237,7 +237,6 @@ namespace SACCOBlockChainSystem.Controllers
                 string fullName = $"{member.Surname} {member.OtherNames}".Trim();
 
                 _logger.LogInformation($"Member found: {member.MemberNo} - {member.Surname} {member.OtherNames}");
-                _logger.LogInformation($"Idno: '{member.Idno}', PhoneNo: '{member.PhoneNo}', Dept: '{member.Dept}', Station: '{member.Station}'");
 
                 return Json(new
                 {
@@ -249,31 +248,31 @@ namespace SACCOBlockChainSystem.Controllers
                         Surname = member.Surname ?? "",
                         OtherNames = member.OtherNames ?? "",
                         FullName = fullName,
-                        IdNo = member.Idno ?? "",  // IMPORTANT: Maps to Idno from database
+                        IdNo = member.Idno ?? "",
 
-                        // Contact Info - Using the correct database fields
+                        // Contact Info
                         PhoneNo = member.PhoneNo ?? member.MobileNo ?? "",
                         LandLine = member.HomeTelNo ?? member.OfficeTelNo ?? "",
                         Email = member.Email ?? member.EmailAddress ?? "",
 
                         // Personal Info
-                        Gender = member.Sex ?? "",  // Maps to Sex from database
+                        Gender = member.Sex ?? "",
                         DateOfBirth = member.Dob?.ToString("yyyy-MM-dd") ?? "",
                         Age = member.Age?.ToString() ?? "",
                         MaritalStatus = member.Mstatus == true ? "Married" : member.Mstatus == false ? "Single" : "",
 
                         // Employment & Location
                         Employer = member.Employer ?? "",
-                        Department = member.Dept ?? "",  // Maps to Dept from database
-                        Station = member.Station ?? "",  // Maps to Station from database
-                        PresentAddress = member.PresentAddr ?? "",  // Maps to PresentAddr from database
+                        Department = member.Dept ?? "",
+                        Station = member.Station ?? "",
+                        PresentAddress = member.PresentAddr ?? "",
                         HomeAddress = member.HomeAddr ?? "",
 
                         // Membership Settings
                         Cigcode = member.Cigcode ?? "",
                         GroupCig = member.Cigcode ?? "",
                         MembershipType = member.MembershipType ?? "Individual",
-                        RegistrationType = member.MemberDescription ?? "Ordinary Member",  // Maps to MemberDescription
+                        RegistrationType = member.MemberDescription ?? "Ordinary Member",
                         Status = statusText,
                         RegistrationDate = member.ApplicDate?.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"),
 
@@ -292,7 +291,14 @@ namespace SACCOBlockChainSystem.Controllers
                         IsDormant = member.Dormant == 1,
 
                         // Blockchain
-                        BlockchainTxId = member.BlockchainTxId ?? ""
+                        BlockchainTxId = member.BlockchainTxId ?? "",
+
+                        // ============================================================
+                        // ADD ID IMAGES AND PHOTO
+                        // ============================================================
+                        Photo = member.Photo ?? "",
+                        IdFrontImage = member.IdFrontImage ?? "",
+                        IdBackImage = member.IdBackImage ?? ""
                     }
                 });
             }
@@ -321,16 +327,25 @@ namespace SACCOBlockChainSystem.Controllers
             });
         }
 
+        // POST: MemberMvc/Update
         [HttpPost]
-        public async Task<IActionResult> Update( MemberUpdateDTO model)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Update([FromForm] MemberUpdateDTO model)
         {
             try
             {
-                // DEBUG: confirm binding
+                _logger.LogInformation("=== UPDATE METHOD CALLED ===");
+
                 if (model == null)
                 {
-                    return Json(new { success = false, message = "Model is NULL (binding failed)" });
+                    _logger.LogWarning("Model is NULL - binding failed");
+                    return Json(new { success = false, message = "Model is NULL. Please check the data format." });
                 }
+
+                _logger.LogInformation($"Update model received: MemberNo={model.MemberNo}, Surname={model.Surname}, IdNo={model.IdNo}");
+                _logger.LogInformation($"Photo: {(string.IsNullOrEmpty(model.Photo) ? "Empty" : "Has data")}");
+                _logger.LogInformation($"IdFrontImage: {(string.IsNullOrEmpty(model.IdFrontImage) ? "Empty" : "Has data")}");
+                _logger.LogInformation($"IdBackImage: {(string.IsNullOrEmpty(model.IdBackImage) ? "Empty" : "Has data")}");
 
                 if (string.IsNullOrEmpty(model.MemberNo))
                 {
@@ -347,6 +362,7 @@ namespace SACCOBlockChainSystem.Controllers
                     return Json(new { success = false, message = "Member not found." });
                 }
 
+                // Update the member using the service
                 var result = await _memberService.UpdateMemberAsync(model.MemberNo, model);
 
                 if (result == null)
@@ -354,11 +370,19 @@ namespace SACCOBlockChainSystem.Controllers
                     return Json(new { success = false, message = "Member update failed." });
                 }
 
-                return Json(new { success = true, message = "Member updated successfully!" });
+                _logger.LogInformation($"Member {model.MemberNo} updated successfully");
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Member updated successfully!",
+                    data = result
+                });
             }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.Message });
+                _logger.LogError(ex, "Error updating member");
+                return Json(new { success = false, message = $"Error: {ex.Message}" });
             }
         }
 

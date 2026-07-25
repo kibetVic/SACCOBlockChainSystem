@@ -200,8 +200,44 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public DashboardSummaryMetrics SummaryMetrics { get; set; } = new DashboardSummaryMetrics();
 
         // Add this property to DashboardVM class
-        public decimal PenaltyInterestRate { get; set; } // This is the AmountPastDueRate
-        public string PenaltyCalculationMode { get; set; } = "Percentage"; // "Percentage" or "Fixed"
+        public decimal PenaltyInterestRate { get; set; } 
+        public string PenaltyCalculationMode { get; set; } = "Percentage"; 
+
+        // county Admin
+        public bool IsCountyView { get; set; } = false;
+        public string? CountyName { get; set; }
+        public List<string> CountyCompanyCodes { get; set; } = new List<string>();
+
+        // ============================================================
+        // LOAN COUNT STATISTICS (Total Loans)
+        // ============================================================
+        public int TotalLoanCount { get; set; }         
+        public int WomenLoanCount { get; set; }         
+        public int MenLoanCount { get; set; }           
+        public int OthersLoanCount { get; set; }        
+
+        // ============================================================
+        // LOAN STATUS BREAKDOWN
+        // ============================================================
+        public int CompletedLoansCount { get; set; }     
+        public int UncompletedLoansCount { get; set; }  
+        public int OverdueLoansCount { get; set; }      
+        public int ActiveLoansCount { get; set; }       
+
+        // ============================================================
+        // LOAN STATUS BREAKDOWN BY GENDER
+        // ============================================================
+        public int WomenCompletedLoans { get; set; }
+        public int MenCompletedLoans { get; set; }
+        public int OthersCompletedLoans { get; set; }
+
+        public int WomenActiveLoans { get; set; }
+        public int MenActiveLoans { get; set; }
+        public int OthersActiveLoans { get; set; }
+
+        public int WomenOverdueLoans { get; set; }
+        public int MenOverdueLoans { get; set; }
+        public int OthersOverdueLoans { get; set; }
     }
 
     // Rest of your existing classes remain the same...

@@ -4,24 +4,35 @@ using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.ViewModels;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace SACCOBlockChainSystem.Services
 {
+
     public interface ICryptoService
     {
-        // ========== WALLET MANAGEMENT ==========
-        Task<WalletResult> CreateWalletForMemberAsync(int memberId, string memberNo, string companyCode);
-        Task<Wallet> GetWalletByMemberNoAsync(string memberNo);
+        // Wallet Management
         Task<bool> HasWalletAsync(string memberNo);
-        Task<WalletInfo> GetWalletInfoAsync(string memberNo);
+        Task<WalletResult> CreateWalletForMemberAsync(int memberId, string memberNo, string companyCode);
         Task<Wallet> GetWalletByMemberIdAsync(int memberId);
-        string ComputeHash(string data);
+        Task<Wallet> GetWalletByMemberNoAsync(string memberNo);
+
+        // Transaction Signing
         Task<SigningResult> SignTransactionAsync(string memberNo, object transactionData);
-        Task<bool> VerifySignatureAsync(string memberNo, string data, string signature);
-        Task<VerificationResult> VerifyTransactionAsync(int contribId);
-        Task<ChainVerificationResult> VerifyMemberChainAsync(string memberNo);
+
+        // Verification
+        Task<VerificationResult> VerifyTransactionAsync(int transactionId);
         Task<ChainVerificationResult> VerifyMemberChainWithGenesisAsync(string memberNo);
-        Task<FraudResult> AnalyzeTransactionAsync(string memberNo, decimal amount, string transactionType);
+
+        // Fraud Detection
+        Task<FraudAnalysisResult> AnalyzeTransactionAsync(string memberNo, decimal amount, string category);
+
+        // Utilities
+        string ComputeHash(string data);
+        string GetCanonicalData(object transactionData);
+        Task<WalletInfo> GetWalletInfoAsync(string memberNo);
+        Task<bool> VerifySignatureAsync(string memberNo, string data, string signature);
+        Task<ChainVerificationResult> VerifyMemberChainAsync(string memberNo);
     }
 
     public class WalletResult
@@ -29,6 +40,7 @@ namespace SACCOBlockChainSystem.Services
         public bool Success { get; set; }
         public string WalletAddress { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
+        public Wallet? Wallet { get; set; }
     }
 
     public class SigningResult
@@ -46,6 +58,8 @@ namespace SACCOBlockChainSystem.Services
         public bool SignatureValid { get; set; }
         public bool ChainValid { get; set; }
         public string Message { get; set; } = string.Empty;
+        public bool IsGenesisTransaction { get; set; }
+        public string GenesisAnchor { get; set; } = string.Empty;
     }
 
     public class ChainVerificationResult
@@ -55,6 +69,9 @@ namespace SACCOBlockChainSystem.Services
         public int ValidSignatures { get; set; }
         public List<int> FailedTransactionIds { get; set; } = new();
         public string Message { get; set; } = string.Empty;
+        public List<int> BrokenChainIds { get; set; } = new();
+        public string GenesisAnchor { get; set; } = string.Empty;
+        public bool IsFirstTransactionValid { get; set; }
     }
 
     public class FraudResult
@@ -64,6 +81,14 @@ namespace SACCOBlockChainSystem.Services
         public List<string> Flags { get; set; } = new();
         public bool ShouldBlock { get; set; }
         public string Recommendation { get; set; } = string.Empty;
+    }
+
+    public class FraudAnalysisResult
+    {
+        public bool IsSuspicious { get; set; }
+        public bool ShouldBlock { get; set; }
+        public List<string> Flags { get; set; } = new();
+        public int Confidence { get; set; }
     }
 
     public class CryptoService : ICryptoService
@@ -97,10 +122,10 @@ namespace SACCOBlockChainSystem.Services
 
         public string ComputeHash(string data)
         {
-            using var sha256 = SHA256.Create();
+            using var sha = SHA256.Create();
             var bytes = Encoding.UTF8.GetBytes(data);
-            var hash = sha256.ComputeHash(bytes);
-            return Convert.ToHexString(hash).ToLower();
+            var hashBytes = sha.ComputeHash(bytes);
+            return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
         }
 
         private string CreateCanonicalString(object data, long nonce)
@@ -109,289 +134,542 @@ namespace SACCOBlockChainSystem.Services
             return $"{json}|nonce:{nonce}";
         }
 
+        #region Wallet Management
 
-        // ============================================================
-        // WALLET MANAGEMENT
-        // ============================================================
-
-        /// <summary>
-        /// Verifies the transaction chain including the genesis anchor (wallet address)
-        /// </summary>
-        public async Task<ChainVerificationResult> VerifyMemberChainWithGenesisAsync(string memberNo)
+        public async Task<bool> HasWalletAsync(string memberNo)
         {
-            var member = await _context.Members
-                .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
-
-            if (member == null)
-            {
-                return new ChainVerificationResult
-                {
-                    IsValid = false,
-                    Message = "Member not found",
-                    TotalTransactions = 0,
-                    ValidSignatures = 0,
-                    FailedTransactionIds = new List<int>()
-                };
-            }
-
-            var wallet = await _context.Wallets
-                .FirstOrDefaultAsync(w => w.memberNo == memberNo);
-
-            var transactions = await _context.Contribs
-                .Where(c => c.MemberNo == memberNo)
-                .OrderBy(c => c.Id)
-                .ToListAsync();
-
-            var result = new ChainVerificationResult
-            {
-                TotalTransactions = transactions.Count,
-                FailedTransactionIds = new List<int>(),
-                ValidSignatures = 0
-            };
-
-            if (transactions.Count == 0)
-            {
-                result.IsValid = true;
-                result.Message = "No transactions to verify";
-                return result;
-            }
-
-            // Verify FIRST transaction's genesis hash matches wallet address
-            var firstTx = transactions.First();
-
-            // IMPORTANT: Use the RAW wallet address for comparison (not hashed)
-            string expectedGenesisHash = wallet?.Address ?? $"GENESIS-{member.MemberNo}";
-
-            _logger.LogInformation($"Verifying genesis for member {memberNo}");
-            _logger.LogInformation($"   Expected: {expectedGenesisHash}");
-            _logger.LogInformation($"   Found: {firstTx.PreviousTransactionHash ?? "NULL"}");
-
-            if (firstTx.PreviousTransactionHash != expectedGenesisHash)
-            {
-                result.FailedTransactionIds.Add(firstTx.Id);
-                result.Message = $"Genesis hash mismatch! Expected: {expectedGenesisHash}, Found: {firstTx.PreviousTransactionHash}";
-                result.IsValid = false;
-                _logger.LogWarning(result.Message);
-                return result;
-            }
-
-            _logger.LogInformation($"Genesis hash verified for member {memberNo}: {expectedGenesisHash}");
-
-            // Verify remaining chain
-            string previousHash = firstTx.TransactionHash;
-            int validCount = firstTx.IsSignatureVerified == true ? 1 : 0;
-
-            for (int i = 1; i < transactions.Count; i++)
-            {
-                var tx = transactions[i];
-
-                if (tx.PreviousTransactionHash != previousHash)
-                {
-                    result.FailedTransactionIds.Add(tx.Id);
-                    result.Message = $"Chain broken at transaction {tx.Id}";
-                    break;
-                }
-
-                // Verify signature
-                var verifyResult = await VerifyTransactionAsync(tx.Id);
-                if (verifyResult.SignatureValid)
-                {
-                    validCount++;
-                }
-                else
-                {
-                    result.FailedTransactionIds.Add(tx.Id);
-                }
-
-                previousHash = tx.TransactionHash;
-            }
-
-            result.IsValid = result.FailedTransactionIds.Count == 0;
-            result.ValidSignatures = validCount;
-            result.Message = result.IsValid
-                ? $"Chain is valid with correct genesis anchor ✅ - {validCount}/{transactions.Count} verified"
-                : $"Failed at {result.FailedTransactionIds.Count} transaction(s) ❌";
-
-            return result;
+            return await _context.Wallets.AnyAsync(w => w.memberNo == memberNo);
         }
 
-        /// <summary>
-        /// Verifies a transaction by ID using strict ECDsa.VerifyData
-        /// </summary>
-
-        public async Task<VerificationResult> VerifyTransactionAsync(int contribId)
+        public async Task<WalletResult> CreateWalletForMemberAsync(int memberId, string memberNo, string companyCode)
         {
-            var contrib = await _context.Contribs
-                .Include(c => c.SharescodeNavigation)
-                .FirstOrDefaultAsync(c => c.Id == contribId);
-
-            if (contrib == null)
+            try
             {
-                return new VerificationResult { IsValid = false, Message = "Transaction not found" };
+                // Check if wallet already exists
+                var existing = await _context.Wallets.FirstOrDefaultAsync(w => w.memberNo == memberNo);
+                if (existing != null)
+                {
+                    return new WalletResult { Success = true, Message = "Wallet already exists", Wallet = existing };
+                }
+
+                // Generate new wallet using ECDSA P-256
+                using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+                // Export keys
+                var privateKeyBytes = ecdsa.ExportECPrivateKey();
+                var privateKey = Convert.ToBase64String(privateKeyBytes);
+                var publicKey = Convert.ToBase64String(ecdsa.ExportSubjectPublicKeyInfo());
+
+                // Generate wallet address from public key
+                byte[] publicBytes = Encoding.UTF8.GetBytes(publicKey);
+                using var sha = SHA256.Create();
+                byte[] hash = sha.ComputeHash(publicBytes);
+                string walletAddress = Convert.ToHexString(hash).Substring(0, 40);
+
+                // Encrypt private key
+                var encryptedPrivateKey = EncryptionHelper.Encrypt(privateKey);
+
+                var wallet = new Wallet
+                {
+                    MemberId = memberId,
+                    memberNo = memberNo,
+                    CompanyCode = companyCode,
+                    Address = walletAddress,
+                    PublicKey = publicKey,
+                    PrivateKeyEncrypted = encryptedPrivateKey,
+                    Balance = 0,
+                    CapitalBalance = 0,
+                    DepositBalance = 0,
+                    CreatedAt = DateTime.UtcNow,
+                    LastActivity = DateTime.UtcNow,
+                    IsActive = true
+                };
+
+                _context.Wallets.Add(wallet);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation($"Created wallet for member {memberNo}: {walletAddress}");
+
+                return new WalletResult
+                {
+                    Success = true,
+                    Message = "Wallet created successfully",
+                    Wallet = wallet
+                };
             }
-
-            if (string.IsNullOrEmpty(contrib.TransactionSignature))
+            catch (Exception ex)
             {
-                return new VerificationResult { IsValid = false, Message = "No signature found" };
+                _logger.LogError(ex, $"Error creating wallet for member {memberNo}");
+                return new WalletResult { Success = false, Message = ex.Message };
             }
+        }
 
-            var member = await _context.Members
-                .FirstOrDefaultAsync(m => m.MemberNo == contrib.MemberNo);
+        public async Task<Wallet> GetWalletByMemberIdAsync(int memberId)
+        {
+            return await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == memberId);
+        }
 
-            if (member == null)
+        public async Task<Wallet> GetWalletByMemberNoAsync(string memberNo)
+        {
+            return await _context.Wallets.FirstOrDefaultAsync(w => w.memberNo == memberNo);
+        }
+
+        #endregion
+
+        #region Transaction Signing
+
+        public async Task<SigningResult> SignTransactionAsync(string memberNo, object transactionData)
+        {
+            try
             {
-                return new VerificationResult { IsValid = false, Message = "Member not found" };
-            }
+                _logger.LogInformation($"Signing transaction for member: {memberNo}");
 
-            // Get share type to determine contribution category
-            var shareType = await _context.Sharetypes
-                .FirstOrDefaultAsync(st => st.SharesCode == contrib.Sharescode && st.CompanyCode == contrib.CompanyCode);
+                // Get member's wallet
+                var wallet = await GetWalletByMemberNoAsync(memberNo);
+                if (wallet == null)
+                {
+                    return new SigningResult
+                    {
+                        Success = false,
+                        Message = "Wallet not found for member"
+                    };
+                }
 
-            // Determine contribution category
-            string contributionCategory = DetermineContributionCategory(shareType, contrib.Remarks, contrib.Amount ?? 0);
+                if (string.IsNullOrEmpty(wallet.PrivateKeyEncrypted))
+                {
+                    return new SigningResult
+                    {
+                        Success = false,
+                        Message = "Private key not found in wallet"
+                    };
+                }
 
-            // Recreate the EXACT transaction data that was signed
-            var txData = new
-            {
-                MemberNo = contrib.MemberNo,
-                Amount = contrib.Amount,
-                TransactionDate = contrib.ContrDate?.ToString("o"),
-                SharesCode = contrib.Sharescode,
-                ReceiptNo = contrib.ReceiptNo,
-                TransactionNo = contrib.TransactionNo,
-                CompanyCode = contrib.CompanyCode,
-                ContributionCategory = contributionCategory
-            };
+                // Decrypt private key
+                var privateKeyBase64 = EncryptionHelper.Decrypt(wallet.PrivateKeyEncrypted);
+                var privateKeyBytes = Convert.FromBase64String(privateKeyBase64);
 
-            var canonicalData = CreateCanonicalString(txData, contrib.TransactionSequence ?? 0);
+                // Get canonical data
+                var canonicalData = GetCanonicalData(transactionData);
+                var dataBytes = Encoding.UTF8.GetBytes(canonicalData);
 
-            // DEBUG: Log the canonical data for comparison
-            _logger.LogInformation($"=== VERIFICATION DEBUG ===");
-            _logger.LogInformation($"Transaction ID: {contribId}");
-            _logger.LogInformation($"Canonical Data: {canonicalData}");
-            _logger.LogInformation($"Stored Signature: {contrib.TransactionSignature?.Substring(0, Math.Min(50, contrib.TransactionSignature?.Length ?? 0))}...");
-            _logger.LogInformation($"Stored Nonce: {contrib.TransactionSequence}");
-            _logger.LogInformation($"Member No: {contrib.MemberNo}");
+                // Generate transaction hash (SHA-256)
+                using var sha = SHA256.Create();
+                var hashBytes = sha.ComputeHash(dataBytes);
+                var transactionHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
 
-            // STRICT VERIFICATION
-            bool isValid = await VerifySignatureAsync(member.MemberNo, canonicalData, contrib.TransactionSignature);
+                // Sign using ECDSA P-256
+                using var ecdsa = ECDsa.Create();
+                ecdsa.ImportECPrivateKey(privateKeyBytes, out _);
 
-            _logger.LogInformation($"Verification Result: {(isValid ? "VALID ✅" : "INVALID ❌")}");
+                var signatureBytes = ecdsa.SignData(dataBytes, HashAlgorithmName.SHA256);
+                var signature = Convert.ToBase64String(signatureBytes);
 
-            // Check chain integrity
-            bool chainValid = true;
-            if (!string.IsNullOrEmpty(contrib.PreviousTransactionHash))
-            {
-                var prevTx = await _context.Contribs
-                    .Where(c => c.MemberNo == contrib.MemberNo && c.Id < contrib.Id)
+                // Get next sequence number
+                var lastTransaction = await _context.Contribs
+                    .Where(c => c.MemberNo == memberNo)
                     .OrderByDescending(c => c.Id)
                     .FirstOrDefaultAsync();
 
-                if (prevTx != null && prevTx.TransactionHash != contrib.PreviousTransactionHash)
+                var nonce = (lastTransaction?.TransactionSequence ?? 0) + 1;
+
+                _logger.LogInformation($"Transaction signed successfully for member {memberNo}: Hash={transactionHash.Substring(0, 16)}...");
+
+                return new SigningResult
                 {
-                    chainValid = false;
-                    _logger.LogWarning($"Chain broken at transaction {contrib.Id}: Expected {prevTx.TransactionHash}, Got {contrib.PreviousTransactionHash}");
-                }
+                    Success = true,
+                    Signature = signature,
+                    TransactionHash = transactionHash,
+                    Nonce = nonce,
+                    Message = "Transaction signed successfully"
+                };
             }
-
-            // Update verification status
-            contrib.IsSignatureVerified = isValid;
-            contrib.SignatureVerifiedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation($"Updated IsSignatureVerified = {isValid} for transaction {contribId}");
-
-            return new VerificationResult
+            catch (Exception ex)
             {
-                IsValid = isValid && chainValid,
-                SignatureValid = isValid,
-                ChainValid = chainValid,
-                Message = isValid && chainValid ? "Verified ✅" : (isValid ? "Chain broken ❌" : "Invalid signature ❌")
-            };
+                _logger.LogError(ex, $"Error signing transaction for member {memberNo}");
+                return new SigningResult { Success = false, Message = ex.Message };
+            }
         }
 
-        //public async Task<VerificationResult> VerifyTransactionAsync(int contribId)
-        //{
-        //    var contrib = await _context.Contribs
-        //        .Include(c => c.SharescodeNavigation)
-        //        .FirstOrDefaultAsync(c => c.Id == contribId);
+        #endregion
 
-        //    if (contrib == null)
-        //    {
-        //        return new VerificationResult { IsValid = false, Message = "Transaction not found" };
-        //    }
+        #region Transaction Verification
+        public async Task<VerificationResult> VerifyTransactionAsync(int transactionId)
+        {
+            try
+            {
+                _logger.LogInformation($"Verifying transaction: {transactionId}");
 
-        //    if (string.IsNullOrEmpty(contrib.TransactionSignature))
-        //    {
-        //        return new VerificationResult { IsValid = false, Message = "No signature found" };
-        //    }
+                // Get transaction
+                var transaction = await _context.Contribs
+                    .Include(c => c.MemberNoNavigation)
+                    .FirstOrDefaultAsync(c => c.Id == transactionId);
 
-        //    var member = await _context.Members
-        //        .FirstOrDefaultAsync(m => m.MemberNo == contrib.MemberNo);
+                if (transaction == null)
+                {
+                    return new VerificationResult
+                    {
+                        IsValid = false,
+                        Message = "Transaction not found"
+                    };
+                }
 
-        //    if (member == null)
-        //    {
-        //        return new VerificationResult { IsValid = false, Message = "Member not found" };
-        //    }
+                var memberNo = transaction.MemberNo;
+                if (string.IsNullOrEmpty(memberNo))
+                {
+                    return new VerificationResult
+                    {
+                        IsValid = false,
+                        Message = "Transaction has no member number"
+                    };
+                }
 
-        //    // Get share type to determine contribution category
-        //    var shareType = await _context.Sharetypes
-        //        .FirstOrDefaultAsync(st => st.SharesCode == contrib.Sharescode && st.CompanyCode == contrib.CompanyCode);
+                // Get wallet
+                var wallet = await GetWalletByMemberNoAsync(memberNo);
+                if (wallet == null)
+                {
+                    return new VerificationResult
+                    {
+                        IsValid = false,
+                        Message = "Wallet not found for member"
+                    };
+                }
 
-        //    // Determine contribution category (same logic as in ContributionService)
-        //    string contributionCategory = DetermineContributionCategory(shareType, contrib.Remarks, contrib.Amount ?? 0);
+                // ============================================================
+                // 1. VERIFY SIGNATURE - USING STORED CANONICAL DATA
+                // ============================================================
+                var signatureValid = false;
+                var signatureMessage = "Signature invalid";
 
-        //    // Recreate the EXACT transaction data that was signed (MUST MATCH Signing)
-        //    var txData = new
-        //    {
-        //        MemberNo = contrib.MemberNo,
-        //        Amount = contrib.Amount,
-        //        TransactionDate = contrib.ContrDate?.ToString("o"),
-        //        SharesCode = contrib.Sharescode,
-        //        ReceiptNo = contrib.ReceiptNo,
-        //        TransactionNo = contrib.TransactionNo,
-        //        CompanyCode = contrib.CompanyCode,
-        //        ContributionCategory = contributionCategory 
-        //    };
+                if (!string.IsNullOrEmpty(transaction.TransactionSignature) &&
+                    !string.IsNullOrEmpty(wallet.PublicKey))
+                {
+                    try
+                    {
+                        // CRITICAL: Use the stored canonical data
+                        string canonicalData;
 
-        //    var canonicalData = CreateCanonicalString(txData, contrib.TransactionSequence ?? 0);
+                        if (!string.IsNullOrEmpty(transaction.CanonicalData))
+                        {
+                            // ✅ Use the stored canonical data (what was actually signed)
+                            canonicalData = transaction.CanonicalData;
+                            _logger.LogInformation($"Using stored canonical data for transaction {transactionId}");
+                        }
+                        else
+                        {
+                            // ⚠️ Fallback: Reconstruct (for old transactions without CanonicalData)
+                            var data = new
+                            {
+                                MemberNo = transaction.MemberNo ?? "",
+                                Amount = transaction.Amount ?? 0,
+                                TransactionDate = transaction.ContrDate?.ToString("o") ?? DateTime.UtcNow.ToString("o"),
+                                SharesCode = transaction.Sharescode ?? "",
+                                ReceiptNo = transaction.ReceiptNo ?? "",
+                                TransactionNo = transaction.TransactionNo ?? "",
+                                CompanyCode = transaction.CompanyCode ?? "",
+                                ContributionCategory = DetermineContributionCategory(transaction)
+                            };
+                            canonicalData = GetCanonicalData(data);
+                            _logger.LogWarning($"Reconstructed canonical data for transaction {transactionId} (fallback)");
+                        }
 
-        //    _logger.LogDebug($"Verifying transaction {contribId}");
-        //    _logger.LogDebug($"Canonical data: {canonicalData}");
+                        // Verify signature
+                        var publicKeyBytes = Convert.FromBase64String(wallet.PublicKey);
+                        var signatureBytes = Convert.FromBase64String(transaction.TransactionSignature);
+                        var dataBytes = Encoding.UTF8.GetBytes(canonicalData);
 
-        //    // STRICT VERIFICATION - Using ECDsa.VerifyData
-        //    bool isValid = await VerifySignatureAsync(member.MemberNo, canonicalData, contrib.TransactionSignature);
+                        using var ecdsa = ECDsa.Create();
+                        ecdsa.ImportSubjectPublicKeyInfo(publicKeyBytes, out _);
 
-        //    // Check chain integrity
-        //    bool chainValid = true;
-        //    if (!string.IsNullOrEmpty(contrib.PreviousTransactionHash))
-        //    {
-        //        var prevTx = await _context.Contribs
-        //            .Where(c => c.MemberNo == contrib.MemberNo && c.Id < contrib.Id)
-        //            .OrderByDescending(c => c.Id)
-        //            .FirstOrDefaultAsync();
+                        signatureValid = ecdsa.VerifyData(dataBytes, signatureBytes, HashAlgorithmName.SHA256);
+                        signatureMessage = signatureValid ? "Signature valid" : "Signature invalid ❌";
 
-        //        if (prevTx != null && prevTx.TransactionHash != contrib.PreviousTransactionHash)
-        //        {
-        //            chainValid = false;
-        //            _logger.LogWarning($"Chain broken at transaction {contrib.Id}: Expected {prevTx.TransactionHash}, Got {contrib.PreviousTransactionHash}");
-        //        }
-        //    }
+                        _logger.LogInformation($"Signature verification for transaction {transactionId}: {(signatureValid ? "VALID ✅" : "INVALID ❌")}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error verifying signature for transaction {transactionId}");
+                        signatureMessage = $"Signature verification error: {ex.Message}";
+                    }
+                }
+                else
+                {
+                    if (string.IsNullOrEmpty(transaction.TransactionSignature))
+                        signatureMessage = "Transaction has no signature";
+                    else if (string.IsNullOrEmpty(wallet.PublicKey))
+                        signatureMessage = "Member has no public key";
+                }
 
-        //    // Update verification status
-        //    contrib.IsSignatureVerified = isValid;
-        //    contrib.SignatureVerifiedAt = DateTime.UtcNow;
-        //    await _context.SaveChangesAsync();
+                // ============================================================
+                // 2. VERIFY CHAIN
+                // ============================================================
+                var chainValid = false;
+                var chainMessage = "Chain invalid";
+                var isGenesisTransaction = false;
+                var genesisAnchor = string.Empty;
 
-        //    return new VerificationResult
-        //    {
-        //        IsValid = isValid && chainValid,
-        //        SignatureValid = isValid,
-        //        ChainValid = chainValid,
-        //        Message = isValid && chainValid ? "Verified ✅" : (isValid ? "Chain broken ❌" : "Invalid signature ❌")
-        //    };
-        //}
+                if (!string.IsNullOrEmpty(transaction.PreviousTransactionHash))
+                {
+                    // Check if this is a genesis transaction (first for member)
+                    var previousTransaction = await _context.Contribs
+                        .Where(c => c.MemberNo == memberNo && c.Id < transactionId)
+                        .OrderByDescending(c => c.Id)
+                        .FirstOrDefaultAsync();
 
+                    if (previousTransaction == null)
+                    {
+                        // This is the FIRST transaction - verify against wallet address
+                        isGenesisTransaction = true;
+                        genesisAnchor = wallet.Address;
+
+                        // Compare previous hash with wallet address (genesis anchor)
+                        chainValid = transaction.PreviousTransactionHash == wallet.Address;
+                        chainMessage = chainValid ?
+                            "Genesis transaction verified against wallet address" :
+                            $"Genesis anchor mismatch: expected {wallet.Address}, got {transaction.PreviousTransactionHash}";
+                    }
+                    else
+                    {
+                        // Not first transaction - verify against previous transaction hash
+                        chainValid = transaction.PreviousTransactionHash == previousTransaction.TransactionHash;
+                        chainMessage = chainValid ?
+                            "Chain link verified" :
+                            $"Chain broken: expected {previousTransaction.TransactionHash}, got {transaction.PreviousTransactionHash}";
+                    }
+                }
+                else
+                {
+                    // No previous hash - check if it's the first transaction
+                    var anyPrevious = await _context.Contribs
+                        .AnyAsync(c => c.MemberNo == memberNo && c.Id < transactionId);
+
+                    if (!anyPrevious)
+                    {
+                        isGenesisTransaction = true;
+                        genesisAnchor = wallet.Address;
+                        chainValid = false;
+                        chainMessage = $"Genesis transaction must have PreviousTransactionHash = wallet address ({wallet.Address})";
+                    }
+                    else
+                    {
+                        chainValid = false;
+                        chainMessage = "Transaction has no previous hash but there are previous transactions";
+                    }
+                }
+
+                // ============================================================
+                // 3. OVERALL VALIDITY
+                // ============================================================
+                var isValid = signatureValid && chainValid;
+
+                // Update transaction verification status if valid
+                if (isValid && !(transaction.IsSignatureVerified ?? false))
+                {
+                    transaction.IsSignatureVerified = true;
+                    transaction.SignatureVerifiedAt = DateTime.Now;
+                    await _context.SaveChangesAsync();
+                }
+
+                // ============================================================
+                // 4. RETURN RESULT
+                // ============================================================
+                return new VerificationResult
+                {
+                    IsValid = isValid,
+                    SignatureValid = signatureValid,
+                    ChainValid = chainValid,
+                    Message = isValid ?
+                        "✅ Transaction verified successfully" :
+                        $"❌ Verification failed: {(signatureValid ? "" : "Invalid signature")}{(chainValid ? "" : (signatureValid ? " - Broken chain" : " and broken chain"))}",
+                    IsGenesisTransaction = isGenesisTransaction,
+                    GenesisAnchor = genesisAnchor
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error verifying transaction {transactionId}");
+                return new VerificationResult
+                {
+                    IsValid = false,
+                    Message = $"Verification error: {ex.Message}"
+                };
+            }
+        }
+
+        #endregion
+
+        #region Chain Verification
+
+        public async Task<ChainVerificationResult> VerifyMemberChainWithGenesisAsync(string memberNo)
+        {
+            try
+            {
+                _logger.LogInformation($"Verifying chain for member: {memberNo}");
+
+                var result = new ChainVerificationResult
+                {
+                    TotalTransactions = 0,
+                    ValidSignatures = 0,
+                    FailedTransactionIds = new List<int>(),
+                    BrokenChainIds = new List<int>(),
+                    IsValid = false
+                };
+
+                // Get wallet
+                var wallet = await GetWalletByMemberNoAsync(memberNo);
+                if (wallet == null)
+                {
+                    result.Message = "Wallet not found for member";
+                    return result;
+                }
+
+                result.GenesisAnchor = wallet.Address;
+
+                // Get all transactions for member in order
+                var transactions = await _context.Contribs
+                    .Where(c => c.MemberNo == memberNo)
+                    .OrderBy(c => c.Id)
+                    .ToListAsync();
+
+                if (!transactions.Any())
+                {
+                    result.Message = "No transactions found for this member";
+                    result.IsValid = true; // Empty chain is valid
+                    return result;
+                }
+
+                result.TotalTransactions = transactions.Count;
+
+                // Verify each transaction
+                string previousHash = null;
+                bool isFirst = true;
+                bool allValid = true;
+
+                foreach (var tx in transactions)
+                {
+                    // Verify signature
+                    var signatureValid = await VerifySingleTransactionSignature(tx, wallet);
+
+                    if (signatureValid)
+                    {
+                        result.ValidSignatures++;
+                    }
+                    else
+                    {
+                        result.FailedTransactionIds.Add(tx.Id);
+                        allValid = false;
+                    }
+
+                    // Verify chain link
+                    bool chainLinked = false;
+
+                    if (isFirst)
+                    {
+                        // First transaction - must link to wallet address
+                        chainLinked = tx.PreviousTransactionHash == wallet.Address;
+                        if (!chainLinked)
+                        {
+                            result.BrokenChainIds.Add(tx.Id);
+                            allValid = false;
+                        }
+                        result.IsFirstTransactionValid = chainLinked;
+                    }
+                    else
+                    {
+                        // Subsequent transactions - link to previous hash
+                        chainLinked = tx.PreviousTransactionHash == previousHash;
+                        if (!chainLinked)
+                        {
+                            result.BrokenChainIds.Add(tx.Id);
+                            allValid = false;
+                        }
+                    }
+
+                    // Update transaction status if both valid
+                    if (signatureValid && chainLinked)
+                    {
+                        if (!(tx.IsSignatureVerified ?? false))
+                        {
+                            tx.IsSignatureVerified = true;
+                            tx.SignatureVerifiedAt = DateTime.Now;
+                        }
+                    }
+
+                    previousHash = tx.TransactionHash;
+                    isFirst = false;
+                }
+
+                await _context.SaveChangesAsync();
+
+                result.IsValid = allValid && result.ValidSignatures == result.TotalTransactions;
+                result.Message = result.IsValid ?
+                    "✅ All transactions in chain are valid" :
+                    $"❌ Chain verification failed: {result.FailedTransactionIds.Count} invalid signatures, {result.BrokenChainIds.Count} broken links";
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error verifying chain for member {memberNo}");
+                return new ChainVerificationResult
+                {
+                    IsValid = false,
+                    Message = $"Chain verification error: {ex.Message}"
+                };
+            }
+        }
+
+        private async Task<bool> VerifySingleTransactionSignature(Contrib transaction, Wallet wallet)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(transaction.TransactionSignature) ||
+                    string.IsNullOrEmpty(wallet.PublicKey))
+                {
+                    return false;
+                }
+
+                // CRITICAL: Use stored canonical data if available
+                string canonicalData;
+
+                if (!string.IsNullOrEmpty(transaction.CanonicalData))
+                {
+                    // ✅ Use the stored canonical data
+                    canonicalData = transaction.CanonicalData;
+                }
+                else
+                {
+                    // ⚠️ Fallback: Reconstruct
+                    var data = new
+                    {
+                        MemberNo = transaction.MemberNo ?? "",
+                        Amount = transaction.Amount ?? 0,
+                        TransactionDate = transaction.ContrDate?.ToString("o") ?? DateTime.UtcNow.ToString("o"),
+                        SharesCode = transaction.Sharescode ?? "",
+                        ReceiptNo = transaction.ReceiptNo ?? "",
+                        TransactionNo = transaction.TransactionNo ?? "",
+                        CompanyCode = transaction.CompanyCode ?? "",
+                        ContributionCategory = DetermineContributionCategory(transaction)
+                    };
+                    canonicalData = GetCanonicalData(data);
+                }
+
+                var publicKeyBytes = Convert.FromBase64String(wallet.PublicKey);
+                var signatureBytes = Convert.FromBase64String(transaction.TransactionSignature);
+                var dataBytes = Encoding.UTF8.GetBytes(canonicalData);
+
+                using var ecdsa = ECDsa.Create();
+                ecdsa.ImportSubjectPublicKeyInfo(publicKeyBytes, out _);
+
+                return ecdsa.VerifyData(dataBytes, signatureBytes, HashAlgorithmName.SHA256);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error verifying signature for transaction {transaction.Id}");
+                return false;
+            }
+        }
+
+        #endregion
         /// <summary>
         /// Helper method to determine contribution category (must match the one in ContributionService)
         /// </summary>
@@ -455,75 +733,23 @@ namespace SACCOBlockChainSystem.Services
             return "SHARE_CAPITAL";
         }
 
-        public async Task<WalletResult> CreateWalletForMemberAsync(int memberId, string memberNo, string companyCode)
+        private string DetermineContributionCategory(Contrib transaction)
         {
-            _logger.LogInformation($"Creating wallet for member: {memberNo}, Company: {companyCode}");
+            // Simple determination - you can expand this
+            var shareType = transaction.Sharescode?.ToLower() ?? "";
 
-            var member = await _context.Members
-                .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
+            if (shareType.Contains("reg") || shareType.Contains("fee"))
+                return "REGISTRATION_FEE";
+            if (shareType.Contains("deposit") || shareType.Contains("savings"))
+                return "DEPOSIT";
+            if (shareType.Contains("donor") || shareType.Contains("gift"))
+                return "DONOR";
+            if (shareType.Contains("loan") || shareType.Contains("repayment"))
+                return "LOAN_REPAYMENT";
+            if (shareType.Contains("passbook"))
+                return "PASSBOOK";
 
-            if (member == null)
-            {
-                return new WalletResult { Success = false, Message = "Member not found" };
-            }
-
-            _logger.LogInformation($"Found member: ID={member.Id}, MemberNo={member.MemberNo}, CompanyCode={member.CompanyCode}");
-
-            var existingWallet = await _context.Wallets
-                .FirstOrDefaultAsync(w => w.memberNo == memberNo && w.CompanyCode == companyCode);
-
-            if (existingWallet != null)
-            {
-                return new WalletResult
-                {
-                    Success = true,
-                    WalletAddress = existingWallet.Address,
-                    Message = "Wallet already exists"
-                };
-            }
-
-            try
-            {
-                var wallet = Wallet.CreateNewWallet(member.Id, member.MemberNo, companyCode);
-
-                _context.Wallets.Add(wallet);
-                await _context.SaveChangesAsync();
-
-                member.WalletAddress = wallet.Address;
-                member.IsWalletActive = true;
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation($"Wallet created for member {memberNo} (ID: {member.Id}): {wallet.Address}");
-
-                return new WalletResult
-                {
-                    Success = true,
-                    WalletAddress = wallet.Address,
-                    Message = "Wallet created successfully"
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Failed to create wallet for member {memberNo}");
-                return new WalletResult { Success = false, Message = ex.Message };
-            }
-        }
-
-        public async Task<Wallet> GetWalletByMemberNoAsync(string memberNo)
-        {
-            return await _context.Wallets
-                .FirstOrDefaultAsync(w => w.memberNo == memberNo);
-        }
-
-        public async Task<Wallet> GetWalletByMemberIdAsync(int memberId)
-        {
-            return await _context.Wallets
-                .FirstOrDefaultAsync(w => w.MemberId == memberId);
-        }
-
-        public async Task<bool> HasWalletAsync(string memberNo)
-        {
-            return await _context.Wallets.AnyAsync(w => w.memberNo == memberNo);
+            return "SHARE_CAPITAL";
         }
 
         public async Task<WalletInfo> GetWalletInfoAsync(string memberNo)
@@ -543,75 +769,6 @@ namespace SACCOBlockChainSystem.Services
             };
         }
 
-        // ============================================================
-        // SIGNING TRANSACTIONS
-        // ============================================================
-
-        public async Task<SigningResult> SignTransactionAsync(string memberNo, object transactionData)
-        {
-            var wallet = await _context.Wallets
-                .FirstOrDefaultAsync(w => w.memberNo == memberNo);
-
-            if (wallet == null)
-            {
-                return new SigningResult { Success = false, Message = "Member has no wallet. Create wallet first." };
-            }
-
-            if (!wallet.IsActive)
-            {
-                return new SigningResult { Success = false, Message = "Wallet is inactive" };
-            }
-
-            try
-            {
-                wallet.TransactionNonce++;
-                wallet.LastUsedAt = DateTime.UtcNow;
-
-                var canonicalData = CreateCanonicalString(transactionData, wallet.TransactionNonce);
-                var dataBytes = Encoding.UTF8.GetBytes(canonicalData);
-
-                var privateKeyBytes = DecryptPrivateKey(wallet.PrivateKeyEncrypted!);
-
-                using var ecdsa = ECDsa.Create();
-                ecdsa.ImportECPrivateKey(privateKeyBytes, out _);
-
-                var signature = ecdsa.SignData(dataBytes, HashAlgorithmName.SHA256);
-                var signatureBase64 = Convert.ToBase64String(signature);
-                var transactionHash = ComputeHash(canonicalData);
-
-                var member = await _context.Members
-                    .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
-                if (member != null)
-                {
-                    member.TransactionNonce = wallet.TransactionNonce;
-                    member.LastTransactionHash = transactionHash;
-                    member.LastTransactionSignature = signatureBase64;
-                    member.LastSignatureAt = DateTime.UtcNow;
-                }
-
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation($"Transaction signed for member {memberNo}, nonce: {wallet.TransactionNonce}");
-
-                return new SigningResult
-                {
-                    Success = true,
-                    Signature = signatureBase64,
-                    TransactionHash = transactionHash,
-                    Nonce = wallet.TransactionNonce,
-                    Message = "Transaction signed successfully"
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Failed to sign transaction for member {memberNo}");
-                return new SigningResult { Success = false, Message = ex.Message };
-            }
-        }
-
-        // ============================================================
-        // VERIFICATION - USING STRICT ECDsa.VerifyData
-        // ============================================================
 
         /// <summary>
         /// Verifies a digital signature using the member's public key
@@ -723,581 +880,132 @@ namespace SACCOBlockChainSystem.Services
             return result;
         }
 
-        // ============================================================
-        // FRAUD DETECTION
-        // ============================================================
 
-        public async Task<FraudResult> AnalyzeTransactionAsync(string memberNo, decimal amount, string transactionType)
+        #region Utility Methods
+
+        public string GetCanonicalData(object transactionData)
         {
-            var result = new FraudResult
+            // Convert to JSON with consistent ordering
+            var options = new JsonSerializerOptions
             {
-                RiskScore = 0,
-                Flags = new List<string>(),
-                IsSuspicious = false,
-                ShouldBlock = false
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false
             };
 
-            var recentTransactions = await _context.Contribs
-                .Where(c => c.MemberNo == memberNo)
-                .OrderByDescending(c => c.Id)
-                .Take(10)
-                .ToListAsync();
+            return JsonSerializer.Serialize(transactionData, options);
+        }
 
-            var avgAmount = recentTransactions.Any() ? recentTransactions.Average(c => c.Amount ?? 0) : 0;
-            if (avgAmount > 0 && amount > avgAmount * 3)
+        private string ReconstructCanonicalData(Contrib transaction)
+        {
+            // Reconstruct the data that was originally signed
+            var data = new
             {
-                result.RiskScore += 30;
-                result.Flags.Add($"Amount {amount:C} is 3x above average {avgAmount:C}");
+                MemberNo = transaction.MemberNo ?? "",
+                Amount = transaction.Amount ?? 0,
+                TransactionDate = transaction.ContrDate?.ToString("o") ?? DateTime.UtcNow.ToString("o"),
+                SharesCode = transaction.Sharescode ?? "",
+                ReceiptNo = transaction.ReceiptNo ?? "",
+                TransactionNo = transaction.TransactionNo ?? "",
+                CompanyCode = transaction.CompanyCode ?? "",
+                ContributionCategory = DetermineContributionCategory(transaction)
+            };
+
+            return GetCanonicalData(data);
+        }
+
+        //private string DetermineContributionCategory(Contrib transaction)
+        //{
+        //    // Simple determination - you can expand this
+        //    var shareType = transaction.Sharescode?.ToLower() ?? "";
+
+        //    if (shareType.Contains("reg") || shareType.Contains("fee"))
+        //        return "REGISTRATION_FEE";
+        //    if (shareType.Contains("deposit") || shareType.Contains("savings"))
+        //        return "DEPOSIT";
+        //    if (shareType.Contains("donor") || shareType.Contains("gift"))
+        //        return "DONOR";
+        //    if (shareType.Contains("loan") || shareType.Contains("repayment"))
+        //        return "LOAN_REPAYMENT";
+        //    if (shareType.Contains("passbook"))
+        //        return "PASSBOOK";
+
+        //    return "SHARE_CAPITAL";
+        //}       
+
+        #endregion
+
+        #region Fraud Detection
+
+        public async Task<FraudAnalysisResult> AnalyzeTransactionAsync(
+            string memberNo,
+            decimal amount,
+            string category)
+        {
+            var result = new FraudAnalysisResult
+            {
+                IsSuspicious = false,
+                ShouldBlock = false,
+                Flags = new List<string>(),
+                Confidence = 0
+            };
+
+            try
+            {
+                // Get member's transaction history
+                var transactions = await _context.Contribs
+                    .Where(c => c.MemberNo == memberNo)
+                    .OrderByDescending(c => c.Id)
+                    .Take(10)
+                    .ToListAsync();
+
+                // Check for unusually large amount
+                if (amount > 1000000) // 1M KES
+                {
+                    result.Flags.Add("Unusually large amount");
+                    result.IsSuspicious = true;
+                    result.Confidence += 30;
+                }
+
+                // Check for frequent transactions
+                if (transactions.Count >= 5)
+                {
+                    var recentCount = transactions
+                        .Where(t => t.ContrDate >= DateTime.Now.AddHours(-24))
+                        .Count();
+
+                    if (recentCount >= 3)
+                    {
+                        result.Flags.Add("Frequent transactions (3+ in 24 hours)");
+                        result.IsSuspicious = true;
+                        result.Confidence += 20;
+                    }
+                }
+
+                // Check for duplicate amounts
+                var duplicateCount = transactions
+                    .Where(t => Math.Abs((t.Amount ?? 0) - amount) < 0.01m)
+                    .Count();
+
+                if (duplicateCount >= 3)
+                {
+                    result.Flags.Add("Multiple transactions with same amount");
+                    result.IsSuspicious = true;
+                    result.Confidence += 15;
+                }
+
+                // Block if confidence is high
+                result.ShouldBlock = result.Confidence >= 60;
             }
-
-            var lastHour = DateTime.UtcNow.AddHours(-1);
-            var recentCount = recentTransactions.Count(c => c.ContrDate >= lastHour);
-            if (recentCount >= 5)
+            catch (Exception ex)
             {
-                result.RiskScore += 25;
-                result.Flags.Add($"{recentCount} transactions in the last hour");
-            }
-
-            if (amount % 1000 == 0 && amount > 10000)
-            {
-                result.RiskScore += 10;
-                result.Flags.Add($"Round number amount {amount:C} may indicate testing");
-            }
-
-            if (amount < 100 && recentTransactions.Any(c => (c.Amount ?? 0) > 10000))
-            {
-                result.RiskScore += 15;
-                result.Flags.Add("Small amount after large transaction");
-            }
-
-            result.IsSuspicious = result.RiskScore >= 40;
-            result.ShouldBlock = result.RiskScore >= 70;
-
-            if (result.RiskScore >= 70)
-            {
-                result.Recommendation = "Block transaction and notify admin";
-            }
-            else if (result.RiskScore >= 40)
-            {
-                result.Recommendation = "Flag for review";
-            }
-            else
-            {
-                result.Recommendation = "Allow transaction";
-            }
-
-            var member = await _context.Members
-                .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
-
-            if (member != null)
-            {
-                member.FraudRiskScore = result.RiskScore;
-                member.LastFraudAssessmentAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
+                _logger.LogError(ex, $"Error analyzing transaction for member {memberNo}");
+                result.Flags.Add($"Analysis error: {ex.Message}");
             }
 
             return result;
         }
 
+        #endregion
     }
 
-    //public class CryptoService : ICryptoService
-    //{
-    //    private readonly ApplicationDbContext _context;
-    //    private readonly ILogger<CryptoService> _logger;
-    //    private readonly IHttpContextAccessor _httpContextAccessor;
-    //    private readonly AuditTrailService _auditService;
-
-    //    public CryptoService(
-    //        ApplicationDbContext context,
-    //        ILogger<CryptoService> logger,
-    //        IHttpContextAccessor httpContextAccessor,
-    //        AuditTrailService auditService)
-    //    {
-    //        _context = context;
-    //        _logger = logger;
-    //        _httpContextAccessor = httpContextAccessor;
-    //        _auditService = auditService;
-    //    }
-
-    //    // ============================================================
-    //    // PRIVATE HELPERS
-    //    // ============================================================
-
-    //    private byte[] DecryptPrivateKey(string encryptedPrivateKey)
-    //    {
-    //        var decrypted = EncryptionHelper.Decrypt(encryptedPrivateKey);
-    //        return Convert.FromBase64String(decrypted);
-    //    }
-
-    //    private string ComputeHash(string data)
-    //    {
-    //        using var sha256 = SHA256.Create();
-    //        var bytes = Encoding.UTF8.GetBytes(data);
-    //        var hash = sha256.ComputeHash(bytes);
-    //        return Convert.ToHexString(hash).ToLower();
-    //    }
-
-    //    private string CreateCanonicalString(object data, long nonce)
-    //    {
-    //        var json = System.Text.Json.JsonSerializer.Serialize(data);
-    //        return $"{json}|nonce:{nonce}";
-    //    }
-
-    //    // ============================================================
-    //    // WALLET MANAGEMENT
-    //    // ============================================================
-    //    public async Task<WalletResult> CreateWalletForMemberAsync(int memberId, string memberNo, string companyCode)
-    //    {
-    //        //var member = await _context.Members.FirstOrDefaultAsync(m => m.Id == memberId);
-
-    //        _logger.LogInformation($"Creating wallet for member: {memberNo}, Company: {companyCode}");
-
-    //        // Find member by MemberNo AND CompanyCode
-    //        var member = await _context.Members
-    //            .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
-
-    //        if (member == null)
-    //        {
-    //            return new WalletResult { Success = false, Message = "Member not found" };
-    //        }
-
-    //        _logger.LogInformation($"Found member: ID={member.Id}, MemberNo={member.MemberNo}, CompanyCode={member.CompanyCode}");
-
-    //        // Check if wallet already exists
-    //        var existingWallet = await _context.Wallets
-    //            .FirstOrDefaultAsync(w => w.memberNo == memberNo && w.CompanyCode == companyCode);
-
-    //        if (existingWallet != null)
-    //        {
-    //            return new WalletResult
-    //            {
-    //                Success = true,
-    //                WalletAddress = existingWallet.Address,
-    //                Message = "Wallet already exists"
-    //            };
-    //        }
-
-    //        try
-    //        {
-    //            // Create wallet with MemberId AND MemberNo
-    //            var wallet = Wallet.CreateNewWallet(member.Id, member.MemberNo, companyCode);
-
-    //            _context.Wallets.Add(wallet);
-    //            await _context.SaveChangesAsync();
-
-    //            // =============================================
-    //            // CRITICAL: Update Member table with WalletAddress
-    //            // =============================================
-    //            member.WalletAddress = wallet.Address;
-    //            member.IsWalletActive = true;
-    //            await _context.SaveChangesAsync();
-
-    //            _logger.LogInformation($"Wallet created for member {memberNo} (ID: {member.Id}): {wallet.Address}");
-    //            _logger.LogInformation($"Updated Member {memberNo} with WalletAddress: {wallet.Address}");
-
-    //            return new WalletResult
-    //            {
-    //                Success = true,
-    //                WalletAddress = wallet.Address,
-    //                Message = "Wallet created successfully"
-    //            };
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            _logger.LogError(ex, $"Failed to create wallet for member {memberNo}");
-    //            return new WalletResult { Success = false, Message = ex.Message };
-    //        }
-    //    }
-
-
-    //    public async Task<Wallet> GetWalletByMemberNoAsync(string memberNo)
-    //    {
-    //        return await _context.Wallets
-    //            .FirstOrDefaultAsync(w => w.memberNo == memberNo);
-    //    }
-
-    //    public async Task<bool> HasWalletAsync(string memberNo)
-    //    {
-    //        return await _context.Wallets.AnyAsync(w => w.memberNo == memberNo);
-    //    }
-
-    //    public async Task<WalletInfo> GetWalletInfoAsync(string memberNo)
-    //    {
-    //        var wallet = await _context.Wallets
-    //            .FirstOrDefaultAsync(w => w.memberNo == memberNo);
-
-    //        if (wallet == null) return null;
-
-    //        return new WalletInfo
-    //        {
-    //            WalletAddress = wallet.Address,
-    //            CreatedAt = wallet.CreatedAt,
-    //            IsActive = wallet.IsActive,
-    //            TransactionNonce = wallet.TransactionNonce,
-    //            Balance = wallet.Balance
-    //        };
-    //    }
-
-    //    public async Task<Wallet> GetWalletByMemberIdAsync(int memberId)
-    //    {
-    //        return await _context.Wallets
-    //            .FirstOrDefaultAsync(w => w.MemberId == memberId);
-    //    }
-
-       
-    //    // ============================================================
-    //    // SIGNING TRANSACTIONS
-    //    // ============================================================
-
-    //    public async Task<SigningResult> SignTransactionAsync(string memberNo, object transactionData)
-    //    {
-    //        // Find wallet by MemberNo
-    //        var wallet = await _context.Wallets
-    //            .FirstOrDefaultAsync(w => w.memberNo == memberNo);
-
-    //        if (wallet == null)
-    //        {
-    //            return new SigningResult { Success = false, Message = "Member has no wallet. Create wallet first." };
-    //        }
-
-    //        if (!wallet.IsActive)
-    //        {
-    //            return new SigningResult { Success = false, Message = "Wallet is inactive" };
-    //        }
-
-    //        try
-    //        {
-    //            wallet.TransactionNonce++;
-    //            wallet.LastUsedAt = DateTime.UtcNow;
-
-    //            var canonicalData = CreateCanonicalString(transactionData, wallet.TransactionNonce);
-    //            var dataBytes = Encoding.UTF8.GetBytes(canonicalData);
-
-    //            var privateKeyBytes = DecryptPrivateKey(wallet.PrivateKeyEncrypted!);
-
-    //            using var ecdsa = ECDsa.Create();
-    //            ecdsa.ImportECPrivateKey(privateKeyBytes, out _);
-
-    //            var signature = ecdsa.SignData(dataBytes, HashAlgorithmName.SHA256);
-    //            var signatureBase64 = Convert.ToBase64String(signature);
-    //            var transactionHash = ComputeHash(canonicalData);
-
-    //            // Also update the Member table's nonce for consistency
-    //            var member = await _context.Members
-    //                .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
-    //            if (member != null)
-    //            {
-    //                member.TransactionNonce = wallet.TransactionNonce;
-    //                member.LastTransactionHash = transactionHash;
-    //                member.LastTransactionSignature = signatureBase64;
-    //                member.LastSignatureAt = DateTime.UtcNow;
-    //            }
-
-    //            await _context.SaveChangesAsync();
-
-    //            _logger.LogInformation($"Transaction signed for member {memberNo}, nonce: {wallet.TransactionNonce}");
-
-    //            return new SigningResult
-    //            {
-    //                Success = true,
-    //                Signature = signatureBase64,
-    //                TransactionHash = transactionHash,
-    //                Nonce = wallet.TransactionNonce,
-    //                Message = "Transaction signed successfully"
-    //            };
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            _logger.LogError(ex, $"Failed to sign transaction for member {memberNo}");
-    //            return new SigningResult { Success = false, Message = ex.Message };
-    //        }
-    //    }
-
-
-    //    public async Task<bool> VerifySignatureAsync(string memberNo, string data, string signature)
-    //    {
-    //        var wallet = await _context.Wallets
-    //            .FirstOrDefaultAsync(w => w.memberNo == memberNo);
-
-    //        if (wallet == null || string.IsNullOrEmpty(wallet.PublicKey))
-    //        {
-    //            return false;
-    //        }
-
-    //        try
-    //        {
-    //            var dataBytes = Encoding.UTF8.GetBytes(data);
-    //            var signatureBytes = Convert.FromBase64String(signature);
-    //            var publicKeyBytes = Convert.FromBase64String(wallet.PublicKey);
-
-    //            using var ecdsa = ECDsa.Create();
-    //            ecdsa.ImportSubjectPublicKeyInfo(publicKeyBytes, out _);
-
-    //            return ecdsa.VerifyData(dataBytes, signatureBytes, HashAlgorithmName.SHA256);
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            _logger.LogError(ex, "Signature verification failed");
-    //            return false;
-    //        }
-    //    }
-
-    //    // ============================================================
-    //    // VERIFICATION
-    //    // ============================================================
-
-
-    //    public async Task<ChainVerificationResult> VerifyMemberChainWithGenesisAsync(string memberNo)
-    //    {
-    //        var member = await _context.Members
-    //            .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
-
-    //        if (member == null)
-    //        {
-    //            return new ChainVerificationResult
-    //            {
-    //                IsValid = false,
-    //                Message = "Member not found"
-    //            };
-    //        }
-
-    //        var wallet = await _context.Wallets
-    //            .FirstOrDefaultAsync(w => w.MemberId == member.Id);
-
-    //        var transactions = await _context.Contribs
-    //            .Where(c => c.MemberNo == memberNo)
-    //            .OrderBy(c => c.Id)
-    //            .ToListAsync();
-
-    //        var result = new ChainVerificationResult
-    //        {
-    //            TotalTransactions = transactions.Count,
-    //            FailedTransactionIds = new List<int>()
-    //        };
-
-    //        if (transactions.Count == 0)
-    //        {
-    //            result.IsValid = true;
-    //            result.Message = "No transactions to verify";
-    //            return result;
-    //        }
-
-    //        // Verify FIRST transaction's genesis hash matches wallet
-    //        var firstTx = transactions.First();
-    //        string expectedGenesisHash = wallet?.Address ?? $"GENESIS-{member.MemberNo}";
-
-    //        if (firstTx.PreviousTransactionHash != expectedGenesisHash)
-    //        {
-    //            result.FailedTransactionIds.Add(firstTx.Id);
-    //            result.Message = $"Genesis hash mismatch! Expected: {expectedGenesisHash}, Found: {firstTx.PreviousTransactionHash}";
-    //            _logger.LogWarning(result.Message);
-    //            return result;
-    //        }
-
-    //        // Verify remaining chain
-    //        string previousHash = firstTx.TransactionHash;
-
-    //        for (int i = 1; i < transactions.Count; i++)
-    //        {
-    //            var tx = transactions[i];
-
-    //            if (tx.PreviousTransactionHash != previousHash)
-    //            {
-    //                result.FailedTransactionIds.Add(tx.Id);
-    //                result.Message = $"Chain broken at transaction {tx.Id}";
-    //                break;
-    //            }
-
-    //            var verifyResult = await VerifyTransactionAsync(tx.Id);
-    //            if (!verifyResult.SignatureValid)
-    //            {
-    //                result.FailedTransactionIds.Add(tx.Id);
-    //            }
-
-    //            previousHash = tx.TransactionHash;
-    //        }
-
-    //        result.IsValid = result.FailedTransactionIds.Count == 0;
-    //        result.ValidSignatures = transactions.Count - result.FailedTransactionIds.Count;
-    //        result.Message = result.IsValid ? "Chain is valid with correct genesis anchor" : $"Failed at {result.FailedTransactionIds.Count} transaction(s)";
-
-    //        return result;
-    //    }
-
-    //    public async Task<VerificationResult> VerifyTransactionAsync(int contribId)
-    //    {
-    //        var contrib = await _context.Contribs
-    //            .FirstOrDefaultAsync(c => c.Id == contribId);
-
-    //        if (contrib == null)
-    //        {
-    //            return new VerificationResult { IsValid = false, Message = "Transaction not found" };
-    //        }
-
-    //        if (string.IsNullOrEmpty(contrib.TransactionSignature))
-    //        {
-    //            return new VerificationResult { IsValid = false, Message = "No signature found" };
-    //        }
-
-    //        var member = await _context.Members
-    //            .FirstOrDefaultAsync(m => m.MemberNo == contrib.MemberNo);
-
-    //        if (member == null)
-    //        {
-    //            return new VerificationResult { IsValid = false, Message = "Member not found" };
-    //        }
-
-    //        var txData = new
-    //        {
-    //            contrib.MemberNo,
-    //            contrib.Amount,
-    //            TransactionDate = contrib.ContrDate?.ToString("o"),
-    //            contrib.Sharescode,
-    //            contrib.ReceiptNo,
-    //            contrib.TransactionNo,
-    //            contrib.CompanyCode
-    //        };
-
-    //        var canonicalData = CreateCanonicalString(txData, contrib.TransactionSequence ?? 0);
-    //        var isValid = await VerifySignatureAsync(member.MobileNo, canonicalData, contrib.TransactionSignature);
-
-    //        contrib.IsSignatureVerified = isValid;
-    //        contrib.SignatureVerifiedAt = DateTime.UtcNow;
-    //        await _context.SaveChangesAsync();
-
-    //        return new VerificationResult
-    //        {
-    //            IsValid = isValid,
-    //            SignatureValid = isValid,
-    //            ChainValid = true,
-    //            Message = isValid ? "Verified" : "Verification failed"
-    //        };
-    //    }
-
-    //    public async Task<ChainVerificationResult> VerifyMemberChainAsync(string memberNo)
-    //    {
-    //        var transactions = await _context.Contribs
-    //            .Where(c => c.MemberNo == memberNo)
-    //            .OrderBy(c => c.Id)
-    //            .ToListAsync();
-
-    //        var result = new ChainVerificationResult
-    //        {
-    //            TotalTransactions = transactions.Count,
-    //            FailedTransactionIds = new List<int>()
-    //        };
-
-    //        string previousHash = null;
-    //        int validCount = 0;
-
-    //        foreach (var tx in transactions)
-    //        {
-    //            if (previousHash != null && tx.PreviousTransactionHash != previousHash)
-    //            {
-    //                result.FailedTransactionIds.Add(tx.Id);
-    //                continue;
-    //            }
-
-    //            var verifyResult = await VerifyTransactionAsync(tx.Id);
-    //            if (verifyResult.SignatureValid)
-    //            {
-    //                validCount++;
-    //            }
-    //            else
-    //            {
-    //                result.FailedTransactionIds.Add(tx.Id);
-    //            }
-
-    //            previousHash = tx.TransactionHash;
-    //        }
-
-    //        result.IsValid = result.FailedTransactionIds.Count == 0;
-    //        result.ValidSignatures = validCount;
-    //        result.Message = result.IsValid ? "Chain is valid" : $"Failed at {result.FailedTransactionIds.Count} transaction(s)";
-
-    //        return result;
-    //    }
-
-    //    // ============================================================
-    //    // FRAUD DETECTION
-    //    // ============================================================
-
-    //    public async Task<FraudResult> AnalyzeTransactionAsync(string memberNo, decimal amount, string transactionType)
-    //    {
-    //        var result = new FraudResult
-    //        {
-    //            RiskScore = 0,
-    //            Flags = new List<string>(),
-    //            IsSuspicious = false,
-    //            ShouldBlock = false
-    //        };
-
-    //        var recentTransactions = await _context.Contribs
-    //            .Where(c => c.MemberNo == memberNo)
-    //            .OrderByDescending(c => c.Id)
-    //            .Take(10)
-    //            .ToListAsync();
-
-    //        var avgAmount = recentTransactions.Any() ? recentTransactions.Average(c => c.Amount ?? 0) : 0;
-    //        if (avgAmount > 0 && amount > avgAmount * 3)
-    //        {
-    //            result.RiskScore += 30;
-    //            result.Flags.Add($"Amount {amount:C} is 3x above average {avgAmount:C}");
-    //        }
-
-    //        var lastHour = DateTime.UtcNow.AddHours(-1);
-    //        var recentCount = recentTransactions.Count(c => c.ContrDate >= lastHour);
-    //        if (recentCount >= 5)
-    //        {
-    //            result.RiskScore += 25;
-    //            result.Flags.Add($"{recentCount} transactions in the last hour");
-    //        }
-
-    //        if (amount % 1000 == 0 && amount > 10000)
-    //        {
-    //            result.RiskScore += 10;
-    //            result.Flags.Add($"Round number amount {amount:C} may indicate testing");
-    //        }
-
-    //        if (amount < 100 && recentTransactions.Any(c => (c.Amount ?? 0) > 10000))
-    //        {
-    //            result.RiskScore += 15;
-    //            result.Flags.Add("Small amount after large transaction");
-    //        }
-
-    //        result.IsSuspicious = result.RiskScore >= 40;
-    //        result.ShouldBlock = result.RiskScore >= 70;
-
-    //        if (result.RiskScore >= 70)
-    //        {
-    //            result.Recommendation = "Block transaction and notify admin";
-    //        }
-    //        else if (result.RiskScore >= 40)
-    //        {
-    //            result.Recommendation = "Flag for review";
-    //        }
-    //        else
-    //        {
-    //            result.Recommendation = "Allow transaction";
-    //        }
-
-    //        var member = await _context.Members
-    //            .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
-
-    //        if (member != null)
-    //        {
-    //            member.FraudRiskScore = result.RiskScore;
-    //            member.LastFraudAssessmentAt = DateTime.UtcNow;
-    //            await _context.SaveChangesAsync();
-    //        }
-
-    //        return result;
-    //    }
-
-    //    string ICryptoService.ComputeHash(string data)
-    //    {
-    //        return ComputeHash(data);
-    //    }
-    //}
 }

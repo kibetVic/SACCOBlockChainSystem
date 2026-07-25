@@ -125,7 +125,8 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form asp-action="Edit" method="post">
+                    <form asp-action="Edit" method="post" enctype="multipart/form-data">
+                    @* <form asp-action="Edit" method="post"> *@
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@ViewContext.RouteData.Values["id"]" />
 
@@ -229,11 +230,73 @@
                             </div>
                         </div>
 
+                        <!-- Document Upload Section (Add to Edit.cshtml) -->
                         <div class="row">
                             <div class="col-md-12 mb-3">
-                                <label asp-for="DocumentPath" class="form-label">Supporting Document</label>
-                                <input asp-for="DocumentPath" class="form-control" placeholder="Path to uploaded document" />
-                                <small class="text-muted">Upload the withdrawal application letter or other supporting documents</small>
+                                <label class="form-label fw-bold">Supporting Documents</label>
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">Application Letter</label>
+                                                <div class="file-upload-wrapper">
+                                                    <input type="file" id="applicationLetterUpload" name="applicationLetterUpload" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+                                                    <span class="text-muted small">PDF, DOC, DOCX, JPG, PNG (Max 5MB)</span>
+                                                </div>
+                                                <div id="applicationLetterPreview" class="mt-2" style="display: none;">
+                                                    <div class="uploaded-file">
+                                                        <i class="bi bi-file-pdf text-danger me-2"></i>
+                                                        <span id="applicationLetterName" class="file-name"></span>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="clearFile('applicationLetter')">
+                                                            <i class="bi bi-x-circle"></i> Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(Model.DocumentPath))
+                                                {
+                                                    <div class="mt-2">
+                                                        <small class="text-muted">Current file: <a href="#" target="_blank">@System.IO.Path.GetFileName(Model.DocumentPath)</a></small>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">ID Copy</label>
+                                                <div class="file-upload-wrapper">
+                                                    <input type="file" id="idCopyUpload" name="idCopyUpload" class="form-control" accept=".pdf,.jpg,.jpeg,.png" />
+                                                    <span class="text-muted small">PDF, JPG, PNG (Max 5MB)</span>
+                                                </div>
+                                                <div id="idCopyPreview" class="mt-2" style="display: none;">
+                                                    <div class="uploaded-file">
+                                                        <i class="bi bi-file-image text-primary me-2"></i>
+                                                        <span id="idCopyName" class="file-name"></span>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="clearFile('idCopy')">
+                                                            <i class="bi bi-x-circle"></i> Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-12 mb-3">
+                                                <label class="form-label">Other Supporting Documents</label>
+                                                <div class="file-upload-wrapper">
+                                                    <input type="file" id="otherDocumentsUpload" name="otherDocumentsUpload" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" multiple />
+                                                    <span class="text-muted small">PDF, DOC, DOCX, JPG, PNG (Max 5MB each, multiple files allowed)</span>
+                                                </div>
+                                                <div id="otherDocumentsPreview" class="mt-2" style="display: none;">
+                                                    <div class="uploaded-file">
+                                                        <i class="bi bi-files text-success me-2"></i>
+                                                        <span id="otherDocumentsCount" class="file-name">0 file(s) selected</span>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="clearFile('otherDocuments')">
+                                                            <i class="bi bi-x-circle"></i> Clear All
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <small class="text-muted">Upload all required supporting documents for the withdrawal request</small>
                             </div>
                         </div>
 

@@ -57,21 +57,22 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public List<LoanScheduleDTO> RepaymentSchedule { get; set; }
     }
 
+
     public class LoanWithdrawalViewModel
     {
-        public string LoanNo { get; set; }
+        public string LoanNo { get; set; } = string.Empty;
         public decimal Amount { get; set; }
-        public string MemberPhone { get; set; }
-
-        [Required(ErrorMessage = "Please select withdrawal method")]
-        public string WithdrawalMethod { get; set; }
-
-        [Display(Name = "M-Pesa Phone Number")]
-        public string MpesaPhoneNumber { get; set; }
-        public List<WithdrawalMethodDTO> WithdrawalMethods { get; set; }
         public decimal ProcessingFee { get; set; }
-        public string MemberAccount { get; set; }
-        public decimal ProcessingFeePercentage { get; internal set; }
+        public decimal ProcessingFeePercentage { get; set; }
+        public string MemberPhone { get; set; } = string.Empty;
+        public string MpesaPhoneNumber { get; set; } = string.Empty;
+        public string MemberAccount { get; set; } = string.Empty;
+        public string WithdrawalMethod { get; set; } = "MPESA";
+        public List<WithdrawalMethodDTO> WithdrawalMethods { get; set; } = new();
+        public bool? IsApproved { get; set; }
+        public bool? RequiresApproval { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string Posted { get; set; } = string.Empty;
     }
 
     public class DisbursementConfirmationViewModel
@@ -104,28 +105,25 @@ namespace SACCOBlockChainSystem.Models.ViewModels
     {
         public string LoanCode { get; set; }
         public string LoanName { get; set; }
-
-        [Required]
-        [Range(1000, 1000000, ErrorMessage = "Amount must be between 1,000 and 1,000,000")]
         public decimal PrincipalAmount { get; set; }
-
-        [Required]
-        [Range(1, 12, ErrorMessage = "Repayment period must be between 1 and 12 months")]
-        public int RepayPeriod { get; set; }
-
-        public string Purpose { get; set; }
-
-        // Display properties
         public decimal EligibleAmount { get; set; }
         public decimal MaxAmount { get; set; }
         public decimal MinAmount { get; set; }
-        public decimal InterestRate { get; set; }
+        public int RepayPeriod { get; set; }
         public int MaxRepayPeriod { get; set; }
+        public decimal InterestRate { get; set; }
         public decimal EstimatedMonthlyInstallment { get; set; }
         public decimal CurrentDeposits { get; set; }
         public decimal Multiplier { get; set; }
         public decimal AvailableShares { get; set; }
-        public bool IsSelfGuarantee { get; set; } = true;
+        public bool IsSelfGuarantee { get; set; }
+        public string Purpose { get; set; }
+
+        // New properties for mobile loan percentage
+        public decimal MaxAmountPercentage { get; set; }
+        public decimal ProcessingFee { get; set; }
+        public decimal ProcessingFeeAmount { get; set; }
+        public string RepayMethod { get; set; }
         public bool IsMobileLoan { get; set; }
     }
 

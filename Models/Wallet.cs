@@ -28,8 +28,8 @@ namespace SACCOBlockChainSystem.Models
         [Column(TypeName = "decimal(18,8)")]
         public decimal Balance { get; set; } = 0;
 
+        [Column(TypeName = "datetime2")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
         public DateTime? LastActivity { get; set; }
 
         // ========== CRYPTOGRAPHIC SIGNING PROPERTIES ==========

@@ -91,8 +91,13 @@ namespace SACCOBlockChainSystem.Models
         public decimal? Sharecapital { get; set; }
 
         public DateTime? Rescheduledate { get; set; }
-
-        public string? Gperiod { get; set; }
+        public int? Gperiod { get; set; }
+        //Penalty
+        public string? PenaltyMode { get; set; }        // "Percentage" or "Fixed"
+        public string? PenaltyRate { get; set; }        // "Daily", "Weekly", "Monthly", "Yearly"
+        public decimal? PenaltyValue { get; set; }      // Percentage or fixed amount
+        public short? PenaltyChargeItem { get; set; }   // 0=Principal, 1=Interest, 2=Both
+        public bool? AttractsPenalty { get; set; }      // Whether penalty applies
 
         public int? Run { get; set; }
 

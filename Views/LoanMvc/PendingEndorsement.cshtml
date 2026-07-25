@@ -1,7 +1,10 @@
-﻿@model IEnumerable<dynamic>
+﻿@model dynamic
 @{
-    ViewData["Title"] = "Pending Endorsement";
+    ViewData["Title"] = "Endorsement Management";
     Layout = "~/Views/Shared/_Layout.cshtml";
+    var pendingLoans = Model.PendingLoans as IEnumerable<dynamic> ?? new List<dynamic>();
+    var endorsedLoans = Model.EndorsedLoans as IEnumerable<dynamic> ?? new List<dynamic>();
+    var allLoans = pendingLoans.Concat(endorsedLoans).OrderByDescending(l => l.ApplicationDate);
 }
 
 <div class="container py-4">
@@ -13,7 +16,7 @@
                         <i class="bi bi-arrow-left"></i> Back to Dashboard
                     </a>
                     <h2 class="page-title mb-0">
-                        <i class="bi bi-calculator me-2"></i>Loans Pending Endorsement
+                        <i class="bi bi-calculator me-2"></i>Endorsement Management
                     </h2>
                 </div>
             </div>
@@ -37,24 +40,24 @@
             </div>
         }
 
-        @if (!Model.Any())
-        {
-            <div class="alert alert-info text-center py-5">
-                <i class="bi bi-check-circle fs-1"></i>
-                <h5 class="mt-3">No loans pending endorsement</h5>
-                <p class="mb-0">All approved loans have been endorsed.</p>
+        <!-- All Loans in One Table -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-check me-2"></i>Loans (@allLoans.Count())
+                </h5>
+                <small class="text-light">Showing all loans with their endorsement status</small>
             </div>
-        }
-        else
-        {
-            <div class="card shadow-sm">
-                <div class="card-header bg-light">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-list-check me-2"></i>Loans Ready for Endorsement
-                    </h5>
-                    <small class="text-muted">These loans have been approved and are ready for deduction/endorsement</small>
-                </div>
-                <div class="card-body">
+            <div class="card-body">
+                @if (!allLoans.Any())
+                {
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-check-circle fs-2"></i>
+                        <p class="mt-2">No loans found.</p>
+                    </div>
+                }
+                else
+                {
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead class="table-light">
@@ -64,11 +67,19 @@
                                     <th>Loan Type</th>
                                     <th>Approved Amount</th>
                                     <th>Application Date</th>
+                                    <th>Status</th>
                                     <th>Actions</th>
+                                </tr>
                             </thead>
                             <tbody>
-                                @foreach (var loan in Model)
+                                @foreach (var loan in allLoans)
                                 {
+                                    var status = loan.Status ?? "Pending";
+                                    var isEndorsed = status == "Endorsed";
+                                    var isRejected = status == "Rejected";
+                                    var isPending = status == "Pending" || string.IsNullOrEmpty(status);
+                                    var isDisbursed = loan.IsDisbursed ?? false;
+
                                     <tr>
                                         <td><strong>@loan.LoanNo</strong></td>
                                         <td>@loan.MemberName</td>
@@ -76,18 +87,53 @@
                                         <td>KES @loan.ApprovedAmount.ToString("N0")</td>
                                         <td>@loan.ApplicationDate.ToString("dd/MM/yyyy")</td>
                                         <td>
-                                            <a asp-action="Endorse" asp-route-loanNo="@loan.LoanNo"
-                                               class="btn btn-sm btn-primary">
-                                                <i class="bi bi-calculator"></i> Endorse
-                                            </a>
+                                            @if (isRejected)
+                                            {
+                                                <span class="badge bg-danger">Rejected</span>
+                                            }
+                                            else if (isEndorsed)
+                                            {
+                                                <span class="badge bg-success">Endorsed</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-warning">Pending</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <!-- Details button - always visible -->
+                                                <a asp-action="EndorsementDetails" asp-route-loanNo="@loan.LoanNo"
+                                                   class="btn btn-sm btn-info" title="View Details">
+                                                    <i class="bi bi-eye"></i> Details
+                                                </a>
+
+                                                <!-- Edit button - only for endorsed loans that are NOT disbursed -->
+                                                @if (isEndorsed && !isDisbursed && loan.CanEdit != false)
+                                                {
+                                                    <a asp-action="EditEndorsement" asp-route-loanNo="@loan.LoanNo"
+                                                       class="btn btn-sm btn-warning" title="Edit Endorsement">
+                                                        <i class="bi bi-pencil"></i> Edit
+                                                    </a>
+                                                }
+
+                                                <!-- Endorse button - only for pending loans -->
+                                                @if (isPending)
+                                                {
+                                                    <a asp-action="Endorse" asp-route-loanNo="@loan.LoanNo"
+                                                       class="btn btn-sm btn-primary" title="Create Endorsement">
+                                                        <i class="bi bi-calculator"></i> Endorse
+                                                    </a>
+                                                }
+                                            </div>
                                         </td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
-                </div>
+                }
             </div>
-        }
+        </div>
     </div>
 </div>

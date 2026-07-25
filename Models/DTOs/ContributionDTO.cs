@@ -1,4 +1,5 @@
 ﻿// Models/DTOs/ContributionDTO.cs
+using SACCOBlockChainSystem.Models.DTOs;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
@@ -28,6 +29,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string CreatedBy { get; set; } = null!;
         public string CompanyCode { get; set; } = null!;
         public DateTime? DepositedDate { get; internal set; }
+        public string? TransactionNo { get; internal set; }
     }
 
     public class ContributionResponseDTO
@@ -152,5 +154,57 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public DateTime? TransactionDate { get; set; }
         public string? CreatedBy { get; set; }
         public string? BlockchainTxId { get; set; }
+    }
+
+    public class MemberShareTypeTotalsDTO
+    {
+        public string MemberNo { get; set; } = null!;
+        public List<ShareTypeTotalsDTO> ShareTypeTotals { get; set; } = new();
+    }
+
+    public class ShareTypeTotalsDTO
+    {
+        public string SharesCode { get; set; } = null!;
+        public string SharesType { get; set; } = null!;
+        public string Category { get; set; } = null!;
+        public decimal CurrentAmount { get; set; }
+        public decimal MinAmount { get; set; }
+        public decimal MaxAmount { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public bool IsFullyPaid { get; set; }
+        public int Priority { get; set; }
+        public bool IsMainShares { get; set; }
+        public bool UsedToGuarantee { get; set; }
+        public bool UsedToOffset { get; set; }
+        public bool Withdrawable { get; set; }
+        public int TransactionCount { get; internal set; }
+    }
+
+    public class ContributionItemDTO
+    {
+        [Required]
+        public string MemberNo { get; set; } = string.Empty;
+
+        [Required]
+        public string SharesCode { get; set; } = string.Empty;
+
+        [Required]
+        [Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than 0")]
+        public decimal Amount { get; set; }
+
+        [Required]
+        public string Remarks { get; set; } = string.Empty;
+
+        public DateTime? DepositedDate { get; set; }
+
+        public DateTime TransactionDate { get; set; } = DateTime.Now;
+
+        public string? PaymentMethod { get; set; } = "CASH";
+
+        public string? ReferenceNo { get; set; }
+
+        public string CompanyCode { get; set; } = string.Empty;
+
+        public string? CreatedBy { get; set; }
     }
 }

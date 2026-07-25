@@ -35,6 +35,7 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly ILogger<LoanMvcController> _logger;
         private readonly ApplicationDbContext _context;
         private readonly ISaccoService _saccoService;
+        private readonly ICollateralService _collateralService;
 
         public LoanMvcController(
             ILoanService loanService,
@@ -45,6 +46,7 @@ namespace SACCOBlockChainSystem.Controllers
             ICompanyContextService companyContextService,
             ApplicationDbContext context,
             ISaccoService saccoService,
+            ICollateralService collateralService,
             ILogger<LoanMvcController> logger)
         {
             _loanService = loanService;
@@ -55,6 +57,7 @@ namespace SACCOBlockChainSystem.Controllers
             _logger = logger;
             _appDbContext = appDbContext;
             _saccoService = saccoService;
+            _collateralService = collateralService;
             _context = context;
         }
 
@@ -267,8 +270,12 @@ namespace SACCOBlockChainSystem.Controllers
         {
             try
             {
-                // Check permission
-                if (!User.IsInRole("Admin") && !User.IsInRole("Super Admin"))
+                bool hasPermission = User.IsInRole("System Administrator") ||
+                     User.IsInRole("Super Admin") ||
+                     User.IsInRole("Finance Officer") ||
+                     User.IsInRole("Loan Officer");
+
+                if (!hasPermission)
                 {
                     TempData["ErrorMessage"] = "You don't have permission to delete loans";
                     return RedirectToAction("AllLoans");
@@ -723,7 +730,7 @@ namespace SACCOBlockChainSystem.Controllers
                         application.MemberNo,
                         application.LoanCode,
                         application.CompanyCode);
-
+                
                 if (!loanTypeEligibility.IsEligible)
                 {
                     ViewBag.LoanTypes =
@@ -994,6 +1001,7 @@ namespace SACCOBlockChainSystem.Controllers
 
             return 0;
         }
+
         [HttpGet]
         public async Task<IActionResult> AssignGuarantor(string loanNo)
         {
@@ -1028,9 +1036,8 @@ namespace SACCOBlockChainSystem.Controllers
                 var totalMemberGuarantee = existingGuarantors.Sum(g => g.GuaranteeAmount);
 
                 // ============================================================
-                // CRITICAL: LOAD COLLATERAL GUARANTEES FROM COLLOANGUAR TABLE
+                // GET COLLATERAL GUARANTEES FROM COLLOANGUAR TABLE
                 // ============================================================
-                // Get existing collateral guarantees directly from database
                 var existingCollateralGuaranteesRaw = await _context.ColloanGuars
                     .Where(cg => cg.LoanNo == loanNo && cg.Balance > 0)
                     .ToListAsync();
@@ -1073,15 +1080,47 @@ namespace SACCOBlockChainSystem.Controllers
                 var isSelfGuarantee = loanType?.SelfGuarantee ?? false;
                 var canProceed = isFullyGuaranteed || isSelfGuarantee;
 
-                // Get all available collateral types for dropdown
-                var allCollateralTypes = await _context.Collaterals
-                    .Where(c => c.CompanyCode == companyCode)
-                    .OrderBy(c => c.ColCode)
+                // ============================================================
+                // USE COLLATERAL SERVICE TO GET MEMBER'S COLLATERALS
+                // This gets the actual collaterals owned by the loan applicant
+                // ============================================================
+                var memberCollaterals = await _collateralService.GetMemberCollateralsAsync(loan.MemberNo, companyCode);
+
+                _logger.LogInformation($"Found {memberCollaterals.Count} collaterals for member {loan.MemberNo}");
+
+                // Convert to the format expected by the view
+                var collateralList = memberCollaterals.Select(c => new Collateral
+                {
+                    Id = c.Id,
+                    ColCode = c.ColCode,
+                    Coldescription = c.Coldescription,
+                    Percentage = c.Percentage,
+                    MemberNo = c.MemberNo,
+                    CompanyCode = c.CompanyCode,
+                    BlockchainTxId = c.BlockchainTxId,
+                    Photo = c.HasPhoto ? Convert.FromBase64String(c.PhotoBase64 ?? "") : null,
+                    PhotoContentType = c.PhotoContentType
+                }).ToList();
+
+                // ============================================================
+                // GET USED COLLATERALS (across all active loans)
+                // ============================================================
+                var usedCollaterals = await _context.ColloanGuars
+                    .Where(cg => cg.CompanyCode == companyCode && cg.Balance > 0)
+                    .Select(cg => new { cg.ColCode, cg.DocNo })
                     .ToListAsync();
 
-                _logger.LogInformation($"Loading {allCollateralTypes.Count} collateral types for company {companyCode}");
+                var usedCollateralKeys = usedCollaterals
+                    .Select(u => $"{u.ColCode}|{u.DocNo}")
+                    .ToHashSet();
 
-                // Set ViewBag properties
+                var usedDocumentsByColCode = usedCollaterals
+                    .GroupBy(u => u.ColCode)
+                    .ToDictionary(g => g.Key, g => g.Select(u => u.DocNo).ToHashSet());
+
+                // ============================================================
+                // SET ViewBag PROPERTIES
+                // ============================================================
                 ViewBag.Loan = loan;
                 ViewBag.LoanType = loanType;
                 ViewBag.ExistingGuarantors = existingGuarantors;
@@ -1096,9 +1135,19 @@ namespace SACCOBlockChainSystem.Controllers
                 ViewBag.MaxGuarantors = maxGuarantors;
                 ViewBag.LoanAmount = loanAmount;
 
-                // CRITICAL: These must be set for the view to show collaterals
-                ViewBag.CollateralTypes = allCollateralTypes;
+                // ============================================================
+                // PASS ONLY THE LOANEE'S COLLATERALS TO THE VIEW
+                // ============================================================
+                ViewBag.CollateralTypes = collateralList;
                 ViewBag.ExistingCollateralGuarantees = existingCollateralGuarantees;
+                ViewBag.UsedCollateralKeys = usedCollateralKeys;
+                ViewBag.UsedDocumentsByColCode = usedDocumentsByColCode;
+                ViewBag.TotalMemberCollaterals = memberCollaterals.Count;
+
+                // Count available collaterals (not already used)
+                var availableCount = memberCollaterals
+                    .Count(c => !usedCollateralKeys.Contains($"{c.ColCode}|"));
+                ViewBag.AvailableCollateralsCount = availableCount;
 
                 return View(loan);
             }
@@ -1109,6 +1158,124 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("LoansNeedingGuarantors");
             }
         }
+
+        //[HttpGet]
+        //public async Task<IActionResult> AssignGuarantor(string loanNo)
+        //{
+        //    try
+        //    {
+        //        var companyCode = GetUserCompanyCode();
+
+        //        var loan = await _loanService.GetLoanByNoForDisplayAsync(loanNo, companyCode);
+
+        //        if (loan == null)
+        //        {
+        //            TempData["ErrorMessage"] = "Loan not found";
+        //            return RedirectToAction("LoansNeedingGuarantors");
+        //        }
+
+        //        _logger.LogInformation($"Loan {loanNo} status from DB: {loan.Status}");
+
+        //        if (loan.Status != (int)Status.Draft && loan.Status != (int)Status.Submitted)
+        //        {
+        //            TempData["ErrorMessage"] = $"Cannot assign guarantors to loan in status '{loan.Status}'.";
+        //            return RedirectToAction("AllLoans");
+        //        }
+
+        //        // Get loan type
+        //        var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
+
+        //        // Get max guarantors from SACCO parameters
+        //        var maxGuarantors = await _saccoService.GetMaxGuarantorsAsync(companyCode);
+
+        //        // Get existing member guarantors
+        //        var existingGuarantors = await _loanService.GetLoanGuarantorsAsync(loanNo);
+        //        var totalMemberGuarantee = existingGuarantors.Sum(g => g.GuaranteeAmount);
+
+        //        // ============================================================
+        //        // CRITICAL: LOAD COLLATERAL GUARANTEES FROM COLLOANGUAR TABLE
+        //        // ============================================================
+        //        // Get existing collateral guarantees directly from database
+        //        var existingCollateralGuaranteesRaw = await _context.ColloanGuars
+        //            .Where(cg => cg.LoanNo == loanNo && cg.Balance > 0)
+        //            .ToListAsync();
+
+        //        _logger.LogInformation($"Found {existingCollateralGuaranteesRaw.Count} collateral guarantees for loan {loanNo}");
+
+        //        // Convert to DTOs with collateral descriptions
+        //        var existingCollateralGuarantees = new List<CollateralGuaranteeResponseDTO>();
+
+        //        // Get all collateral types for descriptions
+        //        var collateralTypes = await _context.Collaterals
+        //            .Where(c => c.CompanyCode == companyCode)
+        //            .ToDictionaryAsync(c => c.ColCode, c => c);
+
+        //        foreach (var cg in existingCollateralGuaranteesRaw)
+        //        {
+        //            var collateral = collateralTypes.GetValueOrDefault(cg.ColCode);
+        //            existingCollateralGuarantees.Add(new CollateralGuaranteeResponseDTO
+        //            {
+        //                Id = cg.Id,
+        //                ColCode = cg.ColCode,
+        //                Coldescription = collateral?.Coldescription ?? cg.ColCode,
+        //                DocNo = cg.DocNo,
+        //                MarketValue = cg.Mktvalue,
+        //                GuaranteeAmount = cg.Balance,
+        //                RemainingBalance = cg.Balance,
+        //                AssignedDate = DateTime.Now,
+        //                BlockchainTxId = cg.BlockchainTxId
+        //            });
+        //        }
+
+        //        var totalCollateralGuarantee = existingCollateralGuarantees.Sum(g => g.GuaranteeAmount);
+
+        //        // Calculate totals including collateral
+        //        var totalGuarantee = totalMemberGuarantee + totalCollateralGuarantee;
+        //        var loanAmount = loan.LoanAmt ?? 0;
+        //        var remainingAmount = loanAmount - totalGuarantee;
+        //        var isFullyGuaranteed = remainingAmount <= 0;
+
+        //        var isSelfGuarantee = loanType?.SelfGuarantee ?? false;
+        //        var canProceed = isFullyGuaranteed || isSelfGuarantee;
+
+        //        // Get all available collateral types for dropdown
+        //        var allCollateralTypes = await _context.Collaterals
+        //            .Where(c => c.CompanyCode == companyCode)
+        //            .OrderBy(c => c.ColCode)
+        //            .ToListAsync();
+
+        //        _logger.LogInformation($"Loading {allCollateralTypes.Count} collateral types for company {companyCode}");
+
+        //        // Set ViewBag properties
+        //        ViewBag.Loan = loan;
+        //        ViewBag.LoanType = loanType;
+        //        ViewBag.ExistingGuarantors = existingGuarantors;
+        //        ViewBag.TotalGuarantee = totalGuarantee;
+        //        ViewBag.TotalMemberGuarantee = totalMemberGuarantee;
+        //        ViewBag.TotalCollateralGuarantee = totalCollateralGuarantee;
+        //        ViewBag.RemainingAmount = remainingAmount > 0 ? remainingAmount : 0;
+        //        ViewBag.IsFullyGuaranteed = isFullyGuaranteed;
+        //        ViewBag.CanProceed = canProceed;
+        //        ViewBag.IsSelfGuarantee = isSelfGuarantee;
+        //        ViewBag.CompanyCode = companyCode;
+        //        ViewBag.MaxGuarantors = maxGuarantors;
+        //        ViewBag.LoanAmount = loanAmount;
+
+        //        // CRITICAL: These must be set for the view to show collaterals
+        //        ViewBag.CollateralTypes = allCollateralTypes;
+        //        ViewBag.ExistingCollateralGuarantees = existingCollateralGuarantees;
+
+        //        return View(loan);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"Error loading guarantor assignment for {loanNo}");
+        //        TempData["ErrorMessage"] = $"Error loading guarantor assignment: {ex.Message}";
+        //        return RedirectToAction("LoansNeedingGuarantors");
+        //    }
+        //}
+
+
         [HttpGet]
         public async Task<IActionResult> DebugLoanStatus(string loanNo)
         {
@@ -1357,6 +1524,7 @@ namespace SACCOBlockChainSystem.Controllers
 
         #region Collateral Guarantee Management
 
+
         [HttpGet]
         public async Task<IActionResult> AssignCollateralGuarantee(string loanNo)
         {
@@ -1364,7 +1532,6 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 var companyCode = GetUserCompanyCode();
 
-                // LOG THE COMPANY CODE FOR DEBUGGING
                 _logger.LogInformation($"=== AssignCollateralGuarantee called ===");
                 _logger.LogInformation($"CompanyCode: '{companyCode}'");
                 _logger.LogInformation($"LoanNo: '{loanNo}'");
@@ -1384,83 +1551,47 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 // ============================================================
-                // GET ALL COLLATERAL TYPES
+                // USE COLLATERAL SERVICE TO GET MEMBER'S COLLATERALS
+                // This gets the actual collaterals owned by the loan applicant
                 // ============================================================
-                var allCollateralTypes = await _context.Collaterals
-                    .Where(c => c.CompanyCode == companyCode)
-                    .OrderBy(c => c.ColCode)
-                    .ToListAsync();
+                var memberCollateralsDTOs = await _collateralService.GetMemberCollateralsAsync(loan.MemberNo, companyCode);
+
+                _logger.LogInformation($"Found {memberCollateralsDTOs.Count} collaterals for member {loan.MemberNo}");
+
+                // Convert to the format expected by the view
+                var memberCollaterals = memberCollateralsDTOs.Select(c => new Collateral
+                {
+                    Id = c.Id,
+                    ColCode = c.ColCode,
+                    Coldescription = c.Coldescription,
+                    Percentage = c.Percentage,
+                    MemberNo = c.MemberNo,
+                    CompanyCode = c.CompanyCode,
+                    BlockchainTxId = c.BlockchainTxId,
+                    Photo = c.HasPhoto ? Convert.FromBase64String(c.PhotoBase64 ?? "") : null,
+                    PhotoContentType = c.PhotoContentType
+                }).ToList();
 
                 // ============================================================
-                // GET USED COLLATERALS (already assigned to ANY active loan)
+                // GET USED COLLATERALS
                 // ============================================================
-                // Get all active collateral guarantees for ANY loan (not just this one)
-                // This prevents using the same collateral document for multiple loans
                 var usedCollaterals = await _context.ColloanGuars
                     .Where(cg => cg.CompanyCode == companyCode && cg.Balance > 0)
                     .Select(cg => new { cg.ColCode, cg.DocNo })
                     .ToListAsync();
 
-                // Create a set of used collateral identifiers (ColCode + DocNo combination)
                 var usedCollateralKeys = usedCollaterals
                     .Select(u => $"{u.ColCode}|{u.DocNo}")
                     .ToHashSet();
 
-                _logger.LogInformation($"Found {usedCollateralKeys.Count} used collateral document(s)");
-
-                // ============================================================
-                // FILTER OUT USED COLLATERALS FROM DROPDOWN
-                // ============================================================
-                // For collateral types dropdown, we need to know which ones have 
-                // available documents. Since the same ColCode can have multiple DocNo,
-                // we need to track available documents per collateral type.
-
-                // Get all used documents grouped by ColCode
                 var usedDocumentsByColCode = usedCollaterals
                     .GroupBy(u => u.ColCode)
                     .ToDictionary(g => g.Key, g => g.Select(u => u.DocNo).ToHashSet());
 
-                // Build a list of available collaterals with their available document counts
-                var availableCollaterals = new List<dynamic>();
-
-                foreach (var collateral in allCollateralTypes)
-                {
-                    // Get used documents for this collateral type
-                    var usedDocs = usedDocumentsByColCode.ContainsKey(collateral.ColCode)
-                        ? usedDocumentsByColCode[collateral.ColCode]
-                        : new HashSet<string>();
-
-                    // For now, we don't have a list of all documents per collateral type.
-                    // In a real system, you would have a MemberCollateral table.
-                    // For this implementation, we'll assume each collateral type can be used
-                    // multiple times with different document numbers, but the SAME document
-                    // cannot be reused.
-
-                    // We'll still show the collateral type in dropdown, but validation
-                    // will prevent reusing the same document number.
-
-                    availableCollaterals.Add(new
-                    {
-                        collateral.ColCode,
-                        collateral.Coldescription,
-                        collateral.Percentage,
-                        HasUsedDocuments = usedDocs.Any(),
-                        UsedDocumentCount = usedDocs.Count
-                    });
-                }
-
                 // Get existing collateral guarantees for THIS loan
                 var existingCollateralGuarantees = await _loanService.GetLoanCollateralGuaranteesAsync(loanNo);
 
-                _logger.LogInformation($"Found {existingCollateralGuarantees.Count} collateral guarantees for loan {loanNo}");
-                foreach (var g in existingCollateralGuarantees)
-                {
-                    _logger.LogInformation($"  - Collateral: {g.ColCode}, Doc: {g.DocNo}, Amount: {g.GuaranteeAmount:C}");
-                }
-
                 var totalCollateralGuarantee = existingCollateralGuarantees.Sum(g => g.GuaranteeAmount);
-
-                // Get existing member guarantees
                 var existingMemberGuarantees = await _loanService.GetLoanGuarantorsAsync(loanNo);
                 var totalMemberGuarantee = existingMemberGuarantees.Sum(g => g.GuaranteeAmount);
 
@@ -1469,19 +1600,16 @@ namespace SACCOBlockChainSystem.Controllers
                 var remainingAmount = loanAmount - totalGuarantee;
                 var isFullyGuaranteed = remainingAmount <= 0;
 
-                // Get loan type
                 var loanType = await _context.Loantypes
                     .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
 
-                // Get max guarantors from SACCO parameters
                 var saccoParams = await _context.SaccoParram
                     .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
 
-                // Get existing member guarantors
                 var existingGuarantors = await _loanService.GetLoanGuarantorsAsync(loanNo);
 
                 // ============================================================
-                // SET ALL ViewBag PROPERTIES
+                // SET ViewBag PROPERTIES
                 // ============================================================
                 ViewBag.Loan = loan;
                 ViewBag.LoanAmount = loanAmount;
@@ -1491,14 +1619,24 @@ namespace SACCOBlockChainSystem.Controllers
                 ViewBag.RemainingAmount = remainingAmount > 0 ? remainingAmount : 0;
                 ViewBag.IsFullyGuaranteed = isFullyGuaranteed;
                 ViewBag.ExistingCollateralGuarantees = existingCollateralGuarantees;
-                ViewBag.CollateralTypes = allCollateralTypes;  // Pass all types, but we'll track used docs
-                ViewBag.UsedCollateralKeys = usedCollateralKeys;  // Pass used keys for validation
+
+                // ============================================================
+                // PASS ONLY THE LOANEE'S COLLATERALS TO THE VIEW
+                // ============================================================
+                ViewBag.CollateralTypes = memberCollaterals;
+                ViewBag.UsedCollateralKeys = usedCollateralKeys;
                 ViewBag.UsedDocumentsByColCode = usedDocumentsByColCode;
                 ViewBag.CompanyCode = companyCode;
                 ViewBag.IsSelfGuarantee = loanType?.SelfGuarantee ?? false;
                 ViewBag.MaxGuarantors = saccoParams?.MaxGuarantor ?? 5;
                 ViewBag.LoanType = loanType;
                 ViewBag.ExistingGuarantors = existingGuarantors;
+                ViewBag.TotalMemberCollaterals = memberCollateralsDTOs.Count;
+
+                // Count available collaterals (not already used)
+                var availableCount = memberCollateralsDTOs
+                    .Count(c => !usedCollateralKeys.Contains($"{c.ColCode}|"));
+                ViewBag.AvailableCollateralsCount = availableCount;
 
                 return View();
             }
@@ -1509,6 +1647,172 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("AllLoans");
             }
         }
+
+        //[HttpGet]
+        //public async Task<IActionResult> AssignCollateralGuarantee(string loanNo)
+        //{
+        //    try
+        //    {
+        //        var companyCode = GetUserCompanyCode();
+
+        //        LOG THE COMPANY CODE FOR DEBUGGING
+        //        _logger.LogInformation($"=== AssignCollateralGuarantee called ===");
+        //        _logger.LogInformation($"CompanyCode: '{companyCode}'");
+        //        _logger.LogInformation($"LoanNo: '{loanNo}'");
+
+        //        var loan = await _loanService.GetLoanByNoForDisplayAsync(loanNo, companyCode);
+
+        //        if (loan == null)
+        //        {
+        //            TempData["ErrorMessage"] = "Loan not found";
+        //            return RedirectToAction("AllLoans");
+        //        }
+
+        //        if (loan.Status != (int)Status.Draft && loan.Status != (int)Status.Submitted)
+        //        {
+        //            TempData["ErrorMessage"] = $"Cannot add collateral guarantees to loan in status '{loan.Status}'";
+        //            return RedirectToAction("AllLoans");
+        //        }
+
+        //         ============================================================
+        //         GET ALL COLLATERAL TYPES
+        //         ============================================================
+        //        var allCollateralTypes = await _context.Collaterals
+        //            .Where(c => c.CompanyCode == companyCode)
+        //            .OrderBy(c => c.ColCode)
+        //            .ToListAsync();
+
+        //        var allCollateralTypes = await _context.Collaterals
+        //           .Where(c => c.CompanyCode == companyCode && c.MemberNo == loan.MemberNo)
+        //           .OrderBy(c => c.ColCode)
+        //           .ToListAsync();
+
+        //        _logger.LogInformation($"Found {allCollateralTypes.Count} collaterals for member {loan.MemberNo}");
+
+        //         ============================================================
+        //         GET USED COLLATERALS(already assigned to ANY active loan)
+        //         ============================================================
+        //         Get all active collateral guarantees for ANY loan (not just this one)
+        //         This prevents using the same collateral document for multiple loans
+        //        var usedCollaterals = await _context.ColloanGuars
+        //            .Where(cg => cg.CompanyCode == companyCode && cg.Balance > 0)
+        //            .Select(cg => new { cg.ColCode, cg.DocNo })
+        //            .ToListAsync();
+
+        //        Create a set of used collateral identifiers(ColCode + DocNo combination)
+        //        var usedCollateralKeys = usedCollaterals
+        //            .Select(u => $"{u.ColCode}|{u.DocNo}")
+        //            .ToHashSet();
+
+        //        _logger.LogInformation($"Found {usedCollateralKeys.Count} used collateral document(s)");
+
+        //         ============================================================
+        //         FILTER OUT USED COLLATERALS FROM DROPDOWN
+        //         ============================================================
+        //         For collateral types dropdown, we need to know which ones have
+        //         available documents.Since the same ColCode can have multiple DocNo,
+        //         we need to track available documents per collateral type.
+
+        //         Get all used documents grouped by ColCode
+        //        var usedDocumentsByColCode = usedCollaterals
+        //            .GroupBy(u => u.ColCode)
+        //            .ToDictionary(g => g.Key, g => g.Select(u => u.DocNo).ToHashSet());
+
+        //        Build a list of available collaterals with their available document counts
+        //        var availableCollaterals = new List<dynamic>();
+
+        //        foreach (var collateral in allCollateralTypes)
+        //            {
+        //                Get used documents for this collateral type
+
+        //               var usedDocs = usedDocumentsByColCode.ContainsKey(collateral.ColCode)
+        //                   ? usedDocumentsByColCode[collateral.ColCode]
+        //                   : new HashSet<string>();
+
+        //                For now, we don't have a list of all documents per collateral type.
+
+        //                In a real system, you would have a MemberCollateral table.
+        //                For this implementation, we'll assume each collateral type can be used
+
+        //                multiple times with different document numbers, but the SAME document
+
+        //                cannot be reused.
+
+        //                We'll still show the collateral type in dropdown, but validation
+
+        //                will prevent reusing the same document number.
+
+        //               availableCollaterals.Add(new
+        //               {
+        //                   collateral.ColCode,
+        //                   collateral.Coldescription,
+        //                   collateral.Percentage,
+        //                   HasUsedDocuments = usedDocs.Any(),
+        //                   UsedDocumentCount = usedDocs.Count
+        //               });
+        //        }
+
+        //        Get existing collateral guarantees for THIS loan
+
+        //       var existingCollateralGuarantees = await _loanService.GetLoanCollateralGuaranteesAsync(loanNo);
+
+        //        _logger.LogInformation($"Found {existingCollateralGuarantees.Count} collateral guarantees for loan {loanNo}");
+        //        foreach (var g in existingCollateralGuarantees)
+        //            {
+        //                _logger.LogInformation($"  - Collateral: {g.ColCode}, Doc: {g.DocNo}, Amount: {g.GuaranteeAmount:C}");
+        //            }
+
+        //        var totalCollateralGuarantee = existingCollateralGuarantees.Sum(g => g.GuaranteeAmount);
+
+        //        Get existing member guarantees
+        //        var existingMemberGuarantees = await _loanService.GetLoanGuarantorsAsync(loanNo);
+        //        var totalMemberGuarantee = existingMemberGuarantees.Sum(g => g.GuaranteeAmount);
+
+        //        var totalGuarantee = totalCollateralGuarantee + totalMemberGuarantee;
+        //        var loanAmount = loan.LoanAmt ?? 0;
+        //        var remainingAmount = loanAmount - totalGuarantee;
+        //        var isFullyGuaranteed = remainingAmount <= 0;
+
+        //        Get loan type
+        //       var loanType = await _context.Loantypes
+        //           .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
+
+        //        Get max guarantors from SACCO parameters
+        //        var saccoParams = await _context.SaccoParram
+        //            .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
+
+        //        Get existing member guarantors
+        //        var existingGuarantors = await _loanService.GetLoanGuarantorsAsync(loanNo);
+
+        //         ============================================================
+        //         SET ALL ViewBag PROPERTIES
+        //         ============================================================
+        //        ViewBag.Loan = loan;
+        //        ViewBag.LoanAmount = loanAmount;
+        //        ViewBag.TotalGuarantee = totalGuarantee;
+        //        ViewBag.TotalCollateralGuarantee = totalCollateralGuarantee;
+        //        ViewBag.TotalMemberGuarantee = totalMemberGuarantee;
+        //        ViewBag.RemainingAmount = remainingAmount > 0 ? remainingAmount : 0;
+        //        ViewBag.IsFullyGuaranteed = isFullyGuaranteed;
+        //        ViewBag.ExistingCollateralGuarantees = existingCollateralGuarantees;
+        //        ViewBag.CollateralTypes = allCollateralTypes;  // Pass all types, but we'll track used docs
+        //        ViewBag.UsedCollateralKeys = usedCollateralKeys;  // Pass used keys for validation
+        //        ViewBag.UsedDocumentsByColCode = usedDocumentsByColCode;
+        //        ViewBag.CompanyCode = companyCode;
+        //        ViewBag.IsSelfGuarantee = loanType?.SelfGuarantee ?? false;
+        //        ViewBag.MaxGuarantors = saccoParams?.MaxGuarantor ?? 5;
+        //        ViewBag.LoanType = loanType;
+        //        ViewBag.ExistingGuarantors = existingGuarantors;
+
+        //        return View();
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"Error loading collateral guarantee assignment for {loanNo}");
+        //        TempData["ErrorMessage"] = $"Error loading page: {ex.Message}";
+        //        return RedirectToAction("AllLoans");
+        //    }
+        //}
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -2076,6 +2380,7 @@ namespace SACCOBlockChainSystem.Controllers
 
         #region Loan Endorsement
 
+        // GET: Pending Endorsement (Updated to show both pending and endorsed)
         [HttpGet]
         public async Task<IActionResult> PendingEndorsement()
         {
@@ -2083,39 +2388,123 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 var companyCode = GetUserCompanyCode();
 
-                var searchDto = new LoanSearchDTO
-                {
-                    CompanyCode = companyCode,
-                    LoanStatus = ((int)Status.Approved).ToString()
-                };
-
-                var allLoans = await _loanService.SearchLoansAsync(searchDto);
+                // Get loans with their related data in one query
+                var loansData = await _context.Loans
+                    .Where(l => l.CompanyCode == companyCode &&
+                               (l.Status == (int)Status.Approved ||
+                                l.Status == (int)Status.Endorsed ||
+                                l.Status == (int)Status.Rejected))
+                    .Select(l => new
+                    {
+                        Loan = l,
+                        Member = _context.Members
+                            .FirstOrDefault(m => m.MemberNo == l.MemberNo && m.CompanyCode == companyCode),
+                        LoanType = _context.Loantypes
+                            .FirstOrDefault(lt => lt.LoanCode == l.LoanCode && lt.CompanyCode == companyCode),
+                        Endorsement = _context.Endmain
+                            .FirstOrDefault(e => e.LoanNo == l.LoanNo && e.CompanyCode == companyCode),
+                        IsDisbursed = _context.Loanbal
+                            .Any(lb => lb.LoanNo == l.LoanNo && lb.Companycode == companyCode)
+                    })
+                    .OrderByDescending(x => x.Loan.ApplicDate)
+                    .ToListAsync();
 
                 var pendingEndorsement = new List<dynamic>();
-                foreach (var loan in allLoans)
+                var endorsedLoans = new List<dynamic>();
+
+                foreach (var data in loansData)
                 {
-                    var hasEndorsement = await _loanService.HasEndorsementAsync(loan.LoanNo, companyCode);
-                    if (!hasEndorsement)
+                    var loan = data.Loan;
+                    var member = data.Member;
+                    var loanType = data.LoanType;
+                    var endorsement = data.Endorsement;
+                    var isDisbursed = data.IsDisbursed;
+
+                    // Build member name
+                    string memberName = "N/A";
+                    if (member != null)
                     {
+                        memberName = $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim();
+                        if (string.IsNullOrEmpty(memberName)) memberName = member.MemberNo;
+                    }
+
+                    // Build loan type name
+                    string loanTypeName = loanType?.LoanType1 ?? loan.LoanCode ?? "Unknown";
+
+                    // Check if loan has endorsement
+                    var hasEndorsement = endorsement != null;
+
+                    if (loan.Status == (int)Status.Rejected)
+                    {
+                        // Rejected loans
+                        endorsedLoans.Add(new
+                        {
+                            loan.LoanNo,
+                            MemberName = memberName,
+                            LoanType = loanTypeName,
+                            ApprovedAmount = loan.LoanAmt ?? 0,
+                            ApplicationDate = loan.ApplicDate,
+                            EndorsementDate = endorsement?.MeetingDate,
+                            EndorsedBy = endorsement?.ChairSigned,
+                            MinuteNo = endorsement?.MinuteNo,
+                            Status = "Rejected",
+                            IsDisbursed = false,
+                            CanEdit = false,
+                            CanDisburse = false,
+                            CanViewDetails = true
+                        });
+                    }
+                    else if (loan.Status == (int)Status.Endorsed || hasEndorsement)
+                    {
+                        // Endorsed loans
+                        endorsedLoans.Add(new
+                        {
+                            loan.LoanNo,
+                            MemberName = memberName,
+                            LoanType = loanTypeName,
+                            ApprovedAmount = loan.LoanAmt ?? 0,
+                            ApplicationDate = loan.ApplicDate,
+                            EndorsementDate = endorsement?.MeetingDate,
+                            EndorsedBy = endorsement?.ChairSigned,
+                            MinuteNo = endorsement?.MinuteNo,
+                            Status = endorsement?.Accepted == "1" ? "Endorsed" : "Pending Endorsement",
+                            IsDisbursed = isDisbursed,
+                            CanEdit = !isDisbursed && loan.Status == (int)Status.Endorsed && endorsement?.Accepted == "1",
+                            CanDisburse = !isDisbursed && loan.Status == (int)Status.Endorsed,
+                            CanViewDetails = true
+                        });
+                    }
+                    else if (loan.Status == (int)Status.Approved && !hasEndorsement)
+                    {
+                        // Pending endorsement (Approved without endorsement)
                         pendingEndorsement.Add(new
                         {
-                            LoanNo = loan.LoanNo,
-                            MemberName = loan.MemberName,
-                            LoanType = loan.LoanType,
-                            ApprovedAmount = loan.PrincipalAmount,
-                            ApplicationDate = loan.ApplicationDate
+                            loan.LoanNo,
+                            MemberName = memberName,
+                            LoanType = loanTypeName,
+                            ApprovedAmount = loan.LoanAmt ?? 0,
+                            ApplicationDate = loan.ApplicDate
                         });
                     }
                 }
 
-                ViewBag.Count = pendingEndorsement.Count;
-                return View(pendingEndorsement);
+                ViewBag.PendingCount = pendingEndorsement.Count;
+                ViewBag.EndorsedCount = endorsedLoans.Count;
+                ViewBag.CompanyCode = companyCode;
+
+                var viewModel = new
+                {
+                    PendingLoans = pendingEndorsement,
+                    EndorsedLoans = endorsedLoans
+                };
+
+                return View(viewModel);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error loading Approved endorsement loans");
+                _logger.LogError(ex, "Error loading pending endorsement loans");
                 TempData["ErrorMessage"] = "Error loading loans pending endorsement";
-                return View(new List<dynamic>());
+                return View(new { PendingLoans = new List<dynamic>(), EndorsedLoans = new List<dynamic>() });
             }
         }
 
@@ -2184,48 +2573,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> Endorse(LoanEndorsementDTO endorsementDto)
-        //{
-        //    try
-        //    {
-        //        _logger.LogInformation($"=== ENDORSE POST CALLED ===");
-        //        _logger.LogInformation($"LoanNo: {endorsementDto.LoanNo}");
-
-        //        // Log all deductions for debugging
-        //        foreach (var deduction in endorsementDto.Deductions)
-        //        {
-        //            _logger.LogInformation($"Deduction: {deduction.DeductionCode}, Amount: {deduction.Amount}, GL Account: {deduction.GlAccountNo}");
-        //        }
-
-        //        // Validate that all deductions with amount > 0 have GL accounts
-        //        var invalidDeductions = endorsementDto.Deductions
-        //            .Where(d => d.Amount > 0 && string.IsNullOrEmpty(d.GlAccountNo))
-        //            .ToList();
-
-        //        if (invalidDeductions.Any())
-        //        {
-        //            var invalidNames = string.Join(", ", invalidDeductions.Select(d => d.DeductionName));
-        //            TempData["ErrorMessage"] = $"Please select income accounts for: {invalidNames}";
-        //            return RedirectToAction("Endorse", new { loanNo = endorsementDto.LoanNo });
-        //        }
-
-        //        endorsementDto.CompanyCode = GetUserCompanyCode();
-        //        endorsementDto.EndorsedBy = User.Identity?.Name ?? "SYSTEM";
-
-        //        var endorsement = await _loanService.CreateEndorsementAsync(endorsementDto);
-        //        TempData["SuccessMessage"] = $"✅ Endorsement {endorsement.MinuteNo} completed successfully! The loan is now endorsed and waiting for Finance Officer to disburse the loan. Net amount: KES {endorsement.AmtApproved:N0}";
-        //        return RedirectToAction("AllLoans");
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error submitting loan endorsement");
-        //        TempData["ErrorMessage"] = $"Error: {ex.Message}";
-        //        return RedirectToAction("Endorse", new { loanNo = endorsementDto.LoanNo });
-        //    }
-        //}
-
         [HttpGet]
         public async Task<IActionResult> Endorse(string loanNo)
         {
@@ -2252,6 +2599,10 @@ namespace SACCOBlockChainSystem.Controllers
                     TempData["ErrorMessage"] = "Endorsement already exists for this loan";
                     return RedirectToAction("AllLoans");
                 }
+
+                // Get the actual Loantype entity
+                var loanType = await _context.Loantypes
+                    .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
 
                 var availableDeductions = await _loanService.GetAvailableDeductionsAsync(companyCode);
 
@@ -2308,7 +2659,72 @@ namespace SACCOBlockChainSystem.Controllers
                     }
                 }
 
+                // ============================================================
+                // CALCULATE REGISTRATION FEE - Supports both fixed and percentage
+                // ============================================================
+                var grossAmount = loan.LoanAmt ?? 0;
+                decimal registrationFeeAmount = 0;
+                bool isPercentageFee = false;
+                decimal percentageValue = 0;
+
+                if (loanType != null)
+                {
+                    var processingFee = loanType.Processingfee ?? 0;
+
+                    if (processingFee > 0)
+                    {
+                        // Determine if it's a percentage or fixed amount
+                        // If processing fee < 1000 and > 1, treat as percentage (2 = 2%)
+                        // If processing fee < 1, treat as decimal percentage (0.02 = 2%)
+                        // If processing fee >= 1000, treat as fixed amount
+                        if (processingFee < 1000 && processingFee > 0)
+                        {
+                            isPercentageFee = true;
+
+                            if (processingFee < 1)
+                            {
+                                // e.g., 0.02 = 2%
+                                percentageValue = processingFee * 100;
+                                registrationFeeAmount = grossAmount * processingFee;
+                            }
+                            else
+                            {
+                                // e.g., 2 = 2%
+                                percentageValue = processingFee;
+                                registrationFeeAmount = (grossAmount * processingFee) / 100;
+                            }
+                        }
+                        else
+                        {
+                            // Fixed amount
+                            isPercentageFee = false;
+                            registrationFeeAmount = processingFee;
+                        }
+                    }
+                }
+
                 var defaultDeductions = new List<LoanDeductionDTO>();
+
+                // 1. Add Registration Fee from LoanType
+                if (registrationFeeAmount > 0)
+                {
+                    defaultDeductions.Add(new LoanDeductionDTO
+                    {
+                        DeductionCode = "REG_FEE",
+                        DeductionName = "Registration Fee",
+                        GlAccountNo = "",
+                        GlAccountName = "",
+                        Amount = registrationFeeAmount,
+                        Description = isPercentageFee
+                            ? $"Registration fee: {percentageValue:F2}% of {grossAmount:C} from {loanType?.LoanType1 ?? loan.LoanCode}"
+                            : $"Registration fee: {registrationFeeAmount:C} from {loanType?.LoanType1 ?? loan.LoanCode}",
+                        IsMandatory = false,
+                        IsPercentage = isPercentageFee,
+                        PercentageValue = percentageValue
+                    });
+                }
+
+                // 2. Add other available deductions
                 foreach (var deduction in availableDeductions)
                 {
                     defaultDeductions.Add(new LoanDeductionDTO
@@ -2320,8 +2736,8 @@ namespace SACCOBlockChainSystem.Controllers
                         Amount = 0,
                         Description = deduction.Description,
                         IsMandatory = false,
-                        IsPercentage = false,
-                        PercentageValue = null
+                        IsPercentage = deduction.IsPercentage,
+                        PercentageValue = deduction.PercentageValue
                     });
                 }
 
@@ -2338,8 +2754,12 @@ namespace SACCOBlockChainSystem.Controllers
                 };
 
                 ViewBag.Loan = loan;
-                ViewBag.GrossAmount = loan.LoanAmt ?? 0;
+                ViewBag.GrossAmount = grossAmount;
                 ViewBag.AllGlAccounts = allGlAccounts;
+                ViewBag.RegistrationFee = registrationFeeAmount;
+                ViewBag.RegistrationFeeIsPercentage = isPercentageFee;
+                ViewBag.RegistrationFeePercentage = percentageValue;
+                ViewBag.LoanType = loanType;
 
                 return View(endorsementDto);
             }
@@ -2347,6 +2767,206 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 _logger.LogError(ex, $"Error loading endorsement form for {loanNo}");
                 TempData["ErrorMessage"] = $"Error loading endorsement: {ex.Message}";
+                return RedirectToAction("PendingEndorsement");
+            }
+        }
+
+        // GET: Edit Endorsement
+        [HttpGet]
+        public async Task<IActionResult> EditEndorsement(string loanNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+
+                // Check if loan exists
+                var loan = await _loanService.GetLoanByNoForDisplayAsync(loanNo, companyCode);
+                if (loan == null)
+                {
+                    TempData["ErrorMessage"] = "Loan not found";
+                    return RedirectToAction("PendingEndorsement");
+                }
+
+                // Check if endorsement exists
+                var existingEndorsement = await _loanService.GetEndorsementByLoanNoAsync(loanNo, companyCode);
+                if (existingEndorsement == null)
+                {
+                    TempData["ErrorMessage"] = "Endorsement not found for this loan";
+                    return RedirectToAction("PendingEndorsement");
+                }
+
+                // Check if already disbursed
+                var isDisbursed = await _context.Loanbal
+                    .AnyAsync(lb => lb.LoanNo == loanNo && lb.Companycode == companyCode);
+
+                if (isDisbursed)
+                {
+                    TempData["ErrorMessage"] = "Cannot edit endorsement for a disbursed loan";
+                    return RedirectToAction("PendingEndorsement");
+                }
+
+                // Get endorsement data for editing
+                var endorsementDto = await _loanService.GetEndorsementForEditAsync(loanNo, companyCode);
+
+                // Get GL accounts for dropdown
+                var allGlAccounts = await _context.GlSetup
+                    .Where(g => g.CompanyCode == companyCode && g.Status == true)
+                    .OrderBy(g => g.AccNo)
+                    .Select(g => new
+                    {
+                        AccountNo = g.AccNo,
+                        AccountName = g.Glaccname,
+                        AccountType = g.Glacctype,
+                        DisplayText = $"{g.Glaccname}"
+                    })
+                    .ToListAsync();
+
+                if (!allGlAccounts.Any())
+                {
+                    TempData["ErrorMessage"] = "No GL accounts found. Please set up GL accounts first.";
+                    return RedirectToAction("PendingEndorsement");
+                }
+
+                // Get banks for source account dropdown
+                var banks = await _context.Banks
+                    .Where(b => b.CompanyCode == companyCode && b.IsActive == true)
+                    .OrderBy(b => b.BankName)
+                    .Select(b => new
+                    {
+                        BankId = b.Id,
+                        BankName = b.BankName,
+                        GlAccountNo = b.GlAccountNo
+                    })
+                    .ToListAsync();
+
+                // Get loan type for registration fee
+                var loanType = await _context.Loantypes
+                    .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
+
+                var grossAmount = loan.LoanAmt ?? 0;
+
+                // ✅ Ensure endorsementDto has the correct GrossAmount
+                if (endorsementDto.GrossAmount == 0 && grossAmount > 0)
+                {
+                    endorsementDto.GrossAmount = grossAmount;
+                }
+
+                ViewBag.Loan = loan;
+                ViewBag.GrossAmount = loan.LoanAmt ?? 0;
+                ViewBag.AllGlAccounts = allGlAccounts;
+                ViewBag.Banks = banks;
+                ViewBag.RegistrationFee = loanType?.Processingfee ?? 0;
+                ViewBag.LoanType = loanType;
+                ViewBag.IsEdit = true;
+
+                return View(endorsementDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error loading edit endorsement form for {loanNo}");
+                TempData["ErrorMessage"] = $"Error loading endorsement: {ex.Message}";
+                return RedirectToAction("PendingEndorsement");
+            }
+        }
+
+        // POST: Edit Endorsement
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditEndorsement(LoanEndorsementDTO endorsementDto)
+        {
+            try
+            {
+                _logger.LogInformation($"=== EDIT ENDORSEMENT POST CALLED ===");
+                _logger.LogInformation($"LoanNo: {endorsementDto.LoanNo}");
+                _logger.LogInformation($"GrossAmount from DTO: {endorsementDto.GrossAmount}");
+
+                endorsementDto.CompanyCode = GetUserCompanyCode();
+                endorsementDto.EndorsedBy = User.Identity?.Name ?? "SYSTEM";
+
+                // ============================================================
+                // FIX: If GrossAmount is 0, get it from the loan
+                // ============================================================
+                if (endorsementDto.GrossAmount == 0)
+                {
+                    var loan = await _context.Loans
+                        .FirstOrDefaultAsync(l => l.LoanNo == endorsementDto.LoanNo && l.CompanyCode == endorsementDto.CompanyCode);
+
+                    if (loan != null && loan.LoanAmt > 0)
+                    {
+                        endorsementDto.GrossAmount = loan.LoanAmt.Value;
+                        _logger.LogInformation($"GrossAmount set from loan: {endorsementDto.GrossAmount}");
+                    }
+                    else
+                    {
+                        // Try to get from ViewBag as fallback
+                        var viewBagGross = ViewBag.GrossAmount as decimal? ?? 0;
+                        if (viewBagGross > 0)
+                        {
+                            endorsementDto.GrossAmount = viewBagGross;
+                            _logger.LogInformation($"GrossAmount set from ViewBag: {endorsementDto.GrossAmount}");
+                        }
+                    }
+                }
+
+                _logger.LogInformation($"Final GrossAmount: {endorsementDto.GrossAmount}");
+
+                // Validate deductions
+                if (endorsementDto.IsAccepted)
+                {
+                    var invalidDeductions = endorsementDto.Deductions
+                        .Where(d => d.Amount > 0 && string.IsNullOrEmpty(d.GlAccountNo))
+                        .ToList();
+
+                    if (invalidDeductions.Any())
+                    {
+                        var invalidNames = string.Join(", ", invalidDeductions.Select(d => d.DeductionName));
+                        TempData["ErrorMessage"] = $"Please select income accounts for: {invalidNames}";
+                        return RedirectToAction("EditEndorsement", new { loanNo = endorsementDto.LoanNo });
+                    }
+
+                    var totalDeductions = endorsementDto.Deductions.Sum(d => d.Amount);
+                    var netAmount = endorsementDto.GrossAmount - totalDeductions;
+
+                    _logger.LogInformation($"Gross: {endorsementDto.GrossAmount}, Total Ded: {totalDeductions}, Net: {netAmount}");
+
+                    if (netAmount < 0)
+                    {
+                        TempData["ErrorMessage"] = $"Total deductions ({totalDeductions:C}) cannot exceed gross amount ({endorsementDto.GrossAmount:C})";
+                        return RedirectToAction("EditEndorsement", new { loanNo = endorsementDto.LoanNo });
+                    }
+                }
+
+                // Update endorsement
+                var updatedEndmain = await _loanService.UpdateEndorsementAsync(endorsementDto);
+
+                TempData["SuccessMessage"] = $"Endorsement updated successfully! Minute No: {updatedEndmain.MinuteNo}";
+
+                return RedirectToAction("PendingEndorsement");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating endorsement for {endorsementDto.LoanNo}");
+                TempData["ErrorMessage"] = $"Error updating endorsement: {ex.Message}";
+                return RedirectToAction("EditEndorsement", new { loanNo = endorsementDto.LoanNo });
+            }
+        }
+
+        // GET: Endorsement Details
+        [HttpGet]
+        public async Task<IActionResult> EndorsementDetails(string loanNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+
+                var details = await _loanService.GetEndorsementDetailsAsync(loanNo, companyCode);
+
+                return View(details);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error loading endorsement details for {loanNo}");
+                TempData["ErrorMessage"] = $"Error loading details: {ex.Message}";
                 return RedirectToAction("PendingEndorsement");
             }
         }
@@ -2362,7 +2982,44 @@ namespace SACCOBlockChainSystem.Controllers
         {
             try
             {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                _logger.LogInformation($"PendingDisbursement: UserId={userId}");
+
+                // Check if OTP was validated in this session
+                var otpValidated = HttpContext.Session.GetString($"OtpValidated_{userId}");
+                var otpValidatedAt = HttpContext.Session.GetString($"OtpValidatedAt_{userId}");
+
+                bool isValidated = false;
+                if (otpValidated == "true" && !string.IsNullOrEmpty(otpValidatedAt))
+                {
+                    if (DateTime.TryParse(otpValidatedAt, out var validatedAt))
+                    {
+                        var timeSinceValidation = DateTime.UtcNow - validatedAt;
+                        isValidated = timeSinceValidation.TotalMinutes <= 5;
+
+                        _logger.LogInformation($"PendingDisbursement: Validation check - IsValidated: {isValidated}, TimeSince: {timeSinceValidation.TotalMinutes:F2} minutes");
+
+                        if (!isValidated)
+                        {
+                            _logger.LogInformation($"PendingDisbursement: OTP validation expired for user {userId}");
+                        }
+                    }
+                }
+
+                if (!isValidated)
+                {
+                    // Clear invalid session
+                    HttpContext.Session.Remove($"OtpValidated_{userId}");
+                    HttpContext.Session.Remove($"OtpValidatedAt_{userId}");
+
+                    _logger.LogInformation($"PendingDisbursement: OTP not validated, redirecting to verification for user {userId}");
+
+                    TempData["ErrorMessage"] = "Please verify your identity with OTP to access pending disbursements.";
+                    return RedirectToAction("OtpVerification", "Account", new { returnUrl = Url.Action("PendingDisbursement", "LoanMvc") });
+                }
+
                 var companyCode = GetUserCompanyCode();
+                _logger.LogInformation($"PendingDisbursement: User {userId} accessing pending disbursements for company {companyCode}");
 
                 // Get loans with Endorsed status (5)
                 var endorsedLoans = await _context.Loans
@@ -2434,6 +3091,7 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 ViewBag.Count = pendingDisbursement.Count;
+                ViewBag.OtpValidated = true;
                 return View(pendingDisbursement);
             }
             catch (Exception ex)
@@ -2717,81 +3375,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        //[HttpPost]
-        //[FinanceOfficerOnly]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> Disburse(LoanDisbursementDTO disbursementDto)
-        //{
-        //    try
-        //    {
-        //        _logger.LogInformation($"=== DISBURSE POST CALLED ===");
-        //        _logger.LogInformation($"LoanNo: {disbursementDto.LoanNo}");
-        //        _logger.LogInformation($"DisbursementMethod: {disbursementDto.DisbursementMethod}");
-        //        _logger.LogInformation($"BankId: {disbursementDto.BankId}");
-
-        //        if (string.IsNullOrEmpty(disbursementDto.DisbursementMethod))
-        //        {
-        //            TempData["ErrorMessage"] = "Please select a disbursement method.";
-        //            return RedirectToAction("Disburse", new { loanNo = disbursementDto.LoanNo });
-        //        }
-
-        //        disbursementDto.CompanyCode = GetUserCompanyCode();
-        //        disbursementDto.DisbursedBy = User.Identity?.Name ?? "SYSTEM";
-        //        disbursementDto.AuthorizedBy = User.Identity?.Name ?? "SYSTEM";
-
-        //        var result = await _loanService.DisburseLoanAsync(disbursementDto);
-
-        //        //============================================================
-        //        // GET MEMBER DETAILS
-        //        // ============================================================
-        //        var member = await _context.Members
-        //            .FirstOrDefaultAsync(m =>
-        //                m.MemberNo == result.MemberNo &&
-        //                m.CompanyCode == disbursementDto.CompanyCode);
-
-        //        string memberFullName = member != null
-        //            ? $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim()
-        //            : result.MemberNo;
-
-        //        TempData["SuccessMessage"] = $"Loan disbursed successfully to {memberFullName}. Net Amount: KES {result.Amount:N0}";
-        //        return RedirectToAction("AllLoans");
-        //    }
-        //    catch (DbUpdateException ex)
-        //    {
-        //        _logger.LogError(ex, $"Database error disbursing loan: {ex.Message}");
-
-        //        string errorMessage = "Error disbursing loan. ";
-        //        if (ex.InnerException != null)
-        //        {
-        //            if (ex.InnerException.Message.Contains("String or binary data would be truncated"))
-        //            {
-        //                errorMessage += "One or more fields exceed the maximum length allowed.";
-        //            }
-        //            else if (ex.InnerException.Message.Contains("FOREIGN KEY"))
-        //            {
-        //                errorMessage += "Referenced record does not exist.";
-        //            }
-        //            else
-        //            {
-        //                errorMessage += ex.InnerException.Message;
-        //            }
-        //        }
-        //        else
-        //        {
-        //            errorMessage += ex.Message;
-        //        }
-
-        //        TempData["ErrorMessage"] = errorMessage;
-        //        return RedirectToAction("Disburse", new { loanNo = disbursementDto.LoanNo });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, $"Error disbursing loan: {ex.Message}");
-        //        TempData["ErrorMessage"] = $"Error disbursing loan: {ex.Message}";
-        //        return RedirectToAction("Disburse", new { loanNo = disbursementDto.LoanNo });
-        //    }
-        //}
-
         [HttpGet]
         [FinanceOfficerOnly]
         public async Task<IActionResult> PrintDisbursementReceipt(string loanNo)
@@ -2927,6 +3510,15 @@ namespace SACCOBlockChainSystem.Controllers
             public FinanceOfficerOnlyAttribute()
             {
                 Roles = "Finance Officer, Super Admin, Admin";
+            }
+        }
+
+        // Custom attribute for OTP validation check
+        public class OtpRequiredAttribute : AuthorizeAttribute
+        {
+            public OtpRequiredAttribute()
+            {
+                // This attribute can be used on actions that require OTP
             }
         }
 
@@ -4888,24 +5480,54 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
         #region Guarantor Reports
-
         [HttpGet]
         public async Task<IActionResult> GuarantorsPerLoanReport(DateTime? startDate, DateTime? endDate)
         {
             try
             {
                 var companyCode = GetUserCompanyCode();
-                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var companyName = User.FindFirstValue("CompanyName") ?? "SACCO BlockChain System";
                 var printedBy = User.Identity?.Name ?? "System";
+                var userEmail = User.FindFirstValue(ClaimTypes.Email) ?? "";
 
-                // Set default date range (last 3 months if not provided)
+                // Set default date range (last 6 months if not provided)
                 if (!startDate.HasValue)
-                    startDate = DateTime.Now.AddMonths(-3);
+                    startDate = DateTime.Now.AddMonths(-6);
                 if (!endDate.HasValue)
                     endDate = DateTime.Now;
 
+                // Ensure end date is at end of day
+                endDate = endDate.Value.Date.AddDays(1).AddTicks(-1);
+
+                // Validate date range
+                if (startDate > endDate)
+                {
+                    TempData["ErrorMessage"] = "Start date cannot be later than end date.";
+                    return RedirectToAction("AllLoans");
+                }
+
+                // Check if date range is too large (more than 1 year)
+                if ((endDate - startDate).Value.TotalDays > 365)
+                {
+                    TempData["WarningMessage"] = "Date range exceeds 1 year. Please narrow your search for better performance.";
+                }
+
+                _logger.LogInformation($"Generating Guarantors Per Loan Report for company: {companyCode}, Date Range: {startDate} to {endDate}");
+
+                // Get report data from service
                 var reportData = await _loanService.GetGuarantorsPerLoanReportAsync(companyCode, startDate, endDate);
 
+                // Calculate summary statistics
+                var totalLoans = reportData.Count;
+                var totalGuarantors = reportData.Sum(l => l.Guarantors?.Count ?? 0);
+                var totalGuaranteeAmount = reportData.Sum(l => l.TotalGuaranteeAmount);
+                var fullyGuaranteed = reportData.Count(l => l.IsFullyGuaranteed);
+                var partiallyGuaranteed = reportData.Count(l => !l.IsFullyGuaranteed && l.Guarantors.Any());
+                var loansWithoutGuarantors = reportData.Count(l => !l.Guarantors.Any());
+                var averageGuarantorsPerLoan = totalLoans > 0 ? Math.Round((decimal)totalGuarantors / totalLoans, 2) : 0;
+                var averageGuaranteeAmount = totalLoans > 0 ? Math.Round(totalGuaranteeAmount / totalLoans, 2) : 0;
+
+                // Create view model
                 var viewModel = new GuarantorsPerLoanIndexViewModel
                 {
                     Loans = reportData,
@@ -4916,21 +5538,53 @@ namespace SACCOBlockChainSystem.Controllers
                     CompanyName = companyName,
                     PrintedBy = printedBy,
                     GeneratedOn = DateTime.Now,
-                    TotalLoans = reportData.Count,
-                    TotalGuarantors = reportData.Sum(l => l.Guarantors.Count),
-                    TotalGuaranteeAmount = reportData.Sum(l => l.TotalGuaranteeAmount),
-                    FullyGuaranteedLoans = reportData.Count(l => l.IsFullyGuaranteed),
-                    PartiallyGuaranteedLoans = reportData.Count(l => !l.IsFullyGuaranteed && l.Guarantors.Any())
+                    TotalLoans = totalLoans,
+                    TotalGuarantors = totalGuarantors,
+                    TotalGuaranteeAmount = totalGuaranteeAmount,
+                    FullyGuaranteedLoans = fullyGuaranteed,
+                    PartiallyGuaranteedLoans = partiallyGuaranteed,
+
+                    // Additional properties for display
+                    LoansWithoutGuarantors = loansWithoutGuarantors,
+                    AverageGuarantorsPerLoan = averageGuarantorsPerLoan,
+                    AverageGuaranteeAmount = averageGuaranteeAmount,
+                    UserEmail = userEmail
                 };
 
+                // Store for export actions
                 ViewBag.StartDate = startDate;
                 ViewBag.EndDate = endDate;
+                ViewBag.CompanyCode = companyCode;
+
+                _logger.LogInformation($"Report generated successfully. Total Loans: {totalLoans}, Total Guarantors: {totalGuarantors}");
+
+                // Add success message if data exists
+                if (viewModel.HasData)
+                {
+                    TempData["SuccessMessage"] = $"Report generated successfully with {totalLoans} loans and {totalGuarantors} guarantors.";
+                }
+                else
+                {
+                    TempData["InfoMessage"] = "No data found for the selected date range. Try adjusting your filters.";
+                }
 
                 return View("~/Views/LoanMvc/GuarantorsPerLoanReport.cshtml", viewModel);
             }
+            catch (ArgumentNullException ex)
+            {
+                _logger.LogError(ex, "Null argument error in GuarantorsPerLoanReport");
+                TempData["ErrorMessage"] = "Invalid data received. Please try again.";
+                return RedirectToAction("AllLoans");
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex, "Invalid operation error in GuarantorsPerLoanReport");
+                TempData["ErrorMessage"] = "An operation error occurred. Please contact support.";
+                return RedirectToAction("AllLoans");
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error loading guarantors per loan report");
+                _logger.LogError(ex, "Unexpected error in GuarantorsPerLoanReport");
                 TempData["ErrorMessage"] = $"Error loading report: {ex.Message}";
                 return RedirectToAction("AllLoans");
             }
@@ -4942,37 +5596,66 @@ namespace SACCOBlockChainSystem.Controllers
             try
             {
                 var companyCode = GetUserCompanyCode();
-                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var companyName = User.FindFirstValue("CompanyName") ?? "SACCO BlockChain System";
                 var printedBy = User.Identity?.Name ?? "System";
 
-                // Set default date range (last 3 months if not provided)
+                // Set default date range (last 6 months if not provided)
                 if (!startDate.HasValue)
-                    startDate = DateTime.Now.AddMonths(-3);
+                    startDate = DateTime.Now.AddMonths(-6);
                 if (!endDate.HasValue)
                     endDate = DateTime.Now;
 
+                // Ensure end date is at end of day
+                endDate = endDate.Value.Date.AddDays(1).AddTicks(-1);
+
+                // Validate date range
+                if (startDate > endDate)
+                {
+                    TempData["ErrorMessage"] = "Start date cannot be later than end date.";
+                    return RedirectToAction("AllLoans");
+                }
+
+                _logger.LogInformation($"Generating All Guarantors Report for company: {companyCode}, Date Range: {startDate} to {endDate}");
+
                 var reportData = await _loanService.GetAllGuarantorsReportAsync(companyCode, startDate, endDate);
+
+                // Calculate summary statistics safely
+                var totalRecords = reportData?.Count ?? 0;
+                var totalGuaranteeAmount = reportData?.Sum(g => g.GuaranteeAmount) ?? 0;
+                var activeGuarantors = reportData?.Count(g => !g.Transfered) ?? 0;
+                var releasedGuarantors = reportData?.Count(g => g.Transfered) ?? 0;
+                var uniqueLoans = reportData?.Select(g => g.LoanNo).Where(l => !string.IsNullOrEmpty(l)).Distinct().Count() ?? 0;
+                var uniqueGuarantors = reportData?.Select(g => g.GuarantorMemberNo).Where(m => !string.IsNullOrEmpty(m)).Distinct().Count() ?? 0;
 
                 var viewModel = new AllGuarantorsIndexViewModel
                 {
-                    Guarantors = reportData,
+                    Guarantors = reportData ?? new List<AllGuarantorsReportDTO>(),
                     ReportDate = DateTime.Now,
                     StartDate = startDate,
                     EndDate = endDate,
-                    HasData = reportData.Any(),
+                    HasData = reportData != null && reportData.Any(),
                     CompanyName = companyName,
                     PrintedBy = printedBy,
                     GeneratedOn = DateTime.Now,
-                    TotalRecords = reportData.Count,
-                    UniqueLoans = reportData.Select(g => g.LoanNo).Distinct().Count(),
-                    UniqueGuarantors = reportData.Select(g => g.GuarantorMemberNo).Distinct().Count(),
-                    TotalGuaranteeAmount = reportData.Sum(g => g.GuaranteeAmount),
-                    ActiveGuarantors = reportData.Count(g => !g.Transfered),
-                    ReleasedGuarantors = reportData.Count(g => g.Transfered)
+                    TotalRecords = totalRecords,
+                    UniqueLoans = uniqueLoans,
+                    UniqueGuarantors = uniqueGuarantors,
+                    TotalGuaranteeAmount = totalGuaranteeAmount,
+                    ActiveGuarantors = activeGuarantors,
+                    ReleasedGuarantors = releasedGuarantors
                 };
 
                 ViewBag.StartDate = startDate;
                 ViewBag.EndDate = endDate;
+
+                if (viewModel.HasData)
+                {
+                    TempData["SuccessMessage"] = $"Report generated successfully with {totalRecords} records.";
+                }
+                else
+                {
+                    TempData["InfoMessage"] = "No guarantor records found for the selected date range.";
+                }
 
                 return View("~/Views/LoanMvc/AllGuarantorsReport.cshtml", viewModel);
             }

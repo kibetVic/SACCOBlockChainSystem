@@ -228,6 +228,9 @@ namespace SACCOBlockChainSystem.Services
                     MemberDescription = registration.RegistrationType,
                     ShareCap = registration.InitialShares,
                     InitShares = registration.InitialShares,
+                    Photo = registration.Photo,
+                    IdFrontImage = registration.IdFrontImage,  
+                    IdBackImage = registration.IdBackImage, 
                     LoanBalance = 0,
                     InterestBalance = 0,
                     Status = 1,  // Active
@@ -819,6 +822,7 @@ namespace SACCOBlockChainSystem.Services
         //    }
         //}
 
+
         public async Task<MemberResponseDTO> UpdateMemberAsync(string memberNo, MemberUpdateDTO updateDto)
         {
             _logger.LogInformation($"Starting member update for: {memberNo}");
@@ -839,63 +843,13 @@ namespace SACCOBlockChainSystem.Services
                     throw new InvalidOperationException($"Member {memberNo} not found.");
                 }
 
+                _logger.LogInformation($"Found member: {memberNo}, Current Surname: {member.Surname}");
+
                 // =====================================================
-                // AGE VALIDATION FOR UPDATE
+                // UPDATE ID NUMBER
                 // =====================================================
-                if (updateDto.DateOfBirth.HasValue || !string.IsNullOrEmpty(updateDto.MembershipType))
+                if (!string.IsNullOrEmpty(updateDto.IdNo))
                 {
-                    string membershipType = updateDto.MembershipType ?? member.MembershipType;
-                    DateTime? dob = updateDto.DateOfBirth.HasValue ? updateDto.DateOfBirth : member.Dob;
-
-                    if (!string.IsNullOrEmpty(membershipType) && membershipType.Equals("Individual", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (!dob.HasValue || dob.Value == default(DateTime))
-                        {
-                            throw new ValidationException("Date of Birth is required for Individual members.");
-                        }
-
-                        int age = CalculateAge(dob.Value);
-                        if (age < 18)
-                        {
-                            throw new ValidationException("Individual members must be 18 years or older.");
-                        }
-
-                        // Update age if dob was changed
-                        if (updateDto.DateOfBirth.HasValue)
-                        {
-                            member.Age = age;
-                        }
-                    }
-                }
-
-                // Store old values for blockchain record
-                var oldValues = new
-                {
-                    member.Idno,
-                    member.ApplicDate,
-                    member.Surname,
-                    member.OtherNames,
-                    member.PhoneNo,
-                    member.HomeTelNo,
-                    member.Email,
-                    member.Sex,
-                    member.Dob,
-                    member.Station,
-                    member.Dept,
-                    member.PresentAddr,
-                    member.Cigcode,
-                    member.MembershipType,
-                    member.MemberDescription,
-                    member.Status,
-                    member.Mstatus,
-                    member.Employer,  
-                    member.Photo  
-                };
-
-                // Update ID Number if provided and different
-                if (!string.IsNullOrEmpty(updateDto.IdNo) && updateDto.IdNo != member.Idno)
-                {
-                    // Check if the new ID number already exists for another member
                     var existingWithId = await _context.Members
                         .FirstOrDefaultAsync(m => m.Idno == updateDto.IdNo &&
                                                  m.CompanyCode == currentCompanyCode &&
@@ -905,37 +859,52 @@ namespace SACCOBlockChainSystem.Services
                     {
                         throw new InvalidOperationException($"ID Number {updateDto.IdNo} is already registered to another member.");
                     }
-
                     member.Idno = updateDto.IdNo;
                 }
 
-                // Update Registration Date if provided - FIXED: RegistrationDate is DateTime, not nullable
-                // Check if it's a valid date (not default/min value)
+                // =====================================================
+                // UPDATE REGISTRATION DATE
+                // =====================================================
                 if (updateDto.RegistrationDate != default(DateTime) && updateDto.RegistrationDate != DateTime.MinValue)
                 {
                     member.ApplicDate = updateDto.RegistrationDate;
                 }
 
-                // Update employer if provided
+                // =====================================================
+                // UPDATE EMPLOYER
+                // =====================================================
                 if (!string.IsNullOrEmpty(updateDto.Employer))
                 {
                     member.Employer = updateDto.Employer;
                 }
 
-                // Update other fields
+                // =====================================================
+                // UPDATE NAME
+                // =====================================================
                 if (!string.IsNullOrEmpty(updateDto.Surname))
+                {
                     member.Surname = updateDto.Surname;
+                }
 
                 if (!string.IsNullOrEmpty(updateDto.OtherNames))
+                {
                     member.OtherNames = updateDto.OtherNames;
+                }
 
                 member.FullName = $"{member.Surname} {member.OtherNames}".Trim();
 
+                // =====================================================
+                // UPDATE CONTACT
+                // =====================================================
                 if (!string.IsNullOrEmpty(updateDto.PhoneNo))
+                {
                     member.PhoneNo = updateDto.PhoneNo;
+                }
 
                 if (updateDto.LandLine != null)
+                {
                     member.HomeTelNo = updateDto.LandLine;
+                }
 
                 if (updateDto.Email != null)
                 {
@@ -943,8 +912,13 @@ namespace SACCOBlockChainSystem.Services
                     member.EmailAddress = updateDto.Email;
                 }
 
+                // =====================================================
+                // UPDATE PERSONAL DETAILS
+                // =====================================================
                 if (updateDto.Gender != null)
+                {
                     member.Sex = updateDto.Gender;
+                }
 
                 if (updateDto.DateOfBirth.HasValue)
                 {
@@ -953,59 +927,50 @@ namespace SACCOBlockChainSystem.Services
                 }
 
                 if (updateDto.Station != null)
-                    member.Station = updateDto.Station;
-
-                if (updateDto.Department != null)
-                    member.Dept = updateDto.Department;
-
-                if (updateDto.PresentAddress != null)
-                    member.PresentAddr = updateDto.PresentAddress;
-
-                if (updateDto.Cigcode != null)
-                    member.Cigcode = updateDto.Cigcode;
-
-                if (updateDto.MembershipType != null)
-                    member.MembershipType = updateDto.MembershipType;
-
-                if (updateDto.RegistrationType != null)
-                    member.MemberDescription = updateDto.RegistrationType;
-
-                // Add photo update logic
-                if (!string.IsNullOrEmpty(updateDto.Photo))
                 {
-                    // Validate image size (max 5MB)
-                    var base64Data = updateDto.Photo;
-                    if (base64Data.StartsWith("data:image"))
-                    {
-                        // Extract the base64 part
-                        var base64Parts = base64Data.Split(',');
-                        if (base64Parts.Length == 2)
-                        {
-                            var imageBytes = Convert.FromBase64String(base64Parts[1]);
-
-                            // Check file size (max 5MB = 5,242,880 bytes)
-                            if (imageBytes.Length > 5 * 1024 * 1024)
-                            {
-                                throw new ValidationException("Image size must be less than 5MB");
-                            }
-
-                            member.Photo = updateDto.Photo; // Store the full data URL
-                        }
-                    }
-                    else
-                    {
-                        member.Photo = updateDto.Photo;
-                    }
+                    member.Station = updateDto.Station;
                 }
 
-                // Update marital status
+                if (updateDto.Department != null)
+                {
+                    member.Dept = updateDto.Department;
+                }
+
+                if (updateDto.PresentAddress != null)
+                {
+                    member.PresentAddr = updateDto.PresentAddress;
+                }
+
+                // =====================================================
+                // UPDATE MEMBERSHIP SETTINGS
+                // =====================================================
+                if (updateDto.Cigcode != null)
+                {
+                    member.Cigcode = updateDto.Cigcode;
+                }
+
+                if (updateDto.MembershipType != null)
+                {
+                    member.MembershipType = updateDto.MembershipType;
+                }
+
+                if (updateDto.RegistrationType != null)
+                {
+                    member.MemberDescription = updateDto.RegistrationType;
+                }
+
+                // =====================================================
+                // UPDATE MARITAL STATUS
+                // =====================================================
                 if (!string.IsNullOrEmpty(updateDto.MaritalStatus))
                 {
                     member.Mstatus = updateDto.MaritalStatus.ToUpper() == "MARRIED" ? true :
                                      updateDto.MaritalStatus.ToUpper() == "SINGLE" ? false : member.Mstatus;
                 }
 
-                // Update status
+                // =====================================================
+                // UPDATE STATUS
+                // =====================================================
                 if (!string.IsNullOrEmpty(updateDto.Status))
                 {
                     member.Status = updateDto.Status switch
@@ -1019,15 +984,50 @@ namespace SACCOBlockChainSystem.Services
                     };
                 }
 
-                // Update audit fields
+                // =====================================================
+                // UPDATE PHOTO - Handle base64 images
+                // =====================================================
+                if (!string.IsNullOrEmpty(updateDto.Photo))
+                {
+                    member.Photo = updateDto.Photo;
+                    _logger.LogInformation($"Photo updated for member {memberNo}");
+                }
+
+                // =====================================================
+                // UPDATE ID FRONT IMAGE
+                // =====================================================
+                if (!string.IsNullOrEmpty(updateDto.IdFrontImage))
+                {
+                    member.IdFrontImage = updateDto.IdFrontImage;
+                    _logger.LogInformation($"ID Front image updated for member {memberNo}");
+                }
+
+                // =====================================================
+                // UPDATE ID BACK IMAGE
+                // =====================================================
+                if (!string.IsNullOrEmpty(updateDto.IdBackImage))
+                {
+                    member.IdBackImage = updateDto.IdBackImage;
+                    _logger.LogInformation($"ID Back image updated for member {memberNo}");
+                }
+
+                // =====================================================
+                // UPDATE AUDIT FIELDS
+                // =====================================================
                 member.AuditId = currentUserName;
                 member.AuditTime = DateTime.Now;
                 member.AuditDateTime = DateTime.Now;
 
+                // =====================================================
+                // SAVE CHANGES
+                // =====================================================
+                _logger.LogInformation($"Saving member {memberNo} with updated fields");
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Member {memberNo} updated in database");
+                _logger.LogInformation($"Member {memberNo} saved successfully");
 
-                // Create blockchain transaction for the update
+                // =====================================================
+                // BLOCKCHAIN TRANSACTION (Optional)
+                // =====================================================
                 string blockchainTxId = null;
                 try
                 {
@@ -1035,39 +1035,25 @@ namespace SACCOBlockChainSystem.Services
                     {
                         MemberNo = memberNo,
                         Action = "UPDATE",
-                        OldValues = oldValues,
-                        NewValues = new
-                        {
-                            member.Idno,
-                            member.ApplicDate,
-                            member.Surname,
-                            member.OtherNames,
-                            member.PhoneNo,
-                            member.HomeTelNo,
-                            member.Email,
-                            member.Sex,
-                            member.Dob,
-                            member.Station,
-                            member.Dept,
-                            member.PresentAddr,
-                            member.Cigcode,
-                            member.MembershipType,
-                            member.MemberDescription,
-                            member.Status,
-                            member.Mstatus,
-                            member.Photo,
-                            member.Employer 
-                        },
                         UpdatedBy = currentUserName,
                         UpdatedAt = DateTime.Now,
-                        UpdateType = "MEMBER_UPDATE"
+                        Fields = new
+                        {
+                            IdNo = member.Idno,
+                            Surname = member.Surname,
+                            OtherNames = member.OtherNames,
+                            PhoneNo = member.PhoneNo,
+                            Email = member.Email,
+                            MembershipType = member.MembershipType,
+                            Status = member.Status
+                        }
                     };
 
                     var blockchainTx = await _blockchainService.CreateAndAddTransactionAsync(
                         "MEMBER_UPDATE",
                         memberNo,
                         currentCompanyCode,
-                        0, // No amount for update
+                        0,
                         memberNo,
                         blockchainData
                     );
@@ -1083,12 +1069,10 @@ namespace SACCOBlockChainSystem.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error recording blockchain update transaction, but member was updated");
-                    // Don't throw - member update succeeded, blockchain recording failed
                 }
 
                 await transaction.CommitAsync();
 
-                // Return response DTO
                 return new MemberResponseDTO
                 {
                     MemberNo = member.MemberNo,
@@ -1112,7 +1096,7 @@ namespace SACCOBlockChainSystem.Services
                     MembershipType = member.MembershipType,
                     RegistrationType = member.MemberDescription,
                     IsActive = member.Status == 1,
-                    Employer = member.Employer  
+                    Employer = member.Employer
                 };
             }
             catch (Exception ex)
@@ -1122,6 +1106,325 @@ namespace SACCOBlockChainSystem.Services
                 throw new Exception($"Error updating member: {ex.Message}");
             }
         }
+
+
+
+        //public async Task<MemberResponseDTO> UpdateMemberAsync(string memberNo, MemberUpdateDTO updateDto)
+        //{
+        //    _logger.LogInformation($"Starting member update for: {memberNo}");
+
+        //    using var transaction = await _context.Database.BeginTransactionAsync();
+
+        //    try
+        //    {
+        //        var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();
+        //        var currentUserName = _companyContextService.GetCurrentUserName() ?? "SYSTEM";
+
+        //        // Find the existing member
+        //        var member = await _context.Members
+        //            .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == currentCompanyCode);
+
+        //        if (member == null)
+        //        {
+        //            throw new InvalidOperationException($"Member {memberNo} not found.");
+        //        }
+
+        //        // =====================================================
+        //        // AGE VALIDATION FOR UPDATE
+        //        // =====================================================
+        //        if (updateDto.DateOfBirth.HasValue || !string.IsNullOrEmpty(updateDto.MembershipType))
+        //        {
+        //            string membershipType = updateDto.MembershipType ?? member.MembershipType;
+        //            DateTime? dob = updateDto.DateOfBirth.HasValue ? updateDto.DateOfBirth : member.Dob;
+
+        //            if (!string.IsNullOrEmpty(membershipType) && membershipType.Equals("Individual", StringComparison.OrdinalIgnoreCase))
+        //            {
+        //                if (!dob.HasValue || dob.Value == default(DateTime))
+        //                {
+        //                    throw new ValidationException("Date of Birth is required for Individual members.");
+        //                }
+
+        //                int age = CalculateAge(dob.Value);
+        //                if (age < 18)
+        //                {
+        //                    throw new ValidationException("Individual members must be 18 years or older.");
+        //                }
+
+        //                // Update age if dob was changed
+        //                if (updateDto.DateOfBirth.HasValue)
+        //                {
+        //                    member.Age = age;
+        //                }
+        //            }
+        //        }
+
+        //        // Store old values for blockchain record
+        //        var oldValues = new
+        //        {
+        //            member.Idno,
+        //            member.ApplicDate,
+        //            member.Surname,
+        //            member.OtherNames,
+        //            member.PhoneNo,
+        //            member.HomeTelNo,
+        //            member.Email,
+        //            member.Sex,
+        //            member.Dob,
+        //            member.Station,
+        //            member.Dept,
+        //            member.PresentAddr,
+        //            member.Cigcode,
+        //            member.MembershipType,
+        //            member.MemberDescription,
+        //            member.Status,
+        //            member.Mstatus,
+        //            member.Employer,  
+        //            member.Photo  
+        //        };
+
+        //        // Update ID Number if provided and different
+        //        if (!string.IsNullOrEmpty(updateDto.IdNo) && updateDto.IdNo != member.Idno)
+        //        {
+        //            // Check if the new ID number already exists for another member
+        //            var existingWithId = await _context.Members
+        //                .FirstOrDefaultAsync(m => m.Idno == updateDto.IdNo &&
+        //                                         m.CompanyCode == currentCompanyCode &&
+        //                                         m.MemberNo != memberNo);
+
+        //            if (existingWithId != null)
+        //            {
+        //                throw new InvalidOperationException($"ID Number {updateDto.IdNo} is already registered to another member.");
+        //            }
+
+        //            member.Idno = updateDto.IdNo;
+        //        }
+
+        //        // Update Registration Date if provided - FIXED: RegistrationDate is DateTime, not nullable
+        //        // Check if it's a valid date (not default/min value)
+        //        if (updateDto.RegistrationDate != default(DateTime) && updateDto.RegistrationDate != DateTime.MinValue)
+        //        {
+        //            member.ApplicDate = updateDto.RegistrationDate;
+        //        }
+
+        //        // Update employer if provided
+        //        if (!string.IsNullOrEmpty(updateDto.Employer))
+        //        {
+        //            member.Employer = updateDto.Employer;
+        //        }
+
+        //        // Update other fields
+        //        if (!string.IsNullOrEmpty(updateDto.Surname))
+        //            member.Surname = updateDto.Surname;
+
+        //        if (!string.IsNullOrEmpty(updateDto.OtherNames))
+        //            member.OtherNames = updateDto.OtherNames;
+
+        //        member.FullName = $"{member.Surname} {member.OtherNames}".Trim();
+
+        //        if (!string.IsNullOrEmpty(updateDto.PhoneNo))
+        //            member.PhoneNo = updateDto.PhoneNo;
+
+        //        if (updateDto.LandLine != null)
+        //            member.HomeTelNo = updateDto.LandLine;
+
+        //        if (updateDto.Email != null)
+        //        {
+        //            member.Email = updateDto.Email;
+        //            member.EmailAddress = updateDto.Email;
+        //        }
+
+        //        if (updateDto.Gender != null)
+        //            member.Sex = updateDto.Gender;
+
+        //        if (updateDto.DateOfBirth.HasValue)
+        //        {
+        //            member.Dob = updateDto.DateOfBirth;
+        //            member.Age = CalculateAge(updateDto.DateOfBirth.Value);
+        //        }
+
+        //        if (updateDto.Station != null)
+        //            member.Station = updateDto.Station;
+
+        //        if (updateDto.Department != null)
+        //            member.Dept = updateDto.Department;
+
+        //        if (updateDto.PresentAddress != null)
+        //            member.PresentAddr = updateDto.PresentAddress;
+
+        //        if (updateDto.Cigcode != null)
+        //            member.Cigcode = updateDto.Cigcode;
+
+        //        if (updateDto.MembershipType != null)
+        //            member.MembershipType = updateDto.MembershipType;
+
+        //        if (updateDto.RegistrationType != null)
+        //            member.MemberDescription = updateDto.RegistrationType;
+
+
+        //        // Add photo update logic
+        //        if (!string.IsNullOrEmpty(updateDto.Photo))
+        //        {
+        //            // Validate image size (max 5MB)
+        //            var base64Data = updateDto.Photo;
+        //            if (base64Data.StartsWith("data:image"))
+        //            {
+        //                // Extract the base64 part
+        //                var base64Parts = base64Data.Split(',');
+        //                if (base64Parts.Length == 2)
+        //                {
+        //                    var imageBytes = Convert.FromBase64String(base64Parts[1]);
+
+        //                    // Check file size (max 5MB = 5,242,880 bytes)
+        //                    if (imageBytes.Length > 5 * 1024 * 1024)
+        //                    {
+        //                        throw new ValidationException("Image size must be less than 5MB");
+        //                    }
+
+        //                    member.Photo = updateDto.Photo; // Store the full data URL
+        //                }
+        //            }
+        //            else
+        //            {
+        //                member.Photo = updateDto.Photo;
+        //            }
+        //        }
+
+        //        // Update ID Front image
+        //        if (!string.IsNullOrEmpty(updateDto.IdFrontImage))
+        //        {
+        //            member.IdFrontImage = updateDto.IdFrontImage;
+        //        }
+
+        //        // Update ID Back image
+        //        if (!string.IsNullOrEmpty(updateDto.IdBackImage))
+        //        {
+        //            member.IdBackImage = updateDto.IdBackImage;
+        //        }
+
+        //        // Update marital status
+        //        if (!string.IsNullOrEmpty(updateDto.MaritalStatus))
+        //        {
+        //            member.Mstatus = updateDto.MaritalStatus.ToUpper() == "MARRIED" ? true :
+        //                             updateDto.MaritalStatus.ToUpper() == "SINGLE" ? false : member.Mstatus;
+        //        }
+
+        //        // Update status
+        //        if (!string.IsNullOrEmpty(updateDto.Status))
+        //        {
+        //            member.Status = updateDto.Status switch
+        //            {
+        //                "Active" => 1,
+        //                "Withdrawn" => 2,
+        //                "Deceased" => 3,
+        //                "Dormant" => 4,
+        //                "Suspended" => 5,
+        //                _ => member.Status
+        //            };
+        //        }
+
+        //        // Update audit fields
+        //        member.AuditId = currentUserName;
+        //        member.AuditTime = DateTime.Now;
+        //        member.AuditDateTime = DateTime.Now;
+
+        //        await _context.SaveChangesAsync();
+        //        _logger.LogInformation($"Member {memberNo} updated in database");
+
+        //        // Create blockchain transaction for the update
+        //        string blockchainTxId = null;
+        //        try
+        //        {
+        //            var blockchainData = new
+        //            {
+        //                MemberNo = memberNo,
+        //                Action = "UPDATE",
+        //                OldValues = oldValues,
+        //                NewValues = new
+        //                {
+        //                    member.Idno,
+        //                    member.ApplicDate,
+        //                    member.Surname,
+        //                    member.OtherNames,
+        //                    member.PhoneNo,
+        //                    member.HomeTelNo,
+        //                    member.Email,
+        //                    member.Sex,
+        //                    member.Dob,
+        //                    member.Station,
+        //                    member.Dept,
+        //                    member.PresentAddr,
+        //                    member.Cigcode,
+        //                    member.MembershipType,
+        //                    member.MemberDescription,
+        //                    member.Status,
+        //                    member.Mstatus,
+        //                    member.Photo,
+        //                    member.Employer 
+        //                },
+        //                UpdatedBy = currentUserName,
+        //                UpdatedAt = DateTime.Now,
+        //                UpdateType = "MEMBER_UPDATE"
+        //            };
+
+        //            var blockchainTx = await _blockchainService.CreateAndAddTransactionAsync(
+        //                "MEMBER_UPDATE",
+        //                memberNo,
+        //                currentCompanyCode,
+        //                0, // No amount for update
+        //                memberNo,
+        //                blockchainData
+        //            );
+
+        //            if (blockchainTx != null)
+        //            {
+        //                blockchainTxId = blockchainTx.TransactionId;
+        //                member.BlockchainTxId = blockchainTxId;
+        //                await _context.SaveChangesAsync();
+        //                _logger.LogInformation($"Blockchain update transaction recorded: {blockchainTxId}");
+        //            }
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            _logger.LogError(ex, "Error recording blockchain update transaction, but member was updated");
+        //            // Don't throw - member update succeeded, blockchain recording failed
+        //        }
+
+        //        await transaction.CommitAsync();
+
+        //        // Return response DTO
+        //        return new MemberResponseDTO
+        //        {
+        //            MemberNo = member.MemberNo,
+        //            FullName = $"{member.Surname} {member.OtherNames}".Trim(),
+        //            Status = member.Status switch
+        //            {
+        //                1 => "Active",
+        //                2 => "Withdrawn",
+        //                3 => "Deceased",
+        //                4 => "Dormant",
+        //                5 => "Suspended",
+        //                _ => "Unknown"
+        //            },
+        //            RegistrationDate = member.ApplicDate ?? DateTime.Now,
+        //            BlockchainTxId = blockchainTxId ?? member.BlockchainTxId,
+        //            ShareBalance = member.ShareCap ?? 0,
+        //            Email = member.Email,
+        //            Phone = member.PhoneNo,
+        //            Photo = member.Photo,
+        //            CompanyCode = member.CompanyCode,
+        //            MembershipType = member.MembershipType,
+        //            RegistrationType = member.MemberDescription,
+        //            IsActive = member.Status == 1,
+        //            Employer = member.Employer  
+        //        };
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        await transaction.RollbackAsync();
+        //        _logger.LogError(ex, $"Error updating member {memberNo}");
+        //        throw new Exception($"Error updating member: {ex.Message}");
+        //    }
+        //}
 
         private async Task<string> GenerateUniqueMemberNumberAsync(string companyCode, MemberRegistrationDTO registration)
         {

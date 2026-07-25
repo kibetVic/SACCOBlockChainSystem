@@ -5,8 +5,12 @@
     var loan = ViewBag.Loan as SACCOBlockChainSystem.Models.Loan;
     var grossAmount = ViewBag.GrossAmount as decimal? ?? 0;
     var allGlAccounts = ViewBag.AllGlAccounts as IEnumerable<dynamic> ?? new List<dynamic>();
+    var loanType = ViewBag.LoanType as SACCOBlockChainSystem.Models.Loantype;
+    var processingFee = ViewBag.RegistrationFee as decimal? ?? 0; // Using RegistrationFee as ProcessingFee
+    var isPercentage = ViewBag.RegistrationFeeIsPercentage as bool? ?? false;
+    var percentageValue = ViewBag.RegistrationFeePercentage as decimal? ?? 0;
+    int deductionIndex = 0;
 }
-
 
 <div class="container py-4">
     <div class="row mb-4">
@@ -32,7 +36,7 @@
     }
 
     <div class="row">
-        <div class="col-md-8">
+        <div class="col-md-10">
             <div class="card shadow-sm">
                 <div class="card-header bg-light">
                     <h5 class="card-title mb-0">Endorsement Details</h5>
@@ -54,13 +58,13 @@
                         </div>
                         <div class="col-md-4">
                             <div class="bg-light p-3 rounded text-center">
-                                <small class="text-muted">Approved Amount</small>
+                                <small class="text-muted">Gross Amount</small>
                                 <h5 class="mb-0 text-primary">KES @grossAmount.ToString("N0")</h5>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Checkboxes for Endorsement Decision - Place this after the Loan Information Summary -->
+                    <!-- Checkboxes for Endorsement Decision -->
                     <div class="row mt-4">
                         <div class="col-md-12">
                             <div class="card border-info">
@@ -122,7 +126,6 @@
                         </div>
                     </div>
 
-                    
                     <form asp-action="Endorse" method="post" id="endorsementForm" onsubmit="return window.validateForm()">
                         @Html.AntiForgeryToken()
                         <input type="hidden" asp-for="LoanNo" />
@@ -155,16 +158,105 @@
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        @{
+                                            deductionIndex = 0;
+                                        }
+
+                                        <!-- ============================================================ -->
+                                        <!-- PROCESSING FEE DEDUCTION - Pulled from LoanType.Processingfee -->
+                                        <!-- ============================================================ -->
+                                        @if (processingFee > 0)
+                                        {
+                                            var procFeeIndex = deductionIndex++;
+                                            <tr class="deduction-row" data-index="@procFeeIndex" data-proc-fee="true">
+                                                <td class="align-middle">
+                                                    <input type="hidden" name="Deductions[@procFeeIndex].DeductionCode" value="PROC_FEE" />
+                                                    <input type="hidden" name="Deductions[@procFeeIndex].DeductionName" value="Processing Fee" />
+                                                    <input type="hidden" name="Deductions[@procFeeIndex].IsMandatory" value="false" />
+                                                    <input type="hidden" name="Deductions[@procFeeIndex].IsPercentage" id="IsPercentage_@procFeeIndex" value="@isPercentage.ToString().ToLower()" />
+                                                    <input type="hidden" name="Deductions[@procFeeIndex].PercentageValue" id="PercentageValue_@procFeeIndex" value="@percentageValue" />
+                                                    <strong>Processing Fee</strong>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <select name="Deductions[@procFeeIndex].GlAccountNo"
+                                                            class="form-select form-select-sm deduction-account"
+                                                            data-index="@procFeeIndex"
+                                                            onchange="updateGlAccountName(@procFeeIndex, this.value)">
+                                                        <option value="">-- Select Income Account --</option>
+                                                        @foreach (var account in allGlAccounts)
+                                                        {
+                                                            <option value="@account.AccountNo"
+                                                                    data-account-name="@account.AccountName">
+                                                                @account.DisplayText
+                                                            </option>
+                                                        }
+                                                    </select>
+                                                    <input type="hidden" name="Deductions[@procFeeIndex].GlAccountName" id="GlAccountName_@procFeeIndex" value="" />
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="number"
+                                                           name="Deductions[@procFeeIndex].Amount"
+                                                           class="form-control deduction-amount"
+                                                           id="Amount_@procFeeIndex"
+                                                           value="@processingFee"
+                                                           min="0"
+                                                           step="any"
+                                                           placeholder="Enter amount"
+                                                           onchange="updateTotals()"
+                                                           oninput="updateTotals()" />
+                                                </td>
+                                                <td class="align-middle">
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="number"
+                                                               class="form-control deduction-percentage"
+                                                               id="PercentageInput_@procFeeIndex"
+                                                               value="@(isPercentage? percentageValue : 0)"
+                                                               min="0"
+                                                               max="100"
+                                                               step="0.01"
+                                                               placeholder="%"
+                                                               @(isPercentage ? "" : "disabled")
+                                                               onchange="calculatePercentageAmount(@procFeeIndex)" />
+                                                        <button type="button"
+                                                                class="btn btn-outline-secondary toggle-percentage"
+                                                                data-index="@procFeeIndex"
+                                                                onclick="togglePercentageMode(@procFeeIndex)"
+                                                                title="Toggle between fixed amount and percentage">
+                                                            <i class="bi bi-percent"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="text"
+                                                           name="Deductions[@procFeeIndex].Description"
+                                                           class="form-control form-control-sm"
+                                                           value="@(isPercentage ? $"Processing Fee ({percentageValue:F2}% of gross)" : "Processing Fee")" />
+                                                </td>
+                                                <td class="align-middle text-center">
+                                                    <button type="button" class="btn btn-sm btn-danger remove-deduction" data-index="@procFeeIndex" title="Remove Processing Fee">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+
+                                        <!-- ============================================================ -->
+                                        <!-- EXISTING DEDUCTIONS FROM MODEL -->
+                                        <!-- ============================================================ -->
                                         @for (int i = 0; i < Model.Deductions.Count; i++)
                                         {
                                             var deduction = Model.Deductions[i];
-                                            <tr class="deduction-row" data-index="@i">
+                                            // Skip if this is the processing fee (we already added it above)
+                                            if (deduction.DeductionCode == "PROC_FEE" || deduction.DeductionCode == "REG_FEE") continue;
+
+                                            var currentIndex = deductionIndex++;
+                                            <tr class="deduction-row" data-index="@currentIndex">
                                                 <td class="align-middle">
-                                                    <input type="hidden" name="Deductions[@i].DeductionCode" value="@deduction.DeductionCode" />
-                                                    <input type="hidden" name="Deductions[@i].DeductionName" value="@deduction.DeductionName" />
-                                                    <input type="hidden" name="Deductions[@i].IsMandatory" value="@deduction.IsMandatory.ToString().ToLower()" />
-                                                    <input type="hidden" name="Deductions[@i].IsPercentage" id="IsPercentage_@i" value="@deduction.IsPercentage.ToString().ToLower()" />
-                                                    <input type="hidden" name="Deductions[@i].PercentageValue" id="PercentageValue_@i" value="@deduction.PercentageValue" />
+                                                    <input type="hidden" name="Deductions[@currentIndex].DeductionCode" value="@deduction.DeductionCode" />
+                                                    <input type="hidden" name="Deductions[@currentIndex].DeductionName" value="@deduction.DeductionName" />
+                                                    <input type="hidden" name="Deductions[@currentIndex].IsMandatory" value="@deduction.IsMandatory.ToString().ToLower()" />
+                                                    <input type="hidden" name="Deductions[@currentIndex].IsPercentage" id="IsPercentage_@currentIndex" value="@deduction.IsPercentage.ToString().ToLower()" />
+                                                    <input type="hidden" name="Deductions[@currentIndex].PercentageValue" id="PercentageValue_@currentIndex" value="@deduction.PercentageValue" />
                                                     <strong>@deduction.DeductionName</strong>
                                                     @if (deduction.IsMandatory)
                                                     {
@@ -172,10 +264,10 @@
                                                     }
                                                 </td>
                                                 <td class="align-middle">
-                                                    <select name="Deductions[@i].GlAccountNo"
+                                                    <select name="Deductions[@currentIndex].GlAccountNo"
                                                             class="form-select form-select-sm deduction-account"
-                                                            data-index="@i"
-                                                            onchange="updateGlAccountName(@i, this.value)">
+                                                            data-index="@currentIndex"
+                                                            onchange="updateGlAccountName(@currentIndex, this.value)">
                                                         <option value="">-- Select Income Account --</option>
                                                         @foreach (var account in allGlAccounts)
                                                         {
@@ -186,35 +278,36 @@
                                                             </option>
                                                         }
                                                     </select>
-                                                    <input type="hidden" name="Deductions[@i].GlAccountName" id="GlAccountName_@i" value="@deduction.GlAccountName" />
+                                                    <input type="hidden" name="Deductions[@currentIndex].GlAccountName" id="GlAccountName_@currentIndex" value="@deduction.GlAccountName" />
                                                 </td>
                                                 <td class="align-middle">
                                                     <input type="number"
-                                                           name="Deductions[@i].Amount"
+                                                           name="Deductions[@currentIndex].Amount"
                                                            class="form-control deduction-amount"
-                                                           id="Amount_@i"
+                                                           id="Amount_@currentIndex"
                                                            value="@deduction.Amount"
                                                            min="0"
                                                            step="any"
                                                            placeholder="Enter amount"
-                                                           onchange="updateTotals()" />
+                                                           onchange="updateTotals()"
+                                                           oninput="updateTotals()" />
                                                 </td>
                                                 <td class="align-middle">
                                                     <div class="input-group input-group-sm">
                                                         <input type="number"
                                                                class="form-control deduction-percentage"
-                                                               id="PercentageInput_@i"
+                                                               id="PercentageInput_@currentIndex"
                                                                value="@(deduction.IsPercentage? deduction.PercentageValue: 0)"
                                                                min="0"
                                                                max="100"
                                                                step="0.01"
                                                                placeholder="%"
                                                                @(deduction.IsPercentage ? "" : "disabled")
-                                                               onchange="calculatePercentageAmount(@i)" />
+                                                               onchange="calculatePercentageAmount(@currentIndex)" />
                                                         <button type="button"
                                                                 class="btn btn-outline-secondary toggle-percentage"
-                                                                data-index="@i"
-                                                                onclick="togglePercentageMode(@i)"
+                                                                data-index="@currentIndex"
+                                                                onclick="togglePercentageMode(@currentIndex)"
                                                                 title="Toggle between fixed amount and percentage">
                                                             <i class="bi bi-percent"></i>
                                                         </button>
@@ -222,16 +315,20 @@
                                                 </td>
                                                 <td class="align-middle">
                                                     <input type="text"
-                                                           name="Deductions[@i].Description"
+                                                           name="Deductions[@currentIndex].Description"
                                                            class="form-control form-control-sm"
                                                            value="@deduction.Description" />
                                                 </td>
                                                 <td class="align-middle text-center">
                                                     @if (!deduction.IsMandatory)
                                                     {
-                                                        <button type="button" class="btn btn-sm btn-danger remove-deduction" data-index="@i" title="Remove">
+                                                        <button type="button" class="btn btn-sm btn-danger remove-deduction" data-index="@currentIndex" title="Remove">
                                                             <i class="bi bi-trash"></i>
                                                         </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted"><i class="bi bi-lock"></i></span>
                                                     }
                                                 </td>
                                             </tr>
@@ -263,22 +360,19 @@
                                                 <tr>
                                                     <td><strong>Gross Amount:</strong></td>
                                                     <td class="text-end">
-                                                        KES
-                                                        <span id="grossAmountDisplay">@grossAmount.ToString("N2")</span>
+                                                        KES <span id="grossAmountDisplay">@grossAmount.ToString("N2")</span>
                                                     </td>
                                                 </tr>
                                                 <tr>
                                                     <td><strong>Total Deductions:</strong></td>
                                                     <td class="text-end text-danger">
-                                                        KES
-                                                        <span id="totalDeductions">0.00</span>
+                                                        KES <span id="totalDeductions">0.00</span>
                                                     </td>
                                                 </tr>
                                                 <tr class="border-top">
                                                     <td><strong>Net Amount:</strong></td>
                                                     <td class="text-end fw-bold text-primary">
-                                                        KES
-                                                        <span id="netAmount">0.00</span>
+                                                        KES <span id="netAmount">0.00</span>
                                                     </td>
                                                 </tr>
                                             </table>
@@ -327,6 +421,7 @@
                             <li>Net amount cannot be negative</li>
                             <li>All deductions with amount > 0 require an income account</li>
                             <li>Use percentage mode for interest-based calculations</li>
+                            <li>Processing fee is pre-filled from the loan type</li>
                         </ul>
                     </div>
                 </div>
@@ -339,7 +434,9 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         var grossAmount = @grossAmount;
-        var deductionCounter = @Model.Deductions.Count;
+        var deductionCounter = @(deductionIndex);
+        var processingFee = @processingFee;
+        var isPercentageFee = @(isPercentage.ToString().ToLower());
 
         // Function to update GL Account Name
         function updateGlAccountName(index, accountNo) {
@@ -424,7 +521,7 @@
             }
         }
 
-                // Function to add custom deduction - FIXED VERSION
+        // Function to add custom deduction
         function addCustomDeduction() {
             var newIndex = deductionCounter++;
             var tbody = document.querySelector('#deductionsTable tbody');
@@ -484,7 +581,6 @@
                             <i class="bi bi-percent"></i>
                         </button>
                     </div>
-                </div>
                 </td>
                 <td class="align-middle">
                     <input type="text"
@@ -511,7 +607,7 @@
             }
         }
 
-        // Function to get account options as HTML string - FIXED VERSION
+        // Function to get account options as HTML string
         function getAccountOptions() {
             var options = '<option value="">-- Select Income Account --</option>';
             @foreach (var account in allGlAccounts)
@@ -529,7 +625,7 @@
             }
         }
 
-        // Function to update totals
+        // Function to update totals - REAL-TIME UPDATE
         function updateTotals() {
             var totalDeductions = 0;
             var hasInvalidAmount = false;
@@ -581,8 +677,57 @@
             }
         }
 
-                // Override the main validateForm to handle dynamically added deductions
-        window.validateForm = function() {
+        // Remove deduction row
+        function removeDeduction(btn) {
+            var row = btn.closest('tr');
+            if (row) {
+                row.remove();
+                updateTotals();
+                // Reindex remaining rows
+                reindexRows();
+            }
+        }
+
+        // Reindex rows after removal
+        function reindexRows() {
+            var rows = document.querySelectorAll('#deductionsTable tbody tr');
+            rows.forEach(function(row, newIndex) {
+                row.setAttribute('data-index', newIndex);
+                var inputs = row.querySelectorAll('input, select');
+                inputs.forEach(function(input) {
+                    var name = input.getAttribute('name');
+                    var id = input.getAttribute('id');
+                    if (name) {
+                        var newName = name.replace(/Deductions\[\d+\]/, `Deductions[${newIndex}]`);
+                        input.setAttribute('name', newName);
+                    }
+                    if (id) {
+                        var newId = id.replace(/_\d+$/, `_${newIndex}`);
+                        input.setAttribute('id', newId);
+                    }
+                });
+            });
+        }
+
+        // Add event listeners for real-time percentage updates
+        function addPercentageEventListeners() {
+            var percentageInputs = document.querySelectorAll('.deduction-percentage');
+            percentageInputs.forEach(function(input, idx) {
+                input.removeEventListener('input', percentageInputHandler);
+                input.addEventListener('input', percentageInputHandler);
+            });
+        }
+
+        function percentageInputHandler(e) {
+            var input = e.target;
+            var index = input.id.replace('PercentageInput_', '');
+            calculatePercentageAmount(index);
+        }
+
+        // ============================================================
+        // VALIDATE FORM
+        // ============================================================
+        function validateForm() {
             var acceptCheckbox = document.getElementById('acceptCheckbox');
             var rejectCheckbox = document.getElementById('rejectCheckbox');
             var isValid = true;
@@ -634,94 +779,14 @@
             }
 
             return true;
-        };
-
-        // Validate form before submission
-        function validateForm() {
-            var amountInputs = document.querySelectorAll('.deduction-amount');
-            var glSelects = document.querySelectorAll('.deduction-account');
-            var isValid = true;
-            var errorMessage = '';
-
-            for (var i = 0; i < amountInputs.length; i++) {
-                var amount = parseFloat(amountInputs[i].value) || 0;
-                var glAccount = glSelects[i].value;
-
-                if (amount > 0 && !glAccount) {
-                    isValid = false;
-                    errorMessage = 'Please select an income account for all deductions with amounts greater than 0';
-                    break;
-                }
-            }
-
-            var netAmountSpan = document.getElementById('netAmount');
-            var netAmountText = netAmountSpan ? netAmountSpan.textContent.replace(/[^0-9.-]/g, '') : '0';
-            var netAmount = parseFloat(netAmountText) || 0;
-
-            if (netAmount < 0) {
-                isValid = false;
-                errorMessage = 'Net amount cannot be negative. Please reduce deductions.';
-            }
-
-            if (!isValid && errorMessage) {
-                alert(errorMessage);
-                return false;
-            }
-
-            return true;
         }
 
-        // Remove deduction row
-        function removeDeduction(btn) {
-            var row = btn.closest('tr');
-            if (row) {
-                row.remove();
-                updateTotals();
-                // Reindex remaining rows
-                reindexRows();
-            }
-        }
-
-        // Reindex rows after removal
-        function reindexRows() {
-            var rows = document.querySelectorAll('#deductionsTable tbody tr');
-            rows.forEach(function(row, newIndex) {
-                row.setAttribute('data-index', newIndex);
-                var inputs = row.querySelectorAll('input, select');
-                inputs.forEach(function(input) {
-                    var name = input.getAttribute('name');
-                    var id = input.getAttribute('id');
-                    if (name) {
-                        var newName = name.replace(/Deductions\[\d+\]/, `Deductions[${newIndex}]`);
-                        input.setAttribute('name', newName);
-                    }
-                    if (id) {
-                        var newId = id.replace(/_\d+$/, `_${newIndex}`);
-                        input.setAttribute('id', newId);
-                    }
-                });
-            });
-        }
-
-        // Add event listeners for real-time percentage updates
-        function addPercentageEventListeners() {
-            var percentageInputs = document.querySelectorAll('.deduction-percentage');
-            percentageInputs.forEach(function(input, idx) {
-                input.removeEventListener('input', percentageInputHandler);
-                input.addEventListener('input', percentageInputHandler);
-            });
-        }
-
-        function percentageInputHandler(e) {
-            var input = e.target;
-            var index = input.id.replace('PercentageInput_', '');
-            calculatePercentageAmount(index);
-        }
-
-        // Initialize when document is ready
+        // ============================================================
+        // INITIALIZATION
+        // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
             // Set initial values for GL Account Names
-            var deductionCount = @Model.Deductions.Count;
+            var deductionCount = @(deductionIndex);
             for (var i = 0; i < deductionCount; i++) {
                 var selectElement = document.querySelector(`select[name="Deductions[${i}].GlAccountNo"]`);
                 if (selectElement && selectElement.value) {
@@ -755,12 +820,12 @@
                 input.addEventListener('input', function() {
                     updateTotals();
                 });
+                input.addEventListener('change', function() {
+                    updateTotals();
+                });
             });
-        });
 
-        // Two Checkboxes Logic for Endorsement Decision
-        document.addEventListener('DOMContentLoaded', function() {
-            // Get the checkbox elements
+            // Two Checkboxes Logic for Endorsement Decision
             var acceptCheckbox = document.getElementById('acceptCheckbox');
             var rejectCheckbox = document.getElementById('rejectCheckbox');
             var hiddenField = document.getElementById('IsAcceptedHidden');
@@ -790,6 +855,9 @@
 
                 // Enable submit button
                 if (submitBtn) submitBtn.disabled = false;
+
+                // Update totals
+                updateTotals();
             }
 
             // Function to handle Reject state
@@ -815,6 +883,9 @@
 
                 // Enable submit button (will be validated in validateForm)
                 if (submitBtn) submitBtn.disabled = false;
+
+                // Update totals
+                updateTotals();
             }
 
             // Add event listeners to checkboxes
@@ -847,115 +918,9 @@
             // Initial state - default to Accept
             setAcceptState();
 
-            // Override validateForm to include rejection reason check
-            window.validateForm = function() {
-                var acceptCheckbox = document.getElementById('acceptCheckbox');
-                var rejectCheckbox = document.getElementById('rejectCheckbox');
-                var isValid = true;
-                var errorMessage = '';
-
-                // Check if accepted
-                if (acceptCheckbox && acceptCheckbox.checked) {
-                    // Validate deductions
-                    var amountInputs = document.querySelectorAll('.deduction-amount');
-                    var glSelects = document.querySelectorAll('.deduction-account');
-
-                    for (var i = 0; i < amountInputs.length; i++) {
-                        var amount = parseFloat(amountInputs[i].value) || 0;
-                        var glAccount = glSelects[i] ? glSelects[i].value : '';
-
-                        if (amount > 0 && !glAccount) {
-                            isValid = false;
-                            errorMessage = 'Please select an income account for all deductions with amounts greater than 0';
-                            break;
-                        }
-                    }
-
-                    // Check net amount
-                    if (isValid) {
-                        var netAmountSpan = document.getElementById('netAmount');
-                        var netAmountText = netAmountSpan ? netAmountSpan.textContent.replace(/[^0-9.-]/g, '') : '0';
-                        var netAmount = parseFloat(netAmountText) || 0;
-
-                        if (netAmount < 0) {
-                            isValid = false;
-                            errorMessage = 'Net amount cannot be negative. Please reduce deductions.';
-                        }
-                    }
-                }
-                // Check if rejected
-                else if (rejectCheckbox && rejectCheckbox.checked) {
-                    var rejectionReason = document.querySelector('textarea[name="Remarks"]');
-                    if (!rejectionReason || !rejectionReason.value || rejectionReason.value.trim() === '') {
-                        isValid = false;
-                        errorMessage = 'Please provide a reason for rejecting the endorsement.';
-                    }
-                }
-
-                if (!isValid && errorMessage) {
-                    alert(errorMessage);
-                    return false;
-                }
-
-                return true;
-            };
+            // Make validateForm globally accessible
+            window.validateForm = validateForm;
+            window.updateTotals = updateTotals;
         });
-
-        // Updated validateForm function to include rejection reason validation
-        function validateForm() {
-            var acceptCheckbox = document.getElementById('acceptCheckbox');
-            var rejectCheckbox = document.getElementById('rejectCheckbox');
-            var isValid = true;
-            var errorMessage = '';
-
-            // Check if accepted
-            if (acceptCheckbox && acceptCheckbox.checked) {
-                // Validate deductions
-                var amountInputs = document.querySelectorAll('.deduction-amount');
-                var glSelects = document.querySelectorAll('.deduction-account');
-
-                for (var i = 0; i < amountInputs.length; i++) {
-                    var amount = parseFloat(amountInputs[i].value) || 0;
-                    var glAccount = glSelects[i]?.value;
-
-                    if (amount > 0 && !glAccount) {
-                        isValid = false;
-                        errorMessage = 'Please select an income account for all deductions with amounts greater than 0';
-                        break;
-                    }
-                }
-
-                // Check net amount
-                if (isValid) {
-                    var netAmountSpan = document.getElementById('netAmount');
-                    var netAmountText = netAmountSpan ? netAmountSpan.textContent.replace(/[^0-9.-]/g, '') : '0';
-                    var netAmount = parseFloat(netAmountText) || 0;
-
-                    if (netAmount < 0) {
-                        isValid = false;
-                        errorMessage = 'Net amount cannot be negative. Please reduce deductions.';
-                    }
-                }
-            }
-            // Check if rejected
-            else if (rejectCheckbox && rejectCheckbox.checked) {
-                var rejectionReason = document.querySelector('[name="Remarks"]')?.value;
-                if (!rejectionReason || rejectionReason.trim() === '') {
-                    isValid = false;
-                    errorMessage = 'Please provide a reason for rejecting the endorsement.';
-                }
-            }
-            // Neither checked - default to accept
-            else {
-                // Default to accept, no additional validation needed
-            }
-
-            if (!isValid && errorMessage) {
-                alert(errorMessage);
-                return false;
-            }
-
-            return true;
-        }
     </script>
 }

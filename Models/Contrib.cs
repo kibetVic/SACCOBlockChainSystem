@@ -85,6 +85,7 @@ public partial class Contrib
     public long? TransactionSequence { get; set; }
     public bool? IsSignatureVerified { get; set; }
     public DateTime? SignatureVerifiedAt { get; set; }
+    public string? CanonicalData { get; set; }
 
     public string? BlockchainTxId { get; set; }
 

@@ -1,0 +1,823 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.InvoiceReceiveViewModel
+@{
+    ViewData["Title"] = "Invoice Management";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var companyName = ViewBag.CompanyName as string ?? "JUHUDI SACCO";
+}
+
+<div class="container-fluid">
+    <!-- Success/Error Messages -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- FORM CARD -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h4><i class="fas fa-file-invoice"></i> Invoice Management</h4>
+        </div>
+        <div class="card-body">
+            <form id="invoiceForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="InvoiceId" name="InvoiceId" />
+                <input type="hidden" id="CompanyCode" name="CompanyCode" value="@Model.UserCompanyCode" />
+
+                <div class="row">
+                    <!-- LEFT SIDE - Form Fields -->
+                    <div class="col-md-8">
+                        <!-- Invoice Details Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="required">Invoice Number *</label>
+                                <input type="text" id="InvoiceNo" class="form-control" />
+                                <span id="invoiceNoError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="required">Supplier *</label>
+                                <select id="SupplierCode" class="form-control">
+                                    <option value="">-- Select Supplier --</option>
+                                    @foreach (var supplier in Model.Suppliers)
+                                    {
+                                        <option value="@supplier.SupplierCode">@supplier.SupplierName (@supplier.SupplierCode)</option>
+                                    }
+                                </select>
+                                <span id="supplierError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Purchase Order No</label>
+                                <input type="text" id="PurchaseOrderNo" class="form-control" />
+                            </div>
+                        </div>
+
+                        <!-- Amount Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="required">Invoice Amount (KES) *</label>
+                                <input type="number" id="InvoiceAmount" class="form-control" step="0.01" min="0.01" />
+                                <span id="amountError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Tax Amount (KES)</label>
+                                <input type="number" id="TaxAmount" class="form-control" step="0.01" min="0" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Discount Amount (KES)</label>
+                                <input type="number" id="DiscountAmount" class="form-control" step="0.01" min="0" />
+                            </div>
+                        </div>
+
+                        <!-- Date Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Invoice Date</label>
+                                <input type="date" id="InvoiceDate" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Due Date</label>
+                                <input type="date" id="DueDate" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Received Date</label>
+                                <input type="date" id="ReceivedDate" class="form-control" />
+                            </div>
+                        </div>
+
+                        <!-- GL Account Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label>GL Account No</label>
+                                <input type="text" id="GlAccountNo" class="form-control" />
+                            </div>
+                            <div class="col-md-6">
+                                <label>GL Account Name</label>
+                                <input type="text" id="GlAccountName" class="form-control" />
+                            </div>
+                        </div>
+
+                        <!-- Description Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label>Description</label>
+                                <textarea id="Description" class="form-control" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT SIDE - Settings -->
+                    <div class="col-md-4">
+                        <div class="card bg-light mb-3">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="mb-0"><i class="fas fa-check-square"></i> Invoice Settings</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label>Status</label>
+                                    <select id="Status" class="form-control">
+                                        <option value="Pending">Pending</option>
+                                        <option value="Partially Paid">Partially Paid</option>
+                                        <option value="Paid">Paid</option>
+                                        <option value="Overdue">Overdue</option>
+                                        <option value="Cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Payment Status</label>
+                                    <select id="PaymentStatus" class="form-control">
+                                        <option value="Unpaid">Unpaid</option>
+                                        <option value="Partially Paid">Partially Paid</option>
+                                        <option value="Paid">Paid</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Remarks</label>
+                                    <textarea id="Remarks" class="form-control" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BUTTONS -->
+                <div class="mt-4 d-flex gap-2">
+                    <button type="button" class="btn btn-primary" id="btnSave">
+                        <i class="fas fa-save"></i> Save Invoice
+                    </button>
+                    <button type="button" class="btn btn-warning" id="btnUpdate" style="display:none;">
+                        <i class="fas fa-edit"></i> Update
+                    </button>
+                    <button type="button" class="btn btn-danger" id="btnDelete" style="display:none;">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                    <button type="button" class="btn btn-dark" id="btnNew">
+                        <i class="fas fa-plus"></i> New
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EXISTING INVOICES TABLE -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5><i class="fas fa-list"></i> Existing Invoices</h5>
+        </div>
+        <div class="card-body">
+            <!-- Search Bar -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="invoiceSearchInput" class="form-control" placeholder="Search by Invoice No, Supplier, Description..." autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select id="statusFilter" class="form-select">
+                        <option value="all">All Status</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Partially Paid">Partially Paid</option>
+                        <option value="Paid">Paid</option>
+                        <option value="Overdue">Overdue</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select id="sortBy" class="form-select">
+                        <option value="date">Sort by Date</option>
+                        <option value="amount">Sort by Amount</option>
+                        <option value="invoiceNo">Sort by Invoice No</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="invoicesTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Invoice No</th>
+                            <th>Supplier</th>
+                            <th class="text-end">Amount</th>
+                            <th class="text-end">Paid</th>
+                            <th class="text-end">Balance</th>
+                            <th>Status</th>
+                            <th>Payment Status</th>
+                            <th>Due Date</th>
+                            <th>Blockchain</th>
+                            <th style="width: 100px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invoicesTableBody">
+                        @{
+                            var counter = 1;
+                        }
+                        @foreach (var invoice in Model.Invoices.OrderByDescending(i => i.InvoiceDate))
+                        {
+                            var statusClass = invoice.Status == "Paid" ? "bg-success" :
+                            invoice.Status == "Partially Paid" ? "bg-warning" :
+                            invoice.Status == "Overdue" ? "bg-danger" : "bg-secondary";
+
+                            <tr data-id="@invoice.Id"
+                                data-invoiceno="@invoice.InvoiceNo"
+                                data-suppliercode="@invoice.SupplierCode"
+                                data-suppliername="@invoice.SupplierName"
+                                data-invoiceamount="@invoice.InvoiceAmount"
+                                data-amountpaid="@invoice.AmountPaid"
+                                data-balance="@invoice.Balance"
+                                data-taxamount="@invoice.TaxAmount"
+                                data-discountamount="@invoice.DiscountAmount"
+                                data-invoicedate="@invoice.InvoiceDate?.ToString("yyyy-MM-dd")"
+                                data-duedate="@invoice.DueDate?.ToString("yyyy-MM-dd")"
+                                data-receiveddate="@invoice.ReceivedDate?.ToString("yyyy-MM-dd")"
+                                data-description="@invoice.Description"
+                                data-purchaseorderno="@invoice.PurchaseOrderNo"
+                                data-glaccountno="@invoice.GlAccountNo"
+                                data-glaccountname="@invoice.GlAccountName"
+                                data-status="@invoice.Status"
+                                data-paymentstatus="@invoice.PaymentStatus"
+                                data-remarks="@invoice.Remarks">
+                                <td class="row-number">@counter</td>
+                                <td>
+                                    <strong>@invoice.InvoiceNo</strong>
+                                    @if (!string.IsNullOrEmpty(invoice.BlockchainTxId))
+                                    {
+                                        <span class="badge bg-success ms-1" title="On Blockchain">
+                                            <i class="fas fa-link fa-xs"></i>
+                                        </span>
+                                    }
+                                </td>
+                                <td class="supplier-name">@invoice.SupplierName</td>
+                                <td class="text-end fw-bold">KES @invoice.InvoiceAmount.ToString("N0")</td>
+                                <td class="text-end">KES @(invoice.AmountPaid?.ToString("N0") ?? "0")</td>
+                                <td class="text-end fw-bold @(invoice.Balance > 0 ? "text-danger" : "text-success")">KES @(invoice.Balance?.ToString("N0") ?? "0")</td>
+                                <td>
+                                    <span class="badge @statusClass status-badge">@invoice.Status</span>
+                                </td>
+                                <td>@invoice.PaymentStatus</td>
+                                <td>@(invoice.DueDate?.ToString("dd/MM/yyyy") ?? "N/A")</td>
+                                <td class="text-center">
+                                    @if (!string.IsNullOrEmpty(invoice.BlockchainTxId))
+                                    {
+                                        <span class="badge bg-success" title="Verified">
+                                            <i class="fas fa-link"></i>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary" title="Not Verified">
+                                            <i class="fas fa-unlink"></i>
+                                        </span>
+                                    }
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-info select-btn w-100" data-id="@invoice.Id">
+                                        <i class="fas fa-edit"></i> Select
+                                    </button>
+                                </td>
+                            </tr>
+                            counter++;
+                        }
+                        @if (!Model.Invoices.Any())
+                        {
+                            <tr id="noInvoicesRow">
+                                <td colspan="11" class="text-center text-muted py-4">
+                                    <i class="fas fa-info-circle"></i> No invoices found. Click "New" to create one.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Statistics Summary -->
+            <div class="row mt-4">
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="totalInvoicesCount">@Model.TotalInvoices</h3>
+                            <p class="text-muted mb-0">Total Invoices</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="pendingInvoicesCount">@Model.PendingInvoices</h3>
+                            <p class="text-muted mb-0">Pending</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="overdueInvoicesCount">@Model.OverdueInvoices</h3>
+                            <p class="text-muted mb-0">Overdue</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="totalOutstanding">KES @Model.TotalOutstanding.ToString("N0")</h3>
+                            <p class="text-muted mb-0">Total Outstanding</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete invoice <strong id="deleteInvoiceName"></strong>?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; text-align:center; padding-top:20%;">
+    <div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="text-light mt-2">Processing...</div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: red;
+    }
+
+    .table-primary {
+        background-color: #cfe2ff !important;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .alert {
+        animation: slideDown 0.5s ease;
+    }
+
+    @@keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+</style>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let currentInvoiceId = null;
+        let deleteInvoiceId = null;
+        let deleteInvoiceName = null;
+
+        $(document).ready(function() {
+            setDefaultDates();
+
+            $('#invoiceSearchInput').on('keyup', performSearch);
+            $('#statusFilter').on('change', performSearch);
+            $('#sortBy').on('change', function() {
+                sortInvoices();
+                performSearch();
+            });
+            $('#clearSearchBtn').on('click', clearAllFilters);
+
+            $('#btnSave').on('click', saveInvoice);
+            $('#btnUpdate').on('click', updateInvoice);
+            $('#btnDelete').on('click', function() {
+                if (currentInvoiceId) {
+                    const name = $('#InvoiceNo').val() || 'this invoice';
+                    deleteInvoice(currentInvoiceId, name);
+                }
+            });
+            $('#btnNew').on('click', resetForm);
+            $('#confirmDeleteBtn').on('click', confirmDelete);
+
+            // Auto-calculate balance
+            $('#InvoiceAmount, #AmountPaid').on('input', function() {
+                const amount = parseFloat($('#InvoiceAmount').val()) || 0;
+                const paid = parseFloat($('#AmountPaid').val()) || 0;
+                const balance = amount - paid;
+                $('#Balance').val(balance > 0 ? balance.toFixed(2) : '0.00');
+            });
+
+            $(document).on('click', '.select-btn', function() {
+                const id = $(this).data('id');
+                if (id) {
+                    loadInvoiceForEdit(id);
+                }
+            });
+        });
+
+        function setDefaultDates() {
+            const today = new Date().toISOString().split('T')[0];
+            $('#InvoiceDate').val(today);
+            const dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + 30);
+            $('#DueDate').val(dueDate.toISOString().split('T')[0]);
+            $('#ReceivedDate').val(today);
+        }
+
+        function loadInvoiceForEdit(id) {
+            showLoading(true);
+
+            $.ajax({
+                url: `/Invoice/GetInvoice/${id}`,
+                type: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success && response.invoice) {
+                        const inv = response.invoice;
+                        currentInvoiceId = inv.id;
+
+                        $('#InvoiceId').val(inv.id);
+                        $('#InvoiceNo').val(inv.invoiceNo).prop('readonly', true);
+                        $('#SupplierCode').val(inv.supplierCode);
+                        $('#InvoiceAmount').val(inv.invoiceAmount);
+                        $('#TaxAmount').val(inv.taxAmount || 0);
+                        $('#DiscountAmount').val(inv.discountAmount || 0);
+                        $('#InvoiceDate').val(inv.invoiceDate);
+                        $('#DueDate').val(inv.dueDate);
+                        $('#ReceivedDate').val(inv.receivedDate);
+                        $('#Description').val(inv.description || '');
+                        $('#PurchaseOrderNo').val(inv.purchaseOrderNo || '');
+                        $('#GlAccountNo').val(inv.glAccountNo || '');
+                        $('#GlAccountName').val(inv.glAccountName || '');
+                        $('#Status').val(inv.status);
+                        $('#PaymentStatus').val(inv.paymentStatus);
+                        $('#Remarks').val(inv.remarks || '');
+
+                        $('#btnSave').hide();
+                        $('#btnUpdate').show();
+                        $('#btnDelete').show();
+
+                        $('.select-btn').closest('tr').removeClass('table-primary');
+                        $(`.select-btn[data-id="${inv.id}"]`).closest('tr').addClass('table-primary');
+
+                        showNotification('Invoice loaded for editing', 'success');
+                    } else {
+                        showNotification(response.message || 'Invoice not found.', 'error');
+                        resetForm();
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    showNotification('Error loading invoice data', 'error');
+                    resetForm();
+                }
+            });
+        }
+
+        function resetForm() {
+            currentInvoiceId = null;
+            $('#InvoiceId').val('');
+            $('#InvoiceNo').val('').prop('readonly', false);
+            $('#SupplierCode').val('');
+            $('#InvoiceAmount').val('');
+            $('#TaxAmount').val('');
+            $('#DiscountAmount').val('');
+            $('#Description').val('');
+            $('#PurchaseOrderNo').val('');
+            $('#GlAccountNo').val('');
+            $('#GlAccountName').val('');
+            $('#Status').val('Pending');
+            $('#PaymentStatus').val('Unpaid');
+            $('#Remarks').val('');
+
+            setDefaultDates();
+
+            $('.text-danger').text('');
+            $('.input-validation-error').removeClass('input-validation-error');
+            $('.select-btn').closest('tr').removeClass('table-primary');
+
+            $('#btnSave').show();
+            $('#btnUpdate').hide();
+            $('#btnDelete').hide();
+        }
+
+        function validateInvoice() {
+            let isValid = true;
+            $('.text-danger').text('');
+            $('.input-validation-error').removeClass('input-validation-error');
+
+            if (!$('#InvoiceNo').val().trim()) {
+                $('#invoiceNoError').text('Invoice Number is required');
+                $('#InvoiceNo').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            if (!$('#SupplierCode').val()) {
+                $('#supplierError').text('Please select a supplier');
+                $('#SupplierCode').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            const amount = parseFloat($('#InvoiceAmount').val());
+            if (!amount || amount <= 0) {
+                $('#amountError').text('Please enter a valid invoice amount');
+                $('#InvoiceAmount').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            return isValid;
+        }
+
+        function saveInvoice() {
+            if (!validateInvoice()) return;
+            showLoading(true);
+
+            const formData = {
+                InvoiceNo: $('#InvoiceNo').val(),
+                SupplierCode: $('#SupplierCode').val(),
+                InvoiceAmount: parseFloat($('#InvoiceAmount').val()),
+                TaxAmount: parseFloat($('#TaxAmount').val()) || 0,
+                DiscountAmount: parseFloat($('#DiscountAmount').val()) || 0,
+                InvoiceDate: $('#InvoiceDate').val(),
+                DueDate: $('#DueDate').val(),
+                ReceivedDate: $('#ReceivedDate').val(),
+                Description: $('#Description').val(),
+                PurchaseOrderNo: $('#PurchaseOrderNo').val(),
+                GlAccountNo: $('#GlAccountNo').val(),
+                GlAccountName: $('#GlAccountName').val(),
+                Status: $('#Status').val(),
+                PaymentStatus: $('#PaymentStatus').val(),
+                Remarks: $('#Remarks').val(),
+                CompanyCode: $('#CompanyCode').val()
+            };
+
+            $.ajax({
+                url: '/Invoice/Create',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    let errorMsg = 'Error creating invoice';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error');
+                }
+            });
+        }
+
+        function updateInvoice() {
+            if (!validateInvoice()) return;
+            if (!currentInvoiceId) {
+                showNotification('Invoice not selected. Please select an invoice to update.', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            const formData = {
+                Id: currentInvoiceId,
+                InvoiceNo: $('#InvoiceNo').val(),
+                SupplierCode: $('#SupplierCode').val(),
+                InvoiceAmount: parseFloat($('#InvoiceAmount').val()),
+                TaxAmount: parseFloat($('#TaxAmount').val()) || 0,
+                DiscountAmount: parseFloat($('#DiscountAmount').val()) || 0,
+                InvoiceDate: $('#InvoiceDate').val(),
+                DueDate: $('#DueDate').val(),
+                ReceivedDate: $('#ReceivedDate').val(),
+                Description: $('#Description').val(),
+                PurchaseOrderNo: $('#PurchaseOrderNo').val(),
+                GlAccountNo: $('#GlAccountNo').val(),
+                GlAccountName: $('#GlAccountName').val(),
+                Status: $('#Status').val(),
+                PaymentStatus: $('#PaymentStatus').val(),
+                Remarks: $('#Remarks').val(),
+                CompanyCode: $('#CompanyCode').val()
+            };
+
+            $.ajax({
+                url: '/Invoice/Update',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    let errorMsg = 'Error updating invoice';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error');
+                }
+            });
+        }
+
+        function deleteInvoice(id, name) {
+            deleteInvoiceId = id;
+            deleteInvoiceName = name;
+            $('#deleteInvoiceName').text(name);
+            const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            modal.show();
+        }
+
+        function confirmDelete() {
+            if (!deleteInvoiceId) return;
+
+            showLoading(true);
+
+            $.ajax({
+                url: `/Invoice/Delete/${deleteInvoiceId}`,
+                type: 'DELETE',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    $('#deleteModal').modal('hide');
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    $('#deleteModal').modal('hide');
+                    let errorMsg = 'Error deleting invoice';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error');
+                }
+            });
+        }
+
+        function performSearch() {
+            const searchTerm = $('#invoiceSearchInput').val().toLowerCase().trim();
+            const statusFilter = $('#statusFilter').val();
+
+            $('#invoicesTableBody tr').each(function() {
+                const row = $(this);
+                if (row.attr('id') === 'noInvoicesRow') return;
+
+                const invoiceNo = row.find('td:eq(1)').text().toLowerCase();
+                const supplier = row.find('td.supplier-name').text().toLowerCase();
+                const status = row.data('status');
+
+                let matchesSearch = true;
+                if (searchTerm) {
+                    matchesSearch = invoiceNo.includes(searchTerm) ||
+                                   supplier.includes(searchTerm);
+                }
+
+                let matchesStatus = true;
+                if (statusFilter !== 'all') {
+                    matchesStatus = status === statusFilter;
+                }
+
+                if (matchesSearch && matchesStatus) {
+                    row.show();
+                } else {
+                    row.hide();
+                }
+            });
+        }
+
+        function sortInvoices() {
+            const sortBy = $('#sortBy').val();
+            const tbody = $('#invoicesTableBody');
+            const rows = tbody.find('tr:visible:not(#noInvoicesRow)').get();
+
+            rows.sort(function(a, b) {
+                let aVal, bVal;
+                switch(sortBy) {
+                    case 'date':
+                        aVal = $(a).data('invoicedate') || '';
+                        bVal = $(b).data('invoicedate') || '';
+                        break;
+                    case 'amount':
+                        aVal = parseFloat($(a).data('invoiceamount')) || 0;
+                        bVal = parseFloat($(b).data('invoiceamount')) || 0;
+                        return bVal - aVal;
+                    case 'invoiceNo':
+                        aVal = $(a).find('td:eq(1)').text();
+                        bVal = $(b).find('td:eq(1)').text();
+                        break;
+                    default:
+                        aVal = $(a).data('invoicedate') || '';
+                        bVal = $(b).data('invoicedate') || '';
+                }
+                return aVal.localeCompare(bVal);
+            });
+
+            $.each(rows, function(index, row) {
+                tbody.append(row);
+                $(row).find('.row-number').text(index + 1);
+            });
+        }
+
+        function clearAllFilters() {
+            $('#invoiceSearchInput').val('');
+            $('#statusFilter').val('all');
+            $('#sortBy').val('date');
+            performSearch();
+            $('#invoiceSearchInput').focus();
+        }
+
+        function showNotification(message, type) {
+            const alertDiv = $(`
+                <div class="alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed top-0 end-0 m-3"
+                     style="z-index: 9999; min-width: 300px;" role="alert">
+                    <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info'} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `);
+            $('body').append(alertDiv);
+            setTimeout(() => alertDiv.fadeOut('slow', function() { $(this).remove(); }), 5000);
+        }
+
+        function showLoading(show) {
+            if (show) {
+                $('#loadingOverlay').fadeIn(200);
+            } else {
+                $('#loadingOverlay').fadeOut(200);
+            }
+        }
+    </script>
+}

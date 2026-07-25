@@ -8,6 +8,7 @@
     var totalOutstanding = Model.TotalOutstanding;
     var penaltyAmount = Model.PenaltyAmount;
     var monthlyInstallment = Model.MonthlyInstallment;
+    var fullBalance = totalOutstanding + penaltyAmount;
 }
 
 <div class="container">
@@ -114,7 +115,7 @@
                     <form method="post" asp-action="Repay" asp-route-loanNo="@Model.LoanNo" id="repaymentForm">
                         @Html.AntiForgeryToken()
                         <input type="hidden" asp-for="LoanNo" />
-                        <input type="hidden" asp-for="TotalOutstanding" />
+                        <input type="hidden" asp-for="TotalOutstanding" id="hiddenTotalOutstanding" />
                         <input type="hidden" asp-for="OutstandingBalance" />
                         <input type="hidden" asp-for="OutstandingInterest" />
                         <input type="hidden" asp-for="PenaltyAmount" />
@@ -126,15 +127,16 @@
                                     <span class="input-group-text">KES</span>
                                     <input asp-for="PaymentAmount" class="form-control form-control-lg" type="number"
                                            step="1" min="1" id="paymentAmount"
+                                           max="@fullBalance"
                                            value="@Model.PaymentAmount.ToString("F0")" />
                                 </div>
                                 <span asp-validation-for="PaymentAmount" class="text-danger"></span>
                                 <div class="mt-2">
                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setPaymentAmount(@monthlyInstallment)">
-                                        <i class="fa fa-calendar"></i> Monthly
+                                        <i class="fa fa-calendar"></i> Monthly (@monthlyInstallment.ToString("N0") KES)
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-outline-success" onclick="setPaymentAmount(@totalOutstanding)">
-                                        <i class="fa fa-check-circle"></i> Full Settlement
+                                    <button type="button" class="btn btn-sm btn-outline-success" onclick="setPaymentAmount(@fullBalance)">
+                                        <i class="fa fa-check-circle"></i> Full Balance (@fullBalance.ToString("N0") KES)
                                     </button>
                                 </div>
                                 <small class="text-muted">Enter any amount - minimum 1 KES, maximum your total outstanding balance</small>
@@ -266,6 +268,15 @@
                                         </tr>
                                     }
                                 </tbody>
+                                <tfoot>
+                                    <tr class="fw-bold bg-light">
+                                        <td colspan="2" class="text-end">Totals:</td>
+                                        <td>@Model.RepaymentSchedule.Sum(s => s.PrincipalAmount).ToString("N0")</td>
+                                        <td>@Model.RepaymentSchedule.Sum(s => s.InterestAmount).ToString("N0")</td>
+                                        <td>@Model.RepaymentSchedule.Sum(s => s.TotalAmount).ToString("N0")</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -278,14 +289,22 @@
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        // Store data for JavaScript
         var scheduleData = @Html.Raw(scheduleJson);
         var totalOutstanding = @totalOutstanding;
         var penaltyAmount = @penaltyAmount;
         var monthlyInstallment = @monthlyInstallment;
+        var fullBalance = @fullBalance;
 
         function setPaymentAmount(amount) {
-            document.getElementById('paymentAmount').value = amount;
+            // Round to nearest integer
+            var roundedAmount = Math.round(amount);
+            document.getElementById('paymentAmount').value = roundedAmount;
             calculatePaymentSummary();
+
+            // Trigger change event for any listeners
+            var event = new Event('input', { bubbles: true });
+            document.getElementById('paymentAmount').dispatchEvent(event);
         }
 
         function calculatePaymentSummary() {
@@ -297,57 +316,124 @@
                 return;
             }
 
+            // Get maximum allowed (total outstanding + penalty if any)
+            let maxAmount = fullBalance;
+
+            if (amount > maxAmount) {
+                document.getElementById('paymentAmount').value = maxAmount;
+                amount = maxAmount;
+            }
+
             let remainingAmount = amount;
             let totalPrincipal = 0;
             let totalInterest = 0;
             let totalPenalty = 0;
-            let remainingBalance = totalOutstanding - amount;
+            let installmentsCovered = 0;
+            let allInstallmentsPaid = true;
+            let isFullBalancePayment = (amount >= fullBalance - 0.01);
 
+            // Process each pending installment
             for (var i = 0; i < scheduleData.length; i++) {
                 var schedule = scheduleData[i];
+                // Skip paid installments
                 if (schedule.status === 'Paid') continue;
 
-                var installmentTotal = schedule.totalAmount;
-                var installmentPrincipal = schedule.principalAmount;
-                var installmentInterest = schedule.interestAmount;
-                var penalty = (i === 0 && penaltyAmount > 0) ? penaltyAmount : 0;
+                var installmentPrincipal = schedule.principalAmount || 0;
+                var installmentInterest = schedule.interestAmount || 0;
+                var installmentTotal = installmentPrincipal + installmentInterest;
+
+                // Check if this installment has penalty
+                var penalty = 0;
+                if (i === 0 && penaltyAmount > 0) {
+                    penalty = penaltyAmount;
+                }
+
+                var totalDue = installmentTotal + penalty;
 
                 if (remainingAmount <= 0) break;
 
-                var amountForThisInstallment = Math.min(remainingAmount, installmentTotal + penalty);
+                // Calculate how much of this installment can be paid
+                var amountForThisInstallment = Math.min(remainingAmount, totalDue);
+
+                // Allocate: Penalty first, then Interest, then Principal
                 var penaltyPaid = Math.min(amountForThisInstallment, penalty);
                 var afterPenalty = amountForThisInstallment - penaltyPaid;
+
                 var interestPaid = Math.min(afterPenalty, installmentInterest);
                 var afterInterest = afterPenalty - interestPaid;
+
                 var principalPaid = Math.min(afterInterest, installmentPrincipal);
+
+                // Round to 2 decimal places
+                penaltyPaid = Math.round(penaltyPaid * 100) / 100;
+                interestPaid = Math.round(interestPaid * 100) / 100;
+                principalPaid = Math.round(principalPaid * 100) / 100;
 
                 totalPenalty += penaltyPaid;
                 totalInterest += interestPaid;
                 totalPrincipal += principalPaid;
                 remainingAmount -= amountForThisInstallment;
+                installmentsCovered++;
+
+                // Check if this installment is fully paid
+                if (installmentTotal > 0 && amountForThisInstallment < installmentTotal) {
+                    allInstallmentsPaid = false;
+                }
             }
 
-            let newBalance = totalOutstanding - amount;
+            // Calculate new balance
+            let newBalance = fullBalance - amount;
             if (newBalance < 0) newBalance = 0;
 
-            let summaryHtml = '<strong>Payment Breakdown:</strong><br />' +
-                'Amount: <strong>' + Math.round(amount).toLocaleString() + ' KES</strong><br />' +
-                'Principal Paid: <strong>' + Math.round(totalPrincipal).toLocaleString() + ' KES</strong><br />' +
-                'Interest Paid: <strong>' + Math.round(totalInterest).toLocaleString() + ' KES</strong><br />';
+            // Build the summary HTML
+            let summaryHtml = '<div class="payment-breakdown">';
+            summaryHtml += '<div class="row"><div class="col-6"><strong>Payment Amount:</strong></div>';
+            summaryHtml += '<div class="col-6 text-end"><strong>' + Math.round(amount).toLocaleString() + ' KES</strong></div></div>';
+
+            if (isFullBalancePayment) {
+                summaryHtml += '<div class="alert alert-success mt-2 mb-0"><i class="fa fa-check-circle"></i> <strong>FULL BALANCE PAYMENT</strong> - This payment will clear the entire loan balance!</div>';
+            }
+
+            summaryHtml += '<hr class="my-1" />';
+
+            if (totalPrincipal > 0) {
+                summaryHtml += '<div class="row"><div class="col-6">Principal Paid:</div>';
+                summaryHtml += '<div class="col-6 text-end text-danger">' + Math.round(totalPrincipal).toLocaleString() + ' KES</div></div>';
+            }
+
+            if (totalInterest > 0) {
+                summaryHtml += '<div class="row"><div class="col-6">Interest Paid:</div>';
+                summaryHtml += '<div class="col-6 text-end text-warning">' + Math.round(totalInterest).toLocaleString() + ' KES</div></div>';
+            }
 
             if (totalPenalty > 0) {
-                summaryHtml += 'Penalty Paid: <strong class="text-danger">' + Math.round(totalPenalty).toLocaleString() + ' KES</strong><br />';
+                summaryHtml += '<div class="row"><div class="col-6">Penalty Paid:</div>';
+                summaryHtml += '<div class="col-6 text-end text-danger">' + Math.round(totalPenalty).toLocaleString() + ' KES</div></div>';
             }
 
-            summaryHtml += 'Remaining Balance: <strong>' + Math.round(newBalance).toLocaleString() + ' KES</strong>';
+            summaryHtml += '<hr class="my-1" />';
+            summaryHtml += '<div class="row"><div class="col-6"><strong>Installments Covered:</strong></div>';
+            summaryHtml += '<div class="col-6 text-end"><strong>' + installmentsCovered + '</strong></div></div>';
+
+            summaryHtml += '<div class="row"><div class="col-6"><strong>Remaining Balance:</strong></div>';
 
             if (newBalance <= 0) {
-                summaryHtml += '<br /><span class="text-success fw-bold">Congratulations! Your loan will be fully paid!</span>';
+                summaryHtml += '<div class="col-6 text-end text-success fw-bold">0 KES - FULLY PAID!</div></div>';
+                summaryHtml += '<div class="alert alert-success mt-2 mb-0"><i class="fa fa-trophy"></i> Congratulations! Your loan is now fully settled!</div>';
+            } else {
+                summaryHtml += '<div class="col-6 text-end text-primary fw-bold">' + Math.round(newBalance).toLocaleString() + ' KES</div></div>';
             }
 
+            if (remainingAmount > 0 && newBalance > 0) {
+                summaryHtml += '<div class="alert alert-warning mt-2 mb-0"><i class="fa fa-exclamation-triangle"></i> Overpayment of ' +
+                               Math.round(remainingAmount).toLocaleString() + ' KES will be credited to your deposit account.</div>';
+            }
+
+            summaryHtml += '</div>';
             summaryDiv.innerHTML = summaryHtml;
         }
 
+        // Payment method toggle
         document.querySelectorAll('input[name="PaymentMethod"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 let mpesaSection = document.getElementById('mpesaSection');
@@ -374,26 +460,50 @@
             });
         });
 
+        // Payment amount input handler
         document.getElementById('paymentAmount').addEventListener('input', function() {
             let val = parseFloat(this.value) || 0;
-            let max = totalOutstanding + penaltyAmount;
-            if (val > max) this.value = max;
+            let max = fullBalance;
+            if (val > max) {
+                this.value = max;
+                val = max;
+            }
             calculatePaymentSummary();
         });
 
+        // Form submission handler
         document.getElementById('repaymentForm').addEventListener('submit', function(e) {
             let selectedMethod = document.querySelector('input[name="PaymentMethod"]:checked');
             let amount = parseFloat(document.getElementById('paymentAmount').value) || 0;
 
             if (!selectedMethod) {
                 e.preventDefault();
-                Swal.fire({ icon: 'error', title: 'Selection Required', text: 'Please select a payment method' });
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Selection Required',
+                    text: 'Please select a payment method'
+                });
                 return false;
             }
 
             if (amount <= 0) {
                 e.preventDefault();
-                Swal.fire({ icon: 'error', title: 'Invalid Amount', text: 'Please enter a valid payment amount' });
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid Amount',
+                    text: 'Please enter a valid payment amount'
+                });
+                return false;
+            }
+
+            let maxAmount = fullBalance;
+            if (amount > maxAmount) {
+                e.preventDefault();
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Amount Exceeds Balance',
+                    text: 'You cannot pay more than your outstanding balance'
+                });
                 return false;
             }
 
@@ -402,7 +512,11 @@
                 let cleanPhone = phone.replace(/\D/g, '');
                 if (!cleanPhone || cleanPhone.length !== 9) {
                     e.preventDefault();
-                    Swal.fire({ icon: 'error', title: 'Invalid Phone Number', text: 'Please enter a valid 9-digit M-Pesa phone number' });
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid Phone Number',
+                        text: 'Please enter a valid 9-digit M-Pesa phone number'
+                    });
                     return false;
                 }
             }
@@ -411,17 +525,53 @@
                 let chequeNo = document.getElementById('ChequeNumber').value;
                 if (!chequeNo || chequeNo.trim() === '') {
                     e.preventDefault();
-                    Swal.fire({ icon: 'error', title: 'Cheque Number Required', text: 'Please enter the cheque number' });
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Cheque Number Required',
+                        text: 'Please enter the cheque number'
+                    });
                     return false;
                 }
             }
 
-            document.getElementById('submitBtn').disabled = true;
-            document.getElementById('submitBtn').innerHTML = '<i class="fa fa-spinner fa-spin"></i> Processing...';
-            return true;
+            // Confirm payment
+            let confirmText = 'Are you sure you want to process this payment?';
+            if (amount >= fullBalance) {
+                confirmText = 'This payment will fully settle your loan. Are you sure you want to proceed?';
+            }
+
+            Swal.fire({
+                title: 'Confirm Payment',
+                text: confirmText,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#198754',
+                cancelButtonColor: '#dc3545',
+                confirmButtonText: 'Yes, Process Payment',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('submitBtn').disabled = true;
+                    document.getElementById('submitBtn').innerHTML = '<i class="fa fa-spinner fa-spin"></i> Processing...';
+                    document.getElementById('repaymentForm').submit();
+                }
+            });
+
+            e.preventDefault();
+            return false;
         });
 
-        calculatePaymentSummary();
+        // Initialize on page load
+        $(document).ready(function() {
+            // Initial calculation
+            calculatePaymentSummary();
+
+            // If there's a value already set, trigger calculation
+            var initialAmount = document.getElementById('paymentAmount').value;
+            if (initialAmount && parseFloat(initialAmount) > 0) {
+                calculatePaymentSummary();
+            }
+        });
     </script>
 
     <style>
@@ -443,6 +593,14 @@
 
         .btn-sm {
             margin-right: 5px;
+        }
+
+        .payment-breakdown .row {
+            padding: 2px 0;
+        }
+
+        .payment-breakdown hr {
+            margin: 4px 0;
         }
     </style>
 }

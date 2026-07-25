@@ -62,6 +62,38 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+        [HttpGet("member/{memberNo}/sharetype-totals")]
+        public async Task<IActionResult> GetMemberShareTypeTotals(string memberNo)
+        {
+            try
+            {
+                var companyCode = User.FindFirst("CompanyCode")?.Value;
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    return BadRequest(new { Success = false, Message = "Company code not found" });
+                }
+
+                var totals = await _contributionService.GetMemberShareTypeTotalsAsync(memberNo, companyCode);
+
+                return Ok(new
+                {
+                    Success = true,
+                    Data = totals,
+                    Message = "Share type totals retrieved successfully"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting member share type totals");
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "An error occurred while fetching share type totals",
+                    Error = ex.Message
+                });
+            }
+        }
+
         [HttpGet("member/{memberNo}/sharetype/{shareTypeCode}/total")]
         public async Task<IActionResult> GetMemberShareTypeTotal(string memberNo, string shareTypeCode)
         {
