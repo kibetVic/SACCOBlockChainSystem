@@ -234,6 +234,26 @@ namespace SACCOBlockChainSystem.Controllers
                         .Where(cs => cs.MemberNo == member.MemberNo && cs.CompanyCode == member.CompanyCode)
                         .SumAsync(cs => cs.DepositsAmount ?? 0);
 
+                    // ============================================================
+                    // DETERMINE IF MEMBER IS ACTIVE (3 CONSECUTIVE MONTHS OF DEPOSITS)
+                    // ============================================================
+                    // Get member's deposit dates from ContribShares
+                    var memberDepositDates = await _context.ContribShares
+                        .Where(cs => cs.MemberNo == member.MemberNo
+                                     && cs.CompanyCode == member.CompanyCode
+                                     && cs.DepositsAmount.HasValue
+                                     && cs.DepositsAmount.Value > 0)
+                        .Select(cs => cs.ContrDate /*?? cs.DepositedDate ?? cs.ReceiptDate ?? cs.AuditTime*/)
+                        .ToListAsync();
+
+                    // Filter out null dates
+                    var validDates = memberDepositDates
+                        .Where(d => d.HasValue && d.Value != DateTime.MinValue)
+                        .Select(d => d.Value)
+                        .ToList();
+
+                    bool isActive = IsMemberActive(validDates);
+
                     // 4. Get loan summary
                     var activeLoan = await _context.Loans
                         .AsNoTracking()
@@ -421,6 +441,57 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+        /// <summary>
+        /// Determines if a member is active based on having 3 consecutive months of deposits
+        /// Once active, always active (even if later deposits stop)
+        /// </summary>
+        private bool IsMemberActive(List<DateTime> depositDates)
+        {
+            if (depositDates == null || depositDates.Count < 3)
+                return false;
+
+            // Sort dates ascending
+            var sortedDates = depositDates.OrderBy(d => d).ToList();
+
+            // Group by year-month to check consecutive months
+            var monthGroups = sortedDates
+                .Select(d => new { Year = d.Year, Month = d.Month })
+                .Distinct()
+                .OrderBy(m => m.Year).ThenBy(m => m.Month)
+                .ToList();
+
+            // Check for 3 consecutive months
+            int consecutiveCount = 1;
+            for (int i = 1; i < monthGroups.Count; i++)
+            {
+                var current = monthGroups[i];
+                var previous = monthGroups[i - 1];
+
+                // Check if months are consecutive
+                bool isConsecutive = false;
+
+                // Same year, next month
+                if (current.Year == previous.Year && current.Month == previous.Month + 1)
+                    isConsecutive = true;
+                // Year boundary (Dec to Jan)
+                else if (current.Year == previous.Year + 1 && current.Month == 1 && previous.Month == 12)
+                    isConsecutive = true;
+
+                if (isConsecutive)
+                {
+                    consecutiveCount++;
+                    if (consecutiveCount >= 3)
+                        return true; // Once active, always active!
+                }
+                else
+                {
+                    consecutiveCount = 1; // Reset if not consecutive
+                }
+            }
+
+            return false;
+        }
+
 
         #region Financial Data Methods
         private static string NormalizeGender(string? gender)
@@ -559,13 +630,14 @@ namespace SACCOBlockChainSystem.Controllers
             return (total, womenContributions, menContributions, othersContributions);
         }
 
-        // SHARE CAPITAL - From ContribShares table (ShareCapitalAmount)
+        // SHARE CAPITAL - From ContribShares table filtered by Sharetype where Issharecapital = 1 (true)
         private async Task<(decimal Total, decimal Women, decimal Men, decimal Others)> GetShareCapitalDataAsync(string? companyCode, bool isSuperAdmin)
         {
             try
             {
                 var membersQuery = _context.Members.AsQueryable();
 
+                // Apply company filter to members
                 if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
                 {
                     membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
@@ -574,6 +646,7 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
                 }
+                // If SuperAdmin and no companyCode, include ALL members
 
                 var members = await membersQuery
                     .Select(m => new { MemberNo = m.MemberNo.Trim(), m.Sex })
@@ -600,83 +673,184 @@ namespace SACCOBlockChainSystem.Controllers
                 decimal menShares = 0;
                 decimal othersShares = 0;
 
+                // ============================================================
+                // FIXED: Join with Sharetype and filter by Issharecapital = 1
+                // This ensures ONLY true share capital is included
+                // ============================================================
+                var shareCapitalQuery = from cs in _context.ContribShares
+                                        join st in _context.Sharetypes
+                                            on new { cs.Sharescode, cs.CompanyCode }
+                                            equals new { Sharescode = st.SharesCode, st.CompanyCode }
+                                        where cs.ShareCapitalAmount.HasValue
+                                            && cs.ShareCapitalAmount.Value > 0
+                                            && st.Issharecapital  // ✅ ONLY TRUE SHARE CAPITAL
+                                        select new
+                                        {
+                                            cs.MemberNo,
+                                            cs.ShareCapitalAmount,
+                                            cs.CompanyCode,
+                                            Sex = st.SharesType // Not used for gender, just for debugging
+                                        };
+
                 if (targetCompanyCode != null)
                 {
-                    var allShares = await _context.ContribShares
-                        .Where(s => s.CompanyCode == targetCompanyCode
-                            && s.ShareCapitalAmount.HasValue
-                            && s.ShareCapitalAmount.Value > 0
-                            && s.MemberNo != null)
-                        .Select(s => new { MemberNo = s.MemberNo.Trim(), s.ShareCapitalAmount })
-                        .ToListAsync();
-
-                    var genderDict = members
-                        .GroupBy(m => m.MemberNo)
-                        .ToDictionary(g => g.Key, g => g.First().Sex, StringComparer.OrdinalIgnoreCase);
-
-                    foreach (var share in allShares)
-                    {
-                        if (!genderDict.TryGetValue(share.MemberNo, out var gender)) continue;
-
-                        var amount = share.ShareCapitalAmount ?? 0;
-                        var normalizedGender = NormalizeGender(gender);
-
-                        if (normalizedGender == "FEMALE")
-                            womenShares += amount;
-                        else if (normalizedGender == "MALE")
-                            menShares += amount;
-                        else
-                            othersShares += amount;
-                    }
-
-                    totalShareCapital = womenShares + menShares + othersShares;
+                    shareCapitalQuery = shareCapitalQuery.Where(x => x.CompanyCode == targetCompanyCode);
                 }
-                else
+
+                var shareCapitalData = await shareCapitalQuery.ToListAsync();
+
+                // Build gender lookup
+                var genderDict = members
+                    .GroupBy(m => m.MemberNo)
+                    .ToDictionary(g => g.Key, g => g.First().Sex, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var item in shareCapitalData)
                 {
-                    var allShares = await _context.ContribShares
-                        .Where(s => s.ShareCapitalAmount.HasValue
-                            && s.ShareCapitalAmount.Value > 0
-                            && s.MemberNo != null)
-                        .Select(s => new { MemberNo = s.MemberNo.Trim(), s.ShareCapitalAmount })
-                        .ToListAsync();
+                    if (!genderDict.TryGetValue(item.MemberNo, out var gender)) continue;
 
-                    var allMembers = await _context.Members
-                        .Select(m => new { MemberNo = m.MemberNo.Trim(), m.Sex })
-                        .ToListAsync();
+                    var amount = item.ShareCapitalAmount ?? 0;
+                    var normalizedGender = NormalizeGender(gender);
 
-                    var genderDict = allMembers
-                        .GroupBy(m => m.MemberNo)
-                        .ToDictionary(g => g.Key, g => g.First().Sex, StringComparer.OrdinalIgnoreCase);
-
-                    foreach (var share in allShares)
-                    {
-                        if (!genderDict.TryGetValue(share.MemberNo, out var gender)) continue;
-
-                        var amount = share.ShareCapitalAmount ?? 0;
-                        var normalizedGender = NormalizeGender(gender);
-
-                        if (normalizedGender == "FEMALE")
-                            womenShares += amount;
-                        else if (normalizedGender == "MALE")
-                            menShares += amount;
-                        else
-                            othersShares += amount;
-                    }
-
-                    totalShareCapital = womenShares + menShares + othersShares;
+                    if (normalizedGender == "FEMALE")
+                        womenShares += amount;
+                    else if (normalizedGender == "MALE")
+                        menShares += amount;
+                    else
+                        othersShares += amount;
                 }
 
-                _logger.LogInformation($"Share Capital Summary - Total: {totalShareCapital:C}, Women: {womenShares:C}, Men: {menShares:C}, Others: {othersShares:C}");
+                totalShareCapital = womenShares + menShares + othersShares;
+
+                _logger.LogInformation($"Share Capital Summary (filtered by Issharecapital=1) - Total: {totalShareCapital:C}, Women: {womenShares:C}, Men: {menShares:C}, Others: {othersShares:C}");
                 _logger.LogInformation($"Company filter: {(targetCompanyCode ?? "ALL COMPANIES")}");
 
                 return (totalShareCapital, womenShares, menShares, othersShares);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error calculating share capital from ContribShare");
+                _logger.LogError(ex, "Error calculating share capital from ContribShare with Issharecapital filter");
                 return (0, 0, 0, 0);
             }
         }
+
+        //// SHARE CAPITAL - From ContribShares table (ShareCapitalAmount)
+        //private async Task<(decimal Total, decimal Women, decimal Men, decimal Others)> GetShareCapitalDataAsync(string? companyCode, bool isSuperAdmin)
+        //{
+        //    try
+        //    {
+        //        var membersQuery = _context.Members.AsQueryable();
+
+        //        if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+        //        {
+        //            membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
+        //        }
+        //        else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+        //        {
+        //            membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
+        //        }
+
+        //        var members = await membersQuery
+        //            .Select(m => new { MemberNo = m.MemberNo.Trim(), m.Sex })
+        //            .ToListAsync();
+
+        //        if (!members.Any())
+        //        {
+        //            _logger.LogInformation("No members found for share capital calculation");
+        //            return (0, 0, 0, 0);
+        //        }
+
+        //        string targetCompanyCode = null;
+        //        if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+        //        {
+        //            targetCompanyCode = companyCode;
+        //        }
+        //        else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+        //        {
+        //            targetCompanyCode = companyCode;
+        //        }
+
+        //        decimal totalShareCapital = 0;
+        //        decimal womenShares = 0;
+        //        decimal menShares = 0;
+        //        decimal othersShares = 0;
+
+        //        if (targetCompanyCode != null)
+        //        {
+        //            var allShares = await _context.ContribShares
+        //                .Where(s => s.CompanyCode == targetCompanyCode
+        //                    && s.ShareCapitalAmount.HasValue
+        //                    && s.ShareCapitalAmount.Value > 0
+        //                    && s.MemberNo != null)
+        //                .Select(s => new { MemberNo = s.MemberNo.Trim(), s.ShareCapitalAmount })
+        //                .ToListAsync();
+
+        //            var genderDict = members
+        //                .GroupBy(m => m.MemberNo)
+        //                .ToDictionary(g => g.Key, g => g.First().Sex, StringComparer.OrdinalIgnoreCase);
+
+        //            foreach (var share in allShares)
+        //            {
+        //                if (!genderDict.TryGetValue(share.MemberNo, out var gender)) continue;
+
+        //                var amount = share.ShareCapitalAmount ?? 0;
+        //                var normalizedGender = NormalizeGender(gender);
+
+        //                if (normalizedGender == "FEMALE")
+        //                    womenShares += amount;
+        //                else if (normalizedGender == "MALE")
+        //                    menShares += amount;
+        //                else
+        //                    othersShares += amount;
+        //            }
+
+        //            totalShareCapital = womenShares + menShares + othersShares;
+        //        }
+        //        else
+        //        {
+        //            var allShares = await _context.ContribShares
+        //                .Where(s => s.ShareCapitalAmount.HasValue
+        //                    && s.ShareCapitalAmount.Value > 0
+        //                    && s.MemberNo != null)
+        //                .Select(s => new { MemberNo = s.MemberNo.Trim(), s.ShareCapitalAmount })
+        //                .ToListAsync();
+
+        //            var allMembers = await _context.Members
+        //                .Select(m => new { MemberNo = m.MemberNo.Trim(), m.Sex })
+        //                .ToListAsync();
+
+        //            var genderDict = allMembers
+        //                .GroupBy(m => m.MemberNo)
+        //                .ToDictionary(g => g.Key, g => g.First().Sex, StringComparer.OrdinalIgnoreCase);
+
+        //            foreach (var share in allShares)
+        //            {
+        //                if (!genderDict.TryGetValue(share.MemberNo, out var gender)) continue;
+
+        //                var amount = share.ShareCapitalAmount ?? 0;
+        //                var normalizedGender = NormalizeGender(gender);
+
+        //                if (normalizedGender == "FEMALE")
+        //                    womenShares += amount;
+        //                else if (normalizedGender == "MALE")
+        //                    menShares += amount;
+        //                else
+        //                    othersShares += amount;
+        //            }
+
+        //            totalShareCapital = womenShares + menShares + othersShares;
+        //        }
+
+        //        _logger.LogInformation($"Share Capital Summary - Total: {totalShareCapital:C}, Women: {womenShares:C}, Men: {menShares:C}, Others: {othersShares:C}");
+        //        _logger.LogInformation($"Company filter: {(targetCompanyCode ?? "ALL COMPANIES")}");
+
+        //        return (totalShareCapital, womenShares, menShares, othersShares);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error calculating share capital from ContribShare");
+        //        return (0, 0, 0, 0);
+        //    }
+        //}
 
         // NON-WITHDRAWABLE DEPOSITS - From ContribShare table (DepositsAmount)
         private async Task<(decimal Total, decimal Women, decimal Men, decimal Others)> GetDepositsDataAsync(string? companyCode, bool isSuperAdmin)

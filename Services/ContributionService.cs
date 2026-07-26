@@ -516,7 +516,7 @@ namespace SACCOBlockChainSystem.Services
                 // Add fraud warning to remarks if suspicious
                 if (fraudResult.IsSuspicious)
                 {
-                    contrib.Remarks = $"⚠️ FLAGGED: {string.Join("; ", fraudResult.Flags)} - {contrib.Remarks}";
+                    contrib.Remarks = $"{contrib.Remarks}";
                 }
 
                 var pending_trans = false;
@@ -558,6 +558,7 @@ namespace SACCOBlockChainSystem.Services
                         TransactionNo = contrib.TransactionNo,
                         ContrDate = contributionDate,
                         LoanNo = null,
+                        Isharecapital = shareType.Issharecapital,
                         DepositedDate = depositedDate,
                         ReceiptDate = receiptDate,
                         // Only set the relevant amount based on category
@@ -584,7 +585,7 @@ namespace SACCOBlockChainSystem.Services
 
                 // Update share balance if needed (for SHARE_CAPITAL or PASSBOOK types)
                 if (contributionCategory == "SHARE_CAPITAL" ||
-                    (contributionCategory == "PASSBOOK" && shareType.Issharecapital == 1))
+                    (contributionCategory == "PASSBOOK" && shareType.Issharecapital == true))
                 {
                     await UpdateShareBalanceAsync(contributionDto.MemberNo,
                         contributionDto.SharesCode,
@@ -636,7 +637,7 @@ namespace SACCOBlockChainSystem.Services
 
                         case "PASSBOOK":
                             // For PASSBOOK, update CapitalBalance if Issharecapital=1, otherwise Balance
-                            if (shareType.Issharecapital == 1)
+                            if (shareType.Issharecapital == true)
                             {
                                 wallet.CapitalBalance += contributionDto.Amount;
                                 _logger.LogInformation($"Updated CapitalBalance (PASSBOOK) for member {memberRecord.MemberNo}: +{contributionDto.Amount:C}");
@@ -1806,7 +1807,7 @@ namespace SACCOBlockChainSystem.Services
             }
 
             // If share capital related flags are true
-            if (shareType.IsMainShares == true || shareType.Issharecapital == 1)
+            if (shareType.IsMainShares == true || shareType.Issharecapital == true)
             {
                 _logger.LogInformation($"✓ FLAG FALLBACK: SHARE_CAPITAL - IsMainShares={shareType.IsMainShares}, Issharecapital={shareType.Issharecapital}");
                 return "SHARE_CAPITAL";
@@ -2128,7 +2129,7 @@ namespace SACCOBlockChainSystem.Services
             if (shareType.Withdrawable == true && (shareType.UsedToGuarantee == true || shareType.UsedToOffset == true))
                 return "DEPOSIT";
 
-            if (shareType.IsMainShares == true || shareType.Issharecapital == 1)
+            if (shareType.IsMainShares == true || shareType.Issharecapital == true)
                 return "SHARE_CAPITAL";
 
             return "SHARE_CAPITAL";

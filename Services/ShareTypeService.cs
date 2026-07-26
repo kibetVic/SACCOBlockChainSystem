@@ -116,6 +116,7 @@ namespace SACCOBlockChainSystem.Services
                     Properties = new
                     {
                         shareType.IsMainShares,
+                        shareType.Issharecapital,
                         shareType.MinAmount,
                         shareType.MaxAmount,
                         shareType.Withdrawable,

@@ -106,7 +106,6 @@ namespace SACCOBlockChainSystem.Services
         }
 
 
-
         private async Task<decimal> CalculateTotalArrearsAsync(string? companyCode, bool isSuperAdmin)
         {
             try
@@ -1014,6 +1013,57 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
+        /// <summary>
+        /// Determines if a member is active based on having 3 consecutive months of deposits
+        /// Once active, always active (even if later deposits stop)
+        /// </summary>
+        private bool IsMemberActive(List<DateTime> depositDates)
+        {
+            if (depositDates == null || depositDates.Count < 3)
+                return false;
+
+            // Sort dates ascending
+            var sortedDates = depositDates.OrderBy(d => d).ToList();
+
+            // Group by year-month to check consecutive months
+            var monthGroups = sortedDates
+                .Select(d => new { Year = d.Year, Month = d.Month })
+                .Distinct()
+                .OrderBy(m => m.Year).ThenBy(m => m.Month)
+                .ToList();
+
+            // Check for 3 consecutive months
+            int consecutiveCount = 1;
+            for (int i = 1; i < monthGroups.Count; i++)
+            {
+                var current = monthGroups[i];
+                var previous = monthGroups[i - 1];
+
+                // Check if months are consecutive
+                bool isConsecutive = false;
+
+                // Same year, next month
+                if (current.Year == previous.Year && current.Month == previous.Month + 1)
+                    isConsecutive = true;
+                // Year boundary (Dec to Jan)
+                else if (current.Year == previous.Year + 1 && current.Month == 1 && previous.Month == 12)
+                    isConsecutive = true;
+
+                if (isConsecutive)
+                {
+                    consecutiveCount++;
+                    if (consecutiveCount >= 3)
+                        return true;
+                }
+                else
+                {
+                    consecutiveCount = 1;
+                }
+            }
+
+            return false;
+        }
+
         private async Task<DashboardVM> CalculateFullDashboardDataAsync(string? companyCode, bool isSuperAdmin)
         {
             var dashboard = new DashboardVM();
@@ -1027,29 +1077,66 @@ namespace SACCOBlockChainSystem.Services
             // QUERY #1: Member statistics - Get ALL members for this company
             // ============================================================
             var memberStats = await memberQuery
-                .Select(m => new {
-                    m.Id,
-                    m.MemberNo,
-                    m.Sex,
-                    m.Status,
-                    m.Dob,
-                    m.EffectDate,
-                    m.CompanyCode
-                })
+                .Select(m => new { m.Id, m.MemberNo, m.Sex, m.Status, m.Dob, m.EffectDate, m.CompanyCode })
                 .ToListAsync();
 
             // Store the member IDs for filtering other queries
             var memberIds = memberStats.Select(m => m.Id).ToList();
             var memberNos = memberStats.Select(m => m.MemberNo).Distinct().ToList();
 
+            // ============================================================
+            // NEW: Determine Active Status based on 3 consecutive months of deposits
+            // ============================================================
+            // Get all deposit dates for all members in one query
+            var allDeposits = await _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo)
+                             && cs.CompanyCode == companyCode
+                             && cs.DepositsAmount.HasValue
+                             && cs.DepositsAmount.Value > 0)
+                .Select(cs => new { cs.MemberNo, Date = cs.ContrDate/* ?? cs.DepositedDate ?? cs.ReceiptDate ?? cs.AuditTime*/ })
+                .ToListAsync();
+
+            // Group deposit dates by member
+            var memberDeposits = allDeposits
+                .Where(d => d.Date != null && d.Date != DateTime.MinValue)
+                .GroupBy(d => d.MemberNo)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(d => d.Date.Value).ToList()
+                );
+
+            // Determine active members
+            var activeMemberNos = new HashSet<string>();
+            var dormantMemberNos = new HashSet<string>();
+
+            foreach (var member in memberStats)
+            {
+                if (memberDeposits.TryGetValue(member.MemberNo, out var depositDates))
+                {
+                    if (IsMemberActive(depositDates))
+                        activeMemberNos.Add(member.MemberNo);
+                    else
+                        dormantMemberNos.Add(member.MemberNo);
+                }
+                else
+                {
+                    dormantMemberNos.Add(member.MemberNo);
+                }
+            }
+
+            // Set dashboard properties
             dashboard.TotalMembers = memberStats.Count;
             dashboard.TotalWomen = memberStats.Count(m => m.Sex?.ToUpper() == "FEMALE");
             dashboard.TotalMen = memberStats.Count(m => m.Sex?.ToUpper() == "MALE");
             dashboard.TotalOthers = memberStats.Count(m => m.Sex?.ToUpper() != "FEMALE" && m.Sex?.ToUpper() != "MALE");
-            dashboard.ActiveMembers = memberStats.Count(m => m.Status == 1);
-            dashboard.ActiveMembersByStatus = dashboard.ActiveMembers;
-            dashboard.ActiveWomen = memberStats.Count(m => m.Sex?.ToUpper() == "FEMALE" && m.Status == 1);
-            dashboard.ActiveMen = memberStats.Count(m => m.Sex?.ToUpper() == "MALE" && m.Status == 1);
+
+            // Active members by gender
+            dashboard.ActiveMembers = activeMemberNos.Count;
+            dashboard.ActiveMembersByStatus = activeMemberNos.Count;
+            dashboard.ActiveWomen = memberStats.Count(m => m.Sex?.ToUpper() == "FEMALE" && activeMemberNos.Contains(m.MemberNo));
+            dashboard.ActiveMen = memberStats.Count(m => m.Sex?.ToUpper() == "MALE" && activeMemberNos.Contains(m.MemberNo));
+
+            // Dormant members by gender
             dashboard.DormantMembers = dashboard.TotalMembers - dashboard.ActiveMembers;
             dashboard.DormantWomen = dashboard.TotalWomen - dashboard.ActiveWomen;
             dashboard.DormantMen = dashboard.TotalMen - dashboard.ActiveMen;

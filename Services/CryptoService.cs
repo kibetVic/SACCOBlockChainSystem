@@ -724,10 +724,10 @@ namespace SACCOBlockChainSystem.Services
             if (shareType.Withdrawable == true && (shareType.UsedToGuarantee == true || shareType.UsedToOffset == true))
                 return "DEPOSIT";
 
-            if (shareType.Issharecapital == 0 && shareType.UsedToGuarantee == false && shareType.UsedToOffset == false && shareType.Withdrawable == false)
+            if (shareType.Issharecapital == false && shareType.UsedToGuarantee == false && shareType.UsedToOffset == false && shareType.Withdrawable == false)
                 return "REGISTRATION_FEE";
 
-            if (shareType.IsMainShares == true || shareType.Issharecapital == 1)
+            if (shareType.IsMainShares == true || shareType.Issharecapital == true)
                 return "SHARE_CAPITAL";
 
             return "SHARE_CAPITAL";

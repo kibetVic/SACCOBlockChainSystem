@@ -19,7 +19,7 @@ namespace SACCOBlockChainSystem.Models
 
         public float? LoanToShareRatio { get; set; }
 
-        public int? Issharecapital { get; set; }
+        public bool Issharecapital { get; set; }
 
         public decimal? Interest { get; set; }
         public string CompanyCode { get; set; } = null!;
