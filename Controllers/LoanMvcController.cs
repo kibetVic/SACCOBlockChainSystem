@@ -114,11 +114,52 @@ namespace SACCOBlockChainSystem.Controllers
                 // Check for existing active loans
                 var existingLoansResult = await _loanService.CheckExistingLoansAsync(memberNo, companyCode);
 
+                // ============================================================
+                // KEY: Find the first active loan that has bridging allowed
+                // This is the loan that can be topped up
+                // ============================================================
+                string topUpLoanTypeCode = null;
+                string topUpLoanTypeName = null;
+                bool hasBridgingAllowed = false;
+                List<object> activeLoans = new List<object>();
+
+                if (existingLoansResult.ExistingLoans != null && existingLoansResult.ExistingLoans.Any())
+                {
+                    // Get all active loans with their bridging status
+                    foreach (var loanSummary in existingLoansResult.ExistingLoans)
+                    {
+                        var loan = await _loanService.GetLoanByNoAsync(loanSummary.LoanNo, companyCode);
+                        if (loan != null)
+                        {
+                            var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
+                            activeLoans.Add(new
+                            {
+                                loanSummary.LoanNo,
+                                loanSummary.LoanType,
+                                loanSummary.LoanStatus,
+                                loanSummary.OutstandingBalance,
+                                BridgingAllowed = loan.Bridging == true
+                            });
+
+                            // Find the FIRST loan that has bridging allowed
+                            if (loan.Bridging == true && string.IsNullOrEmpty(topUpLoanTypeCode))
+                            {
+                                hasBridgingAllowed = true;
+                                topUpLoanTypeCode = loan.LoanCode;
+                                topUpLoanTypeName = loanType?.LoanType ?? loan.LoanCode;
+                            }
+                        }
+                    }
+                }
+
+                // Only block if there are existing loans AND no bridging is allowed
+                bool shouldBlock = existingLoansResult.HasExistingLoan && !hasBridgingAllowed;
+
                 return Json(new
                 {
                     success = eligibility.IsEligible,
                     message = eligibility.Message,
-                    hasExistingLoan = existingLoansResult.HasExistingLoan,
+                    hasExistingLoan = shouldBlock,
                     existingLoans = existingLoansResult.ExistingLoans?.Select(l => new
                     {
                         l.LoanNo,
@@ -141,6 +182,17 @@ namespace SACCOBlockChainSystem.Controllers
                         availableShares = eligibility.TotalEligibleShares,
                         totalContributions = eligibility.TotalEligibleShares,
                         maxLoanAmountFromShares = eligibility.MaxLoanAmount
+                    },
+                    bridgingInfo = new
+                    {
+                        hasExistingLoans = existingLoansResult.HasExistingLoan,
+                        hasBridgingAllowed = hasBridgingAllowed,
+                        // ============================================================
+                        // KEY: Only the EXACT loan type that has bridging allowed
+                        // ============================================================
+                        topUpLoanTypeCode = topUpLoanTypeCode,
+                        topUpLoanTypeName = topUpLoanTypeName,
+                        loans = activeLoans
                     }
                 });
             }
@@ -154,7 +206,6 @@ namespace SACCOBlockChainSystem.Controllers
                 });
             }
         }
-
 
 
         #region Loan Deletion
@@ -694,86 +745,87 @@ namespace SACCOBlockChainSystem.Controllers
                 application.CompanyCode = GetUserCompanyCode();
                 application.CreatedBy = User.Identity?.Name ?? "SYSTEM";
 
-                var existingLoansCheck = await _loanService.CheckExistingLoansAsync(
+                // ============================================================
+                // NEW: Check bridging/refinancing eligibility
+                // ============================================================
+                var bridgingCheck = await _loanService.CanApplyForLoanTypeAsync(
+                    application.MemberNo,
+                    application.LoanCode,
+                    application.CompanyCode);
+
+                if (!bridgingCheck.CanApply)
+                {
+                    ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
+                    ModelState.AddModelError("", bridgingCheck.Message);
+
+                    _logger.LogWarning($"Bridging check failed for member {application.MemberNo}, loan {application.LoanCode}: {bridgingCheck.Message}");
+                    return View(application);
+                }
+
+                //// Existing loans check (general)
+                //var existingLoansCheck = await _loanService.CheckExistingLoansAsync(
+                //    application.MemberNo,
+                //    application.CompanyCode);
+
+                //if (existingLoansCheck.HasExistingLoan)
+                //{
+                //    ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
+                //    ViewBag.ExistingLoans = existingLoansCheck.ExistingLoans;
+                //    ModelState.AddModelError("MemberNo", existingLoansCheck.Message);
+                //    return View(application);
+                //}
+
+                // Eligibility check
+                var eligibility = await _loanService.CheckMemberEligibilityWithContributionsAsync(
                     application.MemberNo,
                     application.CompanyCode);
 
-                if (existingLoansCheck.HasExistingLoan)
-                {
-                    ViewBag.LoanTypes =
-                        await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
-
-                    ViewBag.ExistingLoans = existingLoansCheck.ExistingLoans;
-
-                    ModelState.AddModelError("MemberNo", existingLoansCheck.Message);
-
-                    return View(application);
-                }
-
-                var eligibility =
-                    await _loanService.CheckMemberEligibilityWithContributionsAsync(
-                        application.MemberNo,
-                        application.CompanyCode);
-
                 if (!eligibility.IsEligible)
                 {
-                    ViewBag.LoanTypes =
-                        await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
-
+                    ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
                     ModelState.AddModelError("MemberNo", eligibility.Message);
-
                     return View(application);
                 }
 
-                var loanTypeEligibility =
-                    await _loanService.CheckMemberEligibilityAsync(
-                        application.MemberNo,
-                        application.LoanCode,
-                        application.CompanyCode);
-                
+                // Loan type specific eligibility
+                var loanTypeEligibility = await _loanService.CheckMemberEligibilityAsync(
+                    application.MemberNo,
+                    application.LoanCode,
+                    application.CompanyCode);
+
                 if (!loanTypeEligibility.IsEligible)
                 {
-                    ViewBag.LoanTypes =
-                        await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
-
+                    ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
                     ModelState.AddModelError("", loanTypeEligibility.Message);
-
                     return View(application);
                 }
 
+                // Submit the application
                 var loan = await _loanService.ApplyForLoanAsync(application);
 
                 var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(
                     application.LoanCode,
                     application.CompanyCode);
 
-                var requiresGuarantor =
-                    !string.IsNullOrEmpty(loanType.Guarantor) &&
-                    loanType.Guarantor != "No" &&
-                    loanType.Guarantor != "N";
+                var requiresGuarantor = !string.IsNullOrEmpty(loanType.Guarantor) &&
+                                        loanType.Guarantor != "No" &&
+                                        loanType.Guarantor != "N";
 
                 if (requiresGuarantor &&
                     (loan.Guaranteed != "0" && !string.IsNullOrEmpty(loan.Guaranteed)))
                 {
-                    TempData["SuccessMessage"] =
-                        "Loan application created! Please assign the required guarantor(s).";
-
-                    return RedirectToAction("AssignGuarantor",
-                        new { loanNo = loan.LoanNo });
+                    TempData["SuccessMessage"] = "Loan application created! Please assign the required guarantor(s).";
+                    return RedirectToAction("AssignGuarantor", new { loanNo = loan.LoanNo });
                 }
 
-                TempData["SuccessMessage"] =
-                    $"Loan application {loan.LoanNo} submitted successfully!";
-
+                TempData["SuccessMessage"] = $"Loan application {loan.LoanNo} submitted successfully!";
                 return RedirectToAction("AllLoans");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error submitting loan application");
 
-                ViewBag.LoanTypes =
-                    await _loanTypeService.GetActiveLoanTypesAsync(GetUserCompanyCode());
-
+                ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(GetUserCompanyCode());
                 ViewBag.CompanyCode = GetUserCompanyCode();
 
                 if (ex.Message.Contains("contributions") ||
@@ -786,6 +838,7 @@ namespace SACCOBlockChainSystem.Controllers
                 return View(application);
             }
         }
+
 
         public async Task<IActionResult> Details(string loanNo)
         {
@@ -1159,122 +1212,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        //[HttpGet]
-        //public async Task<IActionResult> AssignGuarantor(string loanNo)
-        //{
-        //    try
-        //    {
-        //        var companyCode = GetUserCompanyCode();
-
-        //        var loan = await _loanService.GetLoanByNoForDisplayAsync(loanNo, companyCode);
-
-        //        if (loan == null)
-        //        {
-        //            TempData["ErrorMessage"] = "Loan not found";
-        //            return RedirectToAction("LoansNeedingGuarantors");
-        //        }
-
-        //        _logger.LogInformation($"Loan {loanNo} status from DB: {loan.Status}");
-
-        //        if (loan.Status != (int)Status.Draft && loan.Status != (int)Status.Submitted)
-        //        {
-        //            TempData["ErrorMessage"] = $"Cannot assign guarantors to loan in status '{loan.Status}'.";
-        //            return RedirectToAction("AllLoans");
-        //        }
-
-        //        // Get loan type
-        //        var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
-
-        //        // Get max guarantors from SACCO parameters
-        //        var maxGuarantors = await _saccoService.GetMaxGuarantorsAsync(companyCode);
-
-        //        // Get existing member guarantors
-        //        var existingGuarantors = await _loanService.GetLoanGuarantorsAsync(loanNo);
-        //        var totalMemberGuarantee = existingGuarantors.Sum(g => g.GuaranteeAmount);
-
-        //        // ============================================================
-        //        // CRITICAL: LOAD COLLATERAL GUARANTEES FROM COLLOANGUAR TABLE
-        //        // ============================================================
-        //        // Get existing collateral guarantees directly from database
-        //        var existingCollateralGuaranteesRaw = await _context.ColloanGuars
-        //            .Where(cg => cg.LoanNo == loanNo && cg.Balance > 0)
-        //            .ToListAsync();
-
-        //        _logger.LogInformation($"Found {existingCollateralGuaranteesRaw.Count} collateral guarantees for loan {loanNo}");
-
-        //        // Convert to DTOs with collateral descriptions
-        //        var existingCollateralGuarantees = new List<CollateralGuaranteeResponseDTO>();
-
-        //        // Get all collateral types for descriptions
-        //        var collateralTypes = await _context.Collaterals
-        //            .Where(c => c.CompanyCode == companyCode)
-        //            .ToDictionaryAsync(c => c.ColCode, c => c);
-
-        //        foreach (var cg in existingCollateralGuaranteesRaw)
-        //        {
-        //            var collateral = collateralTypes.GetValueOrDefault(cg.ColCode);
-        //            existingCollateralGuarantees.Add(new CollateralGuaranteeResponseDTO
-        //            {
-        //                Id = cg.Id,
-        //                ColCode = cg.ColCode,
-        //                Coldescription = collateral?.Coldescription ?? cg.ColCode,
-        //                DocNo = cg.DocNo,
-        //                MarketValue = cg.Mktvalue,
-        //                GuaranteeAmount = cg.Balance,
-        //                RemainingBalance = cg.Balance,
-        //                AssignedDate = DateTime.Now,
-        //                BlockchainTxId = cg.BlockchainTxId
-        //            });
-        //        }
-
-        //        var totalCollateralGuarantee = existingCollateralGuarantees.Sum(g => g.GuaranteeAmount);
-
-        //        // Calculate totals including collateral
-        //        var totalGuarantee = totalMemberGuarantee + totalCollateralGuarantee;
-        //        var loanAmount = loan.LoanAmt ?? 0;
-        //        var remainingAmount = loanAmount - totalGuarantee;
-        //        var isFullyGuaranteed = remainingAmount <= 0;
-
-        //        var isSelfGuarantee = loanType?.SelfGuarantee ?? false;
-        //        var canProceed = isFullyGuaranteed || isSelfGuarantee;
-
-        //        // Get all available collateral types for dropdown
-        //        var allCollateralTypes = await _context.Collaterals
-        //            .Where(c => c.CompanyCode == companyCode)
-        //            .OrderBy(c => c.ColCode)
-        //            .ToListAsync();
-
-        //        _logger.LogInformation($"Loading {allCollateralTypes.Count} collateral types for company {companyCode}");
-
-        //        // Set ViewBag properties
-        //        ViewBag.Loan = loan;
-        //        ViewBag.LoanType = loanType;
-        //        ViewBag.ExistingGuarantors = existingGuarantors;
-        //        ViewBag.TotalGuarantee = totalGuarantee;
-        //        ViewBag.TotalMemberGuarantee = totalMemberGuarantee;
-        //        ViewBag.TotalCollateralGuarantee = totalCollateralGuarantee;
-        //        ViewBag.RemainingAmount = remainingAmount > 0 ? remainingAmount : 0;
-        //        ViewBag.IsFullyGuaranteed = isFullyGuaranteed;
-        //        ViewBag.CanProceed = canProceed;
-        //        ViewBag.IsSelfGuarantee = isSelfGuarantee;
-        //        ViewBag.CompanyCode = companyCode;
-        //        ViewBag.MaxGuarantors = maxGuarantors;
-        //        ViewBag.LoanAmount = loanAmount;
-
-        //        // CRITICAL: These must be set for the view to show collaterals
-        //        ViewBag.CollateralTypes = allCollateralTypes;
-        //        ViewBag.ExistingCollateralGuarantees = existingCollateralGuarantees;
-
-        //        return View(loan);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, $"Error loading guarantor assignment for {loanNo}");
-        //        TempData["ErrorMessage"] = $"Error loading guarantor assignment: {ex.Message}";
-        //        return RedirectToAction("LoansNeedingGuarantors");
-        //    }
-        //}
-
 
         [HttpGet]
         public async Task<IActionResult> DebugLoanStatus(string loanNo)
@@ -1477,7 +1414,8 @@ namespace SACCOBlockChainSystem.Controllers
                 await _context.SaveChangesAsync();
 
                 TempData["SuccessMessage"] = $"Loan {loanNo} has been submitted for appraisal!";
-                return RedirectToAction("AllLoans");
+                return RedirectToAction("Appraise", new { loanNo });
+                // return RedirectToAction("AllLoans");
             }
             catch (Exception ex)
             {
@@ -2199,7 +2137,8 @@ namespace SACCOBlockChainSystem.Controllers
                         return RedirectToAction("PrintAppraisalReport", new { loanNo = appraisalDto.LoanNo });
                     }
 
-                    return RedirectToAction("AllLoans");
+                    return RedirectToAction("Endorse", new { loanNo = appraisalDto.LoanNo });                    
+                    //return RedirectToAction("AllLoans");
                 }
                 else
                 {
@@ -2409,8 +2348,8 @@ namespace SACCOBlockChainSystem.Controllers
                     .OrderByDescending(x => x.Loan.ApplicDate)
                     .ToListAsync();
 
-                var pendingEndorsement = new List<dynamic>();
-                var endorsedLoans = new List<dynamic>();
+                var pendingEndorsement = new List<object>();
+                var endorsedLoans = new List<object>();
 
                 foreach (var data in loansData)
                 {
@@ -2434,6 +2373,12 @@ namespace SACCOBlockChainSystem.Controllers
                     // Check if loan has endorsement
                     var hasEndorsement = endorsement != null;
 
+                    // Get the actual status name
+                    string statusName = ((Status)loan.Status).ToString();
+
+                    // Get bridging status from the Loan table
+                    bool isBridging = loan.Bridging ?? false;
+
                     if (loan.Status == (int)Status.Rejected)
                     {
                         // Rejected loans
@@ -2447,11 +2392,13 @@ namespace SACCOBlockChainSystem.Controllers
                             EndorsementDate = endorsement?.MeetingDate,
                             EndorsedBy = endorsement?.ChairSigned,
                             MinuteNo = endorsement?.MinuteNo,
-                            Status = "Rejected",
+                            Status = statusName,
                             IsDisbursed = false,
                             CanEdit = false,
                             CanDisburse = false,
-                            CanViewDetails = true
+                            CanViewDetails = true,
+                            HasEndorsement = hasEndorsement,
+                            IsBridging = isBridging
                         });
                     }
                     else if (loan.Status == (int)Status.Endorsed || hasEndorsement)
@@ -2471,7 +2418,9 @@ namespace SACCOBlockChainSystem.Controllers
                             IsDisbursed = isDisbursed,
                             CanEdit = !isDisbursed && loan.Status == (int)Status.Endorsed && endorsement?.Accepted == "1",
                             CanDisburse = !isDisbursed && loan.Status == (int)Status.Endorsed,
-                            CanViewDetails = true
+                            CanViewDetails = true,
+                            HasEndorsement = hasEndorsement,
+                            IsBridging = isBridging
                         });
                     }
                     else if (loan.Status == (int)Status.Approved && !hasEndorsement)
@@ -2483,7 +2432,14 @@ namespace SACCOBlockChainSystem.Controllers
                             MemberName = memberName,
                             LoanType = loanTypeName,
                             ApprovedAmount = loan.LoanAmt ?? 0,
-                            ApplicationDate = loan.ApplicDate
+                            ApplicationDate = loan.ApplicDate,
+                            Status = statusName,
+                            IsDisbursed = false,
+                            CanEdit = false,
+                            CanDisburse = false,
+                            CanViewDetails = true,
+                            HasEndorsement = hasEndorsement,  // ✅ ADD THIS
+                            IsBridging = isBridging            // ✅ ADD THIS
                         });
                     }
                 }
@@ -2504,7 +2460,7 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 _logger.LogError(ex, "Error loading pending endorsement loans");
                 TempData["ErrorMessage"] = "Error loading loans pending endorsement";
-                return View(new { PendingLoans = new List<dynamic>(), EndorsedLoans = new List<dynamic>() });
+                return View(new { PendingLoans = new List<object>(), EndorsedLoans = new List<object>() });
             }
         }
 
@@ -2563,7 +2519,7 @@ namespace SACCOBlockChainSystem.Controllers
                     TempData["SuccessMessage"] = $"Endorsement has been rejected. Loan {endorsementDto.LoanNo} has been marked as Rejected.";
                 }
 
-                return RedirectToAction("AllLoans");
+                return RedirectToAction("EndorsementDetails");
             }
             catch (Exception ex)
             {
@@ -2590,14 +2546,14 @@ namespace SACCOBlockChainSystem.Controllers
                 if (loan.Status != (int)Status.Approved)
                 {
                     TempData["ErrorMessage"] = $"Cannot endorse loan in status '{loan.Status}'. Loan must be Approved.";
-                    return RedirectToAction("AllLoans");
+                    return RedirectToAction("PendingEndorsement");
                 }
 
                 var existingEndorsement = await _loanService.GetEndorsementByLoanNoAsync(loanNo, companyCode);
                 if (existingEndorsement != null)
                 {
                     TempData["ErrorMessage"] = "Endorsement already exists for this loan";
-                    return RedirectToAction("AllLoans");
+                    return RedirectToAction("PendingEndorsement");
                 }
 
                 // Get the actual Loantype entity
@@ -4739,79 +4695,6 @@ namespace SACCOBlockChainSystem.Controllers
 
             return View(schedule);
         }
-        //    public async Task<IActionResult> Schedule(string? loanNo)
-        //    {
-        //        try
-        //        {
-        //            var companyCode = GetUserCompanyCode();
-
-        //            var loan = await _loanService.GetLoanByNoAsync(loanNo, companyCode);
-        //            var loanbal = await _loanService.GetLoanBalanceAsync(loanNo);
-
-        //            // Get member details for name
-        //            var member = await _context.Members
-        //                .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
-
-        //            // Get the approved amount from Endmain for display
-        //            var endmain = await _context.Endmain
-        //                .FirstOrDefaultAsync(e => e.LoanNo == loanNo && e.CompanyCode == companyCode);
-
-        //            var schedule = await _context.LoanSchedules
-        //.Where(s => s.LoanNo == loanNo)
-        //.ToListAsync() ?? new List<LoanSchedule>();
-        //            var repayments = await _context.Repay
-        //   .Where(r => r.LoanNo == loanNo)
-        //   .ToListAsync() ?? new List<Repay>();
-
-        //            decimal totalPaid = repayments.Sum(r => r.Amount ?? 0);
-        //            decimal totalPrincipalPaid = repayments.Sum(r => r.Principal ?? 0);
-        //            decimal totalInterestPaid = repayments.Sum(r => r.Interest ?? 0);
-        //            decimal totalPenaltyPaid = repayments.Sum(r => r.Penalty ?? 0);
-
-        //            // Use approved amount from Endmain, fallback to loan.LoanAmt
-        //            decimal approvedAmount = endmain?.AmtApproved ?? loan?.LoanAmt ?? 0;
-
-        //            // Calculate totals from schedule correctly
-        //            decimal totalPrincipalFromSchedule = schedule.Sum(s => s.PrincipalAmount);
-        //            decimal totalInterestFromSchedule = schedule.Sum(s => s.InterestAmount);
-        //            decimal totalRepayableFromSchedule = schedule.Sum(s => s.TotalInstallment);
-
-        //            // Outstanding calculations
-        //            decimal totalPrincipalOutstanding = approvedAmount - totalPrincipalPaid;
-        //            decimal totalInterestOutstanding = totalInterestFromSchedule - totalInterestPaid;
-        //            decimal totalPenaltyOutstanding = (loanbal?.Penalty ?? 0) - totalPenaltyPaid;
-        //            decimal totalOutstanding = totalPrincipalOutstanding + totalInterestOutstanding + totalPenaltyOutstanding;
-
-        //            // Ensure no negative values
-        //            totalPrincipalOutstanding = Math.Max(0, totalPrincipalOutstanding);
-        //            totalInterestOutstanding = Math.Max(0, totalInterestOutstanding);
-        //            totalPenaltyOutstanding = Math.Max(0, totalPenaltyOutstanding);
-        //            totalOutstanding = Math.Max(0, totalOutstanding);
-
-        //            ViewBag.Loan = loan;
-        //            ViewBag.Member = member;
-        //            ViewBag.LoanBalance = loanbal;
-        //            ViewBag.Endmain = endmain;
-        //            ViewBag.ApprovedAmount = approvedAmount;
-        //            ViewBag.Repayments = repayments;
-        //            ViewBag.TotalPrincipal = approvedAmount;
-        //            ViewBag.TotalInterest = totalInterestFromSchedule;
-        //            ViewBag.TotalRepayable = totalRepayableFromSchedule;
-        //            ViewBag.TotalPaid = totalPaid;
-        //            ViewBag.TotalPrincipalPaid = totalPrincipalPaid;
-        //            ViewBag.TotalInterestPaid = totalInterestPaid;
-        //            ViewBag.TotalPenaltyPaid = totalPenaltyPaid;
-        //            ViewBag.TotalOutstanding = totalOutstanding;
-        //            ViewBag.RepaymentMethod = loan?.RepayMethod ?? "AMT";
-
-        //            return View(schedule);
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            _logger.LogError(ex, $"Error loading schedule for {loanNo}");
-        //            return View("Error");
-        //        }
-        //    }
 
         [HttpGet]
         public async Task<IActionResult> ExportSchedule(string loanNo)

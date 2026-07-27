@@ -397,6 +397,129 @@ namespace SACCOBlockChainSystem.Controllers.Api
             }
         }
 
+        [HttpGet("bridging-status")]
+        public async Task<IActionResult> GetBridgingStatus(string memberNo, string companyCode)
+        {
+            try
+            {
+                var result = new List<object>();
+
+                // Get all active loans for this member
+                var activeLoans = await _context.Loans
+                    .Where(l => l.MemberNo == memberNo &&
+                                l.CompanyCode == companyCode &&
+                                l.Status != (int)Status.Closed &&
+                                l.Status != (int)Status.Rejected &&
+                                l.Status != (int)Status.WrittenOff)
+                    .ToListAsync();
+
+                foreach (var loan in activeLoans)
+                {
+                    // Get loan type name
+                    var loanType = await _context.Loantypes
+                        .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
+
+                    result.Add(new
+                    {
+                        loanNo = loan.LoanNo,
+                        loanType = loanType?.LoanType1 ?? loan.LoanCode,
+                        status = ((Status)(loan.Status ?? 0)).ToString(),
+                        // ============================================================
+                        // KEY: Use the Bridging field from the LOAN table
+                        // ============================================================
+                        bridgingAllowed = loan.Bridging == true,
+                        maxLoans = loanType?.MaxLoans ?? 5
+                    });
+                }
+
+                return Ok(new { success = true, data = new { loans = result } });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting bridging status for member {memberNo}", memberNo);
+                return Ok(new { success = false, message = ex.Message });
+            }
+        }
+
+
+        [HttpGet("check-bridging")]
+        public async Task<IActionResult> CheckBridgingForLoanType(string memberNo, string loanCode, string companyCode)
+        {
+            try
+            {
+                // Get the loan type being applied for
+                var loanType = await _context.Loantypes
+                    .FirstOrDefaultAsync(lt => lt.LoanCode == loanCode && lt.CompanyCode == companyCode);
+
+                if (loanType == null)
+                {
+                    return Ok(new { success = false, message = "Loan type not found" });
+                }
+
+                // Count existing active loans of this type
+                var existingCount = await _context.Loans
+                    .CountAsync(l => l.MemberNo == memberNo &&
+                                    l.CompanyCode == companyCode &&
+                                    l.LoanCode == loanCode &&
+                                    l.Status != (int)Status.Closed &&
+                                    l.Status != (int)Status.Rejected &&
+                                    l.Status != (int)Status.WrittenOff);
+
+                bool bridgingAllowed = false;
+                if (existingCount > 0)
+                {
+                    // ============================================================
+                    // KEY: Get bridging from the EXISTING LOAN, not the loan type
+                    // ============================================================
+                    var existingLoan = await _context.Loans
+                        .FirstOrDefaultAsync(l => l.MemberNo == memberNo &&
+                                                  l.CompanyCode == companyCode &&
+                                                  l.LoanCode == loanCode &&
+                                                  l.Status != (int)Status.Closed &&
+                                                  l.Status != (int)Status.Rejected &&
+                                                  l.Status != (int)Status.WrittenOff);
+
+                    bridgingAllowed = existingLoan != null && existingLoan.Bridging == true;
+                }
+
+                int maxLoans = loanType.MaxLoans ?? 5;
+
+                string message;
+                if (existingCount > 0 && !bridgingAllowed)
+                {
+                    message = $"You have {existingCount} existing {loanType.LoanType1} loan(s). Bridging is NOT allowed for this loan.";
+                }
+                else if (existingCount > 0 && bridgingAllowed)
+                {
+                    message = $"You have {existingCount} existing {loanType.LoanType1} loan(s). Bridging is allowed for this loan.";
+                }
+                else
+                {
+                    message = "No existing loans of this type found.";
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        loanTypeName = loanType.LoanType1,
+                        hasExistingLoan = existingCount > 0,
+                        existingCount = existingCount,
+                        bridgingAllowed = bridgingAllowed,
+                        maxLoans = maxLoans,
+                        message = message
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking bridging for member {memberNo}, loan {loanCode}", memberNo, loanCode);
+                return Ok(new { success = false, message = ex.Message });
+            }
+        }
+
+
         private async Task<decimal> CalculateAvailableDepositsForGuaranteeAsync(string memberNo, string companyCode)
         {
             try

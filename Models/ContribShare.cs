@@ -26,11 +26,9 @@ public partial class ContribShare
     public decimal? PassBookAmount { get; set; }
 
     public decimal? Donor { get; set; }
-
     public decimal? LoanAmount { get; set; }
-
     public decimal? RegFeeAmount { get; set; }
-
+    public bool? Isharecapital { get; set; }
     public string? CompanyCode { get; set; }
 
     public string? ReceiptNo { get; set; }

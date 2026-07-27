@@ -1584,7 +1584,7 @@ namespace SACCOBlockChainSystem.Services
             if (shareTypeName.Contains("reg") ||
                 shareTypeName.Contains("fee") ||
                 shareTypeName.Contains("registration") ||
-                (shareType.Issharecapital == 0 && shareType.UsedToGuarantee == false && shareType.UsedToOffset == false && shareType.Withdrawable == false))
+                (shareType.Issharecapital == false && shareType.UsedToGuarantee == false && shareType.UsedToOffset == false && shareType.Withdrawable == false))
             {
                 return contribShare.RegFeeAmount ?? 0;
             }

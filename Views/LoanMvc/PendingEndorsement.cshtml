@@ -7,8 +7,8 @@
     var allLoans = pendingLoans.Concat(endorsedLoans).OrderByDescending(l => l.ApplicationDate);
 }
 
-<div class="container py-4">
-    <div class="container-fluid py-4">
+<div class="container py-3">
+    <div class="container-fluid py-3">
         <div class="row">
             <div class="col-12">
                 <div class="d-flex align-items-center mb-4">
@@ -40,13 +40,70 @@
             </div>
         }
 
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="bi bi-clock-history"></i> Pending Endorsement
+                        </h5>
+                        <h2 class="mb-0">@pendingLoans.Count()</h2>
+                        <small>Loans awaiting endorsement</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="bi bi-check-circle"></i> Endorsed
+                        </h5>
+                        <h2 class="mb-0">@endorsedLoans.Count(l => l.Status == "Endorsed")</h2>
+                        <small>Loans endorsed and completed</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="bi bi-x-circle"></i> Rejected
+                        </h5>
+                        <h2 class="mb-0">@endorsedLoans.Count(l => l.Status == "Rejected")</h2>
+                        <small>Loans rejected during endorsement</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="bi bi-arrow-left-right"></i> Bridging/Refinance
+                        </h5>
+                        <h2 class="mb-0" id="bridgingCount">0</h2>
+                        <small>Loans with bridging enabled</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- All Loans in One Table -->
         <div class="card shadow-sm">
             <div class="card-header bg-primary text-white">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-list-check me-2"></i>Loans (@allLoans.Count())
-                </h5>
-                <small class="text-light">Showing all loans with their endorsement status</small>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-list-check me-2"></i>Loans (@allLoans.Count())
+                        </h5>
+                        <small class="text-light">Showing all loans with their endorsement status</small>
+                    </div>
+                    <div>
+                        <button class="btn btn-light btn-sm" onclick="location.reload()">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="card-body">
                 @if (!allLoans.Any())
@@ -59,7 +116,7 @@
                 else
                 {
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-hover" id="endorsementTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Loan No</th>
@@ -77,8 +134,65 @@
                                     var status = loan.Status ?? "Pending";
                                     var isEndorsed = status == "Endorsed";
                                     var isRejected = status == "Rejected";
-                                    var isPending = status == "Pending" || string.IsNullOrEmpty(status);
-                                    var isDisbursed = loan.IsDisbursed ?? false;
+                                    var isApproved = status == "Approved";
+                                    var isPendingEndorsement = isApproved || status == "Pending Endorsement";
+
+                                    // ✅ FIX: Use try-catch or safe access for properties
+                                    bool isDisbursed = false;
+                                    bool hasEndorsement = false;
+                                    bool isBridging = false;
+                                    bool canEdit = false;
+                                    bool canDisburse = false;
+                                    bool canViewDetails = true;
+
+                                    try
+                                    {
+                                        isDisbursed = loan.IsDisbursed ?? false;
+                                    }
+                                    catch { }
+
+                                    try
+                                    {
+                                        hasEndorsement = loan.HasEndorsement ?? false;
+                                    }
+                                    catch { }
+
+                                    try
+                                    {
+                                        canEdit = loan.CanEdit ?? false;
+                                    }
+                                    catch { }
+
+                                    try
+                                    {
+                                        canDisburse = loan.CanDisburse ?? false;
+                                    }
+                                    catch { }
+
+                                    // Determine badge class and text
+                                    string badgeClass = "bg-warning";
+                                    string statusText = "Pending";
+
+                                    if (isRejected)
+                                    {
+                                        badgeClass = "bg-danger";
+                                        statusText = "Rejected";
+                                    }
+                                    else if (isEndorsed)
+                                    {
+                                        badgeClass = "bg-success";
+                                        statusText = "Endorsed";
+                                    }
+                                    else if (isApproved)
+                                    {
+                                        badgeClass = "bg-primary";
+                                        statusText = "Approved";
+                                    }
+                                    else if (status == "Pending Endorsement")
+                                    {
+                                        badgeClass = "bg-warning";
+                                        statusText = "Pending Endorsement";
+                                    }
 
                                     <tr>
                                         <td><strong>@loan.LoanNo</strong></td>
@@ -87,21 +201,13 @@
                                         <td>KES @loan.ApprovedAmount.ToString("N0")</td>
                                         <td>@loan.ApplicationDate.ToString("dd/MM/yyyy")</td>
                                         <td>
-                                            @if (isRejected)
-                                            {
-                                                <span class="badge bg-danger">Rejected</span>
-                                            }
-                                            else if (isEndorsed)
-                                            {
-                                                <span class="badge bg-success">Endorsed</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge bg-warning">Pending</span>
-                                            }
+                                            <span class="badge @badgeClass">
+                                                <i class="bi @(isRejected ? "bi-x-circle" : isEndorsed ? "bi-check-circle" : "bi-clock")"></i>
+                                                @statusText
+                                            </span>
                                         </td>
                                         <td>
-                                            <div class="btn-group btn-group-sm">
+                                            <div class="btn-group btn-group-sm" role="group">
                                                 <!-- Details button - always visible -->
                                                 <a asp-action="EndorsementDetails" asp-route-loanNo="@loan.LoanNo"
                                                    class="btn btn-sm btn-info" title="View Details">
@@ -109,7 +215,7 @@
                                                 </a>
 
                                                 <!-- Edit button - only for endorsed loans that are NOT disbursed -->
-                                                @if (isEndorsed && !isDisbursed && loan.CanEdit != false)
+                                                @if (isEndorsed && !isDisbursed && canEdit)
                                                 {
                                                     <a asp-action="EditEndorsement" asp-route-loanNo="@loan.LoanNo"
                                                        class="btn btn-sm btn-warning" title="Edit Endorsement">
@@ -117,8 +223,8 @@
                                                     </a>
                                                 }
 
-                                                <!-- Endorse button - only for pending loans -->
-                                                @if (isPending)
+                                                <!-- Endorse button - only for approved loans without endorsement -->
+                                                @if (isApproved && !hasEndorsement)
                                                 {
                                                     <a asp-action="Endorse" asp-route-loanNo="@loan.LoanNo"
                                                        class="btn btn-sm btn-primary" title="Create Endorsement">
@@ -135,5 +241,52 @@
                 }
             </div>
         </div>
+
+        <!-- Legend -->
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6><i class="bi bi-info-circle"></i> Status Legend</h6>
+                <div class="d-flex flex-wrap gap-3">
+                    <span><span class="badge bg-primary">Approved</span> - Loan approved, ready for endorsement</span>
+                    <span><span class="badge bg-warning">Pending Endorsement</span> - Endorsement in progress</span>
+                    <span><span class="badge bg-success">Endorsed</span> - Endorsement completed</span>
+                    <span><span class="badge bg-danger">Rejected</span> - Loan rejected</span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Count bridging loans
+            let bridgingCount = 0;
+            @foreach (var loan in allLoans)
+            {
+                    try
+                    {
+                            if (loan.IsBridging == true)
+                            {
+                                    @:bridgingCount++;
+                            }
+                    }
+                    catch { }
+            }
+            $('#bridgingCount').text(bridgingCount);
+
+            // Search/filter functionality
+            $('#searchInput').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('#endorsementTable tbody tr').filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+                });
+            });
+
+            // Auto-hide alerts after 5 seconds
+            setTimeout(function() {
+                $('.alert').fadeOut('slow');
+            }, 5000);
+        });
+    </script>
+}

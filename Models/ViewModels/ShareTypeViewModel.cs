@@ -28,5 +28,6 @@ namespace SACCOBlockChainSystem.Models.ViewModels
 
         // 🔥 Optional but useful for UI state
         public bool IsSelected { get; set; } = false;
+        public bool Issharecapital { get; set; }
     }
 }

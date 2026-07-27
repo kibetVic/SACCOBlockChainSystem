@@ -66,7 +66,7 @@ namespace SACCOBlockChainSystem.Services
                     LoanCode = loanTypeDto.LoanCode,
                     LoanType1 = loanTypeDto.LoanType,
                     ValueChain = loanTypeDto.ValueChain,
-                    LoanProduct = loanTypeDto.LoanProduct,
+                    LoanProduct = loanTypeDto.LoanType,
                     LoanAcc = loanTypeDto.LoanAcc,
                     InterestAcc = loanTypeDto.InterestAcc,
                     PenaltyAcc = loanTypeDto.PenaltyAcc,
@@ -161,6 +161,7 @@ namespace SACCOBlockChainSystem.Services
                         loanType.RepayPeriod,
                         loanType.Interest,
                         loanType.Bridging,
+                        loanType.LoanProduct,
                         loanType.MobileLoan,
                         loanType.IsProject,
                         loanType.Priority,
@@ -219,6 +220,7 @@ namespace SACCOBlockChainSystem.Services
                     loanTypeName = loanType.LoanType1,
                     maxAmount = loanType.MaxAmount,
                     repayPeriod = loanType.RepayPeriod,
+                    loanproduct = loanType.LoanProduct,
                     interest = loanType.Interest,
                     guarantor = loanType.Guarantor,
                     selfGuarantee = loanType.SelfGuarantee,
@@ -451,7 +453,7 @@ namespace SACCOBlockChainSystem.Services
                 // Update loan type fields (all fields are updatable)
                 loanType.LoanType1 = loanTypeDto.LoanType;
                 loanType.ValueChain = loanTypeDto.ValueChain;
-                loanType.LoanProduct = loanTypeDto.LoanProduct;
+                loanType.LoanProduct = loanTypeDto.LoanType;
                 loanType.LoanAcc = loanTypeDto.LoanAcc;
                 loanType.InterestAcc = loanTypeDto.InterestAcc;
                 loanType.PenaltyAcc = loanTypeDto.PenaltyAcc;
@@ -630,6 +632,7 @@ namespace SACCOBlockChainSystem.Services
                 {
                     loanTypeCode = loanType.LoanCode,
                     loanTypeName = loanType.LoanType1,
+                    Loanproduct = loanType.LoanProduct,
                     usageCount = usageCount,
                     isUsed = isUsed,
                     note = isUsed ? "Changes will only affect NEW loan applications" : "Full update allowed",

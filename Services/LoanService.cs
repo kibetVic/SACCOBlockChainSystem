@@ -113,6 +113,9 @@ namespace SACCOBlockChainSystem.Services
         Task<(bool IsEligible, string Message)> CheckMemberEligibilityAsync(string memberNo, string loanCode, string companyCode);
         Task<decimal> CalculateMaximumLoanAmountAsync(string memberNo, string loanCode, string companyCode);
         Task<bool> RejectGuarantorAsync(int guarantorId, string remarks, string rejectedBy);
+        Task<(bool CanApply, string Message, int ExistingCount)> CanApplyForLoanTypeAsync(string memberNo, string loanCode, string companyCode);
+        Task<(bool IsBridgingAllowed, int ExistingLoansCount, string Message)> GetBridgingStatusAsync(string memberNo, string loanCode, string companyCode);
+
         #endregion
 
         #region Audit
@@ -457,7 +460,8 @@ namespace SACCOBlockChainSystem.Services
                     AddSecurity = application.Remarks,
                     Guaranteed = ParseRequiredGuarantors(loanType.Guarantor).ToString(),
                     RepayMethod = loanType.Repaymethod ?? "AMT",
-                    Gperiod = (int)loanType.GracePeriod, 
+                    Gperiod = (int)loanType.GracePeriod,
+                    Bridging = loanType.Bridging == 1,
                     AuditId = application.CreatedBy,
                     BasicSalary = 0,
                     Repayrate = 0,
@@ -651,248 +655,6 @@ namespace SACCOBlockChainSystem.Services
                 throw;
             }
         }
-
-        //public async Task<Loan> ApplyForLoanAsync(LoanApplicationDTO application)
-        //{
-        //    using var transaction = await _context.Database.BeginTransactionAsync();
-
-        //    try
-        //    {
-        //        var validation = await ValidateLoanApplicationAsync(application);
-        //        if (!validation.IsValid)
-        //        {
-        //            throw new InvalidOperationException($"Loan validation failed: {validation.Message}");
-        //        }
-
-        //        var eligibility = await CheckMemberEligibilityAsync(application.MemberNo, application.LoanCode, application.CompanyCode);
-        //        if (!eligibility.IsEligible)
-        //        {
-        //            throw new InvalidOperationException($"Member not eligible: {eligibility.Message}");
-        //        }
-
-        //        // Fetch the member to get IdNo and other details
-        //        var member = await _context.Members
-        //            .FirstOrDefaultAsync(m => m.MemberNo == application.MemberNo && m.CompanyCode == application.CompanyCode);
-
-        //        if (member == null)
-        //        {
-        //            throw new InvalidOperationException($"Member {application.MemberNo} not found");
-        //        }
-
-        //        var loanType = await _context.Loantypes
-        //            .FirstOrDefaultAsync(l => l.LoanCode == application.LoanCode && l.CompanyCode == application.CompanyCode);
-
-        //        if (loanType == null)
-        //        {
-        //            throw new InvalidOperationException($"Loan type {application.LoanCode} not found");
-        //        }
-
-        //        // Validate that the requested repayment period does not exceed the loan type's maximum
-        //        var maxRepayPeriod = loanType.RepayPeriod ?? 360; // Default to 360 months (30 years) if not set
-        //        if (application.RepayPeriod > maxRepayPeriod)
-        //        {
-        //            throw new InvalidOperationException($"Repayment period of {application.RepayPeriod} months exceeds the maximum allowed of {maxRepayPeriod} months for this loan type.");
-        //        }
-
-        //        if (application.RepayPeriod < 1)
-        //        {
-        //            throw new InvalidOperationException("Repayment period must be at least 1 month.");
-        //        }
-
-        //        var loanNo = await GenerateLoanNumberAsync(loanType.LoanCode, application.MemberNo, application.CompanyCode);
-
-        //        decimal interestRate = 0;
-        //        if (!string.IsNullOrEmpty(loanType.Interest) && decimal.TryParse(loanType.Interest, out interestRate))
-        //        {
-        //            interestRate = Math.Round(interestRate, 4, MidpointRounding.AwayFromZero);
-        //        }
-
-        //        var loan = new Loan
-        //        {
-        //            LoanNo = loanNo,
-        //            MemberNo = application.MemberNo,
-        //            LoanCode = application.LoanCode,
-        //            CompanyCode = application.CompanyCode,
-        //            LoanAmt = application.PrincipalAmount,
-        //            MaxLoanamt = application.PrincipalAmount,
-        //            IdNo = member.Idno,
-        //            Interest = interestRate,
-        //            RepayPeriod = application.RepayPeriod,
-        //            ApplicDate = application.ApplicationDate,
-        //            Status = (int)Status.Draft,
-        //            Purpose = application.Purpose,
-        //            AddSecurity = application.Remarks,
-        //            Guaranteed = ParseRequiredGuarantors(loanType.Guarantor).ToString(),
-        //            RepayMethod = loanType.Repaymethod ?? "AMT",
-        //            Gperiod = loanType.GracePeriod.ToString(),
-        //            AuditId = application.CreatedBy,
-        //            BasicSalary = 0,
-        //            Repayrate = 0,
-        //            Sharecapital = 0,
-        //            Run = 0,
-        //            Run2 = 0,
-        //            AuditTime = DateTime.Now,
-        //            Posted = "Draft",
-        //            UserName = application.CreatedBy,
-        //            AuditDateTime = DateTime.Now,
-        //            BlockchainTxId = null
-        //        };
-
-        //        _context.Loans.Add(loan);
-        //        await _context.SaveChangesAsync();
-
-        //        // Store guarantors data for audit
-        //        var guarantorsList = new List<object>();
-        //        if (application.Guarantors != null && application.Guarantors.Any())
-        //        {
-        //            foreach (var guarantor in application.Guarantors)
-        //            {
-        //                var loanGuarantor = new Loanguar
-        //                {
-        //                    LoanNo = loanNo,
-        //                    MemberNo = guarantor.GuarantorMemberNo,
-        //                    Amount = guarantor.GuaranteeAmount,
-        //                    Balance = guarantor.GuaranteeAmount,
-        //                    CompanyCode = application.CompanyCode,
-        //                    AuditTime = DateTime.Now,
-        //                    Transfered = false
-        //                };
-        //                _context.Loanguar.Add(loanGuarantor);
-
-        //                guarantorsList.Add(new
-        //                {
-        //                    guarantor.GuarantorMemberNo,
-        //                    guarantor.GuaranteeAmount,
-        //                    guarantor.GuarantorName
-        //                });
-        //            }
-        //            await _context.SaveChangesAsync();
-        //        }
-
-        //        // ============================================================
-        //        // CREATE BLOCKCHAIN TRANSACTION
-        //        // ============================================================
-        //        var blockchainData = new
-        //        {
-        //            LoanNo = loanNo,
-        //            MemberNo = application.MemberNo,
-        //            MemberIdNo = member.Idno,
-        //            MemberName = $"{member.Surname} {member.OtherNames}",
-        //            LoanCode = application.LoanCode,
-        //            LoanTypeName = loanType.LoanType1,
-        //            PrincipalAmount = application.PrincipalAmount,
-        //            InterestRate = interestRate,
-        //            RepayPeriod = application.RepayPeriod,
-        //            MaxRepayPeriodAllowed = maxRepayPeriod,
-        //            RepayMethod = loanType.Repaymethod ?? "AMT",
-        //            ApplicationDate = application.ApplicationDate,
-        //            Purpose = application.Purpose,
-        //            Remarks = application.Remarks,
-        //            Guarantors = guarantorsList,
-        //            CreatedBy = application.CreatedBy,
-        //            Status = "Draft"
-        //        };
-
-        //        var blockchainTx = new BlockchainTransaction
-        //        {
-        //            TransactionId = Guid.NewGuid().ToString(),
-        //            TransactionType = "LOAN_APPLICATION",
-        //            MemberNo = application.MemberNo,
-        //            CompanyCode = application.CompanyCode,
-        //            Amount = application.PrincipalAmount,
-        //            Timestamp = DateTime.Now,
-        //            DataHash = await _blockchainService.GenerateTransactionHash(blockchainData),
-        //            PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData),
-        //            OffChainReferenceId = loanNo,
-        //            Status = "PENDING",
-        //            CreatedAt = DateTime.Now
-        //        };
-
-        //        _context.BlockchainTransactions.Add(blockchainTx);
-        //        await _context.SaveChangesAsync();
-
-        //        loan.BlockchainTxId = blockchainTx.TransactionId;
-        //        await _context.SaveChangesAsync();
-
-        //        // ============================================================
-        //        // SAVE AUDIT TRAIL
-        //        // ============================================================
-
-        //        // Create audit extra data
-        //        var auditExtraData = new
-        //        {
-        //            loanNo = loanNo,
-        //            memberNumber = application.MemberNo,
-        //            memberName = $"{member.Surname} {member.OtherNames}",
-        //            memberIdNo = member.Idno,
-        //            loanCode = application.LoanCode,
-        //            loanTypeName = loanType.LoanType1,
-        //            principalAmount = application.PrincipalAmount,
-        //            interestRate = interestRate,
-        //            repayPeriod = application.RepayPeriod,
-        //            maxRepayPeriodAllowed = maxRepayPeriod,
-        //            repayMethod = loanType.Repaymethod ?? "AMT",
-        //            applicationDate = application.ApplicationDate.ToString("yyyy-MM-dd HH:mm:ss"),
-        //            purpose = application.Purpose ?? "",
-        //            remarks = application.Remarks ?? "",
-        //            numberOfGuarantors = guarantorsList.Count,
-        //            guarantors = guarantorsList,
-        //            status = "Draft",
-        //            blockchainTxId = blockchainTx.TransactionId
-        //        };
-
-        //        // Create a copy of the loan object for NewValue (what was just saved)
-        //        var loanForAudit = new
-        //        {
-        //            loan.LoanNo,
-        //            loan.MemberNo,
-        //            loan.LoanCode,
-        //            loan.LoanAmt,
-        //            loan.MaxLoanamt,
-        //            loan.IdNo,
-        //            loan.Interest,
-        //            loan.RepayPeriod,
-        //            loan.ApplicDate,
-        //            loan.Status,
-        //            loan.Purpose,
-        //            loan.AddSecurity,
-        //            loan.Guaranteed,
-        //            loan.RepayMethod,
-        //            loan.Posted,
-        //            loan.UserName,
-        //            loan.CompanyCode,
-        //            BlockchainTxId = blockchainTx.TransactionId,
-        //            CreatedAt = DateTime.Now,
-        //            CreatedBy = application.CreatedBy
-        //        };
-
-        //        await _auditService.SaveLogAsync(
-        //            actionType: AuditActionType.Insert,
-        //            oldModel: null,  // For Insert, OldValue is null (nothing existed before)
-        //            newModel: loanForAudit,  // This will be serialized to NewValue column
-        //            tableName: "Loans",
-        //            recordId: loanNo,
-        //            userId: application.CreatedBy,
-        //            userName: application.CreatedBy,
-        //            companyCode: application.CompanyCode,
-        //            module: "LoanManagement",
-        //            extraData: System.Text.Json.JsonSerializer.Serialize(auditExtraData),
-        //            blockchainTxId: blockchainTx.TransactionId
-        //        );
-
-        //        await transaction.CommitAsync();
-
-        //        _logger.LogInformation($"Loan application {loanNo} created successfully for member {application.MemberNo}");
-
-        //        return loan;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        await transaction.RollbackAsync();
-        //        _logger.LogError(ex, "Error creating loan application");
-        //        throw;
-        //    }
-        //}
 
         public async Task<(bool IsEligible, string Message, bool HasValidShares, decimal TotalEligibleShares, decimal MaxLoanAmount)>
     CheckMemberEligibilityWithContributionsAsync(string memberNo, string companyCode)
@@ -6806,6 +6568,25 @@ namespace SACCOBlockChainSystem.Services
                     }
                 }
 
+
+                // ============================================================
+                // ✅ INSERT PROGRESSIVE GUARANTOR RELEASE HERE
+                // ============================================================
+                // Store principal before for progressive release calculation
+                decimal principalBefore = oldBalance; // oldBalance captured earlier
+                decimal principalAfter = loanbal.Balance;
+
+                // Release guarantors proportionally based on principal reduction
+                if (principalAfter < principalBefore && principalBefore > 0)
+                {
+                    await ReleaseGuarantorsProportionallyAsync(
+                        repaymentDto.LoanNo,
+                        principalBefore,
+                        principalAfter,
+                        repaymentDto.ReceivedBy
+                    );
+                }
+
                 // 10. CHECK IF LOAN IS FULLY PAID
                 bool isFullyPaid = loanbal.Balance <= 0.01m && loanbal.IntrOwed <= 0.01m && loanbal.Penalty <= 0.01m;
 
@@ -7680,59 +7461,96 @@ namespace SACCOBlockChainSystem.Services
         {
             try
             {
+                // Get the loan to identify the loanee
+                var loan = await _context.Loans
+                    .FirstOrDefaultAsync(l => l.LoanNo == loanNo);
+
+                if (loan == null)
+                {
+                    _logger.LogWarning($"Loan {loanNo} not found for full release");
+                    return;
+                }
+
+                string loaneeMemberNo = loan.MemberNo;
+
+                // Get active guarantors
                 var activeGuarantors = await _context.Loanguar
                     .Where(g => g.LoanNo == loanNo && g.Transfered == false)
                     .ToListAsync();
 
                 if (!activeGuarantors.Any())
                 {
-                    _logger.LogInformation($"No active member guarantors found for loan {loanNo}");
+                    _logger.LogInformation($"No active guarantors found for loan {loanNo}");
                     return;
                 }
 
-                _logger.LogInformation($"Releasing {activeGuarantors.Count} member guarantor(s) for loan {loanNo}");
+                // Separate self and other guarantors
+                var selfGuarantors = activeGuarantors.Where(g => g.MemberNo == loaneeMemberNo).ToList();
+                var otherGuarantors = activeGuarantors.Where(g => g.MemberNo != loaneeMemberNo).ToList();
 
-                foreach (var guarantor in activeGuarantors)
+                // Release OTHER guarantors first
+                foreach (var guarantor in otherGuarantors)
                 {
                     guarantor.Transfered = true;
                     guarantor.Transdate = DateTime.Now;
                     guarantor.Balance = 0;
+                    guarantor.AuditTime = DateTime.Now;
                     guarantor.AuditId = releasedBy;
                     guarantor.Description = $"Released due to loan {loanNo} being fully paid";
 
-                    var blockchainData = new
-                    {
-                        Action = "MEMBER_GUARANTOR_AUTO_RELEASE",
-                        GuarantorId = guarantor.Id,
-                        LoanNo = guarantor.LoanNo,
-                        MemberNo = guarantor.MemberNo,
-                        Amount = guarantor.Amount,
-                        ReleasedBy = releasedBy,
-                        Reason = "Loan fully repaid",
-                        ReleasedAt = DateTime.Now
-                    };
-
-                    var blockchainTx = new BlockchainTransaction
-                    {
-                        TransactionId = Guid.NewGuid().ToString(),
-                        TransactionType = "MEMBER_GUARANTOR_RELEASED",
-                        MemberNo = guarantor.MemberNo,
-                        CompanyCode = guarantor.CompanyCode,
-                        Amount = guarantor.Amount ?? 0,
-                        Timestamp = DateTime.Now,
-                        DataHash = await _blockchainService.GenerateTransactionHash(blockchainData),
-                        PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData),
-                        OffChainReferenceId = guarantor.LoanNo,
-                        Status = "CONFIRMED",
-                        CreatedAt = DateTime.Now
-                    };
-
-                    _context.BlockchainTransactions.Add(blockchainTx);
-                    guarantor.BlockchainTxId = blockchainTx.TransactionId;
+                    _logger.LogInformation($"Released other guarantor {guarantor.MemberNo} for loan {loanNo}");
                 }
 
+                // Then release SELF-guarantors
+                foreach (var selfGuarantor in selfGuarantors)
+                {
+                    selfGuarantor.Transfered = true;
+                    selfGuarantor.Transdate = DateTime.Now;
+                    selfGuarantor.Balance = 0;
+                    selfGuarantor.AuditTime = DateTime.Now;
+                    selfGuarantor.AuditId = releasedBy;
+                    selfGuarantor.Description = $"Self-guarantee released due to loan {loanNo} being fully paid";
+
+                    _logger.LogInformation($"Released self-guarantor {selfGuarantor.MemberNo} for loan {loanNo}");
+                }
+
+                // Record blockchain transaction
+                var blockchainData = new
+                {
+                    Action = "FULL_GUARANTOR_RELEASE",
+                    LoanNo = loanNo,
+                    LoaneeMemberNo = loaneeMemberNo,
+                    OtherGuarantorsReleased = otherGuarantors.Count,
+                    SelfGuarantorsReleased = selfGuarantors.Count,
+                    ReleasedBy = releasedBy,
+                    ReleasedAt = DateTime.Now
+                };
+
+                var blockchainTx = new BlockchainTransaction
+                {
+                    TransactionId = Guid.NewGuid().ToString(),
+                    TransactionType = "FULL_GUARANTOR_RELEASE",
+                    MemberNo = loaneeMemberNo,
+                    CompanyCode = loan.CompanyCode,
+                    Amount = activeGuarantors.Sum(g => g.Amount ?? 0),
+                    Timestamp = DateTime.Now,
+                    DataHash = await _blockchainService.GenerateTransactionHash(blockchainData),
+                    PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData),
+                    OffChainReferenceId = loanNo,
+                    Status = "CONFIRMED",
+                    CreatedAt = DateTime.Now
+                };
+
+                _context.BlockchainTransactions.Add(blockchainTx);
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Released {activeGuarantors.Count} member guarantors for loan {loanNo}");
+
+                foreach (var guarantor in activeGuarantors)
+                {
+                    guarantor.BlockchainTxId = blockchainTx.TransactionId;
+                }
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation($"Released {activeGuarantors.Count} guarantors for loan {loanNo}");
             }
             catch (Exception ex)
             {
@@ -7740,6 +7558,342 @@ namespace SACCOBlockChainSystem.Services
                 throw;
             }
         }
+
+
+        private async Task ReleaseGuarantorsProportionallyAsync(string loanNo, decimal principalBefore, decimal principalAfter, string releasedBy)
+        {
+            try
+            {
+                // Only proceed if there's actual principal reduction
+                if (principalBefore <= 0 || principalAfter >= principalBefore)
+                {
+                    _logger.LogInformation($"No principal reduction for loan {loanNo}. Before: {principalBefore:C}, After: {principalAfter:C}");
+                    return;
+                }
+
+                // Calculate percentage of loan repaid
+                var percentageRepaid = 1 - (principalAfter / principalBefore);
+                if (percentageRepaid <= 0.001m) // Less than 0.1% - skip
+                {
+                    _logger.LogInformation($"Percentage repaid too small for loan {loanNo}: {percentageRepaid:P2}");
+                    return;
+                }
+
+                // Get the loan to identify the loanee
+                var loan = await _context.Loans
+                    .FirstOrDefaultAsync(l => l.LoanNo == loanNo);
+
+                if (loan == null)
+                {
+                    _logger.LogWarning($"Loan {loanNo} not found for progressive release");
+                    return;
+                }
+
+                string loaneeMemberNo = loan.MemberNo;
+
+                // Get all active guarantors for this loan
+                var allActiveGuarantors = await _context.Loanguar
+                    .Where(g => g.LoanNo == loanNo && g.Transfered == false)
+                    .ToListAsync();
+
+                if (!allActiveGuarantors.Any())
+                {
+                    _logger.LogInformation($"No active guarantors found for loan {loanNo}");
+                    return;
+                }
+
+                // ============================================================
+                // SEPARATE: Self-guarantor vs Other guarantors
+                // ============================================================
+                var selfGuarantors = allActiveGuarantors
+                    .Where(g => g.MemberNo == loaneeMemberNo)
+                    .ToList();
+
+                var otherGuarantors = allActiveGuarantors
+                    .Where(g => g.MemberNo != loaneeMemberNo)
+                    .ToList();
+
+                decimal totalOtherGuaranteeBefore = otherGuarantors.Sum(g => g.Balance ?? g.Amount ?? 0);
+                decimal totalSelfGuaranteeBefore = selfGuarantors.Sum(g => g.Balance ?? g.Amount ?? 0);
+                decimal totalGuaranteeBefore = totalOtherGuaranteeBefore + totalSelfGuaranteeBefore;
+
+                if (totalGuaranteeBefore <= 0.01m)
+                {
+                    _logger.LogInformation($"Total guarantee amount is zero for loan {loanNo}");
+                    return;
+                }
+
+                // ============================================================
+                // Calculate how much to release from OTHER guarantors first
+                // ============================================================
+                decimal totalToRelease = totalGuaranteeBefore * percentageRepaid;
+                decimal totalReleasedFromOthers = 0;
+                decimal totalReleasedFromSelf = 0;
+
+                _logger.LogInformation($"Progressive guarantor release for loan {loanNo}: " +
+                    $"Total Guarantee: {totalGuaranteeBefore:C}, " +
+                    $"Other Guarantors: {totalOtherGuaranteeBefore:C}, " +
+                    $"Self Guarantee: {totalSelfGuaranteeBefore:C}, " +
+                    $"Percentage Repaid: {percentageRepaid:P2}, " +
+                    $"Total to Release: {totalToRelease:C}");
+
+                var releasedGuarantors = new List<object>();
+
+                // ============================================================
+                // STEP 1: Release OTHER GUARANTORS first
+                // ============================================================
+                if (otherGuarantors.Any())
+                {
+                    decimal releaseAmountForOthers = totalToRelease;
+
+                    // If there's not enough other guarantee to cover the release, 
+                    // release all other guarantors and the remainder will come from self-guarantee
+                    if (releaseAmountForOthers > totalOtherGuaranteeBefore)
+                    {
+                        releaseAmountForOthers = totalOtherGuaranteeBefore;
+                    }
+
+                    decimal percentageToReleaseOthers = totalOtherGuaranteeBefore > 0
+                        ? releaseAmountForOthers / totalOtherGuaranteeBefore
+                        : 0;
+
+                    _logger.LogInformation($"Releasing {releaseAmountForOthers:C} from OTHER guarantors " +
+                        $"({percentageToReleaseOthers:P2} of their total)");
+
+                    foreach (var guarantor in otherGuarantors)
+                    {
+                        decimal individualBalance = guarantor.Balance ?? guarantor.Amount ?? 0;
+                        if (individualBalance <= 0.01m) continue;
+
+                        decimal releaseAmount = individualBalance * percentageToReleaseOthers;
+                        decimal newBalance = Math.Max(0, individualBalance - releaseAmount);
+
+                        // Update the guarantor balance
+                        guarantor.Balance = newBalance;
+
+                        if (newBalance <= 0.01m)
+                        {
+                            guarantor.Transfered = true;
+                            guarantor.Transdate = DateTime.Now;
+                            guarantor.Balance = 0;
+                            _logger.LogInformation($"Guarantor {guarantor.MemberNo} FULLY released. " +
+                                $"Original: {individualBalance:C}, Released: {releaseAmount:C}");
+                        }
+                        else
+                        {
+                            _logger.LogInformation($"Guarantor {guarantor.MemberNo} partially released. " +
+                                $"Original: {individualBalance:C}, Released: {releaseAmount:C}, New Balance: {newBalance:C}");
+                        }
+
+                        // Update audit fields
+                        guarantor.AuditTime = DateTime.Now;
+                        guarantor.AuditId = releasedBy;
+                        guarantor.Description = $"Progressive release: {percentageRepaid:P2} of loan repaid. " +
+                            $"Released: {releaseAmount:C}, Remaining: {newBalance:C}";
+
+                        totalReleasedFromOthers += releaseAmount;
+
+                        releasedGuarantors.Add(new
+                        {
+                            guarantor.Id,
+                            guarantor.MemberNo,
+                            IsSelfGuarantor = false,
+                            OriginalBalance = individualBalance,
+                            ReleaseAmount = releaseAmount,
+                            NewBalance = newBalance,
+                            IsFullyReleased = newBalance <= 0.01m
+                        });
+                    }
+                }
+
+                // ============================================================
+                // STEP 2: If OTHER guarantors are fully released AND there's still 
+                // release amount remaining, THEN release SELF-GUARANTOR
+                // ============================================================
+                decimal remainingToRelease = totalToRelease - totalReleasedFromOthers;
+
+                if (remainingToRelease > 0.01m && selfGuarantors.Any())
+                {
+                    // Check if all OTHER guarantors are now released
+                    var remainingOtherGuarantors = await _context.Loanguar
+                        .Where(g => g.LoanNo == loanNo &&
+                                   g.MemberNo != loaneeMemberNo &&
+                                   g.Transfered == false &&
+                                   (g.Balance ?? 0) > 0.01m)
+                        .ToListAsync();
+
+                    bool allOthersReleased = !remainingOtherGuarantors.Any();
+
+                    if (allOthersReleased)
+                    {
+                        _logger.LogInformation($"All OTHER guarantors released. Now releasing SELF-GUARANTOR: {remainingToRelease:C}");
+
+                        foreach (var selfGuarantor in selfGuarantors)
+                        {
+                            decimal individualBalance = selfGuarantor.Balance ?? selfGuarantor.Amount ?? 0;
+                            if (individualBalance <= 0.01m) continue;
+
+                            decimal releaseAmount = Math.Min(remainingToRelease, individualBalance);
+                            decimal newBalance = Math.Max(0, individualBalance - releaseAmount);
+
+                            selfGuarantor.Balance = newBalance;
+
+                            if (newBalance <= 0.01m)
+                            {
+                                selfGuarantor.Transfered = true;
+                                selfGuarantor.Transdate = DateTime.Now;
+                                selfGuarantor.Balance = 0;
+                                _logger.LogInformation($"Self-guarantor {selfGuarantor.MemberNo} FULLY released. " +
+                                    $"Original: {individualBalance:C}, Released: {releaseAmount:C}");
+                            }
+                            else
+                            {
+                                _logger.LogInformation($"Self-guarantor {selfGuarantor.MemberNo} partially released. " +
+                                    $"Original: {individualBalance:C}, Released: {releaseAmount:C}, New Balance: {newBalance:C}");
+                            }
+
+                            selfGuarantor.AuditTime = DateTime.Now;
+                            selfGuarantor.AuditId = releasedBy;
+                            selfGuarantor.Description = $"Progressive release (self): {percentageRepaid:P2} of loan repaid. " +
+                                $"Released: {releaseAmount:C}, Remaining: {newBalance:C}";
+
+                            totalReleasedFromSelf += releaseAmount;
+                            remainingToRelease -= releaseAmount;
+
+                            releasedGuarantors.Add(new
+                            {
+                                selfGuarantor.Id,
+                                selfGuarantor.MemberNo,
+                                IsSelfGuarantor = true,
+                                OriginalBalance = individualBalance,
+                                ReleaseAmount = releaseAmount,
+                                NewBalance = newBalance,
+                                IsFullyReleased = newBalance <= 0.01m
+                            });
+
+                            if (remainingToRelease <= 0.01m) break;
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"Cannot release self-guarantee yet. " +
+                            $"{remainingOtherGuarantors.Count} other guarantors still have balances.");
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                // ============================================================
+                // RECORD BLOCKCHAIN TRANSACTION
+                // ============================================================
+                try
+                {
+                    var blockchainData = new
+                    {
+                        Action = "PROGRESSIVE_GUARANTOR_RELEASE",
+                        LoanNo = loanNo,
+                        LoaneeMemberNo = loaneeMemberNo,
+                        PrincipalBefore = principalBefore,
+                        PrincipalAfter = principalAfter,
+                        PercentageRepaid = percentageRepaid,
+                        TotalGuaranteeBefore = totalGuaranteeBefore,
+                        TotalReleased = totalReleasedFromOthers + totalReleasedFromSelf,
+                        ReleasedFromOthers = totalReleasedFromOthers,
+                        ReleasedFromSelf = totalReleasedFromSelf,
+                        ReleasedBy = releasedBy,
+                        ReleasedAt = DateTime.Now,
+                        GuarantorsReleased = releasedGuarantors
+                    };
+
+                    var blockchainTx = new BlockchainTransaction
+                    {
+                        TransactionId = Guid.NewGuid().ToString(),
+                        TransactionType = "PROGRESSIVE_GUARANTOR_RELEASE",
+                        MemberNo = loaneeMemberNo,
+                        CompanyCode = loan.CompanyCode,
+                        Amount = totalReleasedFromOthers + totalReleasedFromSelf,
+                        Timestamp = DateTime.Now,
+                        DataHash = await _blockchainService.GenerateTransactionHash(blockchainData),
+                        PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData),
+                        OffChainReferenceId = loanNo,
+                        Status = "CONFIRMED",
+                        CreatedAt = DateTime.Now
+                    };
+
+                    _context.BlockchainTransactions.Add(blockchainTx);
+                    await _context.SaveChangesAsync();
+
+                    // Update all guarantors with the blockchain transaction ID
+                    foreach (var guarantor in allActiveGuarantors.Where(g => g.BlockchainTxId == null))
+                    {
+                        guarantor.BlockchainTxId = blockchainTx.TransactionId;
+                    }
+                    await _context.SaveChangesAsync();
+
+                    _logger.LogInformation($"Blockchain transaction recorded for progressive release: {blockchainTx.TransactionId}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, $"Failed to record blockchain transaction for progressive release on loan {loanNo}");
+                }
+
+                // ============================================================
+                // SAVE AUDIT TRAIL
+                // ============================================================
+                try
+                {
+                    var auditExtraData = new
+                    {
+                        loanNo = loanNo,
+                        loaneeMemberNo = loaneeMemberNo,
+                        principalBefore = principalBefore,
+                        principalAfter = principalAfter,
+                        percentageRepaid = percentageRepaid,
+                        totalGuaranteeBefore = totalGuaranteeBefore,
+                        totalReleasedFromOthers = totalReleasedFromOthers,
+                        totalReleasedFromSelf = totalReleasedFromSelf,
+                        totalReleased = totalReleasedFromOthers + totalReleasedFromSelf,
+                        numberOfGuarantorsReleased = releasedGuarantors.Count,
+                        releasedBy = releasedBy,
+                        releasedDate = DateTime.Now
+                    };
+
+                    await _auditService.SaveLogAsync(
+                        actionType: AuditActionType.Update,
+                        oldModel: new { TotalGuaranteeBefore = totalGuaranteeBefore, LoanNo = loanNo },
+                        newModel: new
+                        {
+                            LoanNo = loanNo,
+                            TotalReleased = totalReleasedFromOthers + totalReleasedFromSelf,
+                            GuarantorsReleased = releasedGuarantors.Count,
+                            PercentageRepaid = percentageRepaid,
+                            ReleasedBy = releasedBy,
+                            ReleasedDate = DateTime.Now
+                        },
+                        tableName: "Loanguar",
+                        recordId: loanNo,
+                        userId: releasedBy,
+                        userName: releasedBy,
+                        companyCode: loan.CompanyCode,
+                        module: "LoanManagement",
+                        extraData: System.Text.Json.JsonSerializer.Serialize(auditExtraData),
+                        blockchainTxId: null
+                    );
+
+                    _logger.LogInformation($"Audit trail recorded for progressive release on loan {loanNo}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, $"Failed to record audit trail for progressive release on loan {loanNo}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error in progressive guarantor release for loan {loanNo}");
+                // Don't throw - this should not block the repayment
+            }
+        }
+
 
         #endregion
 
@@ -9264,7 +9418,6 @@ namespace SACCOBlockChainSystem.Services
         #endregion
 
         #region Validation
-
         public async Task<(bool IsValid, string Message)> ValidateLoanApplicationAsync(LoanApplicationDTO application)
         {
             // Check if loan type exists
@@ -9282,15 +9435,37 @@ namespace SACCOBlockChainSystem.Services
                 return (false, $"Loan amount exceeds maximum allowed of {loanType.MaxAmount:C}");
             }
 
-            // Check if member has existing active loans that exceed limit
-            var activeLoans = await _context.Loans
+            // ============================================================
+            // NEW: Check if member has existing loan of same type and if bridging is allowed
+            // ============================================================
+
+            bool hasExistingLoanOfType = await _context.Loans
+                .AnyAsync(l => l.MemberNo == application.MemberNo &&
+                               l.CompanyCode == application.CompanyCode &&
+                               l.LoanCode == application.LoanCode &&
+                               l.Status != (int)Status.Closed &&
+                               l.Status != (int)Status.Rejected &&
+                               l.Status != (int)Status.WrittenOff);
+
+            if (hasExistingLoanOfType && loanType.Bridging == 0)
+            {
+                return (false, $"You already have an active {loanType.LoanType1} loan. This loan type does not allow bridging/refinancing.");
+            }
+
+            // Check max number of loans (regardless of type)
+            int maxLoansAllowed = loanType.MaxLoans ?? int.MaxValue;
+
+            // Count active loans (not closed/rejected/written off)
+            var activeLoansCount = await _context.Loans
                 .CountAsync(l => l.MemberNo == application.MemberNo &&
                                 l.CompanyCode == application.CompanyCode &&
-                                (l.Status == (int)Status.Disbursed || l.Status == (int)Status.Endorsed));
+                                l.Status != (int)Status.Closed &&
+                                l.Status != (int)Status.Rejected &&
+                                l.Status != (int)Status.WrittenOff);
 
-            if (activeLoans >= (loanType.MaxLoans ?? int.MaxValue))
+            if (activeLoansCount >= maxLoansAllowed)
             {
-                return (false, $"Member has reached maximum number of active loans ({loanType.MaxLoans})");
+                return (false, $"Member has reached maximum number of active loans ({maxLoansAllowed})");
             }
 
             return (true, "Validation passed");
@@ -9312,8 +9487,39 @@ namespace SACCOBlockChainSystem.Services
                 return (false, "Member is not active");
             }
 
-            // Check minimum contribution period (if applicable)
-            // This would check how long the member has been contributing
+            // Get the loan type being applied for
+            var loanType = await _context.Loantypes
+                .FirstOrDefaultAsync(l => l.LoanCode == loanCode && l.CompanyCode == companyCode);
+
+            if (loanType == null)
+            {
+                return (false, "Loan type not found");
+            }
+
+            // ============================================================
+            // Check for existing loans of the SAME type - get bridging from the LOAN table
+            // ============================================================
+            var existingLoanOfType = await _context.Loans
+                .FirstOrDefaultAsync(l => l.MemberNo == memberNo &&
+                                          l.CompanyCode == companyCode &&
+                                          l.LoanCode == loanCode &&
+                                          l.Status != (int)Status.Closed &&
+                                          l.Status != (int)Status.Rejected &&
+                                          l.Status != (int)Status.WrittenOff);
+
+            if (existingLoanOfType != null)
+            {
+                // If bridging is NOT allowed on the existing loan, block
+                if (existingLoanOfType.Bridging != true)
+                {
+                    return (false, $"You already have an active {loanType.LoanType1} loan. Bridging/refinancing is not allowed for this loan. Please clear your existing loan first.");
+                }
+                else
+                {
+                    // Bridging IS allowed - log and allow
+                    _logger.LogInformation($"Member {memberNo} has existing {loanCode} loan and bridging is allowed (Bridging={existingLoanOfType.Bridging})");
+                }
+            }
 
             // Check existing loan defaults
             var hasDefaulted = await HasPreviousDefaultAsync(memberNo, companyCode);
@@ -9324,6 +9530,67 @@ namespace SACCOBlockChainSystem.Services
 
             return (true, "Member is eligible");
         }
+
+        //public async Task<(bool IsValid, string Message)> ValidateLoanApplicationAsync(LoanApplicationDTO application)
+        //{
+        //    // Check if loan type exists
+        //    var loanType = await _context.Loantypes
+        //        .FirstOrDefaultAsync(l => l.LoanCode == application.LoanCode && l.CompanyCode == application.CompanyCode);
+
+        //    if (loanType == null)
+        //    {
+        //        return (false, "Loan type not found");
+        //    }
+
+        //    // Check maximum loan amount
+        //    if (application.PrincipalAmount > (loanType.MaxAmount ?? decimal.MaxValue))
+        //    {
+        //        return (false, $"Loan amount exceeds maximum allowed of {loanType.MaxAmount:C}");
+        //    }
+
+        //    // Check if member has existing active loans that exceed limit
+        //    var activeLoans = await _context.Loans
+        //        .CountAsync(l => l.MemberNo == application.MemberNo &&
+        //                        l.CompanyCode == application.CompanyCode &&
+        //                        (l.Status == (int)Status.Disbursed || l.Status == (int)Status.Endorsed));
+
+        //    if (activeLoans >= (loanType.MaxLoans ?? int.MaxValue))
+        //    {
+        //        return (false, $"Member has reached maximum number of active loans ({loanType.MaxLoans})");
+        //    }
+
+        //    return (true, "Validation passed");
+        //}
+
+
+        //public async Task<(bool IsEligible, string Message)> CheckMemberEligibilityAsync(string memberNo, string loanCode, string companyCode)
+        //{
+        //    var member = await _context.Members
+        //        .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
+
+        //    if (member == null)
+        //    {
+        //        return (false, "Member not found");
+        //    }
+
+        //    // Check if member is active
+        //    if (member.Withdrawn == true || member.Archived == true || member.Dormant == 1)
+        //    {
+        //        return (false, "Member is not active");
+        //    }
+
+        //    // Check minimum contribution period (if applicable)
+        //    // This would check how long the member has been contributing
+
+        //    // Check existing loan defaults
+        //    var hasDefaulted = await HasPreviousDefaultAsync(memberNo, companyCode);
+        //    if (hasDefaulted)
+        //    {
+        //        return (false, "Member has previous loan defaults");
+        //    }
+
+        //    return (true, "Member is eligible");
+        //}
 
         public async Task<decimal> CalculateMaximumLoanAmountAsync(string memberNo, string loanCode, string companyCode)
         {
@@ -9357,6 +9624,132 @@ namespace SACCOBlockChainSystem.Services
             maxAmount -= existingLoans;
 
             return Math.Max(0, maxAmount);
+        }
+
+        /// <summary>
+        /// Checks if a member can apply for a new loan based on bridging rules from the Loan table
+        /// </summary>
+        public async Task<(bool CanApply, string Message, int ExistingCount)> CanApplyForLoanTypeAsync(string memberNo, string loanCode, string companyCode)
+        {
+            // Get the loan type being applied for
+            var loanType = await _context.Loantypes
+                .FirstOrDefaultAsync(l => l.LoanCode == loanCode && l.CompanyCode == companyCode);
+
+            if (loanType == null)
+            {
+                return (false, "Loan type not found", 0);
+            }
+
+            // Count existing active loans of THIS type
+            var existingCount = await _context.Loans
+                .CountAsync(l => l.MemberNo == memberNo &&
+                                l.CompanyCode == companyCode &&
+                                l.LoanCode == loanCode &&
+                                l.Status != (int)Status.Closed &&
+                                l.Status != (int)Status.Rejected &&
+                                l.Status != (int)Status.WrittenOff);
+
+            _logger.LogInformation($"Member {memberNo} has {existingCount} active loan(s) of type {loanCode}");
+
+            if (existingCount > 0)
+            {
+                // ============================================================
+                // KEY FIX: Check the Bridging field on the EXISTING LOAN
+                // ============================================================
+                var existingLoan = await _context.Loans
+                    .FirstOrDefaultAsync(l => l.MemberNo == memberNo &&
+                                              l.CompanyCode == companyCode &&
+                                              l.LoanCode == loanCode &&
+                                              l.Status != (int)Status.Closed &&
+                                              l.Status != (int)Status.Rejected &&
+                                              l.Status != (int)Status.WrittenOff);
+
+                // Check if bridging is allowed on the existing loan
+                bool isBridgingAllowed = existingLoan != null && existingLoan.Bridging == true;
+
+                if (!isBridgingAllowed)
+                {
+                    return (false,
+                        $"You already have an active {loanType.LoanType1} loan. " +
+                        $"Bridging/refinancing is not allowed for this loan. " +
+                        $"Please clear your existing {loanType.LoanType1} loan before applying for a new one.",
+                        existingCount);
+                }
+                else
+                {
+                    // Bridging IS allowed on the existing loan - check max loans
+                    int maxLoans = loanType.MaxLoans ?? 5;
+
+                    // Count total active loans (all types) for this member
+                    var totalActiveLoans = await _context.Loans
+                        .CountAsync(l => l.MemberNo == memberNo &&
+                                        l.CompanyCode == companyCode &&
+                                        l.Status != (int)Status.Closed &&
+                                        l.Status != (int)Status.Rejected &&
+                                        l.Status != (int)Status.WrittenOff);
+
+                    if (totalActiveLoans >= maxLoans)
+                    {
+                        return (false,
+                            $"You have reached the maximum number of active loans ({maxLoans}). " +
+                            $"Please clear some existing loans before applying for a new one.",
+                            existingCount);
+                    }
+
+                    return (true,
+                        $"Bridging is allowed for your existing {loanType.LoanType1} loan. " +
+                        $"You have {existingCount} existing loan(s) of this type. " +
+                        $"Maximum active loans allowed: {maxLoans}",
+                        existingCount);
+                }
+            }
+
+            // No existing loan of this type - allowed
+            return (true, "No existing loan of this type found", 0);
+        }
+
+        /// <summary>
+        /// Gets the bridging status for a loan type, including existing loans count
+        /// </summary>
+        public async Task<(bool IsBridgingAllowed, int ExistingLoansCount, string Message)> GetBridgingStatusAsync(
+            string memberNo, string loanCode, string companyCode)
+        {
+            var loanType = await _context.Loantypes
+                .FirstOrDefaultAsync(l => l.LoanCode == loanCode && l.CompanyCode == companyCode);
+
+            if (loanType == null)
+            {
+                return (false, 0, "Loan type not found");
+            }
+
+            var existingCount = await _context.Loans
+                .CountAsync(l => l.MemberNo == memberNo &&
+                                l.CompanyCode == companyCode &&
+                                l.LoanCode == loanCode &&
+                                l.Status != (int)Status.Closed &&
+                                l.Status != (int)Status.Rejected &&
+                                l.Status != (int)Status.WrittenOff);
+
+            bool isBridgingAllowed = loanType.Bridging == 1;
+
+            string message;
+            if (existingCount > 0 && !isBridgingAllowed)
+            {
+                message = $"You have {existingCount} existing {loanType.LoanType1} loan(s). " +
+                          $"Bridging is not allowed for this loan type. " +
+                          $"Please clear your existing loan(s) before applying for a new one.";
+            }
+            else if (existingCount > 0 && isBridgingAllowed)
+            {
+                message = $"You have {existingCount} existing {loanType.LoanType1} loan(s). " +
+                          $"Bridging is allowed for this loan type.";
+            }
+            else
+            {
+                message = "No existing loans of this type found.";
+            }
+
+            return (isBridgingAllowed, existingCount, message);
         }
 
         #endregion
