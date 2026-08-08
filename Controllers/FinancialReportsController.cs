@@ -357,11 +357,11 @@ namespace SACCOBlockChainSystem.Controllers
         // Report Generation Methods
         // ===============================
         private async Task GenerateTrialBalance(
-            FinancialReportViewModel model,
-            List<GlSetup> accounts,
-            List<Gltransaction> transactions,
-            List<JournalsListing> journalListings,
-            string companyCode)
+    FinancialReportViewModel model,
+    List<GlSetup> accounts,
+    List<Gltransaction> transactions,
+    List<JournalsListing> journalListings,
+    string companyCode)
         {
             foreach (var account in accounts)
             {
@@ -389,34 +389,42 @@ namespace SACCOBlockChainSystem.Controllers
 
                 var balance = account.Normalbal == "DR" ? debit - credit : credit - debit;
 
-                model.TrialBalance.Add(new TrialBalanceItem
-                {
-                    AccountNo = account.AccNo ?? "",
-                    AccountName = account.Glaccname ?? "",
-                    AccountType = account.Type ?? "",
-                    NormalBalance = account.Normalbal ?? "DR",
-                    Debit = debit,
-                    Credit = credit,
-                    Balance = balance,
-                    IsSuspense = account.IsSuspense
-                });
+                // ============================================
+                // SHOW ACCOUNTS WITH SIGNIFICANT BALANCE (>= 0.01)
+                // ============================================
 
+                bool hasSignificantBalance = Math.Abs(balance) >= 0.01m;
+                bool isSuspense = account.IsSuspense;
+
+                if (hasSignificantBalance || isSuspense)
+                {
+                    model.TrialBalance.Add(new TrialBalanceItem
+                    {
+                        AccountNo = account.AccNo ?? "",
+                        AccountName = account.Glaccname ?? "",
+                        AccountType = account.Type ?? "",
+                        NormalBalance = account.Normalbal ?? "DR",
+                        Debit = debit,
+                        Credit = credit,
+                        Balance = balance,
+                        IsSuspense = account.IsSuspense
+                    });
+                }
+
+                // Still accumulate totals regardless of display
                 model.TotalDebits += debit;
                 model.TotalCredits += credit;
             }
         }
 
-        private async Task GenerateIncomeStatement(
-            FinancialReportViewModel model,
-            List<GlSetup> accounts,
-            List<Gltransaction> transactions,
-            List<JournalsListing> journalListings,
-            string companyCode)
+        private async Task GenerateIncomeStatement(FinancialReportViewModel model, List<GlSetup> accounts, List<Gltransaction> transactions,List<JournalsListing> journalListings,string companyCode)
         {
             var revenueAccounts = accounts.Where(x => x.Type == "Income Statement" &&
-                                                      x.GlAccMainGroup == "Income");
+                                                      (x.GlAccMainGroup?.ToLower() == "income" ||
+                                                       x.GlAccMainGroup?.ToLower() == "revenue"));
             var expenseAccounts = accounts.Where(x => x.Type == "Income Statement" &&
-                                                      x.GlAccMainGroup == "Expenses");
+                                                      (x.GlAccMainGroup?.ToLower() == "expenses" ||
+                                                       x.GlAccMainGroup?.ToLower() == "expense"));
 
             foreach (var account in revenueAccounts)
             {
@@ -436,12 +444,18 @@ namespace SACCOBlockChainSystem.Controllers
                     .Where(x => x.AccountNo == account.AccNo && x.TransType == "DR")
                     .Sum(x => x.AmountDr ?? 0);
 
-                model.IncomeStatement.Revenue.Add(new IncomeStatementItem
+                var amount = credit - debit;
+
+                // Only add if amount is significant (>= 0.01)
+                if (Math.Abs(amount) >= 0.01m)
                 {
-                    AccountNo = account.AccNo ?? "",
-                    AccountName = account.Glaccname ?? "",
-                    Amount = credit - debit
-                });
+                    model.IncomeStatement.Revenue.Add(new IncomeStatementItem
+                    {
+                        AccountNo = account.AccNo ?? "",
+                        AccountName = account.Glaccname ?? "",
+                        Amount = amount
+                    });
+                }
             }
 
             foreach (var account in expenseAccounts)
@@ -462,131 +476,171 @@ namespace SACCOBlockChainSystem.Controllers
                     .Where(x => x.AccountNo == account.AccNo && x.TransType == "CR")
                     .Sum(x => x.AmountCr ?? 0);
 
-                model.IncomeStatement.Expenses.Add(new IncomeStatementItem
+                var amount = debit - credit;
+
+                // Only add if amount is significant (>= 0.01)
+                if (Math.Abs(amount) >= 0.01m)
                 {
-                    AccountNo = account.AccNo ?? "",
-                    AccountName = account.Glaccname ?? "",
-                    Amount = debit - credit
-                });
+                    model.IncomeStatement.Expenses.Add(new IncomeStatementItem
+                    {
+                        AccountNo = account.AccNo ?? "",
+                        AccountName = account.Glaccname ?? "",
+                        Amount = amount
+                    });
+                }
             }
         }
 
+
         private async Task GenerateBalanceSheet(
-     FinancialReportViewModel model,
-     List<GlSetup> accounts,
-     List<Gltransaction> transactions,
-     List<JournalsListing> journalListings,
-     string companyCode)
+            FinancialReportViewModel model,
+            List<GlSetup> accounts,
+            List<Gltransaction> transactions,
+            List<JournalsListing> journalListings,
+            string companyCode)
         {
             decimal totalAssets = 0;
             decimal totalLiabilities = 0;
             decimal totalEquity = 0;
 
+            // Clear any existing data
+            model.BalanceSheet.Assets.Clear();
+            model.BalanceSheet.Liabilities.Clear();
+            model.BalanceSheet.Equity.Clear();
+
             // Get Net Income from Income Statement for the period
             var netIncome = await CalculateNetIncome(accounts, transactions, journalListings, companyCode, model.EndDate);
 
-            // Process Asset Accounts (Normal Balance = DR)
-            var assetAccounts = accounts.Where(x => x.Type == "Balance Sheet" &&
-                                                   (x.GlAccMainGroup?.ToLower() == "assets" ||
-                                                    x.GlAccMainGroup?.ToLower().Contains("asset") == true));
+            // ============================================
+            // Process ALL Balance Sheet accounts dynamically
+            // ============================================
+            var balanceSheetAccounts = accounts.Where(x => x.Type == "Balance Sheet" && x.Status == true);
 
-            foreach (var account in assetAccounts)
+            foreach (var account in balanceSheetAccounts)
             {
-                var balance = await CalculateAccountBalance(
-                    account.AccNo ?? "", model.EndDate, companyCode);
+                // Calculate balance from transactions
+                var balance = CalculateBalanceFromTransactions(
+                    account.AccNo ?? "",
+                    account.Normalbal ?? "DR",
+                    transactions,
+                    journalListings);
 
-                model.BalanceSheet.Assets.Add(new BalanceSheetItem
+                var group = account.GlAccMainGroup ?? "";
+                var isSuspense = account.IsSuspense;
+                var isRetainedEarnings = account.IsREarning ||
+                                         group.Equals("Retained Earnings", StringComparison.OrdinalIgnoreCase) ||
+                                         group.Contains("Retained", StringComparison.OrdinalIgnoreCase);
+
+                // ============================================
+                // Categorize the account based on its group
+                // ============================================
+                string category = DetermineAccountCategory(group, isSuspense, isRetainedEarnings);
+
+                // Skip zero balance accounts (except retained earnings which should always show)
+                if (Math.Abs(balance) < 0.01m && !isRetainedEarnings)
+                    continue;
+
+                // Add to the appropriate category
+                switch (category)
                 {
-                    AccountNo = account.AccNo ?? "",
-                    AccountName = account.Glaccname ?? "",
-                    Amount = balance,
-                    IsSuspense = account.IsSuspense
-                });
+                    case "Asset":
+                        model.BalanceSheet.Assets.Add(new BalanceSheetItem
+                        {
+                            AccountNo = account.AccNo ?? "",
+                            AccountName = account.Glaccname ?? "",
+                            Amount = balance,
+                            IsSuspense = isSuspense,
+                            IsRetainedEarnings = isRetainedEarnings
+                        });
+                        totalAssets += balance;
+                        break;
 
-                totalAssets += balance;
+                    case "Liability":
+                        model.BalanceSheet.Liabilities.Add(new BalanceSheetItem
+                        {
+                            AccountNo = account.AccNo ?? "",
+                            AccountName = account.Glaccname ?? "",
+                            Amount = balance,
+                            IsSuspense = isSuspense,
+                            IsRetainedEarnings = isRetainedEarnings
+                        });
+                        totalLiabilities += balance;
+                        break;
+
+                    case "Equity":
+                        model.BalanceSheet.Equity.Add(new BalanceSheetItem
+                        {
+                            AccountNo = account.AccNo ?? "",
+                            AccountName = account.Glaccname ?? "",
+                            Amount = balance,
+                            IsSuspense = isSuspense,
+                            IsRetainedEarnings = isRetainedEarnings
+                        });
+                        totalEquity += balance;
+                        break;
+
+                    default:
+                        // If category couldn't be determined, log and default to Equity
+                        _logger.LogWarning($"Account {account.AccNo} - {account.Glaccname} has unrecognized group: {account.GlAccMainGroup}. Defaulting to Equity.");
+                        model.BalanceSheet.Equity.Add(new BalanceSheetItem
+                        {
+                            AccountNo = account.AccNo ?? "",
+                            AccountName = account.Glaccname ?? "",
+                            Amount = balance,
+                            IsSuspense = isSuspense,
+                            IsRetainedEarnings = isRetainedEarnings
+                        });
+                        totalEquity += balance;
+                        break;
+                }
             }
 
-            // Process Liability Accounts (Normal Balance = CR)
-            var liabilityAccounts = accounts.Where(x => x.Type == "Balance Sheet" &&
-                                                       (x.GlAccMainGroup?.ToLower() == "liabilities" ||
-                                                        x.GlAccMainGroup?.ToLower().Contains("liability") == true));
-
-            foreach (var account in liabilityAccounts)
+            // ============================================
+            // Update Retained Earnings with Net Income
+            // ============================================
+            if (Math.Abs(netIncome) >= 0.01m)
             {
-                var balance = await CalculateAccountBalance(
-                    account.AccNo ?? "", model.EndDate, companyCode);
+                // Find the retained earnings account
+                var retainedEarningsAccount = model.BalanceSheet.Equity
+                    .FirstOrDefault(x => x.IsRetainedEarnings == true ||
+                                        x.AccountName?.Contains("Retained Earnings", StringComparison.OrdinalIgnoreCase) == true ||
+                                        x.AccountName?.Contains("Retained Earning", StringComparison.OrdinalIgnoreCase) == true ||
+                                        x.AccountName?.Contains("retained", StringComparison.OrdinalIgnoreCase) == true);
 
-                model.BalanceSheet.Liabilities.Add(new BalanceSheetItem
+                if (retainedEarningsAccount != null)
                 {
-                    AccountNo = account.AccNo ?? "",
-                    AccountName = account.Glaccname ?? "",
-                    Amount = balance,
-                    IsSuspense = account.IsSuspense
-                });
-
-                totalLiabilities += balance;
-            }
-
-            // Process Equity Accounts
-            var equityAccounts = accounts.Where(x => x.Type == "Balance Sheet" &&
-                                                    (x.GlAccMainGroup?.ToLower().Contains("capital") == true ||
-                                                     x.GlAccMainGroup?.ToLower().Contains("reserve") == true ||
-                                                     x.GlAccMainGroup?.ToLower().Contains("equity") == true ||
-                                                     x.GlAccMainGroup?.ToLower().Contains("retained earnings") == true));
-
-            foreach (var account in equityAccounts)
-            {
-                var balance = await CalculateAccountBalance(
-                    account.AccNo ?? "", model.EndDate, companyCode);
-
-                model.BalanceSheet.Equity.Add(new BalanceSheetItem
-                {
-                    AccountNo = account.AccNo ?? "",
-                    AccountName = account.Glaccname ?? "",
-                    Amount = balance,
-                    IsSuspense = account.IsSuspense
-                });
-
-                totalEquity += balance;
-            }
-
-            // Add Net Income to Equity (as Retained Earnings for the period)
-            if (netIncome != 0)
-            {
-                // Check if we already have a retained earnings entry
-                var existingRetainedEarnings = model.BalanceSheet.Equity
-                    .FirstOrDefault(x => x.AccountName?.Contains("Retained Earnings") == true);
-
-                if (existingRetainedEarnings != null)
-                {
-                    // Update existing retained earnings to include net income
-                    existingRetainedEarnings.Amount += netIncome;
+                    // Add net income to existing retained earnings
+                    retainedEarningsAccount.Amount += netIncome;
                 }
                 else
                 {
-                    // Add new retained earnings entry
+                    // No retained earnings account - add as separate entry
                     model.BalanceSheet.Equity.Add(new BalanceSheetItem
                     {
                         AccountNo = "NETINC",
-                        AccountName = "Retained Earnings (Current Period)",
+                        AccountName = "Net Income (Current Period)",
                         Amount = netIncome,
-                        IsSuspense = false
+                        IsSuspense = false,
+                        IsRetainedEarnings = true
                     });
                 }
 
                 totalEquity += netIncome;
             }
 
-            // Set the top-level totals (these are writable)
+            // ============================================
+            // Set totals
+            // ============================================
             model.TotalAssets = totalAssets;
             model.TotalLiabilities = totalLiabilities;
             model.TotalEquity = totalEquity;
 
-            // Calculate if Balance Sheet is balanced using the actual totals
+            // ============================================
+            // Check if balanced
+            // ============================================
             var liabilitiesPlusEquity = totalLiabilities + totalEquity;
             var difference = totalAssets - liabilitiesPlusEquity;
 
-            // Set the balance sheet balanced flag (this is writable)
             model.BalanceSheetBalanced = Math.Abs(difference) < 0.01m;
 
             if (!model.BalanceSheetBalanced)
@@ -597,17 +651,214 @@ namespace SACCOBlockChainSystem.Controllers
 
                 _logger.LogWarning($"Balance Sheet unbalanced by {difference:N2}. Assets: {totalAssets:N2}, Liabilities+Equity: {liabilitiesPlusEquity:N2}");
             }
+
+            _logger.LogInformation($"Balance Sheet Generated - Assets: {totalAssets:N2}, Liabilities: {totalLiabilities:N2}, Equity: {totalEquity:N2}, Net Income: {netIncome:N2}");
         }
-        private async Task<decimal> CalculateAccountBalance(
-         string accountNo,
-         DateTime asAtDate,
-         string companyCode)
+
+        /// <summary>
+        /// Calculates account balance from transactions (same logic as Trial Balance)
+        /// </summary>
+        private decimal CalculateBalanceFromTransactions(
+            string accountNo,
+            string normalBalance,
+            List<Gltransaction> transactions,
+            List<JournalsListing> journalListings)
+        {
+            // Get transactions for this account
+            var accountTransactions = transactions
+                .Where(x => x.DrAccNo == accountNo || x.CrAccNo == accountNo);
+
+            var accountJournals = journalListings
+                .Where(x => x.AccountNo == accountNo);
+
+            // Calculate debits
+            var debit = accountTransactions
+                .Where(x => x.DrAccNo == accountNo)
+                .Sum(x => x.Amount);
+
+            debit += accountJournals
+                .Where(x => x.TransType == "DR")
+                .Sum(x => x.AmountDr ?? 0);
+
+            // Calculate credits
+            var credit = accountTransactions
+                .Where(x => x.CrAccNo == accountNo)
+                .Sum(x => x.Amount);
+
+            credit += accountJournals
+                .Where(x => x.TransType == "CR")
+                .Sum(x => x.AmountCr ?? 0);
+
+            // Calculate balance based on normal balance
+            return normalBalance == "DR" ? debit - credit : credit - debit;
+        }
+
+        /// <summary>
+        /// Determines the category of an account based on its group
+        /// Uses case-insensitive comparison
+        /// </summary>
+        private string DetermineAccountCategory(string group, bool isSuspense, bool isRetainedEarnings)
+        {
+            // Suspense accounts default to Liability
+            if (isSuspense)
+            {
+                return "Liability";
+            }
+
+            // Retained earnings always go to Equity (highest priority)
+            if (isRetainedEarnings)
+            {
+                return "Equity";
+            }
+
+            // Use case-insensitive comparison
+            if (string.IsNullOrEmpty(group))
+                return "Equity";
+
+            var groupLower = group.ToLower();
+
+            // ============================================
+            // ASSET GROUPS - Check these first
+            // ============================================
+            if (groupLower == "assets" ||
+                groupLower == "asset" ||
+                groupLower.Contains("current asset") ||
+                groupLower.Contains("fixed asset") ||
+                groupLower.Contains("non-current asset") ||
+                groupLower.Contains("intangible asset") ||
+                groupLower.Contains("property") ||
+                groupLower.Contains("equipment") ||
+                groupLower.Contains("investment"))
+            {
+                return "Asset";
+            }
+
+            // ============================================
+            // LIABILITY GROUPS
+            // ============================================
+            if (groupLower == "liabilities" ||
+                groupLower == "liability" ||
+                groupLower.Contains("current liability") ||
+                groupLower.Contains("non-current liability") ||
+                groupLower.Contains("long term liability") ||
+                groupLower.Contains("payable") ||
+                groupLower.Contains("creditor") ||
+                groupLower.Contains("deposit") ||
+                groupLower.Contains("accrual"))
+            {
+                return "Liability";
+            }
+
+            // ============================================
+            // EQUITY GROUPS
+            // ============================================
+            if (groupLower == "shareholder equity" ||
+                groupLower == "shareholders equity" ||
+                groupLower == "owner's equity" ||
+                groupLower == "capital reserved" ||
+                groupLower == "capital reserve" ||
+                groupLower == "retained earnings" ||
+                groupLower == "retained earning" ||
+                groupLower.Contains("capital") ||
+                groupLower.Contains("reserve") ||
+                groupLower.Contains("equity") ||
+                groupLower.Contains("shareholder") ||
+                groupLower.Contains("owner") ||
+                groupLower.Contains("retained") ||
+                groupLower.Contains("fund") ||
+                groupLower.Contains("surplus"))
+            {
+                return "Equity";
+            }
+
+            // ============================================
+            // DEFAULT: If we can't determine, default to Equity
+            // ============================================
+            _logger.LogWarning($"Unrecognized account group: '{group}'. Defaulting to Equity.");
+            return "Equity";
+        }
+
+        private async Task<decimal> CalculateNetIncome(List<GlSetup> accounts, List<Gltransaction> transactions,List<JournalsListing> journalListings,string companyCode, DateTime asAtDate)
+        {
+            decimal totalRevenue = 0;
+            decimal totalExpenses = 0;
+
+            // Get revenue accounts
+            var revenueAccounts = accounts.Where(x => x.Type == "Income Statement" &&
+                                                      (x.GlAccMainGroup?.ToLower() == "income" ||
+                                                       x.GlAccMainGroup?.ToLower() == "revenue"));
+
+            foreach (var account in revenueAccounts)
+            {
+                var balance = CalculateBalanceFromTransactions(
+                    account.AccNo ?? "",
+                    account.Normalbal ?? "CR",
+                    transactions,
+                    journalListings);
+                totalRevenue += balance;
+            }
+
+            // Get expense accounts
+            var expenseAccounts = accounts.Where(x => x.Type == "Income Statement" &&
+                                                      (x.GlAccMainGroup?.ToLower() == "expenses" ||
+                                                       x.GlAccMainGroup?.ToLower() == "expense"));
+
+            foreach (var account in expenseAccounts)
+            {
+                var balance = CalculateBalanceFromTransactions(
+                    account.AccNo ?? "",
+                    account.Normalbal ?? "DR",
+                    transactions,
+                    journalListings);
+                totalExpenses += balance;
+            }
+
+            return totalRevenue - totalExpenses;
+        }
+
+
+        private async Task<decimal> CalculateAccountBalance(string accountNo,DateTime asAtDate,string companyCode)
         {
             decimal totalDebits = 0;
             decimal totalCredits = 0;
 
             // ============================================
-            // 1. Get from Journals table (POSTED entries)
+            // 1. Get opening balance from GlSetup
+            // ============================================
+            var account = await _context.GlSetup
+                .FirstOrDefaultAsync(x => x.AccNo == accountNo && x.CompanyCode == companyCode);
+
+            if (account == null)
+                return 0;
+
+            // If the asAtDate is after the opening balance date, include opening balance
+            if (asAtDate >= account.NewGlOpeningBalDate)
+            {
+                if (account.Normalbal?.ToUpper() == "DR")
+                    totalDebits += account.NewGlOpeningBal;
+                else
+                    totalCredits += account.NewGlOpeningBal;
+            }
+
+            // ============================================
+            // 2. Get from GLTRANSACTIONS
+            // ============================================
+            var glTransactions = await _context.Gltransactions
+                .Where(x => x.CompanyCode == companyCode
+                         && x.DocPosted == 1
+                         && x.TransDate <= asAtDate)
+                .ToListAsync();
+
+            totalDebits += glTransactions
+                .Where(x => x.DrAccNo == accountNo)
+                .Sum(x => x.Amount);
+
+            totalCredits += glTransactions
+                .Where(x => x.CrAccNo == accountNo)
+                .Sum(x => x.Amount);
+
+            // ============================================
+            // 3. Get from Journals
             // ============================================
             var journalEntries = await _context.Journals
                 .Where(x => x.ACCNO == accountNo
@@ -625,7 +876,7 @@ namespace SACCOBlockChainSystem.Controllers
             }
 
             // ============================================
-            // 2. Get from JournalsListings (if any posted entries exist here)
+            // 4. Get from JournalsListings
             // ============================================
             var journalListings = await _context.JournalsListings
                 .Where(x => x.AccountNo == accountNo
@@ -639,87 +890,289 @@ namespace SACCOBlockChainSystem.Controllers
             totalDebits += journalListings.Sum(x => x.AmountDr ?? 0);
             totalCredits += journalListings.Sum(x => x.AmountCr ?? 0);
 
-            // Get account normal balance
-            var account = await _context.GlSetup
-                .FirstOrDefaultAsync(x => x.AccNo == accountNo && x.CompanyCode == companyCode);
-
-            if (account == null)
-                return 0;
-
-            _logger.LogDebug(
-                $"BS Account {accountNo} | DR={totalDebits:N2}, CR={totalCredits:N2}, Normal={account.Normalbal}");
-
-            // Normal balance handling
+            // ============================================
+            // Return balance based on normal balance
+            // ============================================
             return account.Normalbal?.ToUpper() == "DR"
                 ? totalDebits - totalCredits
                 : totalCredits - totalDebits;
         }
-        private async Task GenerateCashFlow(
-            FinancialReportViewModel model,
-            List<GlSetup> accounts,
-            List<Gltransaction> transactions,
-            List<JournalsListing> journalListings,
-            string companyCode)
+
+
+        /// <summary>
+        /// Dynamically identifies cash accounts based on GL Setup
+        /// </summary>
+        private List<string> GetCashAccounts(List<GlSetup> accounts, string companyCode)
         {
-            // Get cash account
-            var cashAccount = accounts.FirstOrDefault(x => x.AccNo == "1010");
+            // Method 1: Look for accounts with "Cash" in the group name
+            var cashAccounts = accounts
+                .Where(x => x.Status == true &&
+                           x.Type == "Balance Sheet" &&
+                           (x.GlAccMainGroup?.ToLower().Contains("cash") == true ||
+                            x.GlAccMainGroup?.ToLower().Contains("bank") == true ||
+                            x.GlAccMainGroup?.ToLower() == "current assets" &&
+                            (x.Glaccname?.ToLower().Contains("cash") == true ||
+                             x.Glaccname?.ToLower().Contains("bank") == true ||
+                             x.Glaccname?.ToLower().Contains("mpesa") == true ||
+                             x.Glaccname?.ToLower().Contains("mobile") == true)))
+                .Select(x => x.AccNo)
+                .ToList();
 
-            if (cashAccount != null)
+            // Method 2: If no cash accounts found, look for accounts with "cash" in the name
+            if (!cashAccounts.Any())
             {
-                model.CashFlow.BeginningCash = await CalculateAccountBalance(
-                    cashAccount.AccNo ?? "", model.StartDate.AddDays(-1), companyCode);
+                cashAccounts = accounts
+                    .Where(x => x.Status == true &&
+                               (x.Glaccname?.ToLower().Contains("cash") == true ||
+                                x.Glaccname?.ToLower().Contains("bank") == true ||
+                                x.Glaccname?.ToLower().Contains("mpesa") == true ||
+                                x.Glaccname?.ToLower().Contains("mobile") == true))
+                    .Select(x => x.AccNo)
+                    .ToList();
+            }
 
-                model.CashFlow.EndingCash = await CalculateAccountBalance(
-                    cashAccount.AccNo ?? "", model.EndDate, companyCode);
+            // Method 3: Fallback - check account category
+            if (!cashAccounts.Any())
+            {
+                cashAccounts = accounts
+                    .Where(x => x.Status == true &&
+                               (x.AccCategory?.ToLower() == "cash" ||
+                                x.AccCategory?.ToLower() == "bank" ||
+                                x.SubType?.ToLower() == "cash" ||
+                                x.SubType?.ToLower() == "bank"))
+                    .Select(x => x.AccNo)
+                    .ToList();
+            }
 
-                // Get all cash transactions including suspense
-                var cashTransactions = transactions
-                    .Where(x => x.DrAccNo == cashAccount.AccNo || x.CrAccNo == cashAccount.AccNo);
+            return cashAccounts;
+        }
 
-                foreach (var t in cashTransactions)
+
+
+        private async Task GenerateCashFlow(
+    FinancialReportViewModel model,
+    List<GlSetup> accounts,
+    List<Gltransaction> transactions,
+    List<JournalsListing> journalListings,
+    string companyCode)
+        {
+            // ============================================
+            // 1. Identify cash accounts dynamically
+            // ============================================
+            var cashAccounts = GetCashAccounts(accounts, companyCode);
+
+            if (!cashAccounts.Any())
+            {
+                _logger.LogWarning("No cash accounts found for Cash Flow Statement. Please configure cash accounts in GL Setup.");
+
+                // Add a message to the model
+                model.CashFlow.OperatingActivities.Add(new CashFlowItem
                 {
-                    var amount = t.DrAccNo == cashAccount.AccNo ? t.Amount : -t.Amount;
-                    var description = t.TransDescript ?? "Cash transaction";
+                    Description = "*** No cash accounts configured. Please set up cash accounts in GL Setup. ***",
+                    Amount = 0
+                });
+                return;
+            }
 
-                    // Check if related to suspense
-                    var isSuspenseRelated = t.DrAccNo == "9999" || t.CrAccNo == "9999" ||
-                                           description.ToLower().Contains("suspense");
+            // ============================================
+            // 2. Get the primary cash account for beginning/ending balance
+            // ============================================
+            var primaryCashAccountNo = cashAccounts.First();
+            var primaryCashAccount = accounts.FirstOrDefault(x => x.AccNo == primaryCashAccountNo);
 
-                    if (isSuspenseRelated)
-                    {
-                        description = "[SUSPENSE] " + description;
-                    }
+            if (primaryCashAccount != null)
+            {
+                // Use the transactions list to calculate balances (consistent with Trial Balance)
+                model.CashFlow.BeginningCash = CalculateBalanceFromTransactions(
+                    primaryCashAccount.AccNo ?? "",
+                    primaryCashAccount.Normalbal ?? "DR",
+                    transactions.Where(x => x.TransDate < model.StartDate).ToList(),
+                    journalListings.Where(x => x.TransDate < model.StartDate).ToList());
 
-                    // Categorize cash flows
-                    if (description.ToLower().Contains("loan") ||
-                        description.ToLower().Contains("borrow"))
-                    {
-                        model.CashFlow.FinancingActivities.Add(new CashFlowItem
-                        {
-                            Description = description,
-                            Amount = amount
-                        });
-                    }
-                    else if (description.ToLower().Contains("invest") ||
-                             description.ToLower().Contains("asset"))
-                    {
-                        model.CashFlow.InvestingActivities.Add(new CashFlowItem
-                        {
-                            Description = description,
-                            Amount = amount
-                        });
-                    }
-                    else
-                    {
+                model.CashFlow.EndingCash = CalculateBalanceFromTransactions(
+                    primaryCashAccount.AccNo ?? "",
+                    primaryCashAccount.Normalbal ?? "DR",
+                    transactions,
+                    journalListings);
+            }
+
+            // ============================================
+            // 3. Process ALL cash transactions
+            // ============================================
+            var cashTransactions = transactions
+                .Where(x => (cashAccounts.Contains(x.DrAccNo) || cashAccounts.Contains(x.CrAccNo)) &&
+                           x.DocPosted == 1)
+                .ToList();
+
+            if (!cashTransactions.Any())
+            {
+                _logger.LogInformation($"No cash transactions found for the period.");
+
+                model.CashFlow.OperatingActivities.Add(new CashFlowItem
+                {
+                    Description = "No cash transactions for this period",
+                    Amount = 0
+                });
+                return;
+            }
+
+            foreach (var t in cashTransactions)
+            {
+                // Calculate amount (positive for cash inflow, negative for outflow)
+                decimal amount = 0;
+                string counterpartyAccount = "";
+
+                if (cashAccounts.Contains(t.DrAccNo))
+                {
+                    // Cash is being debited (cash INCREASES)
+                    amount = t.Amount;
+                    counterpartyAccount = t.CrAccNo;
+                }
+                else if (cashAccounts.Contains(t.CrAccNo))
+                {
+                    // Cash is being credited (cash DECREASES)
+                    amount = -t.Amount;
+                    counterpartyAccount = t.DrAccNo;
+                }
+
+                var description = t.TransDescript ?? "Cash transaction";
+
+                // Get counterparty account details
+                var counterparty = accounts.FirstOrDefault(x => x.AccNo == counterpartyAccount);
+
+                // Determine the category based on counterparty account
+                string category = DetermineCashFlowCategory(counterparty, description);
+
+                // Add to the appropriate category
+                switch (category)
+                {
+                    case "Operating":
                         model.CashFlow.OperatingActivities.Add(new CashFlowItem
                         {
                             Description = description,
                             Amount = amount
                         });
-                    }
+                        break;
+                    case "Investing":
+                        model.CashFlow.InvestingActivities.Add(new CashFlowItem
+                        {
+                            Description = description,
+                            Amount = amount
+                        });
+                        break;
+                    case "Financing":
+                        model.CashFlow.FinancingActivities.Add(new CashFlowItem
+                        {
+                            Description = description,
+                            Amount = amount
+                        });
+                        break;
+                    default:
+                        // Default to Operating
+                        model.CashFlow.OperatingActivities.Add(new CashFlowItem
+                        {
+                            Description = description,
+                            Amount = amount
+                        });
+                        break;
                 }
             }
+
+            // ============================================
+            // 4. Log the cash flow summary
+            // ============================================
+            _logger.LogInformation($"Cash Flow Summary - Period: {model.StartDate:dd/MM/yyyy} to {model.EndDate:dd/MM/yyyy}");
+            _logger.LogInformation($"  Cash Accounts Found: {string.Join(", ", cashAccounts)}");
+            _logger.LogInformation($"  Beginning Cash: {model.CashFlow.BeginningCash:N2}");
+            _logger.LogInformation($"  Net Operating: {model.CashFlow.NetOperating:N2}");
+            _logger.LogInformation($"  Net Investing: {model.CashFlow.NetInvesting:N2}");
+            _logger.LogInformation($"  Net Financing: {model.CashFlow.NetFinancing:N2}");
+            _logger.LogInformation($"  Net Cash Flow: {model.CashFlow.NetCashFlow:N2}");
+            _logger.LogInformation($"  Ending Cash: {model.CashFlow.EndingCash:N2}");
         }
+
+        /// <summary>
+        /// Determines the cash flow category based on the counterparty account
+        /// </summary>
+        private string DetermineCashFlowCategory(GlSetup? counterparty, string description)
+        {
+            if (counterparty == null)
+                return "Operating";
+
+            var group = counterparty.GlAccMainGroup?.ToLower() ?? "";
+            var name = counterparty.Glaccname?.ToLower() ?? "";
+            var desc = description.ToLower();
+
+            // ============================================
+            // FINANCING ACTIVITIES
+            // ============================================
+            // Member share capital, loans, dividends
+            if (group.Contains("capital") ||
+                group.Contains("share") ||
+                group.Contains("loan") ||
+                group.Contains("borrow") ||
+                group.Contains("dividend") ||
+                group.Contains("equity") ||
+                name.Contains("share capital") ||
+                name.Contains("loan") ||
+                name.Contains("dividend") ||
+                desc.Contains("share") ||
+                desc.Contains("dividend") ||
+                desc.Contains("loan disbursement") ||
+                desc.Contains("loan repayment") ||
+                desc.Contains("member contribution"))
+            {
+                return "Financing";
+            }
+
+            // ============================================
+            // INVESTING ACTIVITIES
+            // ============================================
+            // Purchase of fixed assets, investments
+            if ((group.Contains("asset") || group.Contains("investment")) &&
+                (name.Contains("fixed") ||
+                 name.Contains("property") ||
+                 name.Contains("equipment") ||
+                 name.Contains("investment") ||
+                 name.Contains("building") ||
+                 name.Contains("vehicle") ||
+                 name.Contains("furniture")))
+            {
+                return "Investing";
+            }
+
+            if (desc.Contains("invest") ||
+                desc.Contains("asset purchase") ||
+                desc.Contains("fixed asset") ||
+                desc.Contains("equipment") ||
+                desc.Contains("property") ||
+                desc.Contains("building") ||
+                desc.Contains("vehicle"))
+            {
+                return "Investing";
+            }
+
+            // ============================================
+            // OPERATING ACTIVITIES (Default)
+            // ============================================
+            return "Operating";
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         // ===============================
         // Helper Methods
@@ -764,48 +1217,7 @@ namespace SACCOBlockChainSystem.Controllers
                                        && x.Status == true);
         }
 
-        private async Task<decimal> CalculateNetIncome(
-    List<GlSetup> accounts,
-    List<Gltransaction> transactions,
-    List<JournalsListing> journalListings,
-    string companyCode,
-    DateTime asAtDate)
-        {
-            decimal totalRevenue = 0;
-            decimal totalExpenses = 0;
-
-            // Get revenue accounts (Income Statement, Income group)
-            var revenueAccounts = accounts.Where(x => x.Type == "Income Statement" &&
-                                                      x.GlAccMainGroup?.ToLower() == "income");
-
-            foreach (var account in revenueAccounts)
-            {
-                var balance = await CalculateAccountBalance(
-                    account.AccNo ?? "", asAtDate, companyCode);
-
-                // Revenue normally has CREDIT balance
-                totalRevenue += balance;
-            }
-
-            // Get expense accounts (Income Statement, Expenses group)
-            var expenseAccounts = accounts.Where(x => x.Type == "Income Statement" &&
-                                                      x.GlAccMainGroup?.ToLower() == "expenses");
-
-            foreach (var account in expenseAccounts)
-            {
-                var balance = await CalculateAccountBalance(
-                    account.AccNo ?? "", asAtDate, companyCode);
-
-                // Expenses normally have DEBIT balance
-                totalExpenses += balance;
-            }
-
-            // Net Income = Revenue - Expenses
-            return totalRevenue - totalExpenses;
-        }
-        private async Task<List<SuspenseAgingItem>> CalculateSuspenseAging(
-            string suspenseAccountNo,
-            string companyCode)
+        private async Task<List<SuspenseAgingItem>> CalculateSuspenseAging( string suspenseAccountNo, string companyCode)
         {
             var suspenseEntries = await _context.JournalsListings
                 .Where(x => x.AccountNo == suspenseAccountNo

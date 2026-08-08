@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models.DTOs;
+using SACCOBlockChainSystem.Models.ViewModels;
 using SACCOBlockChainSystem.Services;
 using System;
 using System.Linq;
@@ -16,19 +19,22 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly ISupplierService _supplierService;
         private readonly ICompanyContextService _companyContextService;
         private readonly ILogger<InvoicePaymentController> _logger;
+        private readonly ApplicationDbContext _context;
 
         public InvoicePaymentController(
             IInvoicePaymentService invoicepaymentService,
             IInvoiceService invoiceService,
             ISupplierService supplierService,
             ICompanyContextService companyContextService,
+            ApplicationDbContext context,
             ILogger<InvoicePaymentController> logger)
         {
-            invoicepaymentService = invoicepaymentService;
+            _invoicepaymentService = invoicepaymentService;
             _invoiceService = invoiceService;
             _supplierService = supplierService;
             _companyContextService = companyContextService;
             _logger = logger;
+            _context = context;
         }
 
         public async Task<IActionResult> Index()
@@ -36,10 +42,20 @@ namespace SACCOBlockChainSystem.Controllers
             try
             {
                 var companyCode = _companyContextService.GetCurrentCompanyCode();
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    TempData["ErrorMessage"] = "Company code not found. Please log in again.";
+                    return View(new InvoicePaymentViewModel());
+                }
+
                 var dashboard = await _invoicepaymentService.GetPaymentDashboardAsync(companyCode);
+                if (dashboard == null)
+                {
+                    dashboard = new InvoicePaymentViewModel();
+                }
 
                 ViewBag.CompanyCode = companyCode;
-                ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "SACCO System";
+                ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "AMTECH SACCO";
 
                 return View(dashboard);
             }
@@ -71,7 +87,14 @@ namespace SACCOBlockChainSystem.Controllers
 
                 var payment = await _invoicepaymentService.CreatePaymentAsync(dto, createdBy);
 
-                return Json(new { success = true, message = $"Payment of KES {payment.Amount:N0} recorded successfully!", payment = payment });
+                // Return success with receipt URL
+                return Json(new
+                {
+                    success = true,
+                    message = $"Payment of KES {payment.Amount:N0} recorded successfully! Receipt: {payment.ReceiptNo}",
+                    payment = payment,
+                    receiptUrl = Url.Action("PrintPaymentReceipt", new { receiptNo = payment.ReceiptNo })
+                });
             }
             catch (Exception ex)
             {
@@ -105,7 +128,14 @@ namespace SACCOBlockChainSystem.Controllers
 
                 var payment = await _invoicepaymentService.UpdatePaymentAsync(dto.Id.Value, dto, updatedBy);
 
-                return Json(new { success = true, message = $"Payment updated successfully!", payment = payment });
+                // Return success with receipt URL
+                return Json(new
+                {
+                    success = true,
+                    message = $"Payment updated successfully!",
+                    payment = payment,
+                    receiptUrl = Url.Action("PrintPaymentReceipt", new { receiptNo = payment.ReceiptNo })
+                });
             }
             catch (Exception ex)
             {
@@ -183,6 +213,210 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 _logger.LogError(ex, $"Error getting payments for supplier: {supplierCode}");
                 return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetGlAccounts()
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+                var glAccounts = await _invoicepaymentService.GetGlAccountsForDropdownAsync(companyCode);
+
+                return Json(new { success = true, glAccounts = glAccounts });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting GL accounts");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetGlAccountDetails(string glAccountNo)
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+                var glAccount = await _invoicepaymentService.GetGlAccountByCodeAsync(glAccountNo, companyCode);
+
+                if (glAccount == null)
+                {
+                    return Json(new { success = false, message = "GL Account not found" });
+                }
+
+                return Json(new { success = true, glAccount = glAccount });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting GL account details for: {glAccountNo}");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Print Payment Receipt - Called after successful payment
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> PrintPaymentReceipt(string receiptNo)
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+
+                // Get payment details
+                var payment = await _invoicepaymentService.GetPaymentByReceiptNoAsync(receiptNo, companyCode);
+
+                if (payment == null)
+                {
+                    TempData["ErrorMessage"] = "Payment receipt not found.";
+                    return RedirectToAction("Index");
+                }
+
+                // Get supplier details
+                var supplier = await _supplierService.GetSupplierByCodeAsync(payment.SupplierId, companyCode);
+
+                // Get invoice details
+                var invoice = await _invoiceService.GetInvoiceByNumberAsync(payment.InvoiceNo, companyCode);
+
+                // Get company details
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                var sacco = await _context.SaccoParram
+                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
+
+                var companyName = company?.CompanyName ?? sacco?.SaccoName ?? "SACCO System";
+                var companyAddress = company?.Address ?? sacco?.PhysicalAddress ?? "P.O. Box 12345 - 00100, Nairobi, Kenya";
+                var companyPhone = company?.Telephone ?? sacco?.Telephone ?? "+254 700 000 000";
+                var companyEmail = company?.Email ?? sacco?.EmailAddress ?? "info@sacco.co.ke";
+
+                // Build receipt view model
+                var receiptViewModel = new PaymentReceiptViewModel
+                {
+                    ReceiptNo = payment.ReceiptNo,
+                    InvoiceNo = payment.InvoiceNo,
+                    SupplierCode = payment.SupplierId,
+                    SupplierName = payment.SupplierName ?? supplier?.SupplierName,
+                    SupplierContact = supplier?.ContactPerson,
+                    SupplierPhone = supplier?.PhoneNo,
+                    SupplierEmail = supplier?.Email,
+                    Amount = payment.Amount,
+                    OpeningBalance = payment.OpeningBalance,
+                    BalanceAfter = (payment.OpeningBalance ?? 0) - payment.Amount,
+                    PaymentDate = payment.TransDate ?? DateTime.Now,
+                    PaymentMethod = string.IsNullOrEmpty(payment.ChequeNo) ? "Bank Transfer" : "Cheque",
+                    ChequeNo = payment.ChequeNo,
+                    TransactionType = payment.Transtype ?? "Payment",
+                    Particulars = payment.Particulars,
+                    Remarks = payment.Remarks,
+                    DebitAccountNo = payment.DebitAccno,
+                    DebitAccountName = payment.DebitAccName,
+                    SupplierAccountNo = payment.SupplierAccno,
+                    SupplierAccountName = payment.SupplierAccName,
+                    BlockchainTxId = payment.BlockchainTxId,
+                    CreatedBy = payment.CreatedBy,
+                    CreatedDate = DateTime.Now,
+                    PaymentStatus = invoice?.PaymentStatus ?? "Confirmed",
+                    TotalPaid = invoice?.AmountPaid ?? payment.Amount,
+                    CompanyName = companyName,
+                    CompanyAddress = companyAddress,
+                    CompanyPhone = companyPhone,
+                    CompanyEmail = companyEmail,
+                };
+
+                return View("PrintPaymentReceipt", receiptViewModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error printing payment receipt for: {receiptNo}");
+                TempData["ErrorMessage"] = "Error printing receipt: " + ex.Message;
+                return RedirectToAction("Index");
+            }
+        }
+
+        /// <summary>
+        /// Print Payment Receipt - Called after successful payment with auto-print
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> PrintAndAutoPrintReceipt(string receiptNo)
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+
+                // Get payment details
+                var payment = await _invoicepaymentService.GetPaymentByReceiptNoAsync(receiptNo, companyCode);
+
+                if (payment == null)
+                {
+                    TempData["ErrorMessage"] = "Payment receipt not found.";
+                    return RedirectToAction("Index");
+                }
+
+                // Get supplier details
+                var supplier = await _supplierService.GetSupplierByCodeAsync(payment.SupplierId, companyCode);
+
+                // Get invoice details
+                var invoice = await _invoiceService.GetInvoiceByNumberAsync(payment.InvoiceNo, companyCode);
+
+                // Get company details
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                var sacco = await _context.SaccoParram
+                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
+
+                var companyName = company?.CompanyName ?? sacco?.SaccoName ?? "SACCO System";
+                var companyAddress = company?.Address ?? sacco?.PhysicalAddress ?? "P.O. Box 12345 - 00100, Nairobi, Kenya";
+                var companyPhone = company?.Telephone ?? sacco?.Telephone ?? "+254 700 000 000";
+                var companyEmail = company?.Email ?? sacco?.EmailAddress ?? "info@sacco.co.ke";
+
+                // Build receipt view model
+                var receiptViewModel = new PaymentReceiptViewModel
+                {
+                    ReceiptNo = payment.ReceiptNo,
+                    InvoiceNo = payment.InvoiceNo,
+                    SupplierCode = payment.SupplierId,
+                    SupplierName = payment.SupplierName ?? supplier?.SupplierName,
+                    SupplierContact = supplier?.ContactPerson,
+                    SupplierPhone = supplier?.PhoneNo,
+                    SupplierEmail = supplier?.Email,
+                    Amount = payment.Amount,
+                    OpeningBalance = payment.OpeningBalance,
+                    BalanceAfter = (payment.OpeningBalance ?? 0) - payment.Amount,
+                    PaymentDate = payment.TransDate ?? DateTime.Now,
+                    PaymentMethod = string.IsNullOrEmpty(payment.ChequeNo) ? "Bank Transfer" : "Cheque",
+                    ChequeNo = payment.ChequeNo,
+                    TransactionType = payment.Transtype ?? "Payment",
+                    Particulars = payment.Particulars,
+                    Remarks = payment.Remarks,
+                    DebitAccountNo = payment.DebitAccno,
+                    DebitAccountName = payment.DebitAccName,
+                    SupplierAccountNo = payment.SupplierAccno,
+                    SupplierAccountName = payment.SupplierAccName,
+                    BlockchainTxId = payment.BlockchainTxId,
+                    CreatedBy = payment.CreatedBy,
+                    CreatedDate = DateTime.Now,
+                    PaymentStatus = invoice?.PaymentStatus ?? "Confirmed",
+                    TotalPaid = invoice?.AmountPaid ?? payment.Amount,
+                    CompanyName = companyName,
+                    CompanyAddress = companyAddress,
+                    CompanyPhone = companyPhone,
+                    CompanyEmail = companyEmail,
+                };
+
+                // Add flag to auto-print
+                ViewBag.AutoPrint = true;
+
+                return View("PrintPaymentReceipt", receiptViewModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error printing payment receipt for: {receiptNo}");
+                TempData["ErrorMessage"] = "Error printing receipt: " + ex.Message;
+                return RedirectToAction("Index");
             }
         }
     }

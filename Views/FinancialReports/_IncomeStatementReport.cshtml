@@ -14,54 +14,71 @@
 
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover mb-0" style="border-collapse: collapse;">
-                <thead style="background-color: #3f2b96; color: white;">
+            <table class="table table-hover mb-0" style="border-collapse: collapse;" id="incomeStatementTable">
+                <thead style="background-color: white; color: black;">
                     <tr>
                         <th style="padding: 12px;">GLAccMainGroup</th>
                         <th style="padding: 12px;">AccNo</th>
                         <th style="padding: 12px;">AccName</th>
-                        <th style="padding: 12px; text-align: right;">IncomeAmount</th>
-                        <th style="padding: 12px; text-align: right;">ExpenseAmount</th>
+                        <th style="padding: 12px; text-align: right;">Income Amount</th>
+                        <th style="padding: 12px; text-align: right;">Expense Amount</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var item in Model.IncomeStatement.Revenue)
-                    {
-                        <tr>
-                            <td style="padding: 10px;">INCOME</td>
-                            <td style="padding: 10px;">@item.AccountNo</td>
-                            <td style="padding: 10px;">@item.AccountName</td>
-                            <td style="padding: 10px; text-align: right; color: #28a745;">@item.Amount.ToString("N4")</td>
-                            <td style="padding: 10px; text-align: right;">0.0000</td>
-                        </tr>
+                    @{
+                        var hasRevenue = Model.IncomeStatement.Revenue.Any();
+                        var hasExpenses = Model.IncomeStatement.Expenses.Any();
                     }
 
-                    @foreach (var item in Model.IncomeStatement.Expenses)
+                    @if (!hasRevenue && !hasExpenses)
                     {
                         <tr>
-                            <td style="padding: 10px;">EXPENSES</td>
-                            <td style="padding: 10px;">@item.AccountNo</td>
-                            <td style="padding: 10px;">@item.AccountName</td>
-                            <td style="padding: 10px; text-align: right;">0.0000</td>
-                            <td style="padding: 10px; text-align: right; color: #dc3545;">@item.Amount.ToString("N4")</td>
+                            <td colspan="5" style="padding: 30px; text-align: center; color: #6c757d;">
+                                <i class="fas fa-info-circle me-2"></i>
+                                No income statement data available for the selected period.
+                            </td>
                         </tr>
                     }
+                    else
+                    {
+                        @foreach (var item in Model.IncomeStatement.Revenue)
+                        {
+                            <tr>
+                                <td style="padding: 10px;">INCOME</td>
+                                <td style="padding: 10px;">@item.AccountNo</td>
+                                <td style="padding: 10px;">@item.AccountName</td>
+                                <td style="padding: 10px; text-align: right; color: #28a745;">@item.Amount.ToString("N4")</td>
+                                <td style="padding: 10px; text-align: right;">0.0000</td>
+                            </tr>
+                        }
 
-                    <!-- Total Income Row -->
-                    <tr style="border-top: 2px solid #3f2b96; background-color: #f8f9fa; font-weight: 600;">
-                        <td style="padding: 12px;" colspan="2"></td>
-                        <td style="padding: 12px;">Total Income</td>
-                        <td style="padding: 12px; text-align: right; color: #28a745;">@Model.IncomeStatement.TotalRevenue.ToString("N4")</td>
-                        <td style="padding: 12px; text-align: right;">0.0000</td>
-                    </tr>
+                        @foreach (var item in Model.IncomeStatement.Expenses)
+                        {
+                            <tr>
+                                <td style="padding: 10px;">EXPENSES</td>
+                                <td style="padding: 10px;">@item.AccountNo</td>
+                                <td style="padding: 10px;">@item.AccountName</td>
+                                <td style="padding: 10px; text-align: right;">0.0000</td>
+                                <td style="padding: 10px; text-align: right; color: #dc3545;">@item.Amount.ToString("N4")</td>
+                            </tr>
+                        }
 
-                    <!-- Total Expenses Row -->
-                    <tr style="background-color: #f8f9fa; font-weight: 600;">
-                        <td style="padding: 12px;" colspan="2"></td>
-                        <td style="padding: 12px;">Total Expenses</td>
-                        <td style="padding: 12px; text-align: right;">0.0000</td>
-                        <td style="padding: 12px; text-align: right; color: #dc3545;">@Model.IncomeStatement.TotalExpenses.ToString("N4")</td>
-                    </tr>
+                        <!-- Total Income Row -->
+                        <tr style="border-top: 2px solid #3f2b96; background-color: #f8f9fa; font-weight: 600;">
+                            <td style="padding: 12px;" colspan="2"></td>
+                            <td style="padding: 12px;">Total Income</td>
+                            <td style="padding: 12px; text-align: right; color: #28a745;">@Model.IncomeStatement.TotalRevenue.ToString("N4")</td>
+                            <td style="padding: 12px; text-align: right;">0.0000</td>
+                        </tr>
+
+                        <!-- Total Expenses Row -->
+                        <tr style="background-color: #f8f9fa; font-weight: 600;">
+                            <td style="padding: 12px;" colspan="2"></td>
+                            <td style="padding: 12px;">Total Expenses</td>
+                            <td style="padding: 12px; text-align: right;">0.0000</td>
+                            <td style="padding: 12px; text-align: right; color: #dc3545;">@Model.IncomeStatement.TotalExpenses.ToString("N4")</td>
+                        </tr>
+                    }
                 </tbody>
             </table>
         </div>
@@ -71,10 +88,7 @@
         <div class="row align-items-center">
             <div class="col-md-6">
                 <div class="d-flex align-items-center">
-                    <button class="btn btn-sm btn-outline-success me-2">
-                        <i class="fas fa-file-excel me-1"></i> Export to Excel
-                    </button>
-                    <small class="text-muted ms-3">
+                    <small class="text-muted">
                         <i class="fas fa-info-circle me-1"></i>
                         Generated: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")
                     </small>
@@ -82,12 +96,51 @@
             </div>
             <div class="col-md-6">
                 <div class="d-flex justify-content-end align-items-center">
-                    <span class="fw-bold me-3">Total Profit/Loss:</span>
-                    <span class="fw-bold" style="color: #17a2b8; font-size: 1.2rem;">
-                        @Model.IncomeStatement.NetIncome.ToString("N4")
+                    <span class="fw-bold me-3">Net Profit/Loss:</span>
+                    <span class="fw-bold" style="color: @(Model.IncomeStatement.NetIncome >= 0 ? "#28a745" : "#dc3545"); font-size: 1.2rem;">
+                        @(Model.IncomeStatement.NetIncome >= 0 ? "+" : "")@Model.IncomeStatement.NetIncome.ToString("N4")
                     </span>
+                    <button class="btn btn-success btn-sm ms-3 me-2" onclick="exportToExcel('incomeStatementTable', 'Income_Statement')">
+                        <i class="fas fa-file-excel me-1"></i> Excel
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="exportIncomeToPDF()">
+                        <i class="fas fa-file-pdf me-1"></i> PDF
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+    function exportToExcel(tableId, fileName) {
+        var table = document.getElementById(tableId);
+        var wb = XLSX.utils.table_to_book(table, { sheet: "Sheet1" });
+        XLSX.writeFile(wb, fileName + '_@Model.EndDate.ToString("yyyyMMdd")' + '.xlsx');
+    }
+
+    function exportIncomeToPDF() {
+        const { jsPDF } = window.jspdf;
+        var doc = new jsPDF('landscape', 'mm', 'a4');
+
+        doc.setFontSize(16);
+        doc.text('INCOME STATEMENT', 14, 15);
+        doc.setFontSize(10);
+        doc.text('Period: @Model.StartDate.ToString("dd/MM/yyyy") - @Model.EndDate.ToString("dd/MM/yyyy")', 14, 22);
+        doc.text('Generated: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")', 14, 28);
+
+        doc.autoTable({
+            html: '#incomeStatementTable',
+            startY: 35,
+            theme: 'grid',
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [63, 43, 150], textColor: [255, 255, 255] }
+        });
+
+        doc.save('Income_Statement_@Model.EndDate.ToString("yyyyMMdd")' + '.pdf');
+    }
+</script>

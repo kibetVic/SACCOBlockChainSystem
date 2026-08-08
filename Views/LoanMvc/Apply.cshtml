@@ -138,7 +138,7 @@
                                     </div>
                                 </div>
 
-                                <!-- Existing Loans Display for Bridging/Refinancing -->
+                                <!-- Existing Loans Display for Top-Up -->
                                 <div id="existingLoansInfo" style="display: none;" class="mt-3">
                                     <div class="alert alert-info" id="existingLoansAlert">
                                         <div id="existingLoansContent"></div>
@@ -168,10 +168,14 @@
                                     </div>
                                 </div>
 
-                                <!-- Bridging/Refinancing Warning/Info Section -->
-                                <div id="bridgingInfo" class="d-none">
-                                    <div id="bridgingAlert" class="alert">
-                                        <div id="bridgingContent"></div>
+                                <!-- Top-Up Warning/Info Section -->
+                                <div id="topUpInfo" class="d-none">
+                                    <div id="topUpAlert" class="alert alert-warning">
+                                        <div id="topUpContent">
+                                            <i class="fas fa-arrow-up-circle me-2"></i>
+                                            @* <strong>Top-Up Loan Application</strong>
+                                            <p class="mb-0 mt-1">This member has existing loans. Only Top-Up loan products are available.</p> *@
+                                        </div>
                                     </div>
                                 </div>
 
@@ -211,7 +215,7 @@
                                     <label asp-for="ApplicationDate" class="col-sm-3 col-form-label fw-bold">Application Date</label>
                                     <div class="col-sm-9">
                                         <input asp-for="ApplicationDate" class="form-control" type="date"
-                                               value="@Model.ApplicationDate.ToString("yyyy-MM-dd")" />
+                                               id="applicationDate" />
                                         <span asp-validation-for="ApplicationDate" class="text-danger"></span>
                                     </div>
                                 </div>
@@ -286,23 +290,23 @@
                             <i class="bi bi-check-circle-fill text-success me-2"></i>
                             Guarantors may be required
                         </li>
-                        <li class="mb-2" id="bridgingGuideline">
-                            <i class="bi bi-info-circle-fill text-info me-2"></i>
-                            Top-up loans allow you to apply for the same loan product again
+                        <li class="mb-2" id="topUpGuideline">
+                            <i class="bi bi-arrow-up-circle-fill text-warning me-2"></i>
+                            <strong>Top-Up Loans:</strong> Members with existing loans can apply for Top-Up loan products
                         </li>
                     </ul>
                 </div>
             </div>
 
-            <!-- Bridging Information Card -->
-            <div class="card mt-4" id="bridgingInfoCard" style="display: none;">
+            <!-- Top-Up Information Card -->
+            <div class="card mt-4" id="topUpInfoCard" style="display: none;">
                 <div class="card-header bg-warning text-dark">
                     <h5 class="card-title mb-0">
-                        <i class="bi bi-arrow-left-right"></i> Top-Up Loan Info
+                        <i class="bi bi-arrow-up-circle"></i> Top-Up Loan Info
                     </h5>
                 </div>
-                <div class="card-body" id="bridgingInfoCardBody">
-                    <div id="bridgingInfoCardContent"></div>
+                <div class="card-body" id="topUpInfoCardBody">
+                    <div id="topUpInfoCardContent"></div>
                 </div>
             </div>
         </div>
@@ -313,24 +317,77 @@
     <partial name="_ValidationScriptsPartial" />
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        // Pass loan types from server to JavaScript using a safe approach
+        var allLoanTypes = @Html.Raw(Json.Serialize(loanTypes));
+
+        // Set application date
+        document.addEventListener('DOMContentLoaded', function() {
+            var dateInput = document.getElementById('applicationDate');
+            if (dateInput) {
+                var today = new Date();
+                var year = today.getFullYear();
+                var month = String(today.getMonth() + 1).padStart(2, '0');
+                var day = String(today.getDate()).padStart(2, '0');
+                dateInput.value = year + '-' + month + '-' + day;
+            }
+        });
+
         let currentMemberNo = null;
         let selectedMemberData = null;
         let memberEligibilityData = null;
         let currentMaxRepayPeriod = 360;
         let isMemberEligible = false;
-        let bridgingData = null;
-        let topUpLoanTypeCode = null;
-        let topUpLoanTypeName = null;
+        let hasExistingLoan = false;
+        let canApplyForTopUp = false;
+        let topUpLoanTypeCodes = [];
+        let bridgingLoanTypeCode = null;
+        let bridgingLoanTypeName = null;
+        let existingLoansList = [];
+        let searchTimeout = null;
 
-        // All loan types from server
-        var allLoanTypes = @Html.Raw(Json.Serialize(loanTypes));
+        // Auto-search with debounce
+        document.getElementById('searchInput').addEventListener('keyup', function(e) {
+            // Don't trigger on Enter key (handled separately)
+            if (e.key === 'Enter') {
+                searchMembers();
+                return;
+            }
+
+            // Clear previous timeout
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+
+            var searchTerm = this.value.trim();
+
+            // Only search if 3 or more characters
+            if (searchTerm.length >= 3) {
+                searchTimeout = setTimeout(function() {
+                    searchMembers();
+                }, 500); // 500ms debounce delay
+            } else if (searchTerm.length === 0) {
+                clearSearch();
+            }
+        });
+
+        // Enter key support for search
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchMembers();
+            }
+        });
 
         // Search members function
         async function searchMembers() {
             const searchTerm = document.getElementById('searchInput').value.trim();
 
             if (searchTerm.length < 3) {
-                Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
+                // Don't show warning for auto-search, just clear results
+                if (searchTerm.length > 0) {
+                    Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
+                }
+                document.getElementById('searchResults').style.display = 'none';
                 return;
             }
 
@@ -339,7 +396,10 @@
             document.getElementById('searchResultsBody').innerHTML = '';
 
             try {
-                const response = await fetch('/api/Member/search?searchTerm=' + encodeURIComponent(searchTerm));
+                // Get company code from hidden field or session
+                var companyCode = '@ViewBag.CompanyCode';
+
+                const response = await fetch('/api/LoanApi/search?searchTerm=' + encodeURIComponent(searchTerm) + '&companyCode=' + encodeURIComponent(companyCode));
 
                 if (response.ok) {
                     const data = await response.json();
@@ -350,7 +410,9 @@
                         document.getElementById('searchResultsBody').innerHTML =
                             '<tr><td colspan="7" class="text-center text-danger">No members found matching your search</td></tr>';
                         document.getElementById('searchResults').style.display = 'block';
-                        Swal.fire('Info', 'No members found matching your search', 'info');
+                        if (searchTerm.length > 0) {
+                            Swal.fire('Info', 'No members found matching your search', 'info');
+                        }
                     }
                 } else {
                     throw new Error('Search failed');
@@ -360,7 +422,9 @@
                 document.getElementById('searchResultsBody').innerHTML =
                     '<tr><td colspan="7" class="text-center text-danger">Error searching members. Please try again.</td></tr>';
                 document.getElementById('searchResults').style.display = 'block';
-                Swal.fire('Error', 'Error searching members', 'error');
+                if (searchTerm.length > 0) {
+                    Swal.fire('Error', 'Error searching members', 'error');
+                }
             } finally {
                 document.getElementById('searchLoading').style.display = 'none';
             }
@@ -373,8 +437,8 @@
             for (var i = 0; i < members.length; i++) {
                 var member = members[i];
                 var row = tbody.insertRow();
-                var isActive = member.status == 1;
-                var statusText = isActive ? 'Active' : (member.withdrawn == true ? 'Withdrawn' : 'Inactive');
+                var isActive = member.isActive != false;
+                var statusText = isActive ? 'Active' : 'Inactive';
                 var statusClass = isActive ? 'bg-success' : 'bg-danger';
 
                 row.innerHTML = `
@@ -384,9 +448,9 @@
                         </button>
                     </td>
                     <td><strong>${escapeHtml(member.memberNo)}</strong></td>
-                    <td>${escapeHtml(member.surname)} ${escapeHtml(member.otherNames)}</td>
-                    <td>${escapeHtml(member.idno || 'N/A')}</td>
-                    <td>${escapeHtml(member.phoneNo || member.phone || 'N/A')}</td>
+                    <td>${escapeHtml(member.fullName || member.surname + ' ' + member.otherNames)}</td>
+                    <td>${escapeHtml(member.idNo || 'N/A')}</td>
+                    <td>${escapeHtml(member.phoneNo || 'N/A')}</td>
                     <td>${escapeHtml(member.email || 'N/A')}</td>
                     <td>
                         <span class="badge ${statusClass}">
@@ -399,6 +463,7 @@
             document.getElementById('searchResults').style.display = 'block';
         }
 
+        // Updated: selectMember function with Top-Up support
         async function selectMember(memberNo) {
             try {
                 var eligibilityDiv = document.getElementById('memberEligibilityInfo');
@@ -412,7 +477,10 @@
 
                 document.getElementById('existingLoansInfo').style.display = 'none';
                 document.getElementById('loanTypeMessage').innerHTML = '';
+                document.getElementById('topUpInfoCard').style.display = 'none';
+                document.getElementById('topUpInfo').classList.add('d-none');
 
+                var companyCode = '@ViewBag.CompanyCode';
                 var response = await fetch('/LoanMvc/CheckMemberEligibility?memberNo=' + memberNo);
                 var data = await response.json();
 
@@ -420,116 +488,138 @@
                     memberEligibilityData = data.data;
                     currentMemberNo = memberNo;
                     selectedMemberData = data.data;
+                    hasExistingLoan = data.hasExistingLoan || false;
+                    canApplyForTopUp = data.canApplyForTopUp || false;
+                    topUpLoanTypeCodes = data.topUpLoanTypeCodes || [];
+                    bridgingLoanTypeCode = data.bridgingLoanTypeCode || null;
+                    bridgingLoanTypeName = data.bridgingLoanTypeName || null;
+                    existingLoansList = data.existingLoans || [];
 
                     document.getElementById('selectedMemberNo').value = memberNo;
                     document.getElementById('selectedMemberName').innerHTML =
                         '<strong>' + escapeHtml(data.data.name || data.data.memberNo) + '</strong>';
                     document.getElementById('selectedMemberNoDisplay').innerHTML = memberNo;
-                    document.getElementById('selectedMemberIdNo').innerHTML = data.data.idno || 'N/A';
+                    document.getElementById('selectedMemberIdNo').innerHTML = data.data.idNo || 'N/A';
                     document.getElementById('selectedMemberPhone').innerHTML = data.data.phone || 'N/A';
 
                     document.getElementById('selectedMemberCard').style.display = 'block';
                     document.getElementById('searchResults').style.display = 'none';
                     document.getElementById('searchInput').value = '';
 
-                    // ============================================================
-                    // CASE 1: Member has existing loan with bridging allowed (TOP-UP)
-                    // ============================================================
-                    if (data.bridgingInfo && data.bridgingInfo.hasBridgingAllowed) {
-                        isMemberEligible = true;
-                        eligibilityAlert.className = 'alert alert-info';
+                    // Check: Does member have existing loans?
+                    if (hasExistingLoan) {
+                        // Case: Member has existing loans - Show only Top-Up loan types
+                        if (topUpLoanTypeCodes.length === 0) {
+                            // No Top-Up loan types available
+                            isMemberEligible = false;
+                            eligibilityAlert.className = 'alert alert-warning';
 
-                        // Get the exact loan type that can be topped up
-                        topUpLoanTypeCode = data.bridgingInfo.topUpLoanTypeCode;
-                        topUpLoanTypeName = data.bridgingInfo.topUpLoanTypeName || topUpLoanTypeCode;
+                            var existingLoansHtml = '';
+                            if (existingLoansList.length > 0) {
+                                existingLoansHtml = '<div class="mt-2"><strong>Existing Loans:</strong><ul class="mb-0 mt-1">';
+                                for (var k = 0; k < existingLoansList.length; k++) {
+                                    var loan = existingLoansList[k];
+                                    var bridgingText = loan.bridgingAllowed ? '✅ Top-Up Allowed' : '❌ No Top-Up';
+                                    existingLoansHtml += '<li>' + loan.loanNo + ' - ' + loan.loanType + ' (' + loan.loanStatus + ') - Paid: ' + loan.percentagePaid + '% - ' + bridgingText + '</li>';
+                                }
+                                existingLoansHtml += '</ul></div>';
+                            }
 
-                        // ============================================================
-                        // KEY: Show ONLY the EXACT SAME loan type for top-up
-                        // ============================================================
+                            document.getElementById('eligibilityContent').innerHTML = `
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>Member Has Existing Loans</strong>
+                                <p class="mb-0 mt-1">This member has existing loans but no Top-Up loan products are currently available.</p>
+                                ${existingLoansHtml}
+                                <small class="text-muted mt-2 d-block">Please clear existing loans first or contact the administrator to enable Top-Up loan products.</small>
+                            `;
+
+                            populateLoanTypes([]);
+                            document.getElementById('loanTypeMessage').innerHTML =
+                                '<span class="text-danger"><i class="bi bi-exclamation-circle"></i> No loan types available. Please clear existing loans first.</span>';
+                            disableLoanForm();
+                            return;
+                        }
+
+                        // Filter loan types to ONLY Top-Up eligible ones (IsTopUp = true)
                         var filteredLoanTypes = allLoanTypes.filter(function(lt) {
-                            return lt.loanCode === topUpLoanTypeCode;
+                            return topUpLoanTypeCodes.indexOf(lt.loanCode) !== -1;
                         });
 
+                        if (filteredLoanTypes.length === 0) {
+                            isMemberEligible = false;
+                            eligibilityAlert.className = 'alert alert-warning';
+                            document.getElementById('eligibilityContent').innerHTML = `
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>No Top-Up Loan Types Available</strong>
+                                <p class="mb-0 mt-1">This member has existing loans but no eligible Top-Up loan types are currently available.</p>
+                                <small class="text-muted mt-2 d-block">Please contact the administrator to configure Top-Up loan types.</small>
+                            `;
+                            populateLoanTypes([]);
+                            document.getElementById('loanTypeMessage').innerHTML =
+                                '<span class="text-danger"><i class="bi bi-exclamation-circle"></i> No Top-Up loan types available.</span>';
+                            disableLoanForm();
+                            return;
+                        }
+
+                        // Populate ONLY Top-Up loan types
                         populateLoanTypes(filteredLoanTypes);
 
-                        // Show top-up message
-                        document.getElementById('loanTypeMessage').innerHTML =
-                            '<span class="text-info"><i class="bi bi-arrow-up-circle"></i> <strong>TOP-UP LOAN:</strong> You can only apply for the same loan product: <strong>' + escapeHtml(topUpLoanTypeName) + '</strong></span>';
+                        var topUpNames = filteredLoanTypes.map(function(lt) {
+                            return lt.loanType;
+                        }).join(', ');
 
-                        // Enable and auto-select the loan type
+                        
+                        // Enable loan form
                         document.getElementById('loanType').disabled = false;
-                        document.getElementById('loanType').value = topUpLoanTypeCode;
+                        document.getElementById('principalAmount').disabled = false;
+                        document.getElementById('repayPeriod').disabled = false;
+                        document.getElementById('Purpose').disabled = false;
 
-                        // Trigger change event to load details
-                        var event = new Event('change');
-                        document.getElementById('loanType').dispatchEvent(event);
-
-                        // Show existing loans info
                         var existingLoansHtml = '';
-                        if (data.bridgingInfo.loans && data.bridgingInfo.loans.length > 0) {
-                            existingLoansHtml = '<div class="mt-2"><strong>Existing Loans:</strong><ul class="mb-0 mt-1">';
-                            for (var j = 0; j < data.bridgingInfo.loans.length; j++) {
-                                var loan = data.bridgingInfo.loans[j];
-                                var bridgingText = loan.bridgingAllowed ? '✅ Top-up Allowed' : '❌ No Top-up';
-                                existingLoansHtml += '<li>' + loan.loanNo + ' - ' + loan.loanType + ' (' + loan.loanStatus + ') - Outstanding: KES ' + (loan.outstandingBalance || 0).toLocaleString() + ' - ' + bridgingText + '</li>';
+                        if (existingLoansList.length > 0) {
+                            existingLoansHtml = '<div class="mt-2"><strong>Existing Loans (will be topped up):</strong><ul class="mb-0 mt-1">';
+                            for (var j = 0; j < existingLoansList.length; j++) {
+                                var loan = existingLoansList[j];
+                                var bridgingText = loan.bridgingAllowed ? '✅ Top-Up Allowed' : '❌ No Top-Up';
+                                existingLoansHtml += '<li>' + loan.loanNo + ' - Paid: ' + loan.percentagePaid + '% - ' + bridgingText + '</li>';
                             }
                             existingLoansHtml += '</ul></div>';
                         }
 
+                        eligibilityAlert.className = 'alert alert-info';
                         document.getElementById('eligibilityContent').innerHTML = `
                             <i class="fas fa-arrow-up-circle me-2"></i>
                             <strong>Top-Up Loan Available</strong>
-                            <p class="mb-0 mt-1">This member has an existing loan that allows top-up.</p>
+                            <p class="mb-0 mt-1">This member has existing loans but can apply for a Top-Up loan.</p>
                             ${existingLoansHtml}
                             <div class="mt-2">
-                                <span class="badge bg-success">Top-Up Product: <strong>${escapeHtml(topUpLoanTypeName)}</strong></span>
+                                <span class="badge bg-warning text-dark">Available Top-Up Products: ${topUpNames}</span>
                             </div>
-                            <small class="text-info mt-2 d-block">✓ You can apply for a top-up of the <strong>${escapeHtml(topUpLoanTypeName)}</strong> only.</small>
+                            <small class="text-info mt-2 d-block">✓ The new loan will be added on top of existing loans. Maximum loan amount is reduced by outstanding balance.</small>
                         `;
 
                         enableLoanForm(data.data.maxLoanAmount || 50000, data.data.eligibleShares || 0);
-                        return;
-                    }
+                        isMemberEligible = true;
 
-                    // ============================================================
-                    // CASE 2: Member has existing loans but NO bridging allowed (BLOCK)
-                    // ============================================================
-                    if (data.hasExistingLoan) {
-                        isMemberEligible = false;
-                        eligibilityAlert.className = 'alert alert-warning';
-
-                        // Clear loan types
-                        populateLoanTypes([]);
-                        document.getElementById('loanTypeMessage').innerHTML =
-                            '<span class="text-danger"><i class="bi bi-exclamation-circle"></i> No loan types available. Please clear existing loans first.</span>';
-
-                        var existingLoansHtml = '';
-                        if (data.existingLoans && data.existingLoans.length > 0) {
-                            existingLoansHtml = '<div class="mt-2"><strong>Existing Loans:</strong><ul class="mb-0 mt-1">';
-                            for (var k = 0; k < data.existingLoans.length; k++) {
-                                var loan = data.existingLoans[k];
-                                existingLoansHtml += '<li>' + loan.loanNo + ' - ' + loan.loanType + ' (' + loan.loanStatus + ') - Outstanding: KES ' + (loan.outstandingBalance || 0).toLocaleString() + '</li>';
-                            }
-                            existingLoansHtml += '</ul></div>';
-                        }
-                        document.getElementById('eligibilityContent').innerHTML = `
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Member Not Eligible for New Loan</strong>
-                            <p class="mb-0 mt-1">${data.message}</p>
-                            ${existingLoansHtml}
-                            <small class="text-muted mt-2 d-block">Please clear existing loans before applying for a new loan.</small>
+                        document.getElementById('topUpInfoCard').style.display = 'block';
+                        document.getElementById('topUpInfoCardContent').innerHTML = `
+                            <div class="alert alert-warning mb-0">
+                                <i class="bi bi-arrow-up-circle-fill me-2"></i>
+                                <strong>Top-Up Loan</strong>
+                                <p class="mb-0 mt-1">This is a Top-Up loan application. The new loan will be added on top of existing loans.</p>
+                                <small class="text-muted">Please ensure the new loan amount plus existing balance does not exceed the maximum eligible amount.</small>
+                            </div>
                         `;
-                        disableLoanForm();
+
                         return;
                     }
 
-                    // ============================================================
-                    // CASE 3: No existing loans (NEW LOAN)
-                    // ============================================================
+                    // Case: No existing loans - Show all loan types (normal)
                     populateLoanTypes(allLoanTypes);
                     document.getElementById('loanTypeMessage').innerHTML =
                         '<span class="text-success"><i class="bi bi-check-circle"></i> You can apply for any available loan type.</span>';
                     document.getElementById('loanType').disabled = false;
+                    document.getElementById('topUpInfo').classList.add('d-none');
 
                     if (!data.data.hasValidShares) {
                         isMemberEligible = false;
@@ -565,6 +655,7 @@
                         </div>
                     `;
 
+                    document.getElementById('topUpInfoCard').style.display = 'none';
                     enableLoanForm(data.data.maxLoanAmount || 50000, data.data.eligibleShares || 0);
 
                 } else {
@@ -608,6 +699,7 @@
 
                 if (lt.mobileLoan) tags.push('Mobile');
                 if (lt.isProject) tags.push('Project');
+                if (lt.isTopUp) tags.push('Top-Up');
 
                 if (tags.length > 0) {
                     displayText += ' (' + tags.join(', ') + ')';
@@ -623,6 +715,7 @@
                 option.dataset.repayMethod = lt.repayMethod || 'AMT';
                 option.dataset.mobile = lt.mobileLoan || false;
                 option.dataset.project = lt.isProject || false;
+                option.dataset.isTopUp = lt.isTopUp || false;
                 option.dataset.maxLoans = lt.maxLoans || 5;
 
                 select.appendChild(option);
@@ -652,8 +745,8 @@
             document.getElementById('loanSummary').innerHTML =
                 '<i class="bi bi-calculator fs-1"></i>' +
                 '<p class="mt-3">Select an eligible member to see loan summary</p>';
-            document.getElementById('bridgingInfo').classList.add('d-none');
-            document.getElementById('bridgingInfoCard').style.display = 'none';
+            document.getElementById('topUpInfo').classList.add('d-none');
+            document.getElementById('topUpInfoCard').style.display = 'none';
             document.getElementById('loanTypeMessage').innerHTML = '';
         }
 
@@ -662,9 +755,12 @@
             selectedMemberData = null;
             memberEligibilityData = null;
             isMemberEligible = false;
-            bridgingData = null;
-            topUpLoanTypeCode = null;
-            topUpLoanTypeName = null;
+            hasExistingLoan = false;
+            canApplyForTopUp = false;
+            topUpLoanTypeCodes = [];
+            bridgingLoanTypeCode = null;
+            bridgingLoanTypeName = null;
+            existingLoansList = [];
 
             document.getElementById('selectedMemberNo').value = '';
             document.getElementById('selectedMemberCard').style.display = 'none';
@@ -679,12 +775,9 @@
             document.getElementById('guarantorInfo').classList.add('d-none');
             document.getElementById('loanTypeMessage').innerHTML = '';
 
-            // Reset to all loan types
             populateLoanTypes(allLoanTypes);
-
-            document.getElementById('bridgingInfo').classList.add('d-none');
-            document.getElementById('bridgingInfoCard').style.display = 'none';
-
+            document.getElementById('topUpInfo').classList.add('d-none');
+            document.getElementById('topUpInfoCard').style.display = 'none';
             disableLoanForm();
         }
 
@@ -977,15 +1070,8 @@
             return div.innerHTML;
         }
 
-        document.getElementById('searchInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                searchMembers();
-            }
-        });
-
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('searchInput').focus();
-            // Pre-populate loan types
             populateLoanTypes(allLoanTypes);
         });
     </script>

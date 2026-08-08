@@ -1669,6 +1669,112 @@ namespace SACCOBlockChainSystem.Services
                 .ToListAsync();
         }
 
+        public async Task<MembersPerCIGReportViewModel> GetMembersPerCIGReportAsync(string companyCode, string? searchTerm = null, string? statusFilter = null)
+        {
+            try
+            {
+                _logger.LogInformation($"Generating Members per CIG Report for company: {companyCode}");
+
+                // 1. Get all CIGs for the company
+                var cigsQuery = _context.CIGs
+                    .Where(c => c.CompanyCode == companyCode && c.Status == "Active")
+                    .OrderBy(c => c.GigName);
+
+                var cigs = await cigsQuery.ToListAsync();
+
+                var report = new MembersPerCIGReportViewModel
+                {
+                    CompanyCode = companyCode,
+                    ReportDate = DateTime.Now,
+                    TotalCIGs = cigs.Count,
+                    CIGs = new List<CIGReportDTO>()
+                };
+
+                // Get company name
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+                report.CompanyName = company?.CompanyName ?? "SACCO BlockChain System";
+
+                // 2. For each CIG, get its members
+                foreach (var cig in cigs)
+                {
+                    var membersQuery = _context.Members
+                        .Where(m => m.CompanyCode == companyCode && m.Cigcode == cig.GigCode);
+
+                    // Apply search filter
+                    if (!string.IsNullOrEmpty(searchTerm))
+                    {
+                        membersQuery = membersQuery.Where(m =>
+                            m.MemberNo.Contains(searchTerm) ||
+                            (m.Surname + " " + m.OtherNames).Contains(searchTerm) ||
+                            m.Idno.Contains(searchTerm) ||
+                            m.PhoneNo.Contains(searchTerm) ||
+                            m.Email.Contains(searchTerm));
+                    }
+
+                    // Apply status filter
+                    if (!string.IsNullOrEmpty(statusFilter))
+                    {
+                        if (statusFilter == "Active")
+                        {
+                            membersQuery = membersQuery.Where(m => m.Withdrawn != true && m.Archived != true && m.Dormant != 1);
+                        }
+                        else if (statusFilter == "Inactive")
+                        {
+                            membersQuery = membersQuery.Where(m => m.Withdrawn == true || m.Archived == true || m.Dormant == 1);
+                        }
+                    }
+
+                    var members = await membersQuery
+                        .OrderBy(m => m.Surname)
+                        .ThenBy(m => m.OtherNames)
+                        .ToListAsync();
+
+                    var cigReport = new CIGReportDTO
+                    {
+                        CIGCode = cig.GigCode,
+                        CIGName = cig.GigName,
+                        ContactPhone = cig.ContactPhone,
+                        ContactEmail = cig.ContactEmail,
+                        Chairperson = cig.Chairperson,
+                        RegistrationDate = cig.RegistrationDate,
+                        Status = cig.Status,
+                        TotalMembers = members.Count,
+                        Members = members.Select(m => new MemberPerCIGDTO
+                        {
+                            MemberNo = m.MemberNo,
+                            FullName = $"{m.Surname ?? ""} {m.OtherNames ?? ""}".Trim(),
+                            Surname = m.Surname,
+                            OtherNames = m.OtherNames,
+                            IdNo = m.Idno,
+                            PhoneNo = m.PhoneNo ?? m.MobileNo,
+                            Email = m.Email,
+                            Gender = m.Sex,
+                            Employer = m.Employer,
+                            Department = m.Dept,
+                            Rank = m.Rank,
+                            ShareCapital = m.ShareCap,
+                            Status = (m.Withdrawn == true || m.Archived == true || m.Dormant == 1) ? "Inactive" : "Active",
+                            JoinedDate = m.ApplicDate ?? m.EffectDate ?? m.ApplicDate,
+                            IsActive = m.Withdrawn != true && m.Archived != true && m.Dormant != 1
+                        }).ToList()
+                    };
+
+                    report.CIGs.Add(cigReport);
+                    report.TotalMembers += cigReport.Members.Count;
+                    report.ActiveMembers += cigReport.Members.Count(m => m.IsActive == true);
+                    report.InactiveMembers += cigReport.Members.Count(m => m.IsActive == false);
+                }
+
+                return report;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating Members per CIG report");
+                throw;
+            }
+        }
+
         public async Task<MemberDTO> GetMemberDetailsAsync(string memberNo)
         {
             var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();

@@ -1,35 +1,6 @@
-﻿@using SACCOBlockChainSystem.Models.DTOs
-@model List<LoanScheduleDTO>
-@{
-    ViewData["Title"] = "Loan Repayment Schedule";
-
-    var loan = ViewBag.Loan as Loan;
-    var member = ViewBag.Member as Member;
-    var loanBalance = ViewBag.LoanBalance as Loanbal;
-    var endmain = ViewBag.Endmain as Endmain;
-    var repayments = ViewBag.Repayments as List<Repay> ?? new List<Repay>();
-
-    decimal approvedAmount = ViewBag.ApprovedAmount ?? 0;
-    decimal totalPrincipal = ViewBag.TotalPrincipal ?? 0;
-    decimal totalInterest = ViewBag.TotalInterest ?? 0;
-    decimal totalRepayable = ViewBag.TotalRepayable ?? 0;
-    decimal totalPaid = ViewBag.TotalPaid ?? 0;
-    decimal totalPrincipalPaid = ViewBag.TotalPrincipalPaid ?? 0;
-    decimal totalInterestPaid = ViewBag.TotalInterestPaid ?? 0;
-    decimal totalPenaltyPaid = ViewBag.TotalPenaltyPaid ?? 0;
-    decimal totalOutstanding = ViewBag.TotalOutstanding ?? 0;
-    string repaymentMethod = ViewBag.RepaymentMethod ?? "AMT";
-
-    decimal totalPrincipalOutstanding = totalPrincipal - totalPrincipalPaid;
-    decimal totalInterestOutstanding = totalInterest - totalInterestPaid;
-    decimal paidPercentage = totalRepayable > 0 ? (totalPaid / totalRepayable) * 100 : 0;
-
-    var methodNames = new Dictionary<string, string>
-    {
-        { "AMT", "Amortized (Equal Monthly Installments - EMI)" },
-        { "STL", "Straight Line (Flat Rate)" },
-        { "RBAL", "Reducing Balance (Interest Only Minimum)" }
-    };
+﻿﻿@{
+ViewData["Title"] = "Loan Repayment Schedule";
+Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
 <div class="container-fluid">
@@ -39,327 +10,122 @@
             <i class="fas fa-calendar-alt text-primary me-2"></i>
             Loan Repayment Schedule
         </h2>
-        <div>
-            <a asp-action="ExportSchedule" asp-route-loanNo="@loan?.LoanNo" class="btn btn-success">
-                <i class="fas fa-file-excel me-2"></i> Export to CSV
-            </a>
-            <button onclick="window.print()" class="btn btn-secondary">
-                <i class="fas fa-print me-2"></i> Print
-            </button>
-            <a asp-action="Details" asp-route-loanNo="@loan?.LoanNo" class="btn btn-primary">
-                <i class="fas fa-arrow-left me-2"></i> Back to Loan Details
-            </a>
-        </div>
     </div>
 
-    <!-- Loan Summary Card -->
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- Search Section -->
     <div class="card mb-4">
         <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Loan Information</h5>
+            <h5 class="mb-0"><i class="fas fa-search me-2"></i>Search Loan</h5>
         </div>
         <div class="card-body">
             <div class="row">
-                <div class="col-md-3">
-                    <label class="text-muted">Loan Number</label>
-                    <p class="fw-bold">@loan?.LoanNo</p>
-                </div>
-                <div class="col-md-3">
-                    <label class="text-muted">Member</label>
-                    <p class="fw-bold">
-                        @if (member != null)
-                        {
-                            <span>@member.Surname @member.OtherNames</span>
-                        
-                            <br />
-                            <small class="text-muted">@member.MemberNo</small>
-                        }
-                        else
-                        {
-                            <span>@loan?.MemberNo</span>
-                        }
-                    </p>
-                </div>
-                <div class="col-md-3">
-                    <label class="text-muted">Repayment Method</label>
-                    <p class="fw-bold">
-                        <span class="badge bg-info">@repaymentMethod</span>
-                        <br />
-                        <small class="text-muted">@(methodNames.ContainsKey(repaymentMethod) ? methodNames[repaymentMethod] : repaymentMethod)</small>
-                    </p>
-                </div>
-                <div class="col-md-3">
-                    <label class="text-muted">Interest Rate</label>
-                    <p class="fw-bold">@loan?.Interest% per annum</p>
-                </div>
-            </div>
-            <div class="row mt-2">
-                <div class="col-md-3">
-                    <label class="text-muted">Principal Amount</label>
-                    <p class="fw-bold text-primary">@approvedAmount.ToString("N2") KES</p>
-                </div>
-                <div class="col-md-3">
-                    <label class="text-muted">Total Interest</label>
-                    <p class="fw-bold text-warning">@totalInterest.ToString("N2") KES</p>
-                </div>
-                <div class="col-md-3">
-                    <label class="text-muted">Total Repayable</label>
-                    <p class="fw-bold text-success">@totalRepayable.ToString("N2") KES</p>
-                </div>
-                <div class="col-md-3">
-                    <label class="text-muted">Repayment Period</label>
-                    <p class="fw-bold">@(loan?.RepayPeriod) months</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Payment Progress Card -->
-    <div class="card mb-4">
-        <div class="card-header bg-success text-white">
-            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Payment Progress</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <h3>@totalPaid.ToString("N2") KES</h3>
-                        <p class="text-muted">Total Paid</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <h3 class="text-danger">@totalOutstanding.ToString("N2") KES</h3>
-                        <p class="text-muted">Outstanding Balance</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <h3 class="text-info">@totalPrincipalPaid.ToString("N2") KES</h3>
-                        <p class="text-muted">Principal Paid</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <h3 class="text-warning">@totalInterestPaid.ToString("N2") KES</h3>
-                        <p class="text-muted">Interest Paid</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Progress Bar -->
-            <div class="mt-3">
-                <div class="d-flex justify-content-between mb-1">
-                    <span>Repayment Progress</span>
-                    <span>@paidPercentage.ToString("F1")%</span>
-                </div>
-                <div class="progress" style="height: 25px;">
-                    <div class="progress-bar bg-success"
-                         role="progressbar"
-                         style="width: @paidPercentage%"
-                         aria-valuenow="@paidPercentage"
-                         aria-valuemin="0"
-                         aria-valuemax="100">
-                        @paidPercentage.ToString("F1")%
-                    </div>
-                </div>
-            </div>
-
-            <!-- RBAL Warning -->
-            @if (repaymentMethod == "RBAL")
-            {
-                <div class="alert alert-warning mt-3">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>RBAL (Reducing Balance) Note:</strong> This is an interest-only minimum payment loan.
-                    The principal balance of <strong>@approvedAmount.ToString("N2") KES</strong> remains unchanged
-                    unless you make extra principal payments. Minimum payment shown is interest only.
-                </div>
-            }
-        </div>
-    </div>
-
-    <!-- Schedule Table -->
-    <div class="card">
-        <div class="card-header bg-info text-white">
-            <h5 class="mb-0"><i class="fas fa-table me-2"></i>Repayment Schedule</h5>
-        </div>
-        <div class="card-body">
-            <!-- Filter Controls -->
-            <div class="row mb-3">
-                <div class="col-md-3">
+                <div class="col-md-8">
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-search"></i></span>
-                        <input type="text" id="searchInput" class="form-control" placeholder="Search by installment..." />
-                        <button class="btn btn-outline-secondary" onclick="clearSearch()">
+                        <input type="text" id="searchInput" class="form-control"
+                               placeholder="Search by Loan No, Member No, Member Name, or ID No..." />
+                        <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
                             <i class="fas fa-times"></i> Clear
+                        </button>
+                        <button class="btn btn-primary" type="button" onclick="searchLoans()">
+                            <i class="fas fa-search me-1"></i> Search
                         </button>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <select id="statusFilter" class="form-select">
-                        <option value="all">All Status</option>
-                        <option value="Pending">Pending</option>
-                        <option value="Partial">Partial</option>
-                        <option value="Paid">Paid</option>
-                        <option value="Overdue">Overdue</option>
-                    </select>
+                <div class="col-md-4">
+                    <div id="searchResultsCount" class="text-muted pt-2">
+                        Enter at least 2 characters to search
+                    </div>
                 </div>
-                <div class="col-md-7 text-end">
-                    <button class="btn btn-sm btn-secondary" onclick="expandAll()">
-                        <i class="fas fa-expand me-1"></i> Expand All
-                    </button>
-                    <button class="btn btn-sm btn-secondary" onclick="collapseAll()">
-                        <i class="fas fa-compress me-1"></i> Collapse All
-                    </button>
-                </div>
-            </div>
-
-            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
-                <table class="table table-bordered table-hover" id="scheduleTable">
-                    <thead class="table-light sticky-top">
-                        <tr>
-                            <th style="width: 40px;">#</th>
-                            <th style="width: 100px;">Due Date</th>
-                            <th class="text-end" style="width: 120px;">Principal (KES)</th>
-                            <th class="text-end" style="width: 120px;">Interest (KES)</th>
-                            <th class="text-end" style="width: 120px;">Total Due (KES)</th>
-                            <th class="text-end" style="width: 120px;">Paid (KES)</th>
-                            <th class="text-end" style="width: 120px;">Outstanding (KES)</th>
-                            <th class="text-end" style="width: 100px;">Penalty (KES)</th>
-                            <th style="width: 100px;">Status</th>
-                            <th style="width: 120px;">Paid Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (Model != null && Model.Any())
-                        {
-                            var index = 1;
-                            foreach (var inst in Model)
-                            {
-                                var statusClass = inst.Status switch
-                                {
-                                    "Paid" => "table-success",
-                                    "Partial" => "table-warning",
-                                    "Overdue" => "table-danger",
-                                    _ => ""
-                                };
-                                var statusIcon = inst.Status switch
-                                {
-                                    "Paid" => "fas fa-check-circle text-success",
-                                    "Partial" => "fas fa-clock text-warning",
-                                    "Overdue" => "fas fa-exclamation-circle text-danger",
-                                    "Pending" => "fas fa-hourglass-half text-info",
-                                    _ => "fas fa-question-circle"
-                                };
-
-                                <tr class="@statusClass" data-status="@inst.Status" data-installment="@inst.InstallmentNo">
-                                    <td class="text-center">
-                                        <strong>@inst.InstallmentNo</strong>
-                                        @if (inst.IsFlexible)
-                                        {
-                                            <span class="badge bg-info ms-1" title="Flexible Payment">F</span>
-                                        }
-                                    </td>
-                                    <td>@inst.DueDate.ToString("dd MMM yyyy")</td>
-                                    <td class="text-end">@inst.PrincipalAmount.ToString("N2")</td>
-                                    <td class="text-end">@inst.InterestAmount.ToString("N2")</td>
-                                    <td class="text-end fw-bold">@inst.TotalInstallment.ToString("N2")</td>
-                                    <td class="text-end text-success">@inst.PaidAmount.ToString("N2")</td>
-                                    <td class="text-end text-danger fw-bold">@inst.OutstandingAmount.ToString("N2")</td>
-                                    <td class="text-end text-warning">@inst.PenaltyAmount.ToString("N2")</td>
-                                    <td>
-                                        <i class="@statusIcon me-1"></i>
-                                        <span class="badge @(inst.Status == "Paid" ? "bg-success" : inst.Status == "Partial" ? "bg-warning" : inst.Status == "Overdue" ? "bg-danger" : "bg-secondary")">
-                                            @inst.Status
-                                        </span>
-                                    </td>
-                                    <td>@(inst.PaidDate?.ToString("dd MMM yyyy") ?? "-")</td>
-                                </tr>
-                                index++;
-                            }
-                        }
-                        else
-                        {
-                            <tr>
-                                <td colspan="10" class="text-center py-5">
-                                    <i class="fas fa-calendar-times fa-3x text-muted mb-3 d-block"></i>
-                                    <h5>No schedule found</h5>
-                                    <p class="text-muted">The loan schedule has not been generated yet.</p>
-                                    <button onclick="generateSchedule()" class="btn btn-primary mt-2">
-                                        <i class="fas fa-sync-alt me-2"></i> Generate Schedule
-                                    </button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                    <tfoot class="table-dark">
-                        <tr>
-                            <th colspan="2" class="text-end">Totals:</th>
-                            <th class="text-end">@totalPrincipal.ToString("N2")</th>
-                            <th class="text-end">@totalInterest.ToString("N2")</th>
-                            <th class="text-end">@totalRepayable.ToString("N2")</th>
-                            <th class="text-end">@totalPaid.ToString("N2")</th>
-                            <th class="text-end">@totalOutstanding.ToString("N2")</th>
-                            <th class="text-end">@(Model?.Sum(m => m.PenaltyAmount).ToString("N2") ?? "0.00")</th>
-                            <th colspan="2"></th>
-                        </tr>
-                    </tfoot>
-                </table>
             </div>
         </div>
     </div>
 
-    <!-- Repayment History Card -->
-    @if (repayments.Any())
-    {
-        <div class="card mt-4">
-            <div class="card-header bg-secondary text-white">
-                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Repayment History</h5>
+    <!-- Selected Member Card (shows after selecting a loan) -->
+    <div id="selectedMemberCard" style="display: none;" class="mb-4">
+        <div class="alert alert-success selected-member-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-check-circle-fill"></i>
+                    <strong>Selected Loan:</strong>
+                    <span id="selectedLoanNoDisplay"></span>
+                    <br />
+                    <small>
+                        <strong>Member:</strong> <span id="selectedMemberNameDisplay"></span> |
+                        <span id="selectedMemberNoDisplay"></span> |
+                        ID: <span id="selectedMemberIdDisplay"></span> |
+                        Phone: <span id="selectedMemberPhoneDisplay"></span>
+                    </small>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeSchedule()">
+                        <i class="bi bi-arrow-left"></i> Change Loan
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    <div id="searchResults" style="display: none;">
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-list me-2"></i>Search Results</h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-sm table-bordered">
+                    <table class="table table-bordered table-hover" id="resultsTable">
                         <thead class="table-light">
                             <tr>
-                                <th>Date</th>
-                                <th>Receipt No</th>
-                                <th class="text-end">Amount (KES)</th>
-                                <th class="text-end">Principal (KES)</th>
-                                <th class="text-end">Interest (KES)</th>
-                                <th class="text-end">Penalty (KES)</th>
-                                <th>Payment Method</th>
-                                <th>Reference</th>
+                                <th>Loan No</th>
+                                <th>Member No</th>
+                                <th>Member Name</th>
+                                <th>Loan Type</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Interest</th>
+                                <th>Repay Period</th>
+                                <th>Has Schedule</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            @foreach (var repayment in repayments.OrderByDescending(r => r.DateReceived))
-                            {
-                                <tr>
-                                    <td>@repayment.DateReceived?.ToString("dd MMM yyyy")</td>
-                                    <td><span class="badge bg-primary">@repayment.ReceiptNo</span></td>
-                                    <td class="text-end fw-bold">@repayment.Amount?.ToString("N2")</td>
-                                    <td class="text-end">@repayment.Principal?.ToString("N2")</td>
-                                    <td class="text-end">@repayment.Interest?.ToString("N2")</td>
-                                    <td class="text-end">@repayment.Penalty?.ToString("N2")</td>
-                                    <td>@repayment.ApiKey</td>
-                                    <td>@repayment.TransactionNo</td>
-                                </tr>
-                            }
-                        </tbody>
-                        <tfoot class="table-light">
-                            <tr>
-                                <th colspan="2" class="text-end">Total:</th>
-                                <th class="text-end">@totalPaid.ToString("N2")</th>
-                                <th class="text-end">@totalPrincipalPaid.ToString("N2")</th>
-                                <th class="text-end">@totalInterestPaid.ToString("N2")</th>
-                                <th class="text-end">@totalPenaltyPaid.ToString("N2")</th>
-                                <th colspan="2"></th>
+                        <tbody id="resultsBody">
+                            <tr id="noResultsRow">
+                                <td colspan="10" class="text-center py-3 text-muted">
+                                    <i class="fas fa-search fa-2x d-block mb-2"></i>
+                                    No loans found. Please try a different search term.
+                                </td>
                             </tr>
-                        </tfoot>
+                        </tbody>
                     </table>
                 </div>
             </div>
         </div>
-    }
+    </div>
+
+    <!-- Schedule View -->
+    <div id="scheduleView" style="display: none;">
+        <div id="scheduleContent">
+            <!-- Schedule will be loaded here -->
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; text-align:center; padding-top:20%;">
+        <div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="text-light mt-2">Loading schedule...</div>
+    </div>
 </div>
 
 <style>
@@ -399,12 +165,61 @@
             background: #555;
         }
 
-    .highlight {
-        background-color: #fff3cd !important;
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-weight: 500;
+        font-size: 12px;
+    }
+
+    .status-paid {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-partial {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .status-overdue {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .status-pending {
+        background: #cce5ff;
+        color: #004085;
+    }
+
+    .loan-card {
+        transition: all 0.2s ease;
+    }
+
+        .loan-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+    .selected-member-card {
+        border-left: 4px solid #28a745;
+    }
+
+    .search-results-table tbody tr {
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+        .search-results-table tbody tr:hover {
+            background-color: rgba(13, 110, 253, 0.05);
+        }
+
+    .btn-select-loan {
+        min-width: 80px;
     }
 
     @@media print {
-        .btn, .input-group, .alert-warning, .card-header .btn {
+        .btn, .input-group, #searchResults, .card-header .btn {
             display: none !important;
         }
 
@@ -413,8 +228,8 @@
             box-shadow: none !important;
         }
 
-        .progress {
-            border: 1px solid #ddd;
+        .card-header {
+            background-color: #f8f9fa !important;
         }
 
         .table-responsive {
@@ -424,45 +239,439 @@
         .sticky-top {
             position: relative !important;
         }
+
+        #searchSection, #searchResults {
+            display: none !important;
+        }
+
+        #scheduleView {
+            display: block !important;
+        }
+
+        #selectedMemberCard {
+            display: block !important;
+        }
     }
 </style>
 
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        let currentLoanNo = null;
+        let selectedMemberData = null;
+
         $(document).ready(function() {
-            $('#searchInput').on('keyup', filterTable);
-            $('#statusFilter').on('change', filterTable);
-            initializeExpandCollapse();
+            // Enter key search
+            $('#searchInput').on('keypress', function(e) {
+                if (e.which === 13) {
+                    searchLoans();
+                }
+            });
+
+            // Auto-search with debounce
+            let searchTimeout;
+            $('#searchInput').on('input', function() {
+                clearTimeout(searchTimeout);
+                const term = $(this).val().trim();
+                if (term.length >= 2) {
+                    searchTimeout = setTimeout(searchLoans, 500);
+                } else {
+                    $('#searchResults').hide();
+                }
+            });
         });
 
-        function filterTable() {
-            const searchTerm = $('#searchInput').val().toLowerCase();
-            const statusFilter = $('#statusFilter').val();
+        function searchLoans() {
+            const searchTerm = $('#searchInput').val().trim();
 
-            $('#scheduleTable tbody tr').each(function() {
-                const row = $(this);
-                const installment = row.find('td:first').text().toLowerCase();
-                const status = row.data('status') || '';
+            if (searchTerm.length < 2) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Search Term Too Short',
+                    text: 'Please enter at least 2 characters to search.',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                return;
+            }
 
-                const matchesSearch = searchTerm === '' || installment.includes(searchTerm);
-                const matchesStatus = statusFilter === 'all' || status === statusFilter;
+            showLoading(true);
 
-                if (matchesSearch && matchesStatus) {
-                    row.show();
-                } else {
-                    row.hide();
+            $.ajax({
+                url: '@Url.Action("SearchLoansForSchedule", "LoanMvc")',
+                type: 'GET',
+                data: {
+                    searchTerm: searchTerm,
+                    companyCode: '@ViewBag.CompanyCode'
+                },
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success) {
+                        displaySearchResults(response.loans);
+                    } else {
+                        Swal.fire('Error', response.message || 'Error searching loans', 'error');
+                    }
+                },
+                error: function() {
+                    showLoading(false);
+                    Swal.fire('Error', 'An error occurred while searching', 'error');
                 }
             });
         }
 
-        function clearSearch() {
-            $('#searchInput').val('');
-            $('#statusFilter').val('all');
-            $('#scheduleTable tbody tr').show();
+        function displaySearchResults(loans) {
+            const tbody = $('#resultsBody');
+            tbody.empty();
+
+            if (!loans || loans.length === 0) {
+                tbody.append(`
+                    <tr>
+                        <td colspan="10" class="text-center py-3 text-muted">
+                            <i class="fas fa-search fa-2x d-block mb-2"></i>
+                            No loans found. Please try a different search term.
+                        </td>
+                    </tr>
+                `);
+                $('#searchResults').show();
+                $('#searchResultsCount').text('No results found');
+                return;
+            }
+
+            $('#searchResultsCount').text(`${loans.length} loan(s) found`);
+
+            loans.forEach(function(loan) {
+                const statusClass = loan.hasSchedule ? 'text-success' : 'text-danger';
+                const statusText = loan.hasSchedule ? 'Yes' : 'No';
+
+                let statusBadge = '';
+                const statusName = loan.statusName || 'Unknown';
+                switch(statusName) {
+                    case 'Disbursed': statusBadge = 'bg-success'; break;
+                    case 'Endorsed': statusBadge = 'bg-info'; break;
+                    case 'Approved': statusBadge = 'bg-primary'; break;
+                    case 'Closed': statusBadge = 'bg-secondary'; break;
+                    case 'Rejected': statusBadge = 'bg-danger'; break;
+                    default: statusBadge = 'bg-warning';
+                }
+
+                const isUpfront = loan.interestUpront ? ' <span class="badge bg-info">Upfront</span>' : '';
+
+                tbody.append(`
+                    <tr>
+                        <td><strong>${loan.loanNo}</strong></td>
+                        <td>${loan.memberNo}</td>
+                        <td>${loan.memberName || loan.memberNo}</td>
+                        <td>${loan.loanTypeName || 'N/A'}</td>
+                        <td class="text-end">${formatCurrency(loan.loanAmt)}</td>
+                        <td><span class="badge ${statusBadge}">${statusName}</span></td>
+                        <td>${loan.interest || 0}%${isUpfront}</td>
+                        <td>${loan.repayPeriod || 0} months</td>
+                        <td class="text-center"><i class="fas ${loan.hasSchedule ? 'fa-check-circle text-success' : 'fa-times-circle text-danger'}"></i> ${statusText}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary btn-select-loan" onclick="viewSchedule('${loan.loanNo}')">
+                                <i class="fas fa-eye me-1"></i> View Schedule
+                            </button>
+                            ${!loan.hasSchedule ?
+                                `<button class="btn btn-sm btn-warning" onclick="generateSchedule('${loan.loanNo}')">
+                                    <i class="fas fa-sync-alt me-1"></i> Generate
+                                </button>` : ''
+                            }
+                        </td>
+                    </tr>
+                `);
+            });
+
+            $('#searchResults').show();
         }
 
-        function generateSchedule() {
+        function viewSchedule(loanNo) {
+            currentLoanNo = loanNo;
+            showLoading(true);
+
+            $.ajax({
+                url: '@Url.Action("ViewSchedule", "LoanMvc")',
+                type: 'GET',
+                data: { loanNo: loanNo },
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success) {
+                        // Store member data
+                        if (response.member) {
+                            selectedMemberData = response.member;
+                        }
+                        // Show selected member card
+                        showSelectedMemberCard(loanNo, response);
+                        renderSchedule(response);
+                        // Hide search results
+                        $('#searchResults').hide();
+                    } else {
+                        Swal.fire('Error', response.message || 'Error loading schedule', 'error');
+                    }
+                },
+                error: function() {
+                    showLoading(false);
+                    Swal.fire('Error', 'An error occurred while loading the schedule', 'error');
+                }
+            });
+        }
+
+        function showSelectedMemberCard(loanNo, data) {
+            const member = data.member || {};
+            const loan = data.loan || {};
+
+            const fullName = (member.surname || '') + ' ' + (member.otherNames || '');
+
+            $('#selectedLoanNoDisplay').text(loanNo);
+            $('#selectedMemberNameDisplay').text(fullName.trim() || member.memberNo || loan.memberNo);
+            $('#selectedMemberNoDisplay').text(member.memberNo || loan.memberNo);
+            $('#selectedMemberIdDisplay').text(member.idno || 'N/A');
+            $('#selectedMemberPhoneDisplay').text(member.phoneNo || member.phone || 'N/A');
+
+            $('#selectedMemberCard').show();
+        }
+
+        function renderSchedule(data) {
+            const schedule = data.schedule || [];
+            const loan = data.loan || {};
+            const member = data.member || {};
+            const loanBalance = data.loanBalance || {};
+            const isUpfront = data.isUpfrontInterest || false;
+            const upfrontAmount = data.upfrontInterestAmount || 0;
+
+            const fullName = (member.surname || '') + ' ' + (member.otherNames || '');
+
+            let scheduleHtml = `
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            Loan Schedule - ${loan.loanNo}
+                        </h5>
+                        <div>
+                            <button class="btn btn-sm btn-success me-1" onclick="exportToExcel('${loan.loanNo}')">
+                                <i class="fas fa-file-excel me-1"></i> Excel
+                            </button>
+                            <button class="btn btn-sm btn-danger me-1" onclick="exportToPdf('${loan.loanNo}')">
+                                <i class="fas fa-file-pdf me-1"></i> PDF
+                            </button>
+                            <button class="btn btn-sm btn-outline-light" onclick="closeSchedule()">
+                                <i class="fas fa-times me-1"></i> Close
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Loan Information -->
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <label class="text-muted">Loan Number</label>
+                                <p class="fw-bold">${loan.loanNo}</p>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="text-muted">Member</label>
+                                <p class="fw-bold">${fullName.trim() || member.memberNo || loan.memberNo}</p>
+                                <small class="text-muted">${member.memberNo || loan.memberNo}</small>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="text-muted">Repayment Method</label>
+                                <p class="fw-bold"><span class="badge bg-info">${loan.repayMethod || 'AMT'}</span></p>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="text-muted">Interest Rate</label>
+                                <p class="fw-bold">${loan.interest || 0}% p.a.</p>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="text-muted">Repayment Period</label>
+                                <p class="fw-bold">${loan.repayPeriod || 0} months</p>
+                            </div>
+                        </div>
+
+                        ${isUpfront ? `
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Upfront Interest:</strong> This loan has upfront interest enabled.
+                            Total interest of <strong>KES ${formatCurrency(upfrontAmount)}</strong> was deducted during endorsement.
+                            The schedule below shows principal-only payments.
+                        </div>
+                        ` : ''}
+
+                        <!-- Summary Cards -->
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">Approved Amount</h6>
+                                        <h4 class="text-primary">KES ${formatCurrency(data.approvedAmount)}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">Total Interest</h6>
+                                        <h4 class="text-warning">KES ${formatCurrency(data.totalInterest)}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">Total Paid</h6>
+                                        <h4 class="text-success">KES ${formatCurrency(data.totalPaid)}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">Outstanding Balance</h6>
+                                        <h4 class="text-danger">KES ${formatCurrency(data.totalOutstanding)}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Repayment Progress</span>
+                                <span>${data.totalRepayable > 0 ? ((data.totalPaid / data.totalRepayable) * 100).toFixed(1) : 0}%</span>
+                            </div>
+                            <div class="progress" style="height: 25px;">
+                                <div class="progress-bar bg-success"
+                                     role="progressbar"
+                                     style="width: ${data.totalRepayable > 0 ? (data.totalPaid / data.totalRepayable) * 100 : 0}%"
+                                     aria-valuenow="${data.totalRepayable > 0 ? (data.totalPaid / data.totalRepayable) * 100 : 0}"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                    ${data.totalRepayable > 0 ? ((data.totalPaid / data.totalRepayable) * 100).toFixed(1) : 0}%
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Schedule Table -->
+                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <table class="table table-bordered table-hover" id="scheduleTable">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width: 40px;">#</th>
+                                        <th>Due Date</th>
+                                        <th class="text-end">Principal (KES)</th>
+                                        <th class="text-end">Interest (KES)</th>
+                                        <th class="text-end">Total Due (KES)</th>
+                                        <th class="text-end">Paid (KES)</th>
+                                        <th class="text-end">Outstanding (KES)</th>
+                                        <th class="text-end">Penalty (KES)</th>
+                                        <th>Status</th>
+                                        <th>Paid Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${schedule.length === 0 ? `
+                                    <tr>
+                                        <td colspan="10" class="text-center py-5">
+                                            <i class="fas fa-calendar-times fa-3x text-muted mb-3 d-block"></i>
+                                            <h5>No schedule entries found</h5>
+                                            <button class="btn btn-primary mt-2" onclick="generateSchedule('${loan.loanNo}')">
+                                                <i class="fas fa-sync-alt me-2"></i> Generate Schedule
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    ` : schedule.map(function(inst) {
+                                        const statusClass = inst.status === 'Paid' ? 'table-success' :
+                                                          inst.status === 'Partial' ? 'table-warning' :
+                                                          inst.status === 'Overdue' ? 'table-danger' : '';
+
+                                        const statusBadge = inst.status === 'Paid' ? 'status-paid' :
+                                                            inst.status === 'Partial' ? 'status-partial' :
+                                                            inst.status === 'Overdue' ? 'status-overdue' : 'status-pending';
+
+                                        return `
+                                        <tr class="${statusClass}">
+                                            <td class="text-center"><strong>${inst.installmentNo}</strong></td>
+                                            <td>${formatDate(inst.dueDate)}</td>
+                                            <td class="text-end">${formatCurrency(inst.principalAmount)}</td>
+                                            <td class="text-end">${formatCurrency(inst.interestAmount)}</td>
+                                            <td class="text-end fw-bold">${formatCurrency(inst.totalInstallment)}</td>
+                                            <td class="text-end text-success">${formatCurrency(inst.paidAmount)}</td>
+                                            <td class="text-end text-danger fw-bold">${formatCurrency(inst.outstandingAmount)}</td>
+                                            <td class="text-end text-warning">${formatCurrency(inst.penaltyAmount)}</td>
+                                            <td><span class="status-badge ${statusBadge}">${inst.status}</span></td>
+                                            <td>${inst.paidDate ? formatDate(inst.paidDate) : '-'}</td>
+                                        </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                                <tfoot class="table-dark">
+                                    <tr>
+                                        <th colspan="2" class="text-end">Totals:</th>
+                                        <th class="text-end">${formatCurrency(data.totalPrincipal)}</th>
+                                        <th class="text-end">${formatCurrency(data.totalInterest)}</th>
+                                        <th class="text-end">${formatCurrency(data.totalRepayable)}</th>
+                                        <th class="text-end">${formatCurrency(data.totalPaid)}</th>
+                                        <th class="text-end">${formatCurrency(data.totalOutstanding)}</th>
+                                        <th class="text-end">${formatCurrency(schedule.reduce((sum, s) => sum + s.penaltyAmount, 0))}</th>
+                                        <th colspan="2"></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <!-- Repayment History -->
+                        ${data.repayments && data.repayments.length > 0 ? `
+                        <div class="mt-4">
+                            <h6><i class="fas fa-history me-2"></i>Repayment History</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Receipt No</th>
+                                            <th class="text-end">Amount (KES)</th>
+                                            <th class="text-end">Principal (KES)</th>
+                                            <th class="text-end">Interest (KES)</th>
+                                            <th class="text-end">Penalty (KES)</th>
+                                            <th>Reference</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.repayments.map(function(r) {
+                                            return `
+                                            <tr>
+                                                <td>${formatDate(r.dateReceived)}</td>
+                                                <td><span class="badge bg-primary">${r.receiptNo}</span></td>
+                                                <td class="text-end fw-bold">${formatCurrency(r.amount)}</td>
+                                                <td class="text-end">${formatCurrency(r.principal)}</td>
+                                                <td class="text-end">${formatCurrency(r.interest)}</td>
+                                                <td class="text-end">${formatCurrency(r.penalty)}</td>
+                                                <td>${r.transactionNo || r.apiKey || '-'}</td>
+                                            </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                    <tfoot class="table-light">
+                                        <tr>
+                                            <th colspan="2" class="text-end">Total:</th>
+                                            <th class="text-end">${formatCurrency(data.totalPaid)}</th>
+                                            <th class="text-end">${formatCurrency(data.totalPrincipalPaid)}</th>
+                                            <th class="text-end">${formatCurrency(data.totalInterestPaid)}</th>
+                                            <th class="text-end">${formatCurrency(data.totalPenaltyPaid)}</th>
+                                            <th></th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            $('#scheduleContent').html(scheduleHtml);
+            $('#scheduleView').show();
+            $('#scheduleView')[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function generateSchedule(loanNo) {
             Swal.fire({
                 title: 'Generate Schedule',
                 text: 'Are you sure you want to generate the loan schedule?',
@@ -475,16 +684,16 @@
                 if (result.isConfirmed) {
                     showLoading(true);
                     $.ajax({
-                        url: '@Url.Action("GenerateSchedule", "Loan")',
-                        type: 'POST',
-                        data: { loanNo: '@loan?.LoanNo' },
+                        url: '@Url.Action("GenerateSchedule", "LoanMvc")',
+                        type: 'GET',
+                        data: { loanNo: loanNo },
                         success: function(response) {
                             showLoading(false);
                             if (response.success) {
                                 Swal.fire('Success!', response.message, 'success');
-                                setTimeout(() => location.reload(), 1500);
+                                setTimeout(() => viewSchedule(loanNo), 1000);
                             } else {
-                                Swal.fire('Error', response.message, 'error');
+                                Swal.fire('Error', response.message || 'Error generating schedule', 'error');
                             }
                         },
                         error: function() {
@@ -496,21 +705,52 @@
             });
         }
 
-        function expandAll() {
-            $('.collapse-row').removeClass('d-none').show();
+        function exportToExcel(loanNo) {
+            window.location.href = '@Url.Action("ExportScheduleToExcel", "LoanMvc")?loanNo=' + loanNo;
         }
 
-        function collapseAll() {
-            $('.collapse-row').addClass('d-none').hide();
+        function exportToPdf(loanNo) {
+            window.location.href = '@Url.Action("ExportScheduleToPdf", "LoanMvc")?loanNo=' + loanNo;
         }
 
-        function initializeExpandCollapse() {
-            // Add expand/collapse buttons to each row if needed
-            $('tr[data-has-details="true"]').each(function() {
-                const row = $(this);
-                const detailsRow = $('<tr class="collapse-row d-none"><td colspan="10"><div class="p-3 bg-light">' +
-                    '<strong>Details:</strong> ' + row.data('details') + '</div></td></tr>');
-                row.after(detailsRow);
+        function closeSchedule() {
+            $('#scheduleView').hide();
+            $('#scheduleContent').empty();
+            $('#selectedMemberCard').hide();
+            $('#searchResults').show();
+            currentLoanNo = null;
+            selectedMemberData = null;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function clearSearch() {
+            $('#searchInput').val('');
+            $('#searchResults').hide();
+            $('#searchResultsCount').text('Enter at least 2 characters to search');
+            $('#resultsBody').empty();
+            $('#selectedMemberCard').hide();
+            $('#scheduleView').hide();
+            $('#scheduleContent').empty();
+            currentLoanNo = null;
+            selectedMemberData = null;
+        }
+
+        function formatCurrency(value) {
+            if (value === undefined || value === null) return '0.00';
+            return parseFloat(value).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return '-';
+            return date.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
             });
         }
 
@@ -521,28 +761,5 @@
                 $('#loadingOverlay').fadeOut(200);
             }
         }
-
-        // Highlight search text
-        function highlightText() {
-            const searchTerm = $('#searchInput').val();
-            if (!searchTerm) return;
-
-            $('td').each(function() {
-                const text = $(this).text();
-                if (text.toLowerCase().includes(searchTerm.toLowerCase())) {
-                    const regex = new RegExp(`(${searchTerm})`, 'gi');
-                    const newText = text.replace(regex, '<span class="highlight">$1</span>');
-                    $(this).html(newText);
-                }
-            });
-        }
     </script>
 }
-
-<!-- Loading Overlay -->
-<div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; text-align:center; padding-top:20%;">
-    <div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-    </div>
-    <div class="text-light mt-2">Generating schedule...</div>
-</div>

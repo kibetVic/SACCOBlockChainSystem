@@ -24,10 +24,10 @@
             border-left: 4px solid transparent;
         }
 
-            .summary-card:hover {
-                transform: translateY(-3px);
-                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            }
+        .summary-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
 
         .filter-section {
             background-color: #f8f9fa;
@@ -41,6 +41,10 @@
             font-size: 0.875rem;
         }
 
+        .table-actions .btn-group {
+            gap: 4px;
+        }
+
         .progress-sm {
             height: 5px;
         }
@@ -51,6 +55,190 @@
             height: 10px;
             border-radius: 50%;
             margin-right: 5px;
+        }
+
+        .table tbody tr:hover {
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+
+        .table td.text-end.text-danger {
+            font-weight: 600;
+        }
+
+        .table td.text-end.text-success {
+            font-weight: 600;
+        }
+
+        .table td.text-end.text-info {
+            font-weight: 600;
+        }
+
+        .nav-pills .nav-link {
+            color: #495057;
+        }
+
+        .nav-pills .nav-link.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+
+        .nav-pills .nav-link .badge {
+            font-size: 0.7rem;
+        }
+
+        .filter-label {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #495057;
+        }
+
+        .loan-row-hidden {
+            display: none !important;
+        }
+
+        .filter-badge {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-badge:hover {
+            transform: scale(1.05);
+        }
+
+        .filter-badge.active-filter {
+            border: 2px solid #0d6efd;
+            box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+        }
+
+        .filter-count {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background-color: #e9ecef;
+            color: #495057;
+            margin-left: 4px;
+        }
+
+        .clear-filter-btn {
+            cursor: pointer;
+            color: #dc3545;
+            font-size: 0.8rem;
+        }
+
+        .clear-filter-btn:hover {
+            text-decoration: underline;
+        }
+
+        .no-results-found {
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .no-results-found i {
+            font-size: 3rem;
+            color: #dee2e6;
+        }
+
+        .filter-summary {
+            background-color: #e7f3ff;
+            border-radius: 6px;
+            padding: 8px 15px;
+            margin-bottom: 10px;
+            display: none;
+        }
+
+        .filter-summary .badge-filter {
+            background-color: #0d6efd;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin: 2px 4px;
+        }
+
+        .filter-summary .badge-filter .remove-filter {
+            cursor: pointer;
+            font-weight: bold;
+            margin-left: 4px;
+        }
+
+        .filter-summary .badge-filter .remove-filter:hover {
+            opacity: 0.7;
+        }
+
+        /* Table container with max height and scroll */
+        .table-responsive-scroll {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .table-responsive-scroll thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .table-responsive-scroll thead th {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        /* Loading shimmer effect */
+        .shimmer {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        @@keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .loading-row td {
+            padding: 12px 8px;
+        }
+
+        .loading-row .shimmer-text {
+            height: 16px;
+            width: 80%;
+            display: inline-block;
+        }
+
+        .loading-row .shimmer-badge {
+            height: 24px;
+            width: 60px;
+            display: inline-block;
+            border-radius: 20px;
+        }
+
+        .loading-row .shimmer-amount {
+            height: 16px;
+            width: 100px;
+            display: inline-block;
+            float: right;
+        }
+
+        .loan-row-loading {
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .loan-row-loaded {
+            opacity: 1;
+        }
+
+        .summary-loading {
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }
+
+        .summary-loaded {
+            opacity: 1;
         }
     </style>
 }
@@ -64,6 +252,9 @@
                 </a>
                 <h2 class="page-title mb-0">
                     <i class="bi bi-files me-2"></i>Loans Management
+                    <small class="text-muted fs-6 fw-light" id="loadingIndicator">
+                        <span class="spinner-border spinner-border-sm ms-2" role="status" style="display:none;"></span>
+                    </small>
                 </h2>
             </div>
             <div>
@@ -97,106 +288,116 @@
     </div>
 }
 
-@* <!-- Summary Cards -->
-<div class="row g-3 mb-4">
+<!-- Summary Cards -->
+<div class="row g-3 mb-4" id="summaryCards">
     <div class="col-md-3">
-        <div class="card summary-card bg-primary text-white">
+        <div class="card summary-card border-primary">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-white-50 mb-2">Total Loans</h6>
-                        <h3 class="mb-0">@totalLoans</h3>
+                        <h6 class="text-muted mb-1">Total Loans</h6>
+                        <h4 class="mb-0" id="totalLoansDisplay">@totalLoans</h4>
                     </div>
-                    <i class="bi bi-files fs-1 opacity-50"></i>
+                    <div class="bg-primary bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-files fs-4 text-primary"></i>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card summary-card bg-success text-white">
+        <div class="card summary-card border-success">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-white-50 mb-2">Total Principal</h6>
-                        <h5 class="mb-0">KES @totalPrincipal.ToString("N0")</h5>
+                        <h6 class="text-muted mb-1">Total Principal</h6>
+                        <h5 class="mb-0" id="totalPrincipalDisplay">KES <span id="totalPrincipalValue">@totalPrincipal.ToString("N0")</span></h5>
                     </div>
-                    <i class="bi bi-cash-stack fs-1 opacity-50"></i>
+                    <div class="bg-success bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-cash-stack fs-4 text-success"></i>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card summary-card bg-info text-white">
+        <div class="card summary-card border-warning">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-white-50 mb-2">Total Disbursed</h6>
-                        <h5 class="mb-0">KES @totalDisbursed.ToString("N0")</h5>
+                        <h6 class="text-muted mb-1">Total Approved</h6>
+                        <h5 class="mb-0" id="totalApprovedDisplay">KES <span id="totalApprovedValue">@totalApproved.ToString("N0")</span></h5>
                     </div>
-                    <i class="bi bi-cash fs-1 opacity-50"></i>
+                    <div class="bg-warning bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-check-circle fs-4 text-warning"></i>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card summary-card bg-warning text-white">
+        <div class="card summary-card border-danger">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-white-50 mb-2">Outstanding</h6>
-                        <h5 class="mb-0">KES @totalOutstanding.ToString("N0")</h5>
+                        <h6 class="text-muted mb-1">Total Outstanding</h6>
+                        <h5 class="mb-0" id="totalOutstandingDisplay">KES <span id="totalOutstandingValue">@totalOutstanding.ToString("N0")</span></h5>
                     </div>
-                    <i class="bi bi-clock-history fs-1 opacity-50"></i>
+                    <div class="bg-danger bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-exclamation-triangle fs-4 text-danger"></i>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div> *@
+</div>
 
 <!-- Advanced Filter Section -->
 <div class="filter-section">
     <h5 class="mb-3">
         <i class="bi bi-funnel me-2"></i>Filter Loans
         <button class="btn btn-sm btn-link float-end" type="button" data-bs-toggle="collapse" data-bs-target="#advancedFilters">
-            Advanced Filters
+            Advanced Filters <i class="bi bi-chevron-down"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-danger float-end me-2" type="button" onclick="clearAllFilters()" id="clearAllFiltersBtn" style="display:none;">
+            <i class="bi bi-x-circle me-1"></i>Clear All Filters
         </button>
     </h5>
 
-    <form asp-action="SearchResults" method="get" id="filterForm">
+    <form id="filterForm" onsubmit="return false;">
         <div class="row g-3">
             <div class="col-md-3">
-                <label class="form-label">Loan Status</label>
-                <select name="LoanStatus" class="form-select">
+                <label class="filter-label">Loan Status</label>
+                <select name="LoanStatus" class="form-select form-select-sm" id="statusFilter" onchange="applyFilters()">
                     <option value="">All Statuses</option>
                     <option value="Draft">Draft</option>
                     <option value="Submitted">Submitted</option>
                     <option value="UnderAppraisal">Under Appraisal</option>
-                    <option value="PendingFinalApproval">Pending Final Approval</option>
                     <option value="Approved">Approved</option>
+                    <option value="Endorsed">Endorsed</option>
                     <option value="Rejected">Rejected</option>
                     <option value="Disbursed">Disbursed</option>
-                    <option value="Active">Active</option>
                     <option value="Closed">Closed</option>
                     <option value="WrittenOff">Written Off</option>
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label">Search By</label>
-                <div class="input-group">
+                <label class="filter-label">Search By</label>
+                <div class="input-group input-group-sm">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" name="searchTerm" class="form-control" placeholder="Loan No / Member Name" />
+                    <input type="text" id="searchTerm" class="form-control" placeholder="Loan No / Member Name / Member No" onkeyup="applyFilters()" />
                 </div>
             </div>
             <div class="col-md-2">
-                <label class="form-label">From Date</label>
-                <input type="date" name="FromDate" class="form-control" />
+                <label class="filter-label">From Date</label>
+                <input type="date" id="fromDate" class="form-control form-control-sm" onchange="applyFilters()" />
             </div>
             <div class="col-md-2">
-                <label class="form-label">To Date</label>
-                <input type="date" name="ToDate" class="form-control" />
+                <label class="filter-label">To Date</label>
+                <input type="date" id="toDate" class="form-control form-control-sm" onchange="applyFilters()" />
             </div>
             <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">
+                <button type="button" class="btn btn-primary btn-sm w-100" onclick="applyFilters()">
                     <i class="bi bi-search me-2"></i>Apply Filter
                 </button>
             </div>
@@ -205,22 +406,22 @@
         <div class="collapse mt-3" id="advancedFilters">
             <div class="row g-3">
                 <div class="col-md-3">
-                    <label class="form-label">Min Amount</label>
-                    <div class="input-group">
+                    <label class="filter-label">Min Amount</label>
+                    <div class="input-group input-group-sm">
                         <span class="input-group-text">KES</span>
-                        <input type="number" name="MinAmount" class="form-control" step="0.01" />
+                        <input type="number" id="minAmount" class="form-control" step="0.01" onchange="applyFilters()" />
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Max Amount</label>
-                    <div class="input-group">
+                    <label class="filter-label">Max Amount</label>
+                    <div class="input-group input-group-sm">
                         <span class="input-group-text">KES</span>
-                        <input type="number" name="MaxAmount" class="form-control" step="0.01" />
+                        <input type="number" id="maxAmount" class="form-control" step="0.01" onchange="applyFilters()" />
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Loan Type</label>
-                    <select name="LoanCode" class="form-select">
+                    <label class="filter-label">Loan Type</label>
+                    <select id="loanTypeFilter" class="form-select form-select-sm" onchange="applyFilters()">
                         <option value="">All Types</option>
                         @if (ViewBag.LoanTypes != null)
                         {
@@ -232,34 +433,53 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Member No</label>
-                    <input type="text" name="MemberNo" class="form-control" placeholder="Member Number" />
+                    <label class="filter-label">Member No</label>
+                    <input type="text" id="memberNoFilter" class="form-control form-control-sm" placeholder="Member Number" onkeyup="applyFilters()" />
                 </div>
             </div>
         </div>
     </form>
+
+    <!-- Filter Summary -->
+    <div id="filterSummary" class="filter-summary mt-3">
+        <div class="d-flex align-items-center flex-wrap">
+            <span class="me-2"><strong>Active Filters:</strong></span>
+            <span id="filterBadges"></span>
+            <span class="ms-2 text-muted" id="filteredCount"></span>
+        </div>
+    </div>
 </div>
 
 <!-- Status Tabs -->
 <ul class="nav nav-pills mb-3" id="statusTabs" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="all-tab" data-bs-toggle="pill" data-bs-target="#all" type="button">
+        <button class="nav-link active" id="all-tab" data-status-filter="all" onclick="filterByTab('all')" type="button">
             All Loans <span class="badge bg-secondary ms-2">@totalLoans</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="pending-tab" data-bs-toggle="pill" data-bs-target="#pending" type="button">
-            Pending <span class="badge bg-warning ms-2">@Model.Count(l => l.LoanStatus == "Draft" || l.LoanStatus == "Submitted")</span>
+        <button class="nav-link" id="pending-tab" data-status-filter="pending" onclick="filterByTab('pending')" type="button">
+            Pending <span class="badge bg-warning ms-2">@Model.Count(l => l.LoanStatus == "Draft" || l.LoanStatus == "Submitted" || l.LoanStatus == "UnderAppraisal")</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="active-tab" data-bs-toggle="pill" data-bs-target="#active" type="button">
-            Active <span class="badge bg-success ms-2">@Model.Count(l => l.LoanStatus == "Disbursed" || l.LoanStatus == "Active")</span>
+        <button class="nav-link" id="active-tab" data-status-filter="active" onclick="filterByTab('active')" type="button">
+            Active <span class="badge bg-success ms-2">@Model.Count(l => l.LoanStatus == "Disbursed" || l.LoanStatus == "Endorsed")</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="completed-tab" data-bs-toggle="pill" data-bs-target="#completed" type="button">
-            Completed <span class="badge bg-info ms-2">@Model.Count(l => l.LoanStatus == "Closed")</span>
+        <button class="nav-link" id="approved-tab" data-status-filter="approved" onclick="filterByTab('approved')" type="button">
+            Approved <span class="badge bg-info ms-2">@Model.Count(l => l.LoanStatus == "Approved")</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="completed-tab" data-status-filter="completed" onclick="filterByTab('completed')" type="button">
+            Completed <span class="badge bg-secondary ms-2">@Model.Count(l => l.LoanStatus == "Closed")</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="rejected-tab" data-status-filter="rejected" onclick="filterByTab('rejected')" type="button">
+            Rejected <span class="badge bg-danger ms-2">@Model.Count(l => l.LoanStatus == "Rejected")</span>
         </button>
     </li>
 </ul>
@@ -267,69 +487,566 @@
 <!-- Loans Table -->
 <div class="tab-content">
     <div class="tab-pane fade show active" id="all">
-        @await Html.PartialAsync("_LoansTable", Model)
-    </div>
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">All Loans</h5>
+                <span class="badge bg-primary" id="loanCountBadge">@Model.Count Loans</span>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.Any())
+                {
+                    <div class="table-responsive table-responsive-scroll">
+                        <table class="table table-hover align-middle mb-0" id="loansTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 110px;">Loan No</th>
+                                    <th style="min-width: 150px;">Member</th>
+                                    <th style="min-width: 120px;">Loan Type</th>
+                                    <th class="text-end" style="min-width: 120px;">Principal</th>
+                                    <th class="text-end" style="min-width: 120px;">Approved</th>
+                                    <th class="text-end" style="min-width: 130px;">Loan Balance</th>
+                                    <th style="min-width: 110px;">Application Date</th>
+                                    <th style="min-width: 200px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="loansTableBody">
+                                @foreach (var loan in Model)
+                                {
+                                    var statusColor = loan.LoanStatus switch
+                                    {
+                                        "Draft" => "secondary",
+                                        "Submitted" => "info",
+                                        "UnderAppraisal" => "warning",
+                                        "Approved" => "success",
+                                        "Endorsed" => "info",
+                                        "Rejected" => "danger",
+                                        "Disbursed" => "success",
+                                        "Closed" => "secondary",
+                                        "WrittenOff" => "dark",
+                                        _ => "secondary"
+                                    };
 
-    <div class="tab-pane fade" id="pending">
-        @await Html.PartialAsync("_LoansTable", Model.Where(l => l.LoanStatus == "Draft" || l.LoanStatus == "Submitted" || l.LoanStatus == "UnderAppraisal" || l.LoanStatus == "PendingFinalApproval").ToList())
-    </div>
+                                    var maxLoanAmount = loan.MaxLoanamt > 0 ? loan.MaxLoanamt : loan.PrincipalAmount;
+                                    var isExceedingMax = loan.PrincipalAmount > maxLoanAmount;
+                                    var principalClass = isExceedingMax ? "text-danger fw-bold" : "text-dark";
 
-    <div class="tab-pane fade" id="active">
-        @await Html.PartialAsync("_LoansTable", Model.Where(l => l.LoanStatus == "Disbursed" || l.LoanStatus == "Active").ToList())
-    </div>
+                                    var approvedAmount = loan.ApprovedAmount > 0 ? loan.ApprovedAmount : loan.PrincipalAmount;
+                                    var outstandingBalance = loan.OutstandingBalance;
+                                    var outstandingClass = outstandingBalance > 0 ? "text-danger fw-bold" : "text-success fw-bold";
+                                    var outstandingDisplay = outstandingBalance > 0 ? $"KES {outstandingBalance:N0}" : "KES 0";
 
-    <div class="tab-pane fade" id="completed">
-        @await Html.PartialAsync("_LoansTable", Model.Where(l => l.LoanStatus == "Closed").ToList())
+                                    <tr data-loan-no="@loan.LoanNo"
+                                        data-status="@loan.LoanStatus"
+                                        data-member="@loan.MemberNo"
+                                        data-member-name="@loan.MemberName"
+                                        data-loan-type="@loan.LoanType"
+                                        data-application-date="@loan.ApplicationDate.ToString("yyyy-MM-dd")"
+                                        data-principal="@loan.PrincipalAmount"
+                                        data-approved="@approvedAmount"
+                                        data-outstanding="@outstandingBalance">
+                                        <td>
+                                            <strong>@loan.LoanNo</strong>
+                                        </td>
+                                        <td>
+                                            <div>@loan.MemberName</div>
+                                            <small class="text-muted">@loan.MemberNo</small>
+                                        </td>
+                                        <td>@loan.LoanType</td>
+                                        <td class="text-end @principalClass">
+                                            KES @loan.PrincipalAmount.ToString("N0")
+                                        </td>
+                                        <td class="text-end text-primary fw-bold">
+                                            KES @approvedAmount.ToString("N0")
+                                        </td>
+                                        <td class="text-end @outstandingClass">
+                                            @outstandingDisplay
+                                        </td>
+                                        <td>@loan.ApplicationDate.ToString("dd/MM/yyyy")</td>
+                                        <td class="table-actions">
+                                            <div class="btn-group">
+                                                <a asp-action="Details" asp-route-loanNo="@loan.LoanNo"
+                                                   class="btn btn-sm btn-outline-primary"
+                                                   data-bs-toggle="tooltip"
+                                                   title="View Details">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+
+                                                @if (loan.LoanStatus == "Draft" || loan.LoanStatus == "Submitted")
+                                                {
+                                                    <a asp-action="AssignGuarantor" asp-route-loanNo="@loan.LoanNo"
+                                                       class="btn btn-sm btn-outline-warning"
+                                                       data-bs-toggle="tooltip"
+                                                       title="Assign Guarantors">
+                                                        <i class="bi bi-people"></i>
+                                                    </a>
+                                                }
+
+                                                @if (loan.LoanStatus == "Submitted")
+                                                {
+                                                    <a asp-action="Appraise" asp-route-loanNo="@loan.LoanNo"
+                                                       class="btn btn-sm btn-outline-info"
+                                                       data-bs-toggle="tooltip"
+                                                       title="Appraise">
+                                                        <i class="bi bi-clipboard-check"></i>
+                                                    </a>
+                                                }
+
+                                                @if (loan.LoanStatus == "Approved")
+                                                {
+                                                    <a asp-action="Endorse" asp-route-loanNo="@loan.LoanNo"
+                                                       class="btn btn-sm btn-outline-info"
+                                                       data-bs-toggle="tooltip"
+                                                       title="Endorse">
+                                                        <i class="bi bi-calendar-check"></i>
+                                                    </a>
+                                                }
+
+                                                @if (loan.LoanStatus == "Endorsed")
+                                                {
+                                                    var isSuperAdmin = User.IsInRole("Super Admin") || User.IsInRole("SuperAdmin");
+                                                    var isLoanOfficer = User.IsInRole("LoanOfficer");
+                                                    var isFinanceOfficer = User.IsInRole("Finance Officer");
+                                                    if (isSuperAdmin || isLoanOfficer || isFinanceOfficer)
+                                                    {
+                                                        <a asp-action="Disburse" asp-route-loanNo="@loan.LoanNo"
+                                                           class="btn btn-sm btn-outline-success"
+                                                           data-bs-toggle="tooltip"
+                                                           title="Disburse">
+                                                            <i class="bi bi-cash-stack"></i>
+                                                        </a>
+                                                    }
+                                                }
+
+                                                @if (loan.LoanStatus == "Disbursed" || loan.LoanStatus == "Endorsed")
+                                                {
+                                                    <a asp-action="Repay" asp-route-loanNo="@loan.LoanNo"
+                                                       class="btn btn-sm btn-outline-primary"
+                                                       data-bs-toggle="tooltip"
+                                                       title="Make Payment">
+                                                        <i class="bi bi-arrow-left-right"></i>
+                                                    </a>
+                                                }
+
+                                                <a asp-action="Schedule" asp-route-loanNo="@loan.LoanNo"
+                                                   class="btn btn-sm btn-outline-secondary"
+                                                   data-bs-toggle="tooltip"
+                                                   title="View Schedule">
+                                                    <i class="bi bi-table"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- No Results Message -->
+                    <div id="noResultsMessage" class="no-results-found" style="display: none;">
+                        <i class="bi bi-inbox"></i>
+                        <h5 class="mt-3">No loans match your filters</h5>
+                        <p class="text-muted">Try adjusting your search criteria or clear the filters.</p>
+                        <button class="btn btn-outline-primary btn-sm" onclick="clearAllFilters()">
+                            <i class="bi bi-x-circle me-1"></i>Clear All Filters
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-5">
+                        <i class="bi bi-files fs-1 text-muted"></i>
+                        <p class="text-muted mt-3">No loans found</p>
+                        <a asp-action="Apply" class="btn btn-primary">
+                            <i class="bi bi-plus-circle me-2"></i>Create New Loan
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
     </div>
 </div>
-
-<!-- Pagination -->
-@if (ViewBag.TotalPages > 1)
-{
-    <nav aria-label="Page navigation" class="mt-4">
-        <ul class="pagination justify-content-center">
-            <li class="page-item @(ViewBag.CurrentPage == 1 ? "disabled" : "")">
-                <a class="page-link" href="@Url.Action("AllLoans", new { page = ViewBag.CurrentPage - 1 })">Previous</a>
-            </li>
-            @for (int i = 1; i <= ViewBag.TotalPages; i++)
-            {
-                <li class="page-item @(i == ViewBag.CurrentPage ? "active" : "")">
-                    <a class="page-link" href="@Url.Action("AllLoans", new { page = i })">@i</a>
-                </li>
-            }
-            <li class="page-item @(ViewBag.CurrentPage == ViewBag.TotalPages ? "disabled" : "")">
-                <a class="page-link" href="@Url.Action("AllLoans", new { page = ViewBag.CurrentPage + 1 })">Next</a>
-            </li>
-        </ul>
-    </nav>
-}
 
 @section Scripts {
     <script>
         $(document).ready(function() {
             // Initialize tooltips
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl)
+                return new bootstrap.Tooltip(tooltipTriggerEl);
             });
 
-            // Auto-refresh every 60 seconds (optional)
-            // setInterval(function() { location.reload(); }, 60000);
+            // Initialize with all rows visible
+            applyFilters();
+
+            // Enter key triggers search
+            $('#searchTerm').on('keypress', function(e) {
+                if (e.which === 13) {
+                    applyFilters();
+                }
+            });
         });
 
+        // ============================================================
+        // FILTER FUNCTIONS
+        // ============================================================
+
+        function applyFilters() {
+            var status = $('#statusFilter').val();
+            var searchTerm = $('#searchTerm').val().toLowerCase().trim();
+            var fromDate = $('#fromDate').val();
+            var toDate = $('#toDate').val();
+            var minAmount = parseFloat($('#minAmount').val()) || 0;
+            var maxAmount = parseFloat($('#maxAmount').val()) || (isNaN(parseFloat($('#maxAmount').val())) ? Infinity : parseFloat($('#maxAmount').val()));
+            var loanType = $('#loanTypeFilter').val();
+            var memberNo = $('#memberNoFilter').val().toLowerCase().trim();
+
+            var visibleCount = 0;
+            var hasActiveFilters = false;
+            var totalPrincipal = 0;
+            var totalApproved = 0;
+            var totalOutstanding = 0;
+
+            // Check if any filters are active
+            if (status || searchTerm || fromDate || toDate || minAmount > 0 || (maxAmount < Infinity && maxAmount > 0) || loanType || memberNo) {
+                hasActiveFilters = true;
+            }
+
+            $('#loansTableBody tr').each(function() {
+                var row = $(this);
+                var show = true;
+
+                // Status filter
+                if (status && status !== '') {
+                    var rowStatus = row.data('status');
+                    if (rowStatus !== status) {
+                        show = false;
+                    }
+                }
+
+                // Search term filter (Loan No, Member Name, Member No)
+                if (show && searchTerm) {
+                    var loanNo = (row.data('loan-no') || '').toLowerCase();
+                    var memberName = (row.data('member-name') || '').toLowerCase();
+                    var member = (row.data('member') || '').toLowerCase();
+                    if (!loanNo.includes(searchTerm) &&
+                        !memberName.includes(searchTerm) &&
+                        !member.includes(searchTerm)) {
+                        show = false;
+                    }
+                }
+
+                // Date range filter
+                if (show && fromDate) {
+                    var appDate = row.data('application-date') || '';
+                    if (appDate < fromDate) {
+                        show = false;
+                    }
+                }
+                if (show && toDate) {
+                    var appDate = row.data('application-date') || '';
+                    if (appDate > toDate) {
+                        show = false;
+                    }
+                }
+
+                // Amount range filter
+                if (show && (minAmount > 0 || (maxAmount < Infinity && maxAmount > 0))) {
+                    var principal = parseFloat(row.data('principal')) || 0;
+                    if (principal < minAmount || (maxAmount < Infinity && principal > maxAmount)) {
+                        show = false;
+                    }
+                }
+
+                // Loan type filter
+                if (show && loanType) {
+                    var rowLoanType = row.data('loan-type') || '';
+                    if (rowLoanType !== loanType) {
+                        show = false;
+                    }
+                }
+
+                // Member No filter
+                if (show && memberNo) {
+                    var rowMember = (row.data('member') || '').toLowerCase();
+                    if (!rowMember.includes(memberNo)) {
+                        show = false;
+                    }
+                }
+
+                if (show) {
+                    row.show();
+                    visibleCount++;
+                    totalPrincipal += parseFloat(row.data('principal')) || 0;
+                    totalApproved += parseFloat(row.data('approved')) || 0;
+                    totalOutstanding += parseFloat(row.data('outstanding')) || 0;
+                } else {
+                    row.hide();
+                }
+            });
+
+            // Update badge count
+            var totalRows = $('#loansTableBody tr').length;
+            $('#loanCountBadge').text(visibleCount + ' Loans');
+
+            // Update summary cards
+            $('#totalLoansDisplay').text(visibleCount);
+            $('#totalPrincipalValue').text(totalPrincipal.toLocaleString());
+            $('#totalApprovedValue').text(totalApproved.toLocaleString());
+            $('#totalOutstandingValue').text(totalOutstanding.toLocaleString());
+
+            // Show/hide no results message
+            if (visibleCount === 0 && totalRows > 0) {
+                $('#noResultsMessage').show();
+            } else {
+                $('#noResultsMessage').hide();
+            }
+
+            // Show/hide clear all filters button
+            if (hasActiveFilters) {
+                $('#clearAllFiltersBtn').show();
+            } else {
+                $('#clearAllFiltersBtn').hide();
+            }
+
+            // Update filter summary
+            updateFilterSummary(visibleCount, totalRows);
+        }
+
+        function filterByTab(tab) {
+            // Reset status filter dropdown
+            $('#statusFilter').val('');
+
+            // Show all rows first
+            $('#loansTableBody tr').show();
+
+            var statusMap = {
+                'all': [],
+                'pending': ['Draft', 'Submitted', 'UnderAppraisal'],
+                'active': ['Disbursed', 'Endorsed'],
+                'approved': ['Approved'],
+                'completed': ['Closed'],
+                'rejected': ['Rejected']
+            };
+
+            var statuses = statusMap[tab] || [];
+
+            var visibleCount = 0;
+            var totalPrincipal = 0;
+            var totalApproved = 0;
+            var totalOutstanding = 0;
+
+            if (tab !== 'all' && statuses.length > 0) {
+                $('#loansTableBody tr').each(function() {
+                    var row = $(this);
+                    var rowStatus = row.data('status');
+                    if (!statuses.includes(rowStatus)) {
+                        row.hide();
+                    } else {
+                        visibleCount++;
+                        totalPrincipal += parseFloat(row.data('principal')) || 0;
+                        totalApproved += parseFloat(row.data('approved')) || 0;
+                        totalOutstanding += parseFloat(row.data('outstanding')) || 0;
+                    }
+                });
+            } else {
+                $('#loansTableBody tr').each(function() {
+                    var row = $(this);
+                    visibleCount++;
+                    totalPrincipal += parseFloat(row.data('principal')) || 0;
+                    totalApproved += parseFloat(row.data('approved')) || 0;
+                    totalOutstanding += parseFloat(row.data('outstanding')) || 0;
+                });
+            }
+
+            // Update badge count
+            var totalRows = $('#loansTableBody tr').length;
+            $('#loanCountBadge').text(visibleCount + ' Loans');
+
+            // Update summary cards
+            $('#totalLoansDisplay').text(visibleCount);
+            $('#totalPrincipalValue').text(totalPrincipal.toLocaleString());
+            $('#totalApprovedValue').text(totalApproved.toLocaleString());
+            $('#totalOutstandingValue').text(totalOutstanding.toLocaleString());
+
+            // Show/hide no results message
+            if (visibleCount === 0 && totalRows > 0) {
+                $('#noResultsMessage').show();
+            } else {
+                $('#noResultsMessage').hide();
+            }
+
+            // Update active tab
+            $('.nav-link').removeClass('active');
+            $('#' + tab + '-tab').addClass('active');
+
+            // Clear all filters button
+            if (tab !== 'all') {
+                $('#clearAllFiltersBtn').show();
+            } else {
+                $('#clearAllFiltersBtn').hide();
+            }
+
+            // Update filter summary
+            updateFilterSummary(visibleCount, totalRows);
+        }
+
+        function updateFilterSummary(visibleCount, totalCount) {
+            var filters = [];
+            var status = $('#statusFilter').val();
+            var searchTerm = $('#searchTerm').val().trim();
+            var fromDate = $('#fromDate').val();
+            var toDate = $('#toDate').val();
+            var minAmount = parseFloat($('#minAmount').val()) || 0;
+            var maxAmount = parseFloat($('#maxAmount').val()) || 0;
+            var loanType = $('#loanTypeFilter').val();
+            var memberNo = $('#memberNoFilter').val().trim();
+
+            if (status) {
+                filters.push('<span class="badge-filter">Status: ' + status + ' <span class="remove-filter" onclick="removeFilter(\'status\')">&times;</span></span>');
+            }
+            if (searchTerm) {
+                filters.push('<span class="badge-filter">Search: "' + searchTerm + '" <span class="remove-filter" onclick="removeFilter(\'search\')">&times;</span></span>');
+            }
+            if (fromDate) {
+                filters.push('<span class="badge-filter">From: ' + formatDate(fromDate) + ' <span class="remove-filter" onclick="removeFilter(\'fromDate\')">&times;</span></span>');
+            }
+            if (toDate) {
+                filters.push('<span class="badge-filter">To: ' + formatDate(toDate) + ' <span class="remove-filter" onclick="removeFilter(\'toDate\')">&times;</span></span>');
+            }
+            if (minAmount > 0) {
+                filters.push('<span class="badge-filter">Min: KES ' + minAmount.toLocaleString() + ' <span class="remove-filter" onclick="removeFilter(\'minAmount\')">&times;</span></span>');
+            }
+            if (maxAmount > 0) {
+                filters.push('<span class="badge-filter">Max: KES ' + maxAmount.toLocaleString() + ' <span class="remove-filter" onclick="removeFilter(\'maxAmount\')">&times;</span></span>');
+            }
+            if (loanType) {
+                filters.push('<span class="badge-filter">Loan Type: ' + loanType + ' <span class="remove-filter" onclick="removeFilter(\'loanType\')">&times;</span></span>');
+            }
+            if (memberNo) {
+                filters.push('<span class="badge-filter">Member No: ' + memberNo + ' <span class="remove-filter" onclick="removeFilter(\'memberNo\')">&times;</span></span>');
+            }
+
+            if (filters.length > 0) {
+                $('#filterSummary').show();
+                $('#filterBadges').html(filters.join(''));
+                $('#filteredCount').text('(' + visibleCount + ' of ' + totalCount + ' loans shown)');
+            } else {
+                $('#filterSummary').hide();
+            }
+        }
+
+        function removeFilter(filterName) {
+            switch(filterName) {
+                case 'status':
+                    $('#statusFilter').val('');
+                    break;
+                case 'search':
+                    $('#searchTerm').val('');
+                    break;
+                case 'fromDate':
+                    $('#fromDate').val('');
+                    break;
+                case 'toDate':
+                    $('#toDate').val('');
+                    break;
+                case 'minAmount':
+                    $('#minAmount').val('');
+                    break;
+                case 'maxAmount':
+                    $('#maxAmount').val('');
+                    break;
+                case 'loanType':
+                    $('#loanTypeFilter').val('');
+                    break;
+                case 'memberNo':
+                    $('#memberNoFilter').val('');
+                    break;
+            }
+            applyFilters();
+            // Reset tabs
+            $('.nav-link').removeClass('active');
+            $('#all-tab').addClass('active');
+        }
+
+        function clearAllFilters() {
+            $('#filterForm')[0].reset();
+            $('#statusFilter').val('');
+            $('#searchTerm').val('');
+            $('#fromDate').val('');
+            $('#toDate').val('');
+            $('#minAmount').val('');
+            $('#maxAmount').val('');
+            $('#loanTypeFilter').val('');
+            $('#memberNoFilter').val('');
+            applyFilters();
+            $('.nav-link').removeClass('active');
+            $('#all-tab').addClass('active');
+            $('#clearAllFiltersBtn').hide();
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            var parts = dateStr.split('-');
+            return parts[2] + '/' + parts[1] + '/' + parts[0];
+        }
+
         function exportToExcel() {
-            var searchParams = new URLSearchParams($('#filterForm').serialize()).toString();
-            window.location.href = '@Url.Action("ExportAllLoans")?' + searchParams;
+            // Export only visible rows
+            var visibleLoans = [];
+            var visibleCount = 0;
+            $('#loansTableBody tr:visible').each(function() {
+                var row = $(this);
+                visibleLoans.push({
+                    loanNo: row.data('loan-no'),
+                    memberNo: row.data('member'),
+                    memberName: row.data('member-name'),
+                    loanType: row.data('loan-type'),
+                    principal: row.data('principal'),
+                    approved: row.data('approved'),
+                    outstanding: row.data('outstanding'),
+                    status: row.data('status'),
+                    applicationDate: row.data('application-date')
+                });
+                visibleCount++;
+            });
+
+            if (visibleLoans.length === 0) {
+                alert('No loans to export. Please adjust your filters.');
+                return;
+            }
+
+            // Build CSV
+            var csv = 'Loan No,Member No,Member Name,Loan Type,Principal,Approved,Outstanding,Status,Application Date\n';
+            visibleLoans.forEach(function(loan) {
+                csv += loan.loanNo + ',' +
+                       loan.memberNo + ',' +
+                       loan.memberName + ',' +
+                       loan.loanType + ',' +
+                       loan.principal + ',' +
+                       loan.approved + ',' +
+                       loan.outstanding + ',' +
+                       loan.status + ',' +
+                       loan.applicationDate + '\n';
+            });
+
+            // Download CSV
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'Loans_Export_' + new Date().toISOString().slice(0,10) + '.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
         }
 
         function quickFilter(status) {
-            $('select[name="LoanStatus"]').val(status);
-            $('#filterForm').submit();
+            $('#statusFilter').val(status);
+            applyFilters();
         }
 
         function clearFilters() {
-            $('#filterForm')[0].reset();
-            $('#filterForm').submit();
+            clearAllFilters();
         }
     </script>
 }

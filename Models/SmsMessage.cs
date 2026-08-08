@@ -180,7 +180,7 @@ namespace SACCOBlockChainSystem.Models
 
         [StringLength(50)]
         [Display(Name = "Sender ID")]
-        public string? SenderId { get; set; } // JUHUDI, SACCO, etc.
+        public string? SenderId { get; set; } // AMTECH, SACCO, etc.
 
         [StringLength(20)]
         [Display(Name = "Username")]

@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "Supplier Management";
     Layout = "~/Views/Shared/_Layout.cshtml";
-    var companyName = ViewBag.CompanyName as string ?? "JUHUDI SACCO";
+    var companyName = ViewBag.CompanyName as string ?? "AMTECH SACCO";
 }
 
 <div class="container-fluid">
@@ -40,8 +40,8 @@
                         <div class="row mb-3">
                             <div class="col-md-4">
                                 <label>Supplier Code</label>
-                                <input type="text" id="SupplierCode" class="form-control" readonly />
-                                <small class="text-muted">Auto-generated, can be edited for new suppliers</small>
+                                <input type="text" id="SupplierCode" class="form-control" />
+                                <small class="text-muted">Auto-generated, can be edited</small>
                                 <span id="supplierCodeError" class="text-danger"></span>
                             </div>
                             <div class="col-md-8">
@@ -119,15 +119,27 @@
 
                         <!-- GL Account Row -->
                         <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label>GL Account No</label>
-                                <input type="text" id="GlAccountNo" class="form-control" />
+                            <div class="col-md-6">
+                                <label>GL Account</label>
+                                <select id="GlAccountNo" class="form-control">
+                                    <option value="">-- Select GL Account --</option>
+                                    @if (Model.GlAccounts != null && Model.GlAccounts.Any())
+                                    {
+                                        foreach (var gl in Model.GlAccounts)
+                                        {
+                                            <option value="@gl.AccNo" data-glname="@gl.Glaccname" data-glcode="@gl.Glcode">
+                                                @gl.Glcode - @gl.Glaccname
+                                            </option>
+                                        }
+                                    }
+                                </select>
+                                <span id="glAccountError" class="text-danger"></span>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label>GL Account Name</label>
-                                <input type="text" id="GlAccountName" class="form-control" />
+                                <input type="text" id="GlAccountName" class="form-control" readonly />
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label>Opening Balance (KES)</label>
                                 <input type="number" id="OpeningBalance" class="form-control" step="0.01" min="0" />
                             </div>
@@ -230,9 +242,9 @@
                             <th>Contact Person</th>
                             <th>Phone</th>
                             <th>Email</th>
+                            <th>GL Account</th>
                             <th>Balance</th>
                             <th>Status</th>
-                            <th>Blockchain</th>
                             <th style="width: 100px;">Action</th>
                         </tr>
                     </thead>
@@ -240,81 +252,73 @@
                         @{
                             var counter = 1;
                         }
-                        @foreach (var supplier in Model.Suppliers.OrderBy(s => s.SupplierName))
+                        @if (Model.Suppliers != null && Model.Suppliers.Any())
                         {
-                            var statusText = supplier.IsActive == true ? "Active" : "Inactive";
-                            var statusClass = supplier.IsActive == true ? "bg-success" : "bg-secondary";
+                            foreach (var supplier in Model.Suppliers.OrderBy(s => s.SupplierName))
+                            {
+                                var statusText = supplier.IsActive == true ? "Active" : "Inactive";
+                                var statusClass = supplier.IsActive == true ? "bg-success" : "bg-secondary";
 
-                            <tr data-id="@supplier.Id"
-                                data-suppliercode="@supplier.SupplierCode"
-                                data-suppliername="@supplier.SupplierName"
-                                data-contactperson="@supplier.ContactPerson"
-                                data-phoneno="@supplier.PhoneNo"
-                                data-email="@supplier.Email"
-                                data-physicaladdress="@supplier.PhysicalAddress"
-                                data-postaladdress="@supplier.PostalAddress"
-                                data-city="@supplier.City"
-                                data-county="@supplier.County"
-                                data-country="@supplier.Country"
-                                data-pinno="@supplier.PinNo"
-                                data-vatno="@supplier.VatNo"
-                                data-bankname="@supplier.BankName"
-                                data-bankaccountno="@supplier.BankAccountNo"
-                                data-bankaccountname="@supplier.BankAccountName"
-                                data-bankbranch="@supplier.BankBranch"
-                                data-glaccountno="@supplier.GlAccountNo"
-                                data-glaccountname="@supplier.GlAccountName"
-                                data-openingbalance="@supplier.OpeningBalance"
-                                data-currentbalance="@supplier.CurrentBalance"
-                                data-remarks="@supplier.Remarks"
-                                data-isactive="@supplier.IsActive"
-                                data-status-text="@statusText">
-                                <td class="row-number">@counter</td>
-                                <td>
-                                    <strong>@supplier.SupplierCode</strong>
-                                    @if (!string.IsNullOrEmpty(supplier.BlockchainTxId))
-                                    {
-                                        <span class="badge bg-success ms-1" title="On Blockchain">
-                                            <i class="fas fa-link fa-xs"></i>
-                                        </span>
-                                    }
-                                </td>
-                                <td class="supplier-name">@supplier.SupplierName</td>
-                                <td class="supplier-contact">@(supplier.ContactPerson ?? "N/A")</td>
-                                <td class="supplier-phone">@(supplier.PhoneNo ?? "N/A")</td>
-                                <td class="supplier-email">@(supplier.Email ?? "N/A")</td>
-                                <td class="supplier-balance text-end fw-bold">
-                                    KES @(supplier.CurrentBalance?.ToString("N0") ?? "0")
-                                </td>
-                                <td class="supplier-status">
-                                    <span class="badge @statusClass status-badge">@statusText</span>
-                                </td>
-                                <td class="text-center">
-                                    @if (!string.IsNullOrEmpty(supplier.BlockchainTxId))
-                                    {
-                                        <span class="badge bg-success" title="Verified">
-                                            <i class="fas fa-link"></i>
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-secondary" title="Not Verified">
-                                            <i class="fas fa-unlink"></i>
-                                        </span>
-                                    }
-                                </td>
-                                <td>
-                                    <button type="button" class="btn btn-sm btn-info select-btn w-100" data-id="@supplier.Id">
-                                        <i class="fas fa-edit"></i> Select
-                                    </button>
-                                </td>
-                            </tr>
-                            counter++;
+                                <tr data-id="@supplier.Id"
+                                    data-suppliercode="@supplier.SupplierCode"
+                                    data-suppliername="@supplier.SupplierName"
+                                    data-contactperson="@supplier.ContactPerson"
+                                    data-phoneno="@supplier.PhoneNo"
+                                    data-email="@supplier.Email"
+                                    data-physicaladdress="@supplier.PhysicalAddress"
+                                    data-postaladdress="@supplier.PostalAddress"
+                                    data-city="@supplier.City"
+                                    data-county="@supplier.County"
+                                    data-country="@supplier.Country"
+                                    data-pinno="@supplier.PinNo"
+                                    data-vatno="@supplier.VatNo"
+                                    data-bankname="@supplier.BankName"
+                                    data-bankaccountno="@supplier.BankAccountNo"
+                                    data-bankaccountname="@supplier.BankAccountName"
+                                    data-bankbranch="@supplier.BankBranch"
+                                    data-glaccountno="@supplier.GlAccountNo"
+                                    data-glaccountname="@supplier.GlAccountName"
+                                    data-openingbalance="@supplier.OpeningBalance"
+                                    data-currentbalance="@supplier.CurrentBalance"
+                                    data-remarks="@supplier.Remarks"
+                                    data-isactive="@supplier.IsActive"
+                                    data-status-text="@statusText">
+                                    <td class="row-number">@counter</td>
+                                    <td class="supplier-name">@supplier.SupplierCode</td>
+                                    <td class="supplier-name">@supplier.SupplierName</td>
+                                    <td class="supplier-contact">@(supplier.ContactPerson ?? "N/A")</td>
+                                    <td class="supplier-phone">@(supplier.PhoneNo ?? "N/A")</td>
+                                    <td class="supplier-email">@(supplier.Email ?? "N/A")</td>
+                                    <td class="supplier-glaccount">
+                                        @if (!string.IsNullOrEmpty(supplier.GlAccountNo))
+                                        {
+                                            <span class="badge bg-info">@supplier.GlAccountNo</span>
+                                            <small class="d-block text-muted">@supplier.GlAccountName</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">N/A</span>
+                                        }
+                                    </td>
+                                    <td class="supplier-balance text-end fw-bold">
+                                        KES @(supplier.CurrentBalance?.ToString("N0") ?? "0")
+                                    </td>
+                                    <td class="supplier-status">
+                                        <span class="badge @statusClass status-badge">@statusText</span>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-info select-btn w-100" data-id="@supplier.Id">
+                                            <i class="fas fa-edit"></i> Select
+                                        </button>
+                                    </td>
+                                </tr>
+                                counter++;
+                            }
                         }
-                        @if (!Model.Suppliers.Any())
+                        else
                         {
                             <tr id="noSuppliersRow">
-                                <td colspan="10" class="text-center text-muted py-4">
+                                <td colspan="11" class="text-center text-muted py-4">
                                     <i class="fas fa-info-circle"></i> No suppliers found. Click "New" to register one.
                                 </td>
                             </tr>
@@ -443,6 +447,15 @@
         padding: 0 2px;
         border-radius: 3px;
     }
+
+    .input-validation-error {
+        border-color: #dc3545 !important;
+        background-color: #fff0f0 !important;
+    }
+
+    .text-danger {
+        font-size: 0.875rem;
+    }
 </style>
 
 @section Scripts {
@@ -453,8 +466,17 @@
         let deleteSupplierName = null;
 
         $(document).ready(function() {
-            generatePreviewSupplierCode();
+            // Generate initial supplier code
+            generateSupplierCode();
 
+            // GL Account selection change - auto populate GL Account Name
+            $('#GlAccountNo').on('change', function() {
+                const selectedOption = $(this).find('option:selected');
+                const glName = selectedOption.data('glname') || '';
+                $('#GlAccountName').val(glName);
+            });
+
+            // Search and filter events
             $('#supplierSearchInput').on('keyup', performSearch);
             $('#statusFilter').on('change', performSearch);
             $('#sortBy').on('change', function() {
@@ -463,6 +485,7 @@
             });
             $('#clearSearchBtn').on('click', clearAllFilters);
 
+            // Button events
             $('#btnSave').on('click', saveSupplier);
             $('#btnUpdate').on('click', updateSupplier);
             $('#btnDelete').on('click', function() {
@@ -474,6 +497,7 @@
             $('#btnNew').on('click', resetForm);
             $('#confirmDeleteBtn').on('click', confirmDelete);
 
+            // Select button click - load supplier data
             $(document).on('click', '.select-btn', function() {
                 const id = $(this).data('id');
                 if (id) {
@@ -482,21 +506,20 @@
             });
         });
 
-        function generatePreviewSupplierCode() {
+        function generateSupplierCode() {
             const now = new Date();
             const year = now.getFullYear().toString().slice(-2);
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
-            const hour = String(now.getHours()).padStart(2, '0');
-            const minute = String(now.getMinutes()).padStart(2, '0');
-            const second = String(now.getSeconds()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
 
-            const preview = `SUP${year}${month}${day}${hour}${minute}${second}`;
-            $('#SupplierCode').val(preview);
+            const code = `SUP${year}${month}${day}${hours}${minutes}${seconds}`;
+            $('#SupplierCode').val(code);
         }
 
         function loadSupplierForEdit(id) {
-            console.log('Loading supplier for edit:', id);
             showLoading(true);
 
             $.ajax({
@@ -509,9 +532,10 @@
                         const s = response.supplier;
                         currentSupplierId = s.id;
 
+                        // Set all form fields
                         $('#SupplierId').val(s.id);
-                        $('#SupplierCode').val(s.supplierCode).prop('readonly', true);
-                        $('#SupplierName').val(s.supplierName);
+                        $('#SupplierCode').val(s.supplierCode);
+                        $('#SupplierName').val(s.supplierName || '');
                         $('#ContactPerson').val(s.contactPerson || '');
                         $('#PhoneNo').val(s.phoneNo || '');
                         $('#Email').val(s.email || '');
@@ -526,16 +550,27 @@
                         $('#BankAccountNo').val(s.bankAccountNo || '');
                         $('#BankAccountName').val(s.bankAccountName || '');
                         $('#BankBranch').val(s.bankBranch || '');
-                        $('#GlAccountNo').val(s.glAccountNo || '');
-                        $('#GlAccountName').val(s.glAccountName || '');
+
+                        // Set GL Account
+                        if (s.glAccountNo) {
+                            $('#GlAccountNo').val(s.glAccountNo);
+                            // Trigger change to load GL Account Name
+                            $('#GlAccountNo').trigger('change');
+                        } else {
+                            $('#GlAccountNo').val('');
+                            $('#GlAccountName').val('');
+                        }
+
                         $('#OpeningBalance').val(s.openingBalance || 0);
                         $('#Remarks').val(s.remarks || '');
                         $('#IsActive').val(s.isActive ? 'true' : 'false');
 
+                        // Show update/delete buttons, hide save
                         $('#btnSave').hide();
                         $('#btnUpdate').show();
                         $('#btnDelete').show();
 
+                        // Highlight selected row
                         $('.select-btn').closest('tr').removeClass('table-primary');
                         $(`.select-btn[data-id="${s.id}"]`).closest('tr').addClass('table-primary');
 
@@ -557,7 +592,7 @@
         function resetForm() {
             currentSupplierId = null;
             $('#SupplierId').val('');
-            $('#SupplierCode').val('').prop('readonly', false);
+            $('#SupplierCode').val('');
             $('#SupplierName').val('');
             $('#ContactPerson').val('');
             $('#PhoneNo').val('');
@@ -579,15 +614,18 @@
             $('#Remarks').val('');
             $('#IsActive').val('true');
 
+            // Clear validation errors
             $('.text-danger').text('');
             $('.input-validation-error').removeClass('input-validation-error');
             $('.select-btn').closest('tr').removeClass('table-primary');
 
+            // Show save button, hide update/delete
             $('#btnSave').show();
             $('#btnUpdate').hide();
             $('#btnDelete').hide();
 
-            generatePreviewSupplierCode();
+            // Generate new supplier code
+            generateSupplierCode();
         }
 
         function validateForm() {
@@ -595,12 +633,14 @@
             $('.text-danger').text('');
             $('.input-validation-error').removeClass('input-validation-error');
 
+            // Validate Supplier Name
             if (!$('#SupplierName').val().trim()) {
                 $('#supplierNameError').text('Supplier Name is required');
                 $('#SupplierName').addClass('input-validation-error');
                 isValid = false;
             }
 
+            // Validate Phone Number
             const phone = $('#PhoneNo').val().trim();
             if (!phone) {
                 $('#phoneError').text('Phone Number is required');
@@ -612,6 +652,7 @@
                 isValid = false;
             }
 
+            // Validate Email (optional but if provided must be valid)
             const email = $('#Email').val().trim();
             if (email && !/^[^\s@@]+@@[^\s@@]+\.[^\s@@]+$/.test(email)) {
                 $('#emailError').text('Please enter a valid email address');
@@ -622,34 +663,47 @@
             return isValid;
         }
 
-        function saveSupplier() {
-            if (!validateForm()) return;
-            showLoading(true);
-
-            const formData = {
-                SupplierCode: $('#SupplierCode').val(),
-                SupplierName: $('#SupplierName').val(),
-                ContactPerson: $('#ContactPerson').val(),
-                PhoneNo: $('#PhoneNo').val(),
-                Email: $('#Email').val(),
-                PhysicalAddress: $('#PhysicalAddress').val(),
-                PostalAddress: $('#PostalAddress').val(),
-                City: $('#City').val(),
-                County: $('#County').val(),
-                Country: $('#Country').val(),
-                PinNo: $('#PinNo').val(),
-                VatNo: $('#VatNo').val(),
-                BankName: $('#BankName').val(),
-                BankAccountNo: $('#BankAccountNo').val(),
-                BankAccountName: $('#BankAccountName').val(),
-                BankBranch: $('#BankBranch').val(),
+        function getFormData() {
+            return {
+                SupplierCode: $('#SupplierCode').val().trim(),
+                SupplierName: $('#SupplierName').val().trim(),
+                ContactPerson: $('#ContactPerson').val().trim(),
+                PhoneNo: $('#PhoneNo').val().trim(),
+                Email: $('#Email').val().trim(),
+                PhysicalAddress: $('#PhysicalAddress').val().trim(),
+                PostalAddress: $('#PostalAddress').val().trim(),
+                City: $('#City').val().trim(),
+                County: $('#County').val().trim(),
+                Country: $('#Country').val().trim(),
+                PinNo: $('#PinNo').val().trim(),
+                VatNo: $('#VatNo').val().trim(),
+                BankName: $('#BankName').val().trim(),
+                BankAccountNo: $('#BankAccountNo').val().trim(),
+                BankAccountName: $('#BankAccountName').val().trim(),
+                BankBranch: $('#BankBranch').val().trim(),
                 GlAccountNo: $('#GlAccountNo').val(),
-                GlAccountName: $('#GlAccountName').val(),
+                GlAccountName: $('#GlAccountName').val().trim(),
                 OpeningBalance: parseFloat($('#OpeningBalance').val()) || 0,
-                Remarks: $('#Remarks').val(),
+                Remarks: $('#Remarks').val().trim(),
                 IsActive: $('#IsActive').val() === 'true',
                 CompanyCode: $('#CompanyCode').val()
             };
+        }
+
+        function saveSupplier() {
+            if (!validateForm()) return;
+
+            const formData = getFormData();
+
+            // Validate GL Account if selected
+            if (formData.GlAccountNo) {
+                const glName = $('#GlAccountNo option:selected').data('glname');
+                if (glName) {
+                    formData.GlAccountName = glName;
+                }
+            }
+
+            showLoading(true);
 
             $.ajax({
                 url: '/Supplier/Create',
@@ -687,33 +741,18 @@
                 return;
             }
 
-            showLoading(true);
+            const formData = getFormData();
+            formData.Id = currentSupplierId;
 
-            const formData = {
-                Id: currentSupplierId,
-                SupplierCode: $('#SupplierCode').val(),
-                SupplierName: $('#SupplierName').val(),
-                ContactPerson: $('#ContactPerson').val(),
-                PhoneNo: $('#PhoneNo').val(),
-                Email: $('#Email').val(),
-                PhysicalAddress: $('#PhysicalAddress').val(),
-                PostalAddress: $('#PostalAddress').val(),
-                City: $('#City').val(),
-                County: $('#County').val(),
-                Country: $('#Country').val(),
-                PinNo: $('#PinNo').val(),
-                VatNo: $('#VatNo').val(),
-                BankName: $('#BankName').val(),
-                BankAccountNo: $('#BankAccountNo').val(),
-                BankAccountName: $('#BankAccountName').val(),
-                BankBranch: $('#BankBranch').val(),
-                GlAccountNo: $('#GlAccountNo').val(),
-                GlAccountName: $('#GlAccountName').val(),
-                OpeningBalance: parseFloat($('#OpeningBalance').val()) || 0,
-                Remarks: $('#Remarks').val(),
-                IsActive: $('#IsActive').val() === 'true',
-                CompanyCode: $('#CompanyCode').val()
-            };
+            // Validate GL Account if selected
+            if (formData.GlAccountNo) {
+                const glName = $('#GlAccountNo option:selected').data('glname');
+                if (glName) {
+                    formData.GlAccountName = glName;
+                }
+            }
+
+            showLoading(true);
 
             $.ajax({
                 url: '/Supplier/Update',
@@ -792,14 +831,17 @@
 
             $('#suppliersTableBody tr').each(function() {
                 const row = $(this);
-                if (row.attr('id') === 'noSuppliersRow') return;
+                if (row.attr('id') === 'noSuppliersRow') {
+                    row.toggle(visibleCount === 0);
+                    return;
+                }
 
-                const name = row.find('td.supplier-name').text().toLowerCase();
+                const name = row.find('.supplier-name').text().toLowerCase();
                 const code = row.find('td:eq(1)').text().toLowerCase();
-                const contact = row.find('td.supplier-contact').text().toLowerCase();
-                const phone = row.find('td.supplier-phone').text().toLowerCase();
-                const email = row.find('td.supplier-email').text().toLowerCase();
-                const isActive = row.data('isactive') === true;
+                const contact = row.find('.supplier-contact').text().toLowerCase();
+                const phone = row.find('.supplier-phone').text().toLowerCase();
+                const email = row.find('.supplier-email').text().toLowerCase();
+                const isActive = row.data('isactive') === true || row.data('isactive') === 'true';
 
                 let matchesSearch = true;
                 if (searchTerm) {
@@ -824,31 +866,34 @@
                     row.hide();
                 }
             });
+
+            // Show/hide no results row
+            $('#noSuppliersRow').toggle(visibleCount === 0);
         }
 
         function sortSuppliers() {
             const sortBy = $('#sortBy').val();
             const tbody = $('#suppliersTableBody');
-            const rows = tbody.find('tr:visible:not(#noSuppliersRow)').get();
+            const rows = tbody.find('tr:visible').not('#noSuppliersRow').get();
 
             rows.sort(function(a, b) {
                 let aVal, bVal;
                 switch(sortBy) {
                     case 'name':
-                        aVal = $(a).find('td.supplier-name').text();
-                        bVal = $(b).find('td.supplier-name').text();
+                        aVal = $(a).find('.supplier-name').text().toLowerCase();
+                        bVal = $(b).find('.supplier-name').text().toLowerCase();
                         break;
                     case 'code':
-                        aVal = $(a).find('td:eq(1)').text();
-                        bVal = $(b).find('td:eq(1)').text();
+                        aVal = $(a).find('td:eq(1)').text().toLowerCase();
+                        bVal = $(b).find('td:eq(1)').text().toLowerCase();
                         break;
                     case 'balance':
-                        aVal = parseFloat($(a).find('td.supplier-balance').text().replace(/[^0-9.-]/g, '')) || 0;
-                        bVal = parseFloat($(b).find('td.supplier-balance').text().replace(/[^0-9.-]/g, '')) || 0;
+                        aVal = parseFloat($(a).find('.supplier-balance').text().replace(/[^0-9.-]/g, '')) || 0;
+                        bVal = parseFloat($(b).find('.supplier-balance').text().replace(/[^0-9.-]/g, '')) || 0;
                         return bVal - aVal;
                     default:
-                        aVal = $(a).find('td.supplier-name').text();
-                        bVal = $(b).find('td.supplier-name').text();
+                        aVal = $(a).find('.supplier-name').text().toLowerCase();
+                        bVal = $(b).find('.supplier-name').text().toLowerCase();
                 }
                 return aVal.localeCompare(bVal);
             });
@@ -868,16 +913,26 @@
         }
 
         function showNotification(message, type) {
+            const icon = type === 'error' ? 'exclamation-triangle' :
+                        type === 'success' ? 'check-circle' : 'info';
+            const alertClass = type === 'error' ? 'danger' : type;
+
             const alertDiv = $(`
-                <div class="alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed top-0 end-0 m-3"
-                     style="z-index: 9999; min-width: 300px;" role="alert">
-                    <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info'} me-2"></i>
+                <div class="alert alert-${alertClass} alert-dismissible fade show position-fixed top-0 end-0 m-3"
+                     style="z-index: 9999; min-width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" role="alert">
+                    <i class="fas fa-${icon} me-2"></i>
                     ${message}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             `);
             $('body').append(alertDiv);
-            setTimeout(() => alertDiv.fadeOut('slow', function() { $(this).remove(); }), 5000);
+
+            // Auto dismiss after 5 seconds
+            setTimeout(() => {
+                alertDiv.fadeOut('slow', function() {
+                    $(this).remove();
+                });
+            }, 5000);
         }
 
         function showLoading(show) {

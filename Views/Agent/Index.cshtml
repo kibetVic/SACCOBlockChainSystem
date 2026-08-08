@@ -162,7 +162,6 @@
                                 <th>Town</th>
                                 <th>Recruitment Date</th>
                                 <th>Recruited By</th>
-                                <th>Blockchain Tx</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
@@ -178,16 +177,6 @@
                                     <td>@item.Town</td>
                                     <td>@item.Recruitdate.ToString("dd/MM/yyyy")</td>
                                     <td>@item.CreatedBy</td>
-                                    <td>
-                                        @if (!string.IsNullOrEmpty(item.BlockchainTxId))
-                                        {
-                                            <code class="small">@(item.BlockchainTxId.Length > 12 ? item.BlockchainTxId.Substring(0, 12) + "..." : item.BlockchainTxId)</code>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not recorded</span>
-                                        }
-                                    </td>
                                     <td class="text-end">
                                         <button class="btn btn-sm btn-outline-info" onclick="viewDetails(@item.Id)"><i class="bi bi-eye"></i></button>
                                         <button class="btn btn-sm btn-outline-primary" onclick="editAgent(@item.Id)"><i class="bi bi-pencil"></i></button>

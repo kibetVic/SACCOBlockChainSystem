@@ -97,6 +97,8 @@ namespace SACCOBlockChainSystem.Models
         [Column("AuditTime")]
         public DateTime? AuditTime { get; set; }
 
+        public string? CSRegNO { get; set; }
+
         [StringLength(255)]
         [Column("BlockchainTxId")]
         public string? BlockchainTxId { get; set; }

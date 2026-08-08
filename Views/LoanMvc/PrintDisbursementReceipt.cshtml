@@ -2,130 +2,311 @@
 @model DisbursementReceiptViewModel
 
 @{
-    ViewData["Title"] = "Disbursement Receipt";
     Layout = null;
+    var companyName = Model.CompanyName ?? "SACCO BlockChain System";
+    var companyAddress = Model.CompanyAddress ?? "P.O. Box 12345 - 00100, Nairobi, Kenya";
 }
 
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Disbursement Receipt - @Model.ReceiptNo</title>
-
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
-
+    <title>Disbursement Receipt</title>
     <style>
+        @@page {
+            size: A5 portrait;
+            margin: 0.5cm;
+        }
+
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background: #f4f6f9;
-            font-size: 13px;
-        }
-
-        /* SCREEN VIEW */
-        .receipt-container {
-            max-width: 650px;
-            margin: 20px auto;
-            background: #fff;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        .receipt-header {
-            background: #007bff;
-            color: #fff;
-            text-align: center;
-            padding: 15px;
-        }
-
-        .receipt-title {
-            font-size: 22px;
-            font-weight: bold;
-        }
-
-        .receipt-subtitle {
-            font-size: 12px;
-        }
-
-        .company-details-header {
-            background: #f8f9fa;
-            text-align: center;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            margin: 0;
             padding: 10px;
-            border-bottom: 2px solid #007bff;
+            background: white;
+            color: #333;
         }
 
-        .company-name {
+        .receipt-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 3px double #333;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        .header .company-name {
+            font-size: 18px;
             font-weight: bold;
-            color: #007bff;
+            letter-spacing: 2px;
+            color: #1a237e;
         }
 
-        .receipt-body {
-            padding: 15px;
-        }
-
-        .info-row {
-            margin-bottom: 12px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 8px;
-        }
-
-        .info-label {
-            font-weight: 600;
+        .header .company-details {
+            font-size: 9px;
             color: #666;
+            margin-top: 3px;
+        }
+
+        .header .receipt-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 8px;
+            background: #1a237e;
+            color: white;
+            padding: 5px 20px;
+            display: inline-block;
+            border-radius: 3px;
+        }
+
+        .disbursement-badge {
+            background: #00695c;
+            color: white;
+            padding: 3px 15px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: bold;
+            text-align: center;
+            display: inline-block;
+            margin: 5px 0;
+        }
+
+        .receipt-no {
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            margin: 8px 0;
+            padding: 8px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            border: 1px solid #90caf9;
+        }
+
+        .receipt-no .label {
+            color: #1565c0;
+        }
+
+        .transaction-refs {
+            font-size: 9px;
+            text-align: center;
+            color: #555;
+            margin: 5px 0;
+            padding: 5px;
+            background: #f5f5f5;
+            border-radius: 3px;
+            word-break: break-all;
+            border: 1px dashed #ccc;
+        }
+
+        .date-time {
+            text-align: center;
+            font-size: 11px;
+            color: #555;
+            margin: 5px 0 10px 0;
+            font-weight: bold;
+        }
+
+        .member-info {
+            background: #f5f5f5;
+            padding: 10px 12px;
+            margin: 10px 0;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
             font-size: 11px;
         }
 
-        .info-value {
-            font-size: 13px;
+        .member-info .row {
+            display: flex;
+            padding: 2px 0;
+        }
+
+        .member-info .label {
+            font-weight: bold;
+            color: #333;
+            width: 100px;
+            min-width: 100px;
+        }
+
+        .member-info .value {
+            color: #333;
         }
 
         .method-details {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 6px;
+            background: #e8f5e9;
+            padding: 10px 12px;
             margin: 10px 0;
-        }
-
-        .disbursement-table {
-            width: 100%;
-        }
-
-            .disbursement-table td {
-                padding: 4px 0;
-            }
-
-        .receipt-footer {
-            background: #f8f9fa;
-            text-align: center;
-            padding: 10px;
+            border: 1px solid #a5d6a7;
+            border-radius: 5px;
             font-size: 11px;
-            border-top: 1px solid #ddd;
         }
 
-        .btn-print {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
+        .method-details .row {
+            display: flex;
+            padding: 2px 0;
+        }
+
+        .method-details .label {
+            font-weight: bold;
+            color: #333;
+            width: 120px;
+            min-width: 120px;
+        }
+
+        .method-details .value {
+            color: #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 10px;
+        }
+
+        table tbody td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        table tbody tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        table .text-right {
+            text-align: right;
+        }
+
+        .total-row {
+            background: #e8f5e9 !important;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .total-row td {
+            padding: 8px !important;
+            border-top: 2px solid #333;
+        }
+
+        .summary {
+            margin: 10px 0;
+            padding: 10px 12px;
+            background: #e8f5e9;
+            border: 1px solid #a5d6a7;
+            border-radius: 5px;
+            font-size: 11px;
+        }
+
+        .summary .row {
+            display: flex;
+            padding: 3px 0;
+        }
+
+        .summary .label {
+            font-weight: bold;
+            width: 160px;
+            min-width: 160px;
+        }
+
+        .summary .value {
+            font-weight: bold;
+            color: #1a237e;
+        }
+
+        .blockchain-tx {
+            font-size: 8px;
+            word-break: break-all;
+            background: #fafafa;
+            padding: 8px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+            font-family: monospace;
+        }
+
+        .blockchain-tx .label {
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 3px double #333;
+            font-size: 9px;
+            color: #666;
+        }
+
+        .footer .thank-you {
+            font-size: 12px;
+            font-weight: bold;
+            color: #1a237e;
+            margin: 5px 0;
+        }
+
+        .print-button {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .print-button button {
+            padding: 10px 40px;
+            background: #1a237e;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .print-button button:hover {
+            background: #0d47a1;
+        }
+
+        .print-button .btn-close {
+            padding: 10px 30px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .print-button .btn-close:hover {
+            background: #5a6268;
+        }
+
+        .print-button .btn-home {
+            padding: 10px 30px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .print-button .btn-home:hover {
+            background: #1e7e34;
         }
 
         @@media print {
-
-            @@page {
-                size: 70mm auto;
-                margin: 5mm;
-            }
-
-            html, body {
-                width: 70mm !important;
-                font-size: 12px !important;
-                background: #fff !important;
-            }
-
-            * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
+            body {
+                padding: 0;
+                background: white;
             }
 
             .no-print {
@@ -133,184 +314,263 @@
             }
 
             .receipt-container {
-                width: 100% !important;
-                padding: 5px !important;
-            }
-            /* FIX HEADER PRINT */
-            .receipt-header {
-                background: #000 !important;
-                color: #fff !important;
-                border: 1px solid #000 !important;
+                border: none;
+                border-radius: 0;
+                padding: 15px;
+                box-shadow: none;
             }
 
-            .receipt-title,
-            .receipt-subtitle {
-                color: #fff !important;
+            .receipt-container .header .company-name {
+                font-size: 16px;
             }
 
             .receipt-no {
-                font-size: 14px !important;
-                font-weight: bold !important;
+                background: #e3f2fd !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
 
-            .info-row {
-                margin-bottom: 12px !important;
+            .header .receipt-title {
+                background: #1a237e !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
 
-            .disbursement-table td {
-                padding: 6px 0 !important;
+            .member-info {
+                background: #f5f5f5 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .method-details {
+                background: #e8f5e9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .summary {
+                background: #e8f5e9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .total-row {
+                background: #e8f5e9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .disbursement-badge {
+                background: #00695c !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
         }
     </style>
 </head>
-
 <body>
-
-    <!-- Buttons -->
-    <div class="no-print text-center mb-3">
-        <button onclick="window.print()" class="btn btn-primary">
-            <i class="fas fa-print"></i> Print / Save PDF
-        </button>
-        <button onclick="goBack()" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Back
-        </button>
-    </div>
-
-    <div class="receipt-container">
-
-        <!-- HEADER -->
-        <div class="receipt-header">
+    <div class="receipt-container" id="receipt">
+        <!-- Header -->
+        <div class="header">
+            <div class="company-name">@companyName</div>
+            <div class="company-details">@companyAddress</div>
+            <div class="company-details">Tel: @Model.CompanyPhone | Email: @Model.CompanyEmail</div>
             <div class="receipt-title">LOAN DISBURSEMENT RECEIPT</div>
-            <div class="receipt-subtitle">Funds Release Confirmation</div>
         </div>
 
-        <!-- COMPANY -->
-        <div class="company-details-header">
-            <div class="company-name">@Model.CompanyName</div>
-            <div>@Model.CompanyAddress</div>
-            <div>Tel: @Model.CompanyPhone | Email: @Model.CompanyEmail</div>
+        <!-- Disbursement Badge -->
+        <div style="text-align:center;">
+            <span class="disbursement-badge">💰 DISBURSEMENT - @Model.DisbursementMethod</span>
         </div>
 
-        <!-- BODY -->
-        <div class="receipt-body">
+        <!-- Receipt Number -->
+        <div class="receipt-no">
+            <span class="label">Voucher No:</span> @Model.ReceiptNo
+        </div>
 
-            <!-- Receipt No -->
-            <div class="text-center mb-2">
-                <span class="badge bg-primary">Voucher No: @Model.ReceiptNo</span>
+        <!-- Date -->
+        <div class="date-time">
+            Date: @Model.DisbursementDate.ToString("dd/MM/yyyy HH:mm")
+        </div>
+
+        <!-- Member Information -->
+        <div class="member-info">
+            <div class="row">
+                <span class="label">Member No:</span>
+                <span class="value">@Model.MemberNo</span>
             </div>
+            <div class="row">
+                <span class="label">Member Name:</span>
+                <span class="value">@Model.MemberName</span>
+            </div>
+            <div class="row">
+                <span class="label">ID Number:</span>
+                <span class="value">@(Model.MemberIdNo ?? "N/A")</span>
+            </div>
+            <div class="row">
+                <span class="label">Phone Number:</span>
+                <span class="value">@(Model.MemberPhone ?? "N/A")</span>
+            </div>
+            <div class="row">
+                <span class="label">Loan No:</span>
+                <span class="value"><strong>@Model.LoanNo</strong></span>
+            </div>
+        </div>
 
-            <!-- MEMBER INFO -->
-            <div class="info-row">
-                <div class="info-label">Member Details</div>
-                <div class="info-value">
-                    Name: @Model.MemberName<br />
-                    Member No: @Model.MemberNo<br />
-                    @if (!string.IsNullOrEmpty(Model.MemberIdNo) && Model.MemberIdNo != "N/A")
-                    {
-                        <text>ID No: @Model.MemberIdNo<br /></text>
-                    }
-                    Loan No: @Model.LoanNo
+        <!-- Disbursement Method Details -->
+        @if (Model.DisbursementMethod == "MPESA" || Model.DisbursementMethod == "M-Pesa")
+        {
+            <div class="method-details">
+                <div class="row">
+                    <span class="label">Method:</span>
+                    <span class="value"><strong>M-PESA</strong></span>
+                </div>
+                <div class="row">
+                    <span class="label">Mobile Number:</span>
+                    <span class="value">@Model.MemberPhone</span>
+                </div>
+                <div class="row">
+                    <span class="label">Recipient:</span>
+                    <span class="value">@Model.MemberName</span>
+                </div>
+                <div class="row">
+                    <span class="label">Status:</span>
+                    <span class="value" style="color:#00695c;">Completed</span>
                 </div>
             </div>
+        }
+        else if (Model.DisbursementMethod == "BANK_TRANSFER" || Model.DisbursementMethod == "Bank Transfer")
+        {
+            <div class="method-details">
+                <div class="row">
+                    <span class="label">Method:</span>
+                    <span class="value"><strong>BANK TRANSFER</strong></span>
+                </div>
+                <div class="row">
+                    <span class="label">Bank Name:</span>
+                    <span class="value">@Model.BankName</span>
+                </div>
+                @if (!string.IsNullOrEmpty(Model.ReferenceNo))
+                {
+                    <div class="row">
+                        <span class="label">Reference:</span>
+                        <span class="value">@Model.ReferenceNo</span>
+                    </div>
+                }
+                <div class="row">
+                    <span class="label">Status:</span>
+                    <span class="value" style="color:#00695c;">Processed</span>
+                </div>
+            </div>
+        }
+        else if (Model.DisbursementMethod == "CHEQUE" || Model.DisbursementMethod == "Cheque")
+        {
+            <div class="method-details">
+                <div class="row">
+                    <span class="label">Method:</span>
+                    <span class="value"><strong>CHEQUE</strong></span>
+                </div>
+                <div class="row">
+                    <span class="label">Cheque Number:</span>
+                    <span class="value">@Model.ReferenceNo</span>
+                </div>
+                <div class="row">
+                    <span class="label">Payable To:</span>
+                    <span class="value">@Model.MemberName</span>
+                </div>
+                <div class="row">
+                    <span class="label">Status:</span>
+                    <span class="value" style="color:#00695c;">Issued</span>
+                </div>
+            </div>
+        }
+        else if (Model.DisbursementMethod == "CASH" || Model.DisbursementMethod == "Cash")
+        {
+            <div class="method-details">
+                <div class="row">
+                    <span class="label">Method:</span>
+                    <span class="value"><strong>CASH</strong></span>
+                </div>
+                <div class="row">
+                    <span class="label">Received By:</span>
+                    <span class="value">@Model.MemberName</span>
+                </div>
+                @if (!string.IsNullOrEmpty(Model.MemberIdNo) && Model.MemberIdNo != "N/A")
+                {
+                    <div class="row">
+                        <span class="label">ID Number:</span>
+                        <span class="value">@Model.MemberIdNo</span>
+                    </div>
+                }
+                <div class="row">
+                    <span class="label">Status:</span>
+                    <span class="value" style="color:#00695c;">Paid</span>
+                </div>
+            </div>
+        }
 
-            <!-- DISBURSEMENT METHOD (DYNAMIC) -->
-            @if (Model.DisbursementMethod == "MPESA" || Model.DisbursementMethod == "M-Pesa")
-            {
-                <div class="method-details">
-                    <strong>M-PESA</strong><br />
-                    Mobile Number: @Model.MemberPhone<br />
-                    Recipient Name: @Model.MemberName<br />
-                    Transaction Status: Completed
-                </div>
-            }
-            else if (Model.DisbursementMethod == "BANK_TRANSFER" || Model.DisbursementMethod == "Bank Transfer")
-            {
-                <div class="method-details">
-                    <strong>BANK TRANSFER</strong><br />
-                    Bank Name: @Model.BankName<br />
-                    @if (!string.IsNullOrEmpty(Model.ReferenceNo))
-                    {
-                        <text>Reference Number: @Model.ReferenceNo<br /></text>
-                    }
-                    Transfer Status: Processed
-                </div>
-            }
-            else if (Model.DisbursementMethod == "CHEQUE" || Model.DisbursementMethod == "Cheque")
-            {
-                <div class="method-details">
-                    <strong>CHEQUE PAYMENT</strong><br />
-                    Cheque Number: @Model.ReferenceNo<br />
-                    Cheque Amount: KES @Model.NetAmount.ToString("N2")<br />
-                    Payable To: @Model.MemberName
-                </div>
-            }
-            else if (Model.DisbursementMethod == "CASH" || Model.DisbursementMethod == "Cash")
-            {
-                <div class="method-details">
-                    <strong>CASH PAYMENT</strong><br />
-                    Received By: @Model.MemberName<br />
-                    @if (!string.IsNullOrEmpty(Model.MemberIdNo) && Model.MemberIdNo != "N/A")
-                    {
-                        <text>ID Number: @Model.MemberIdNo<br /></text>
-                    }
-                    Payment Status: Paid
-                </div>
-            }
-
-            <!-- DISBURSEMENT BREAKDOWN -->
-            <div class="info-row">
-                <div class="info-label">Disbursement Breakdown</div>
-                <table class="disbursement-table">
+        <!-- Disbursement Breakdown -->
+        <table>
+            <tbody>
+                <tr>
+                    <td>Approved Amount</td>
+                    <td class="text-right">KES @Model.ApprovedAmount.ToString("N2")</td>
+                </tr>
+                @if (Model.TotalDeductions > 0)
+                {
                     <tr>
-                        <td>Approved Amount</td>
-                        <td class="text-end">KES @Model.ApprovedAmount.ToString("N2")</td>
+                        <td>Total Deductions</td>
+                        <td class="text-right" style="color:#c62828;">- KES @Model.TotalDeductions.ToString("N2")</td>
                     </tr>
-                    @if (Model.TotalDeductions > 0)
-                    {
-                        <tr>
-                            <td>Total Deductions</td>
-                            <td class="text-end text-danger">- KES @Model.TotalDeductions.ToString("N2")</td>
-                        </tr>
-                    }
-                    <tr class="fw-bold border-top">
-                        <td>Net Amount Disbursed</td>
-                        <td class="text-end">KES @Model.NetAmount.ToString("N2")</td>
-                    </tr>
-                </table>
-            </div>
+                }
+                <tr class="total-row">
+                    <td style="font-size:12px;">Net Amount Disbursed</td>
+                    <td class="text-right" style="font-size:13px; color:#1a237e;">KES @Model.NetAmount.ToString("N2")</td>
+                </tr>
+            </tbody>
+        </table>
 
-            <!-- DISBURSEMENT DATE -->
-            <div class="info-row">
-                <div class="info-label">Disbursement Date</div>
-                <div class="info-value">
-                    @Model.DisbursementDate.ToString("dd MMM yyyy HH:mm")
+        <!-- Summary -->
+        <div class="summary">
+            @if (!string.IsNullOrEmpty(Model.Remarks))
+            {
+                <div class="row">
+                    <span class="label">Remarks:</span>
+                    <span class="value">@Model.Remarks</span>
                 </div>
+            }
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="thank-you">Thank you for your loan!</div>
+            <div>Disbursed By: @Model.DisbursedBy</div>
+            <div>Printed At: @Model.PrintedAt.ToString("dd/MM/yyyy HH:mm:ss")</div>
+            <div style="margin-top:5px; font-size:8px; color:#999;">
+                This is a system generated receipt. Blockchain verified.
             </div>
-
         </div>
-
-        <!-- FOOTER -->
-        <div class="receipt-footer">
-            <div>Disbursed by: @Model.DisbursedBy</div>
-            <div>Printed: @Model.PrintedAt.ToString("dd MMM yyyy HH:mm")</div>
-            <div>This is a system generated receipt.</div>
-            <div class="mt-1"><i class="fas fa-shield-alt"></i> Verified on Blockchain</div>
-        </div>
-
     </div>
 
-    <!-- Floating button -->
-    <div class="btn-print no-print">
-        <button onclick="window.print()" class="btn btn-primary" style="width:60px;height:60px;">
-            <i class="fas fa-print"></i>
+    <!-- Print Button -->
+    <div class="print-button no-print">
+        <button onclick="window.print()">
+            <i class="fas fa-print"></i> Print Receipt
+        </button>
+        <button class="btn-close" onclick="window.close()">
+            <i class="fas fa-times"></i> Close
+        </button>
+        <button class="btn-home" onclick="window.location.href='@Url.Action("PendingDisbursement", "LoanMvc")'">
+            <i class="fas fa-home"></i> Home
         </button>
     </div>
 
     <script>
-        function goBack() {
-            window.history.back();
-        }
+        // Auto-print when page loads (optional - uncomment to enable)
+        window.onload = function() {
+            // Uncomment to auto-print
+            // window.print();
+        };
     </script>
-
 </body>
 </html>

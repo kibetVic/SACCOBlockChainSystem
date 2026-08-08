@@ -93,11 +93,36 @@
             color: white;
             transform: scale(1.05);
         }
+
+    /* Print-friendly styles for PDF */
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+
+        .summary-card {
+            background: #f0f0f0 !important;
+            color: #333 !important;
+            border: 1px solid #ccc !important;
+        }
+
+        .table-bordered {
+            border: 1px solid #000 !important;
+        }
+
+            .table-bordered th, .table-bordered td {
+                border: 1px solid #000 !important;
+            }
+
+        .status-badge {
+            border: 1px solid #000 !important;
+        }
+    }
 </style>
 
 <div class="container-fluid">
     <!-- Header -->
-    <div class="row mb-3">
+    <div class="row mb-3 no-print">
         <div class="col-md-8">
             <h2 style="color: #3f2b96;">
                 <i class="bi bi-handshake"></i> Guarantor Loans
@@ -111,8 +136,21 @@
             <a href="@Url.Action("MemberInquiry")" class="btn btn-secondary ms-2">
                 <i class="bi bi-search"></i> Search
             </a>
+            @if (Model.GuaranteedLoans != null && Model.GuaranteedLoans.Any())
+            {
+                <!-- PDF Export Button - opens in new tab -->
+                <button type="button" class="btn btn-danger ms-2" onclick="exportToPdf()">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            }
         </div>
     </div>
+
+    <!-- Hidden form for PDF export - target="_blank" opens in new tab -->
+    <form id="pdfExportForm" action="@Url.Action("ExportGuarantorLoansToPdf")" method="post" target="_blank">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="memberNo" value="@Model.MemberNo" />
+    </form>
 
     <!-- Member Summary -->
     <div class="row mb-4">
@@ -205,7 +243,7 @@
                                 <th>Application Date</th>
                                 <th>Expected Completion</th>
                                 <th>Status</th>
-                                <th>Actions</th>
+                                <th class="no-print">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -256,11 +294,7 @@
                                             <span class="status-badge status-@loan.LoanStatus.ToLower()">@loan.LoanStatus</span>
                                         }
                                     </td>
-                                    <td>
-                                        @* <a href="@Url.Action("Details", "LoanMvc", new { loanNo = loan.LoanNo })"
-                                           class="btn btn-sm btn-info" target="_blank">
-                                            <i class="bi bi-eye"></i> View Loan
-                                        </a> *@
+                                    <td class="no-print">
                                         <button type="button" class="btn btn-sm btn-secondary"
                                                 onclick="showGuaranteeDetails('@loan.LoanNo')">
                                             <i class="bi bi-info-circle">Details</i>
@@ -377,6 +411,27 @@
                 console.log('DataTable initialization error:', e);
             }
         });
+
+        // PDF Export function - opens in new tab
+        function exportToPdf() {
+            // Show loading indicator
+            var btn = document.querySelector('.btn-danger');
+            if (btn) {
+                btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating PDF...';
+                btn.disabled = true;
+            }
+
+            // Submit the form - target="_blank" on form opens in new tab
+            document.getElementById('pdfExportForm').submit();
+
+            // Reset button after a delay
+            setTimeout(function() {
+                if (btn) {
+                    btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Export PDF';
+                    btn.disabled = false;
+                }
+            }, 5000);
+        }
 
         function showGuaranteeDetails(loanNo) {
             $('#guaranteeDetailsModal').modal('show');

@@ -15,5 +15,6 @@ namespace SACCOBlockChainSystem.Services
         Task<MemberDTO> GetMemberDetailsAsync(string memberNo);        
         Task<MemberResponseDTO> UpdateMemberAsync(string memberNo, MemberUpdateDTO updateDto);
         Task<decimal> GetMemberShareTypeTotalAsync(string memberNo, string shareTypeCode, string companyCode);
+        Task<MembersPerCIGReportViewModel> GetMembersPerCIGReportAsync(string companyCode, string? searchTerm = null, string? statusFilter = null);
     }
 }

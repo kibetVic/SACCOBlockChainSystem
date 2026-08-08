@@ -7,7 +7,7 @@ using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Repositories;
 using SACCOBlockChainSystem.Services;
 using QuestPDF.Infrastructure;
-using Radzen;
+//using Radzen;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,23 +18,23 @@ QuestPDF.Settings.License = LicenseType.Community;
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
-builder.Services.AddRazorPages();
-builder.Services.AddRadzenComponents();
+//builder.Services.AddRazorPages();
+//builder.Services.AddRadzenComponents();
 
-builder.Services.AddServerSideBlazor();
+//builder.Services.AddServerSideBlazor();
 
-builder.Services.AddScoped<DialogService>();
-builder.Services.AddScoped<NotificationService>();
-builder.Services.AddScoped<TooltipService>();
-builder.Services.AddScoped<ContextMenuService>();
+//builder.Services.AddScoped<DialogService>();
+//builder.Services.AddScoped<NotificationService>();
+//builder.Services.AddScoped<TooltipService>();
+//builder.Services.AddScoped<ContextMenuService>();
 builder.Services.AddScoped<RoleService>();
 builder.Services.AddScoped<PrivilegeService>();
 
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
-builder.Services.AddServerSideBlazor();
-builder.Services.AddRadzenComponents();
+//builder.Services.AddServerSideBlazor();
+//builder.Services.AddRadzenComponents();
 builder.Services.AddSignalR();// For API calls if needed
 // session for storing verification codes
 builder.Services.AddDistributedMemoryCache();
@@ -91,12 +91,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         builder.Configuration.GetConnectionString("Connection"),
         sqlOptions => sqlOptions.CommandTimeout(commandTimeout)));
 
-//builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//    options.UseSqlServer(builder.Configuration.GetConnectionString("BlockchainDb")));
-
-//builder.Services.AddDbContext<AppDbContext>(options =>
-//    options.UseSqlServer(builder.Configuration.GetConnectionString("Connection")));
-
 // Register Repository Pattern
 builder.Services.AddScoped<IMemberRepository, MemberRepository>();
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
@@ -133,16 +127,12 @@ builder.Services.AddScoped<ILoanTypePerformanceService, LoanTypePerformanceServi
 builder.Services.AddScoped<IChequeReceivedReportService, ChequeReceivedReportService>();
 builder.Services.AddScoped<AuditTrailService>();
 builder.Services.AddScoped<IAgentService, AgentService>();
-builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<IEmployeePaymentService, EmployeePaymentService>();
 builder.Services.AddScoped<IPaymentTypeService, PaymentTypeService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IInvoicePaymentService, InvoicePaymentService>();
-//builder.Services.AddHostedService<BlockchainSyncService>();
-//builder.Services.AddHostedService<TransactionProcessorService>();
-//builder.Services.AddHostedService<LoanOverdueUpdateService>();
 builder.Services.AddScoped<IMigrationService, MigrationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ISelfServiceLoanService, SelfServiceLoanService>();
@@ -215,7 +205,7 @@ app.UseRouting();
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapBlazorHub();
+// app.MapBlazorHub();
 // SIMPLIFIED Health check endpoint
 app.MapHealthChecks("/health");
 

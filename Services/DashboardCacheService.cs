@@ -714,59 +714,6 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-
-        // ============================================================
-        // CALCULATE LOANEE STATISTICS (Distinct Members with Loans)
-        // ============================================================
-        private async Task<(int Total, int Women, int Men, int Others)> CalculateLoaneesDataAsync(string? companyCode)
-        {
-            try
-            {
-                var loansQuery = _context.Loans.AsQueryable();
-
-                if (!string.IsNullOrEmpty(companyCode))
-                {
-                    loansQuery = loansQuery.Where(l => l.CompanyCode == companyCode);
-                }
-
-                // Get distinct members who have taken loans (INNER JOIN with Members)
-                var loaneesQuery = from l in loansQuery
-                                   join m in _context.Members on l.MemberNo equals m.MemberNo
-                                   select new { m.MemberNo, m.Sex };
-
-                var loanees = await loaneesQuery
-                    .GroupBy(x => new { x.MemberNo, x.Sex })
-                    .Select(g => new { g.Key.MemberNo, g.Key.Sex })
-                    .ToListAsync();
-
-                int womenLoanees = 0;
-                int menLoanees = 0;
-                int othersLoanees = 0;
-
-                foreach (var l in loanees)
-                {
-                    var gender = NormalizeGender(l.Sex);
-                    if (gender == "FEMALE")
-                        womenLoanees++;
-                    else if (gender == "MALE")
-                        menLoanees++;
-                    else
-                        othersLoanees++;
-                }
-
-                int total = womenLoanees + menLoanees + othersLoanees;
-
-                _logger.LogInformation($"Loanees - Total: {total}, Women: {womenLoanees}, Men: {menLoanees}, Others: {othersLoanees}");
-
-                return (total, womenLoanees, menLoanees, othersLoanees);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error calculating loanees data");
-                return (0, 0, 0, 0);
-            }
-        }
-
         // ============================================================
         // CALCULATE LOAN COUNT STATISTICS
         // ============================================================
@@ -849,7 +796,7 @@ namespace SACCOBlockChainSystem.Services
 
                 foreach (var loan in loans)
                 {
-                    // Completed loans: Status = Closed
+                    // Completed loans: Status = Closed (7)
                     if (loan.Status == (int)Status.Closed)
                     {
                         completed++;
@@ -862,7 +809,7 @@ namespace SACCOBlockChainSystem.Services
                         uncompleted++;
                     }
 
-                    // Active loans: Status = Disbursed or Endorsed
+                    // Active loans: Status = Disbursed (6) or Endorsed (5)
                     if (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
                     {
                         active++;
@@ -871,7 +818,7 @@ namespace SACCOBlockChainSystem.Services
                         decimal balance = loanBalances.ContainsKey(loan.LoanNo) ? loanBalances[loan.LoanNo] : 0;
                         if (balance > 0)
                         {
-                            // Calculate days overdue based on last payment date
+                            // Get last repayment date
                             var lastRepayment = await _context.Repay
                                 .Where(r => r.LoanNo == loan.LoanNo && r.DateReceived.HasValue)
                                 .OrderByDescending(r => r.DateReceived)
@@ -898,9 +845,6 @@ namespace SACCOBlockChainSystem.Services
                     }
                 }
 
-                // Overdue loans might already be counted in active, but we keep separate counts
-                // for display purposes
-
                 _logger.LogInformation($"Loan Status - Completed: {completed}, Uncompleted: {uncompleted}, Active: {active}, Overdue: {overdue}");
 
                 return (completed, uncompleted, overdue, active);
@@ -915,7 +859,9 @@ namespace SACCOBlockChainSystem.Services
         // ============================================================
         // CALCULATE LOAN STATUS BREAKDOWN BY GENDER
         // ============================================================
-        private async Task<(int WomenCompleted, int MenCompleted, int OthersCompleted, int WomenActive, int MenActive, int OthersActive, int WomenOverdue, int MenOverdue, int OthersOverdue)>
+        private async Task<(int WomenCompleted, int MenCompleted, int OthersCompleted,
+                            int WomenActive, int MenActive, int OthersActive,
+                            int WomenOverdue, int MenOverdue, int OthersOverdue)>
             CalculateLoanStatusByGenderAsync(string? companyCode)
         {
             try
@@ -951,7 +897,7 @@ namespace SACCOBlockChainSystem.Services
                 {
                     var gender = NormalizeGender(loan.Sex);
 
-                    // Completed loans
+                    // COMPLETED loans: Status = Closed (7)
                     if (loan.Status == (int)Status.Closed)
                     {
                         if (gender == "FEMALE") womenCompleted++;
@@ -960,7 +906,7 @@ namespace SACCOBlockChainSystem.Services
                         continue;
                     }
 
-                    // Active loans: Status = Disbursed or Endorsed
+                    // ACTIVE loans: Status = Disbursed (6) or Endorsed (5)
                     if (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
                     {
                         // Count active by gender
@@ -968,7 +914,7 @@ namespace SACCOBlockChainSystem.Services
                         else if (gender == "MALE") menActive++;
                         else othersActive++;
 
-                        // Check if overdue (>30 days)
+                        // Check if OVERDUE (>30 days)
                         decimal balance = loanBalances.ContainsKey(loan.LoanNo) ? loanBalances[loan.LoanNo] : 0;
                         if (balance > 0)
                         {
@@ -1001,6 +947,8 @@ namespace SACCOBlockChainSystem.Services
                 }
 
                 _logger.LogInformation($"Loan Status by Gender - Women: Completed={womenCompleted}, Active={womenActive}, Overdue={womenOverdue}");
+                _logger.LogInformation($"Loan Status by Gender - Men: Completed={menCompleted}, Active={menActive}, Overdue={menOverdue}");
+                _logger.LogInformation($"Loan Status by Gender - Others: Completed={othersCompleted}, Active={othersActive}, Overdue={othersOverdue}");
 
                 return (womenCompleted, menCompleted, othersCompleted,
                         womenActive, menActive, othersActive,
@@ -1012,6 +960,60 @@ namespace SACCOBlockChainSystem.Services
                 return (0, 0, 0, 0, 0, 0, 0, 0, 0);
             }
         }
+
+
+        // ============================================================
+        // CALCULATE LOANEE STATISTICS (Distinct Members with Loans)
+        // ============================================================
+        private async Task<(int Total, int Women, int Men, int Others)> CalculateLoaneesDataAsync(string? companyCode)
+        {
+            try
+            {
+                var loansQuery = _context.Loans.AsQueryable();
+
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loansQuery = loansQuery.Where(l => l.CompanyCode == companyCode);
+                }
+
+                // Get distinct members who have taken loans (INNER JOIN with Members)
+                var loaneesQuery = from l in loansQuery
+                                   join m in _context.Members on l.MemberNo equals m.MemberNo
+                                   select new { m.MemberNo, m.Sex };
+
+                var loanees = await loaneesQuery
+                    .GroupBy(x => new { x.MemberNo, x.Sex })
+                    .Select(g => new { g.Key.MemberNo, g.Key.Sex })
+                    .ToListAsync();
+
+                int womenLoanees = 0;
+                int menLoanees = 0;
+                int othersLoanees = 0;
+
+                foreach (var l in loanees)
+                {
+                    var gender = NormalizeGender(l.Sex);
+                    if (gender == "FEMALE")
+                        womenLoanees++;
+                    else if (gender == "MALE")
+                        menLoanees++;
+                    else
+                        othersLoanees++;
+                }
+
+                int total = womenLoanees + menLoanees + othersLoanees;
+
+                _logger.LogInformation($"Loanees - Total: {total}, Women: {womenLoanees}, Men: {menLoanees}, Others: {othersLoanees}");
+
+                return (total, womenLoanees, menLoanees, othersLoanees);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calculating loanees data");
+                return (0, 0, 0, 0);
+            }
+        }
+       
 
         /// <summary>
         /// Determines if a member is active based on having 3 consecutive months of deposits
@@ -1444,6 +1446,7 @@ namespace SACCOBlockChainSystem.Services
                         totalCurrentMonthReceived += currentMonthRepayments[loan.CompanyCode ?? ""];
                     }
                 }
+
 
                 // Get Loanees Statistics (Distinct Members with Loans)
                 var loaneesData = await CalculateLoaneesDataAsync(companyCode);

@@ -1,11 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace SACCOBlockChainSystem.Models.DTOs
 {
-    #region Supplier DTOs
-
     public class SupplierDTO
     {
         public long? Id { get; set; }
@@ -20,9 +17,11 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [StringLength(100)]
         public string? ContactPerson { get; set; }
 
+        [Required(ErrorMessage = "Phone Number is required")]
         [StringLength(50)]
         public string? PhoneNo { get; set; }
 
+        [EmailAddress(ErrorMessage = "Invalid Email Address")]
         [StringLength(100)]
         public string? Email { get; set; }
 
@@ -65,23 +64,16 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [StringLength(100)]
         public string? GlAccountName { get; set; }
 
-        [Required(ErrorMessage = "Company Code is required")]
         [StringLength(50)]
         public string? CompanyCode { get; set; }
 
-        public bool? IsActive { get; set; }
+        public bool? IsActive { get; set; } = true;
 
-        [StringLength(50)]
-        public string? Status { get; set; }
-
+        [Range(0, double.MaxValue, ErrorMessage = "Opening Balance must be a positive number")]
         public decimal? OpeningBalance { get; set; }
-
-        public decimal? CurrentBalance { get; set; }
 
         [StringLength(500)]
         public string? Remarks { get; set; }
-
-        public string? BlockchainTxId { get; set; }
     }
 
     public class SupplierResponseDTO
@@ -115,7 +107,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? CreatedBy { get; set; }
         public string? CreatedDate { get; set; }
         public int InvoiceCount { get; set; }
-        public decimal? TotalInvoiceAmount { get; set; }
+        public decimal TotalInvoiceAmount { get; set; }
     }
 
     public class SupplierSearchDTO
@@ -124,22 +116,36 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? SupplierCode { get; set; }
         public string? PhoneNo { get; set; }
         public string? Email { get; set; }
-        public string? CompanyCode { get; set; }
         public bool? IsActive { get; set; }
+        public string? CompanyCode { get; set; }
     }
 
     public class SupplierViewModel
     {
-        public List<SupplierResponseDTO> Suppliers { get; set; } = new();
+        public List<SupplierResponseDTO> Suppliers { get; set; } = new List<SupplierResponseDTO>();
         public int TotalSuppliers { get; set; }
         public int ActiveSuppliers { get; set; }
         public int InactiveSuppliers { get; set; }
         public int BlockchainVerifiedCount { get; set; }
         public decimal TotalSupplierBalance { get; set; }
         public string? UserCompanyCode { get; set; }
+
+        // For GL Account dropdown
+        public List<GlAccountDTO> GlAccounts { get; set; } = new List<GlAccountDTO>();
     }
 
-    #endregion
+    public class GlAccountDTO
+    {
+        public long GlId { get; set; }
+        public string? Glcode { get; set; }
+        public string? Glaccname { get; set; }
+        public string? AccNo { get; set; }
+        public string? Glacctype { get; set; }
+        public string? GlAccMainGroup { get; set; }
+        public decimal? CurrentBal { get; set; }
+        public string? DisplayName => $"{Glcode} - {Glaccname}";
+    }
+
 
     #region InvoiceReceive DTOs
 
@@ -166,8 +172,15 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
         public decimal? Balance { get; set; }
 
+        // Tax Percentage (e.g., 16 for 16%)
+        [Range(0, 100, ErrorMessage = "Tax percentage must be between 0 and 100")]
+        public decimal? TaxPercentage { get; set; }
+
+        // Calculated Tax Amount based on TaxPercentage
         public decimal? TaxAmount { get; set; }
 
+        // Discount Amount (direct value entered by user)
+        [Range(0, double.MaxValue, ErrorMessage = "Discount must be a positive number")]
         public decimal? DiscountAmount { get; set; }
 
         [DataType(DataType.Date)]
@@ -195,16 +208,16 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [StringLength(50)]
         public string? CompanyCode { get; set; }
 
-        [StringLength(50)]
+        // System calculated - not required in input
         public string? Status { get; set; }
 
-        [StringLength(50)]
+        // System calculated - not required in input
         public string? PaymentStatus { get; set; }
 
         public decimal? TotalAmount { get; set; }
 
-        [StringLength(500)]
-        public string? Remarks { get; set; }
+        [StringLength(50)]
+        public string? ReceiptNo { get; set; }
 
         public string? BlockchainTxId { get; set; }
     }
@@ -218,6 +231,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal InvoiceAmount { get; set; }
         public decimal? AmountPaid { get; set; }
         public decimal? Balance { get; set; }
+        public decimal? TaxPercentage { get; set; }
         public decimal? TaxAmount { get; set; }
         public decimal? DiscountAmount { get; set; }
         public DateTime? InvoiceDate { get; set; }
@@ -231,7 +245,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? Status { get; set; }
         public string? PaymentStatus { get; set; }
         public decimal? TotalAmount { get; set; }
-        public string? Remarks { get; set; }
+        public string? ReceiptNo { get; set; }
         public string? BlockchainTxId { get; set; }
         public string? CreatedBy { get; set; }
         public string? CreatedDate { get; set; }
@@ -264,6 +278,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal TotalOutstanding { get; set; }
         public string? UserCompanyCode { get; set; }
         public List<SupplierResponseDTO> Suppliers { get; set; } = new();
+        public List<GlAccountDTO> GlAccounts { get; set; } = new();
     }
 
     #endregion
@@ -363,7 +378,45 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? UserCompanyCode { get; set; }
         public List<SupplierResponseDTO> Suppliers { get; set; } = new();
         public List<InvoiceReceiveResponseDTO> Invoices { get; set; } = new();
+        public List<GlAccountDTO> GlAccounts { get; set; } = new();
     }
 
     #endregion
+    public class PaymentReceiptViewModel
+    {
+        public string? ReceiptNo { get; set; }
+        public string? InvoiceNo { get; set; }
+        public string? SupplierCode { get; set; }
+        public string? SupplierName { get; set; }
+        public string? SupplierContact { get; set; }
+        public string? SupplierPhone { get; set; }
+        public string? SupplierEmail { get; set; }
+        public decimal Amount { get; set; }
+        public decimal? OpeningBalance { get; set; }
+        public decimal? BalanceAfter { get; set; }
+        public DateTime? PaymentDate { get; set; }
+        public string? PaymentMethod { get; set; }
+        public string? ChequeNo { get; set; }
+        public string? TransactionType { get; set; }
+        public string? Particulars { get; set; }
+        public string? Remarks { get; set; }
+        public string? DebitAccountNo { get; set; }
+        public string? DebitAccountName { get; set; }
+        public string? SupplierAccountNo { get; set; }
+        public string? SupplierAccountName { get; set; }
+        public string? BlockchainTxId { get; set; }
+        public string? CreatedBy { get; set; }
+        public DateTime? CreatedDate { get; set; }
+
+        // Company details
+        public string? CompanyName { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? CompanyPhone { get; set; }
+        public string? CompanyEmail { get; set; }
+        public string? CompanyLogo { get; set; }
+
+        // Payment status
+        public string? PaymentStatus { get; set; }
+        public decimal? TotalPaid { get; set; }
+    }
 }

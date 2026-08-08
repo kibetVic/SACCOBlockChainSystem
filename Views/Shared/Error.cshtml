@@ -1,36 +1,95 @@
-﻿@using SACCOBlockChainSystem.Models.ViewModels
+﻿﻿@using SACCOBlockChainSystem.Models.ViewModels
 @model ErrorViewModel
 @{
     ViewData["Title"] = "Error";
 }
 
-<h1 class="text-danger">Error.</h1>
-<h2 class="text-danger">An error occurred while processing your request.</h2>
+<div class="container mt-5">
+    <div class="alert alert-danger">
+        <h1 class="text-danger">Error.</h1>
+        <h2 class="text-danger">An error occurred while processing your request.</h2>
 
-@if (Model != null)
-{
-    @if (Model.ShowRequestId)
-    {
-        <p>
-            <strong>Request ID:</strong> <code>@Model.RequestId</code>
-        </p>
-    }
+        @if (Model != null)
+        {
+            @if (Model.ShowRequestId)
+            {
+                <p>
+                    <strong>Request ID:</strong> <code>@Model.RequestId</code>
+                </p>
+            }
 
-    <h3>Development Mode</h3>
-    <p>
-        Swapping to <strong>Development</strong> environment will display more detailed information about the error that occurred.
-    </p>
-    <p>
-        <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
-        It can result in displaying sensitive information from exceptions to end users.
-        For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
-        and restarting the app.
-    </p>
-}
-else
-{
-    <p>An unexpected error occurred. Please try again later.</p>
-}
+            @if (Model.StatusCode.HasValue)
+            {
+                <p>
+                    <strong>Status Code:</strong> <code>@Model.StatusCode</code>
+                </p>
+            }
 
+            @if (Model.ShowErrorDetails)
+            {
+                <!-- Detailed error information for development -->
+                <div class="mt-4">
+                    <div class="card border-danger">
+                        <div class="card-header bg-danger text-white">
+                            <strong>Error Details</strong>
+                        </div>
+                        <div class="card-body">
+                            @if (!string.IsNullOrEmpty(Model.ExceptionType))
+                            {
+                                <p><strong>Exception Type:</strong> <code>@Model.ExceptionType</code></p>
+                            }
 
+                            @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                            {
+                                <div class="alert alert-warning">
+                                    <strong>Error Message:</strong><br />
+                                    @Model.ErrorMessage
+                                </div>
+                            }
 
+                            @if (!string.IsNullOrEmpty(Model.StackTrace))
+                            {
+                                <div>
+                                    <strong>Stack Trace:</strong>
+                                    <pre class="bg-light p-3 mt-2" style="overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;">@Model.StackTrace</pre>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- User-friendly error message for production -->
+                <div class="mt-4">
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning">
+                            <strong>What happened?</strong>
+                        </div>
+                        <div class="card-body">
+                            <p>Something went wrong. Please try again later.</p>
+                            <p>If this issue persists, please contact support with your request ID.</p>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <div class="mt-3">
+                <h3>Development Mode</h3>
+                <p>
+                    Swapping to <strong>Development</strong> environment will display more detailed information about the error that occurred.
+                </p>
+                <p>
+                    <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
+                    It can result in displaying sensitive information from exceptions to end users.
+                    For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
+                    and restarting the app.
+                </p>
+            </div>
+        }
+        else
+        {
+            <p>An unexpected error occurred. Please try again later.</p>
+        }
+    </div>
+</div>

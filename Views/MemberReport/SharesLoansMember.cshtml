@@ -1,4 +1,4 @@
-﻿@using System.Security.Claims
+﻿﻿@using System.Security.Claims
 @model SACCOBlockChainSystem.Models.ViewModels.SharesAndLoansIndexViewModel
 @{
     ViewData["Title"] = "Shares and Loans Report";
@@ -76,6 +76,7 @@
                     </div>
                     <div class="card-body">
                         <form asp-action="SharesLoansMember" method="post" id="reportForm">
+                            @Html.AntiForgeryToken()
                             <div class="row">
                                 <div class="col-md-4">
                                     <div class="form-group">
@@ -93,12 +94,6 @@
                                             <button type="submit" class="btn btn-primary">
                                                 <i class="fas fa-search me-1"></i>Generate Report
                                             </button>
-                                            <button type="button" class="btn btn-success" id="exportExcelBtn" onclick="exportSharesAndLoansToExcel(); return false;">
-                                                <i class="fas fa-file-excel me-1"></i>Excel
-                                            </button>
-                                            <button type="button" class="btn btn-danger" id="exportPdfBtn" onclick="exportSharesAndLoansToPdf(); return false;">
-                                                <i class="fas fa-file-pdf me-1"></i>PDF
-                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -106,10 +101,12 @@
                         </form>
 
                         <!-- Export Forms -->
-                        <form asp-action="ExportSharesAndLoansMemberToExcel" method="post" id="excelForm" style="display:none;">
+                        <form asp-action="ExportSharesAndLoansMemberToExcel" method="post" id="excelForm" target="_blank" style="display:none;">
+                            @Html.AntiForgeryToken()
                             <input type="hidden" name="reportDate" id="excelReportDate" />
                         </form>
-                        <form asp-action="ExportSharesAndLoansMemberToPdf" method="post" id="pdfForm" style="display:none;">
+                        <form asp-action="ExportSharesAndLoansMemberToPdf" method="post" id="pdfForm" target="_blank" style="display:none;">
+                            @Html.AntiForgeryToken()
                             <input type="hidden" name="reportDate" id="pdfReportDate" />
                         </form>
                     </div>
@@ -119,7 +116,7 @@
 
         @if (hasData)
         {
-            <!-- SACCO Header - Exactly as in the image -->
+            <!-- SACCO Header -->
             <div class="text-center mb-4">
                 <h2 class="display-6 fw-bold">SHARES AND LOANS REPORT FOR</h2>
                 <h1 class="display-5 fw-bold text-purple">@companyName.ToUpper()</h1>
@@ -175,7 +172,7 @@
                 </div>
             </div>
 
-            <!-- Members Table - Exactly as in the image -->
+            <!-- Members Table -->
             <div class="table-responsive">
                 <table class="table table-bordered table-striped table-hover" id="membersTable">
                     <thead class="bg-purple text-white">
@@ -248,6 +245,10 @@
                                     <td>Youth (18-35):</td>
                                     <td class="text-end">@Model.YouthCount (@((Model.YouthCount * 100 / (Model.TotalMembers == 0 ? 1 : Model.TotalMembers)).ToString("N0"))%)</td>
                                 </tr>
+                                <tr>
+                                    <td>Others:</td>
+                                    <td class="text-end">@Model.OtherCount</td>
+                                </tr>
                             </table>
                         </div>
                     </div>
@@ -262,17 +263,26 @@
                                 @{
                                     var topCIGs = Model.MembersByCIG.OrderByDescending(x => x.Value).Take(5);
                                 }
-                                @foreach (var cig in topCIGs)
+                                @if (topCIGs.Any())
                                 {
-                                    <tr>
-                                        <td width="60%">@cig.Key:</td>
-                                        <td class="text-end">@cig.Value members</td>
-                                    </tr>
+                                    @foreach (var cig in topCIGs)
+                                    {
+                                        <tr>
+                                            <td width="60%">@cig.Key:</td>
+                                            <td class="text-end">@cig.Value members</td>
+                                        </tr>
+                                    }
+                                    @if (Model.MembersByCIG.Count > 5)
+                                    {
+                                        <tr>
+                                            <td colspan="2" class="text-muted small">And @(Model.MembersByCIG.Count - 5) more groups...</td>
+                                        </tr>
+                                    }
                                 }
-                                @if (Model.MembersByCIG.Count > 5)
+                                else
                                 {
                                     <tr>
-                                        <td colspan="2" class="text-muted small">And @(Model.MembersByCIG.Count - 5) more groups...</td>
+                                        <td colspan="2" class="text-muted">No CIG groups found</td>
                                     </tr>
                                 }
                             </table>
@@ -375,13 +385,8 @@
                             return;
                         }
 
-                        if (!excelReportDate) {
-                            alert('Excel form hidden input not found');
-                            return;
-                        }
-
-                        if (!excelForm) {
-                            alert('Excel form not found');
+                        if (!excelReportDate || !excelForm) {
+                            alert('Export form not properly configured');
                             return;
                         }
 
@@ -421,13 +426,8 @@
                             return;
                         }
 
-                        if (!pdfReportDate) {
-                            alert('PDF form hidden input not found');
-                            return;
-                        }
-
-                        if (!pdfForm) {
-                            alert('PDF form not found');
+                        if (!pdfReportDate || !pdfForm) {
+                            alert('Export form not properly configured');
                             return;
                         }
 
@@ -467,62 +467,36 @@
                 // Initialize DataTable if available and data exists
                 @if (hasData)
                 {
-                            <text>
-                            if (membersTable && typeof $.fn !== 'undefined' && $.fn.DataTable) {
-                                try {
-                                    $(membersTable).DataTable({
-                                        pageLength: 25,
-                                        ordering: true,
-                                        responsive: true,
-                                        language: {
-                                            search: "Search:",
-                                            lengthMenu: "Show _MENU_ entries",
-                                            info: "Showing _START_ to _END_ of _TOTAL_ entries"
-                                        }
-                                    });
-                                    console.log('DataTable initialized successfully');
-                                } catch (error) {
-                                    console.error('DataTable initialization error:', error);
-                                }
-                            } else {
-                                console.log('DataTable not available or no data');
+                        <text>
+                        if (membersTable && typeof $.fn !== 'undefined' && $.fn.DataTable) {
+                            try {
+                                $(membersTable).DataTable({
+                                    pageLength: 25,
+                                    ordering: true,
+                                    responsive: true,
+                                    language: {
+                                        search: "Search:",
+                                        lengthMenu: "Show _MENU_ entries",
+                                        info: "Showing _START_ to _END_ of _TOTAL_ entries"
+                                    }
+                                });
+                                console.log('DataTable initialized successfully');
+                            } catch (error) {
+                                console.error('DataTable initialization error:', error);
                             }
-                            </text>
-                }
-
-                // Add print button enhancement
-                const printBtn = document.querySelector('button[onclick="window.print()"]');
-                if (printBtn && !printBtn.hasAttribute('data-handler-attached')) {
-                    printBtn.setAttribute('data-handler-attached', 'true');
-                    printBtn.addEventListener('click', function(e) {
-                        const originalText = this.innerHTML;
-                        this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Preparing Print...';
-                        this.disabled = true;
-
-                        setTimeout(function() {
-                            window.print();
-                            setTimeout(function() {
-                                printBtn.innerHTML = originalText;
-                                printBtn.disabled = false;
-                            }, 1000);
-                        }, 100);
-                    });
+                        } else {
+                            console.log('DataTable not available or no data');
+                        }
+                        </text>
                 }
 
                 // Auto-focus report date input
                 if (reportDate) {
                     reportDate.focus();
                 }
-
-                // Add event listener for report date change
-                if (reportDate) {
-                    reportDate.addEventListener('change', function() {
-                        console.log('Report date changed to:', this.value);
-                    });
-                }
             });
 
-            // Global fallback functions - These work even if event listeners fail
+            // Global fallback functions
             window.exportSharesAndLoansToExcel = function() {
                 const reportDate = document.getElementById('reportDate');
                 const excelReportDate = document.getElementById('excelReportDate');
@@ -541,23 +515,18 @@
                     return false;
                 }
 
-                // Show loading state
                 if (btn) {
                     const originalText = btn.innerHTML;
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
                     btn.disabled = true;
                     btn.style.opacity = '0.8';
-
-                    // Store original text to restore later
                     btn.setAttribute('data-original-text', originalText);
                 }
 
-                // Set the date value and submit
                 excelReportDate.value = date;
                 console.log('Exporting to Excel with date:', date);
                 excelForm.submit();
 
-                // Reset button after a short delay
                 setTimeout(function() {
                     if (btn) {
                         const originalText = btn.getAttribute('data-original-text') || '<i class="fas fa-file-excel me-1"></i>Excel';
@@ -588,23 +557,18 @@
                     return false;
                 }
 
-                // Show loading state
                 if (btn) {
                     const originalText = btn.innerHTML;
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
                     btn.disabled = true;
                     btn.style.opacity = '0.8';
-
-                    // Store original text to restore later
                     btn.setAttribute('data-original-text', originalText);
                 }
 
-                // Set the date value and submit
                 pdfReportDate.value = date;
                 console.log('Exporting to PDF with date:', date);
                 pdfForm.submit();
 
-                // Reset button after a short delay
                 setTimeout(function() {
                     if (btn) {
                         const originalText = btn.getAttribute('data-original-text') || '<i class="fas fa-file-pdf me-1"></i>PDF';
@@ -622,20 +586,16 @@
                 const excelBtn = document.getElementById('exportExcelBtn');
                 const pdfBtn = document.getElementById('exportPdfBtn');
 
-                // Only set onclick if not already set and button exists
                 if (excelBtn && !excelBtn.hasAttribute('onclick')) {
                     excelBtn.setAttribute('onclick', 'exportSharesAndLoansToExcel(); return false;');
-                    console.log('Excel button onclick handler set');
                 }
 
                 if (pdfBtn && !pdfBtn.hasAttribute('onclick')) {
                     pdfBtn.setAttribute('onclick', 'exportSharesAndLoansToPdf(); return false;');
-                    console.log('PDF button onclick handler set');
                 }
 
-                // Add keyboard shortcuts (Ctrl+E for Excel, Ctrl+P for PDF)
+                // Keyboard shortcuts
                 document.addEventListener('keydown', function(e) {
-                    // Check if not typing in an input field
                     const tag = e.target.tagName.toLowerCase();
                     if (tag === 'input' || tag === 'textarea' || tag === 'select') {
                         return;
@@ -643,22 +603,23 @@
 
                     if (e.ctrlKey && e.key === 'e') {
                         e.preventDefault();
-                        console.log('Keyboard shortcut: Ctrl+E');
                         if (excelBtn) {
                             excelBtn.click();
                         }
                     }
-                    if (e.ctrlKey && e.key === 'p') {
-                        e.preventDefault();
-                        console.log('Keyboard shortcut: Ctrl+P');
-                        if (pdfBtn) {
-                            pdfBtn.click();
+                    if (e.ctrlKey && e.key === 'p' && !e.shiftKey) {
+                        // Only intercept if not shift+ctrl+p (which is browser print)
+                        if (!e.shiftKey) {
+                            e.preventDefault();
+                            if (pdfBtn) {
+                                pdfBtn.click();
+                            }
                         }
                     }
                 });
             });
 
-            // Add loading indicator CSS if not exists
+            // Add loading indicator CSS
             if (!document.getElementById('export-loading-styles')) {
                 const style = document.createElement('style');
                 style.id = 'export-loading-styles';
@@ -668,7 +629,6 @@
                         pointer-events: none;
                         opacity: 0.8;
                     }
-
                     .btn-loading:after {
                         content: "";
                         position: absolute;
@@ -683,15 +643,12 @@
                         border-top-color: white;
                         animation: spin 0.6s linear infinite;
                     }
-
                     @@keyframes spin {
                         to { transform: rotate(360deg); }
                     }
-
                     .fa-spinner, .fa-spin {
                         animation: spin 1s linear infinite;
                     }
-
                     button:disabled {
                         cursor: not-allowed;
                         opacity: 0.7;
@@ -700,7 +657,7 @@
                 document.head.appendChild(style);
             }
 
-            // Debug helper - log export attempts
+            // Debug logging
             domReady(function() {
                 console.log('=================================');
                 console.log('Shares and Loans Report Page Loaded');
@@ -710,43 +667,9 @@
                 console.log('Report date input exists:', !!document.getElementById('reportDate'));
                 console.log('Excel form exists:', !!document.getElementById('excelForm'));
                 console.log('PDF form exists:', !!document.getElementById('pdfForm'));
-                console.log('Excel hidden input exists:', !!document.getElementById('excelReportDate'));
-                console.log('PDF hidden input exists:', !!document.getElementById('pdfReportDate'));
+                console.log('Has Data:', @hasData.ToString().ToLower());
+                console.log('Total Members:', @Model.TotalMembers);
                 console.log('=================================');
-            });
-
-            // Prevent double submission
-            domReady(function() {
-                let isSubmitting = false;
-
-                const excelBtn = document.getElementById('exportExcelBtn');
-                const pdfBtn = document.getElementById('exportPdfBtn');
-
-                if (excelBtn) {
-                    excelBtn.addEventListener('click', function() {
-                        if (isSubmitting) {
-                            e.preventDefault();
-                            return false;
-                        }
-                        isSubmitting = true;
-                        setTimeout(function() {
-                            isSubmitting = false;
-                        }, 5000);
-                    });
-                }
-
-                if (pdfBtn) {
-                    pdfBtn.addEventListener('click', function() {
-                        if (isSubmitting) {
-                            e.preventDefault();
-                            return false;
-                        }
-                        isSubmitting = true;
-                        setTimeout(function() {
-                            isSubmitting = false;
-                        }, 5000);
-                    });
-                }
             });
         })();
     </script>
@@ -802,6 +725,22 @@
 
     .text-purple {
         color: #6f42c1 !important;
+    }
+
+    .bg-info {
+        background-color: #17a2b8 !important;
+    }
+
+    .bg-success {
+        background-color: #28a745 !important;
+    }
+
+    .bg-warning {
+        background-color: #ffc107 !important;
+    }
+
+    .bg-danger {
+        background-color: #dc3545 !important;
     }
 
     @@media (max-width: 767px) {

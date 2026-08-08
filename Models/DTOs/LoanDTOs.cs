@@ -19,7 +19,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal PrincipalAmount { get; set; }
 
         [Required]
-        [Range(1, 360, ErrorMessage = "Repayment period must be between 1 and 360 months")]
+        [Range(1, 10000, ErrorMessage = "Repayment period must be between 1 and 10000 months")]
         public int RepayPeriod { get; set; } 
 
         [Required]
@@ -63,17 +63,17 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [Range(0, double.MaxValue)]
         public decimal RecommendedAmount { get; set; }
 
-        [Range(0, 100)]
+        [Range(0, 1000000)]
         public decimal RecommendedInterestRate { get; set; }
 
-        [Range(1, 360)]
+        [Range(1, 10000)]
         public int RecommendedPeriod { get; set; }
 
         [Required]
         public string AppraisalDecision { get; set; } = null!;
 
         [Required]
-        [StringLength(1000)]
+        [StringLength(10000)]
         public string AppraisalNotes { get; set; } = null!;
 
         public string? RiskFactors { get; set; }
@@ -256,8 +256,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
         [Required]
         public string PaymentMethod { get; set; } = null!;
-        [Required]
-        public string GlAccountNo { get; set; } = null!;
+       // [Required]
+        //public string GlAccountNo { get; set; } = null!;
         public decimal Amount { get; set; }
         public string? GlAccountName { get; set; }
         public string? ReferenceNo { get; set; }

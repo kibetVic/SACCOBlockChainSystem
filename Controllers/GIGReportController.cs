@@ -22,21 +22,59 @@ namespace SACCOBlockChainSystem.Controllers
 	[Authorize]
 	public class GIGReportController : Controller
 	{
-		private readonly ApplicationDbContext _context;
-		private readonly ILogger<GIGReportController> _logger;
-		private readonly ICompanyContextService _companyContextService;
+        private readonly ApplicationDbContext _context;
+        private readonly ILogger<GIGReportController> _logger;
+        private readonly ICompanyContextService _companyContextService;
+        private readonly IMemberService _memberService;
 
-		public GIGReportController(
-			ApplicationDbContext context,
-			ILogger<GIGReportController> logger,
-			ICompanyContextService companyContextService)
-		{
-			_context = context;
-			_logger = logger;
-			_companyContextService = companyContextService;
-		}
+        public GIGReportController(
+            ApplicationDbContext context,
+            ILogger<GIGReportController> logger,
+            ICompanyContextService companyContextService,
+            IMemberService memberService)
+        {
+            _context = context;
+            _logger = logger;
+            _companyContextService = companyContextService;
+            _memberService = memberService;
+        }
 
-		[HttpGet]
+        private string GetUserCompanyCode()
+        {
+            var companyCode = _companyContextService.GetCurrentCompanyCode();
+            if (string.IsNullOrEmpty(companyCode))
+            {
+                companyCode = HttpContext.Session.GetString("CompanyCode");
+            }
+
+            if (string.IsNullOrEmpty(companyCode))
+            {
+                throw new Exception("Company code not found. Please log in again.");
+            }
+
+            return companyCode;
+        }
+
+        private string GetCompanyNameFromCode(string companyCode)
+        {
+            if (string.IsNullOrEmpty(companyCode))
+                return null;
+
+            var company = _context.Companies
+                .FirstOrDefault(c => c.CompanyCode == companyCode);
+
+            return company?.CompanyName;
+        }
+
+        private int CalculateAge(DateTime birthDate)
+        {
+            var today = DateTime.Today;
+            var age = today.Year - birthDate.Year;
+            if (birthDate.Date > today.AddYears(-age)) age--;
+            return age;
+        }
+
+        [HttpGet]
 		public IActionResult Index()
 		{
 			var companyCode = _companyContextService.GetCurrentCompanyCode();
@@ -919,15 +957,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        private int CalculateAge(DateTime birthDate)
-		{
-			var today = DateTime.Today;
-			var age = today.Year - birthDate.Year;
-			if (birthDate.Date > today.AddYears(-age)) age--;
-			return age;
-		}
-
-
         private string DetermineContributionTypeFromShareAndType(Sharetype shareType, Share share)
         {
             // Get searchable text from ShareType
@@ -986,16 +1015,341 @@ namespace SACCOBlockChainSystem.Controllers
             return "SHARE_CAPITAL";
         }
 
-        // Helper method to get company name from company code
-        private string GetCompanyNameFromCode(string companyCode)
-		{
-			if (string.IsNullOrEmpty(companyCode))
-				return null;
+        
+        [HttpGet]
+        public async Task<IActionResult> MembersPerCIG(string? searchTerm = null, string? statusFilter = null)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+                var report = await _memberService.GetMembersPerCIGReportAsync(companyCode, searchTerm, statusFilter);
 
-			var company = _context.Companies
-				.FirstOrDefault(c => c.CompanyCode == companyCode);
+                ViewBag.SearchTerm = searchTerm;
+                ViewBag.StatusFilter = statusFilter;
+                ViewBag.CompanyCode = companyCode;
 
-			return company?.CompanyName;
-		}
-	}
+                return View("~/Views/Reports/MembersPerCIG.cshtml", report);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading Members per CIG report");
+                TempData["ErrorMessage"] = $"Error loading report: {ex.Message}";
+                return RedirectToAction("Index");
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportMembersPerCIGToExcel(string? searchTerm = null, string? statusFilter = null)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+                var report = await _memberService.GetMembersPerCIGReportAsync(companyCode, searchTerm, statusFilter);
+
+                using var workbook = new XLWorkbook();
+
+                // 1. Summary Sheet
+                var summarySheet = workbook.Worksheets.Add("Summary");
+                int row = 1;
+
+                summarySheet.Cell(row, 1).Value = report.CompanyName.ToUpper();
+                summarySheet.Range(row, 1, row, 6).Merge();
+                summarySheet.Cell(row, 1).Style.Font.SetBold().Font.SetFontSize(18);
+                summarySheet.Cell(row, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                row += 2;
+
+                summarySheet.Cell(row, 1).Value = "MEMBERS PER CIG REPORT";
+                summarySheet.Range(row, 1, row, 6).Merge();
+                summarySheet.Cell(row, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                summarySheet.Cell(row, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                row += 2;
+
+                summarySheet.Cell(row, 1).Value = $"Generated: {report.ReportDate:dd/MM/yyyy HH:mm}";
+                summarySheet.Range(row, 1, row, 6).Merge();
+                summarySheet.Cell(row, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                row += 2;
+
+                summarySheet.Cell(row, 1).Value = $"Printed By: {report.PrintedBy}";
+                summarySheet.Range(row, 1, row, 6).Merge();
+                summarySheet.Cell(row, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                row += 2;
+
+                if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    summarySheet.Cell(row, 1).Value = $"Search Term: {searchTerm}";
+                    row++;
+                }
+                if (!string.IsNullOrEmpty(statusFilter))
+                {
+                    summarySheet.Cell(row, 1).Value = $"Status Filter: {statusFilter}";
+                    row++;
+                }
+                row += 2;
+
+                // Summary Statistics
+                string[] summaryHeaders = { "Metric", "Count" };
+                for (int i = 0; i < summaryHeaders.Length; i++)
+                {
+                    summarySheet.Cell(row, i + 1).Value = summaryHeaders[i];
+                    summarySheet.Cell(row, i + 1).Style.Font.SetBold();
+                    summarySheet.Cell(row, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                }
+                row++;
+
+                var stats = new (string Label, int Value)[]
+                {
+                    ("Total CIGs", report.TotalCIGs),
+                    ("Total Members", report.TotalMembers),
+                    ("Active Members", report.ActiveMembers),
+                    ("Inactive Members", report.InactiveMembers)
+                };
+
+                foreach (var stat in stats)
+                {
+                    summarySheet.Cell(row, 1).Value = stat.Label;
+                    summarySheet.Cell(row, 2).Value = stat.Value;
+                    row++;
+                }
+
+                summarySheet.Columns().AdjustToContents();
+
+                // 2. CIG Members Details Sheet
+                var detailSheet = workbook.Worksheets.Add("CIG Members");
+                int detailRow = 1;
+                int cigCounter = 1;
+
+                foreach (var cig in report.CIGs)
+                {
+                    // CIG Header
+                    detailSheet.Cell(detailRow, 1).Value = $"CIG #{cigCounter}";
+                    detailSheet.Cell(detailRow, 1).Style.Font.SetBold().Font.SetFontSize(12);
+                    detailRow++;
+
+                    detailSheet.Cell(detailRow, 1).Value = $"CIG Code: {cig.CIGCode}";
+                    detailSheet.Cell(detailRow, 2).Value = $"CIG Name: {cig.CIGName}";
+                    detailRow++;
+
+                    detailSheet.Cell(detailRow, 1).Value = $"Contact Phone: {cig.ContactPhone ?? "N/A"}";
+                    detailSheet.Cell(detailRow, 2).Value = $"Contact Email: {cig.ContactEmail ?? "N/A"}";
+                    detailSheet.Cell(detailRow, 3).Value = $"Chairperson: {cig.Chairperson ?? "N/A"}";
+                    detailRow++;
+
+                    detailSheet.Cell(detailRow, 1).Value = $"Total Members: {cig.TotalMembers}";
+                    detailSheet.Cell(detailRow, 1).Style.Font.SetBold();
+                    detailRow += 2;
+
+                    // Member Table Headers
+                    string[] memberHeaders = { "#", "Member No", "Full Name", "ID No", "Phone", "Email", "Gender", "Status", "Joined Date" };
+                    for (int i = 0; i < memberHeaders.Length; i++)
+                    {
+                        detailSheet.Cell(detailRow, i + 1).Value = memberHeaders[i];
+                        detailSheet.Cell(detailRow, i + 1).Style.Font.SetBold();
+                        detailSheet.Cell(detailRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                        detailSheet.Cell(detailRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    }
+                    detailRow++;
+
+                    // Member Data - FIXED: Using FontColor instead of SetColor
+                    int memberCounter = 1;
+                    foreach (var member in cig.Members)
+                    {
+                        detailSheet.Cell(detailRow, 1).Value = memberCounter++;
+                        detailSheet.Cell(detailRow, 2).Value = member.MemberNo;
+                        detailSheet.Cell(detailRow, 3).Value = member.FullName;
+                        detailSheet.Cell(detailRow, 4).Value = member.IdNo ?? "-";
+                        detailSheet.Cell(detailRow, 5).Value = member.PhoneNo ?? "-";
+                        detailSheet.Cell(detailRow, 6).Value = member.Email ?? "-";
+                        detailSheet.Cell(detailRow, 7).Value = member.Gender ?? "-";
+                        detailSheet.Cell(detailRow, 8).Value = member.Status;
+                        // FIXED: Use FontColor instead of SetColor
+                        detailSheet.Cell(detailRow, 8).Style.Font.FontColor = member.Status == "Active" ? XLColor.Green : XLColor.Red;
+                        detailSheet.Cell(detailRow, 9).Value = member.JoinedDate?.ToString("dd/MM/yyyy") ?? "-";
+                        detailRow++;
+                    }
+
+                    detailRow += 2;
+                    cigCounter++;
+                }
+
+                detailSheet.Columns().AdjustToContents();
+
+                using var stream = new MemoryStream();
+                workbook.SaveAs(stream);
+                var content = stream.ToArray();
+
+                return File(content,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"MembersPerCIG_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting Members per CIG to Excel");
+                TempData["ErrorMessage"] = $"Error exporting to Excel: {ex.Message}";
+                return RedirectToAction("MembersPerCIG");
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportMembersPerCIGToPdf(string? searchTerm = null, string? statusFilter = null)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+                var report = await _memberService.GetMembersPerCIGReportAsync(companyCode, searchTerm, statusFilter);
+
+                using var stream = new MemoryStream();
+
+                QuestPDF.Fluent.Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(PageSizes.A4.Portrait());
+                        page.MarginTop(1.5f, Unit.Centimetre);
+                        page.MarginBottom(1.5f, Unit.Centimetre);
+                        page.MarginLeft(1.2f, Unit.Centimetre);
+                        page.MarginRight(1.2f, Unit.Centimetre);
+                        page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
+
+                        page.Header().Column(header =>
+                        {
+                            header.Item().AlignCenter().Text(report.CompanyName.ToUpper()).FontSize(16).Bold();
+                            header.Item().AlignCenter().Text("MEMBERS PER CIG REPORT").FontSize(12).Bold();
+                            header.Item().AlignCenter().Text($"Generated: {report.ReportDate:dd/MM/yyyy HH:mm}").FontSize(9).Italic();
+                            header.Item().AlignCenter().Text($"Printed By: {report.PrintedBy}").FontSize(9).Italic();
+                            if (!string.IsNullOrEmpty(searchTerm))
+                            {
+                                header.Item().AlignCenter().Text($"Search: {searchTerm}").FontSize(9);
+                            }
+                            if (!string.IsNullOrEmpty(statusFilter))
+                            {
+                                header.Item().AlignCenter().Text($"Status Filter: {statusFilter}").FontSize(9);
+                            }
+                            header.Item().PaddingTop(0.3f, Unit.Centimetre).LineHorizontal(0.5f);
+                            header.Item().PaddingBottom(0.5f, Unit.Centimetre);
+                        });
+
+                        page.Content().Column(contentCol =>
+                        {
+                            // Summary Statistics
+                            contentCol.Item().Table(summaryTable =>
+                            {
+                                summaryTable.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                });
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total CIGs:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text(report.TotalCIGs.ToString());
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Members:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text(report.TotalMembers.ToString());
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Active Members:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text(report.ActiveMembers.ToString());
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Inactive Members:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text(report.InactiveMembers.ToString());
+                            });
+
+                            // CIGs Details
+                            int cigCounter = 1;
+                            foreach (var cig in report.CIGs)
+                            {
+                                contentCol.Item().PaddingTop(1, Unit.Centimetre);
+                                contentCol.Item().Table(cigTable =>
+                                {
+                                    cigTable.ColumnsDefinition(cols =>
+                                    {
+                                        cols.RelativeColumn(2);
+                                        cols.RelativeColumn(1);
+                                        cols.RelativeColumn(1);
+                                    });
+
+                                    // FIXED: Use QuestPDF.Infrastructure.Color.FromHex instead of FromRgb
+                                    cigTable.Cell().ColumnSpan(3).Border(0.2f).Background("#2c3e50").Padding(4).Text($"CIG #{cigCounter}: {cig.CIGName} ({cig.CIGCode})").FontColor(QuestPDF.Infrastructure.Color.FromHex("#FFFFFF")).Bold().FontSize(10);
+                                    cigTable.Cell().Border(0.2f).Padding(4).Text($"Contact: {cig.ContactPhone ?? "N/A"}").FontSize(8);
+                                    cigTable.Cell().Border(0.2f).Padding(4).Text($"Email: {cig.ContactEmail ?? "N/A"}").FontSize(8);
+                                    cigTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"Members: {cig.TotalMembers}").FontSize(8);
+
+                                    cigTable.Cell().ColumnSpan(3).Border(0.2f).Padding(2);
+                                });
+
+                                // Member List
+                                if (cig.Members.Any())
+                                {
+                                    contentCol.Item().Table(memberTable =>
+                                    {
+                                        memberTable.ColumnsDefinition(cols =>
+                                        {
+                                            cols.RelativeColumn(0.5f);
+                                            cols.RelativeColumn(1.2f);
+                                            cols.RelativeColumn(2.0f);
+                                            cols.RelativeColumn(1.0f);
+                                            cols.RelativeColumn(1.5f);
+                                            cols.RelativeColumn(1.0f);
+                                            cols.RelativeColumn(0.8f);
+                                        });
+
+                                        memberTable.Header(header =>
+                                        {
+                                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("#").Bold().FontSize(8);
+                                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Member No").Bold().FontSize(8);
+                                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Full Name").Bold().FontSize(8);
+                                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("ID No").Bold().FontSize(8);
+                                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Phone").Bold().FontSize(8);
+                                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Status").Bold().FontSize(8);
+                                            header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Joined").Bold().FontSize(8);
+                                        });
+
+                                        int memberCounter = 1;
+                                        foreach (var member in cig.Members)
+                                        {
+                                            string statusColor = member.Status == "Active" ? "#d4edda" : "#f8d7da";
+                                            memberTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(memberCounter.ToString()).FontSize(8);
+                                            memberTable.Cell().Border(0.2f).Padding(4).Text(member.MemberNo).FontSize(8);
+                                            memberTable.Cell().Border(0.2f).Padding(4).Text(member.FullName).FontSize(8);
+                                            memberTable.Cell().Border(0.2f).Padding(4).Text(member.IdNo ?? "-").FontSize(8);
+                                            memberTable.Cell().Border(0.2f).Padding(4).Text(member.PhoneNo ?? "-").FontSize(8);
+                                            memberTable.Cell().Border(0.2f).Background(statusColor).Padding(4).AlignCenter().Text(member.Status).FontSize(8);
+                                            memberTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(member.JoinedDate?.ToString("dd/MM/yyyy") ?? "-").FontSize(8);
+                                            memberCounter++;
+                                        }
+                                    });
+                                }
+                                else
+                                {
+                                    contentCol.Item().Text("No members found in this CIG.").FontSize(9).Italic();
+                                }
+
+                                cigCounter++;
+                            }
+                        });
+
+                        page.Footer()
+                            .AlignCenter()
+                            .Text(x =>
+                            {
+                                x.DefaultTextStyle(t => t.FontSize(8));
+                                x.Span("Page ");
+                                x.CurrentPageNumber();
+                                x.Span(" of ");
+                                x.TotalPages();
+                                x.Span($" | Generated: {report.ReportDate:dd/MM/yyyy HH:mm:ss}");
+                            });
+                    });
+                }).GeneratePdf(stream);
+
+                var content = stream.ToArray();
+                return File(content, "application/pdf", $"MembersPerCIG_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting Members per CIG to PDF");
+                TempData["ErrorMessage"] = $"Error exporting to PDF: {ex.Message}";
+                return RedirectToAction("MembersPerCIG");
+            }
+        }
+    }
 }
+

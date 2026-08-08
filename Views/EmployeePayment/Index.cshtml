@@ -5,7 +5,7 @@
 @{
     ViewData["Title"] = "Employee Payments";
     var summary = ViewBag.Summary as PaymentSummaryDTO;
-    var companyName = ViewBag.CompanyName as string ?? "JUHUDI SACCO";
+    var companyName = ViewBag.CompanyName as string ?? "AMTECH SACCO";
 }
 
 <div class="container-fluid">
@@ -33,7 +33,7 @@
         <div class="col-lg-3 col-6">
             <div class="small-box bg-info">
                 <div class="inner">
-                    <h3>@(summary?.TotalPayments.ToString("C") ?? "KES 0")</h3>
+                    <h3>@(summary?.TotalPayments.ToString("N2") ?? "KES 0")</h3>
                     <p>Total Payments</p>
                 </div>
                 <div class="icon">
@@ -55,7 +55,7 @@
 
         @if (summary?.PaymentsByType != null)
         {
-            var displayTypes = summary.PaymentsByType.Take(2); // Show top 2 payment types
+            var displayTypes = summary.PaymentsByType.Take(2);
             var colors = new[] { "warning", "danger", "primary", "secondary", "dark" };
             var colorIndex = 0;
 
@@ -64,7 +64,7 @@
                 <div class="col-lg-3 col-6">
                     <div class="small-box bg-@colors[colorIndex % colors.Length]">
                         <div class="inner">
-                            <h3>@paymentType.Value.ToString("C")</h3>
+                            <h3>@paymentType.Value.ToString("N2")</h3>
                             <p>@paymentType.Key Total</p>
                         </div>
                         <div class="icon">
@@ -116,9 +116,6 @@
                             <a href="@Url.Action("Index")" class="btn btn-secondary">
                                 <i class="fas fa-sync-alt"></i> Reset
                             </a>
-                            <button type="button" class="btn btn-info ms-auto" onclick="exportData()">
-                                <i class="fas fa-download"></i> Export
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -264,7 +261,7 @@
                             <th>Payment Date</th>
                             <th>Status</th>
                             <th>Blockchain</th>
-                            <th style="width: 120px;">Actions</th>
+                            <th style="width: 180px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -307,11 +304,11 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm" role="group">
-                                        <button type="button" class="btn btn-info view-details" data-id="@payment.Id">
-                                            <i class="fas fa-eye"></i>
+                                        <button type="button" class="btn btn-success view-receipt" data-id="@payment.Id" title="View Receipt">
+                                            <i class="fas fa-receipt">Receipt</i>
                                         </button>
-                                        <button type="button" class="btn btn-danger reverse-payment" data-id="@payment.Id">
-                                            <i class="fas fa-undo"></i>
+                                        <button type="button" class="btn btn-danger reverse-payment" data-id="@payment.Id" title="Reverse Payment">
+                                            <i class="fas fa-undo">Reverse Payment</i>
                                         </button>
                                     </div>
                                 </td>
@@ -376,7 +373,6 @@
 </div>
 
 @section Scripts {
-    <!-- Add jQuery Validate if needed -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
@@ -495,7 +491,7 @@
             }
         });
 
-        // Process Payment - UPDATED VERSION
+        // Process Payment - UPDATED VERSION with automatic receipt
         $('#btnProcessPayment').click(function() {
             // Get form values
             const employeeId = $('#EmployeeId').val();
@@ -520,7 +516,7 @@
             const $btn = $('#btnProcessPayment');
             $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Processing...');
 
-            // Prepare form data as URL encoded (not JSON)
+            // Prepare form data
             const formData = new URLSearchParams();
             formData.append('EmployeeId', employeeId);
             formData.append('PaymentTypeId', paymentTypeId);
@@ -533,9 +529,6 @@
             formData.append('EmployeeName', employeeName || '');
             formData.append('__RequestVerificationToken', token);
 
-            // Log for debugging
-            console.log('Sending payment request:', Object.fromEntries(formData));
-
             $.ajax({
                 url: '@Url.Action("Create", "EmployeePayment")',
                 type: 'POST',
@@ -543,32 +536,36 @@
                 contentType: 'application/x-www-form-urlencoded; charset=UTF-8',
                 dataType: 'json',
                 success: function(response) {
-                    console.log('Success response:', response);
                     if (response.success) {
                         showNotification(response.message, 'success');
-                        setTimeout(function() {
-                            location.reload();
-                        }, 2000);
+
+                        // Redirect to receipt automatically
+                        if (response.receiptUrl) {
+                            setTimeout(function() {
+                                window.location.href = response.receiptUrl;
+                            }, 1500);
+                        } else if (response.paymentId) {
+                            setTimeout(function() {
+                                window.location.href = '@Url.Action("PrintEmployeePaymentReceipt", "EmployeePayment")' + '?id=' + response.paymentId;
+                            }, 1500);
+                        } else {
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        }
                     } else {
                         showNotification(response.message || 'Error processing payment', 'error');
                         $btn.prop('disabled', false).html('<i class="fas fa-check-circle"></i> Process Payment');
                     }
                 },
                 error: function(xhr, status, error) {
-                    console.error('AJAX Error Details:', {
-                        status: status,
-                        error: error,
-                        statusCode: xhr.status,
-                        responseText: xhr.responseText
-                    });
+                    console.error('AJAX Error:', { status: status, error: error, response: xhr.responseText });
 
                     let errorMsg = 'Error processing payment';
                     try {
                         const response = JSON.parse(xhr.responseText);
                         if (response.message) {
                             errorMsg = response.message;
-                        } else if (response.exceptionMessage) {
-                            errorMsg = response.exceptionMessage;
                         }
                     } catch(e) {
                         if (xhr.responseText && xhr.responseText.length < 500) {
@@ -605,6 +602,24 @@
                 $('#detailsModalContent').html('<div class="alert alert-danger">Error loading payment details</div>');
                 $('#detailsModal').modal('show');
             });
+        });
+
+        // View Receipt button - open receipt in same tab
+        $(document).on('click', '.view-receipt', function() {
+            const id = $(this).data('id');
+            if (id) {
+                const url = '@Url.Action("PrintEmployeePaymentReceipt", "EmployeePayment")' + '?id=' + id;
+                window.location.href = url;
+            }
+        });
+
+        // Print Receipt button - open receipt with auto-print in same tab
+        $(document).on('click', '.print-receipt', function() {
+            const id = $(this).data('id');
+            if (id) {
+                const url = '@Url.Action("PrintAndAutoPrintEmployeeReceipt", "EmployeePayment")' + '?id=' + id;
+                window.location.href = url;
+            }
         });
 
         // Reverse payment
@@ -746,4 +761,13 @@
     .select2-container {
         width: 100% !important;
     }
+
+    .btn-group .btn {
+        font-size: 12px;
+        padding: 4px 6px;
+    }
+
+        .btn-group .btn i {
+            font-size: 13px;
+        }
 </style>

@@ -83,7 +83,9 @@ namespace SACCOBlockChainSystem.Services
                     Bridging = loanTypeDto.Bridging ? 1 : 0,
                     SelfGuarantee = loanTypeDto.SelfGuarantee,
                     MobileLoan = loanTypeDto.MobileLoan,
+                    InterestUpront = loanTypeDto.InterestUpront,
                     IsProject = loanTypeDto.IsProject,
+                    IsTopUp = loanTypeDto.IsTopUp,
                     MobileLoanApproval = loanTypeDto.MobileLoanApproval,
                     Ppacc = loanTypeDto.Ppacc ?? string.Empty,
                     ContraAccount = loanTypeDto.ContraAccount ?? string.Empty,
@@ -163,7 +165,9 @@ namespace SACCOBlockChainSystem.Services
                         loanType.Bridging,
                         loanType.LoanProduct,
                         loanType.MobileLoan,
+                        loanType.InterestUpront,
                         loanType.IsProject,
+                        loanType.IsTopUp,
                         loanType.Priority,
                         loanType.Guarantor,
                         loanType.SelfGuarantee,
@@ -229,7 +233,9 @@ namespace SACCOBlockChainSystem.Services
                     repayMethod = loanType.Repaymethod,
                     bridging = loanType.Bridging,
                     mobileLoan = loanType.MobileLoan,
+                    interestUpront = loanType.InterestUpront,
                     isProject = loanType.IsProject,
+                    IsTopUp = loanType.IsTopUp,
                     priority = loanType.Priority,
                     maxLoans = loanType.MaxLoans,
                     loanAccount = loanType.LoanAcc,
@@ -267,7 +273,9 @@ namespace SACCOBlockChainSystem.Services
                     loanType.Bridging,
                     loanType.SelfGuarantee,
                     loanType.MobileLoan,
+                    loanType.InterestUpront,
                     loanType.IsProject,
+                    loanType.IsTopUp,
                     loanType.Ppacc,
                     loanType.ContraAccount,
                     loanType.Priority,
@@ -430,7 +438,9 @@ namespace SACCOBlockChainSystem.Services
                     loanType.Bridging,
                     loanType.SelfGuarantee,
                     loanType.MobileLoan,
+                    loanType.InterestUpront,
                     loanType.IsProject,
+                    loanType.IsTopUp,
                     loanType.Ppacc,
                     loanType.ContraAccount,
                     loanType.Priority,
@@ -471,7 +481,9 @@ namespace SACCOBlockChainSystem.Services
                 loanType.Bridging = loanTypeDto.Bridging ? 1 : 0;
                 loanType.SelfGuarantee = loanTypeDto.SelfGuarantee;
                 loanType.MobileLoan = loanTypeDto.MobileLoan;
+                loanType.InterestUpront = loanTypeDto.InterestUpront;
                 loanType.IsProject = loanTypeDto.IsProject;
+                loanType.IsTopUp = loanTypeDto.IsTopUp;
                 loanType.MobileLoanApproval = loanTypeDto.MobileLoanApproval;
                 loanType.Ppacc = loanTypeDto.Ppacc ?? string.Empty;
                 loanType.ContraAccount = loanTypeDto.ContraAccount ?? string.Empty;
@@ -571,7 +583,9 @@ namespace SACCOBlockChainSystem.Services
                     loanType.Bridging,
                     loanType.SelfGuarantee,
                     loanType.MobileLoan,
+                    loanType.InterestUpront,
                     loanType.IsProject,
+                    loanType.IsTopUp,
                     loanType.Ppacc,
                     loanType.ContraAccount,
                     loanType.Priority,
@@ -646,7 +660,9 @@ namespace SACCOBlockChainSystem.Services
                     repayMethod = loanType.Repaymethod,
                     bridging = loanType.Bridging,
                     mobileLoan = loanType.MobileLoan,
+                    interestUpront = loanType.InterestUpront,
                     isProject = loanType.IsProject,
+                    IsTopUp = loanType.IsTopUp,
                     priority = loanType.Priority,
                     maxLoans = loanType.MaxLoans,
                     oldApprovalStatus = oldApprovalStatus,
@@ -688,7 +704,9 @@ namespace SACCOBlockChainSystem.Services
                     loanType.Bridging,
                     loanType.SelfGuarantee,
                     loanType.MobileLoan,
+                    loanType.InterestUpront,
                     loanType.IsProject,
+                    loanType.IsTopUp,
                     loanType.Ppacc,
                     loanType.ContraAccount,
                     loanType.Priority,
@@ -1108,7 +1126,9 @@ namespace SACCOBlockChainSystem.Services
                     ProcessingFee = loanType.Processingfee?.ToString(),
                     Bridging = loanType.Bridging == 0,
                     MobileLoan = loanType.MobileLoan ?? false,
+                    InterestUpront = loanType.InterestUpront ?? false,
                     IsProject = loanType.IsProject ?? false,
+                    IsTopUp = loanType.IsTopUp ?? false,
                     SelfGuarantee = loanType.SelfGuarantee?.ToString(),
                     Priority = loanType.Priority ?? 1,
                     IsEligible = isEligible,
@@ -1213,7 +1233,9 @@ namespace SACCOBlockChainSystem.Services
                 Bridging = loanType.Bridging == 1,  // Returns true if bridging is allowed
                 SelfGuarantee = loanType.SelfGuarantee ?? false,
                 MobileLoan = loanType.MobileLoan ?? false,
+                InterestUpront = loanType.InterestUpront ?? false,
                 IsProject = loanType.IsProject ?? false,
+                IsTopUp = loanType.IsTopUp ?? false,
                 MobileLoanApproval = loanType.MobileLoanApproval ?? false,
                 Ppacc = loanType.Ppacc,
                 ContraAccount = loanType.ContraAccount,
@@ -1256,7 +1278,9 @@ namespace SACCOBlockChainSystem.Services
                         lt.Interest,
                         lt.Bridging,
                         lt.MobileLoan,
+                        lt.InterestUpront,
                         lt.IsProject,
+                        lt.IsTopUp,
                         lt.Priority,
                         lt.Guarantor,
                         lt.SelfGuarantee,
@@ -1284,13 +1308,15 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
+
+        //check the code to save the Glcode or accno and not Glaccname
         private async Task ValidateAccountsExist(LoanTypeCreateDTO loanTypeDto)
         {
             // Check if loan account exists (still required)
             if (!string.IsNullOrEmpty(loanTypeDto.LoanAcc))
             {
                 var loanAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(a => a.Glaccname == loanTypeDto.LoanAcc &&
+                    .FirstOrDefaultAsync(a => a.Glcode == loanTypeDto.LoanAcc &&
                                              a.CompanyCode == loanTypeDto.CompanyCode);
                 if (loanAccount == null)
                     throw new ValidationException($"Loan account '{loanTypeDto.LoanAcc}' does not exist");
@@ -1300,7 +1326,7 @@ namespace SACCOBlockChainSystem.Services
             if (!string.IsNullOrEmpty(loanTypeDto.InterestAcc))
             {
                 var interestAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(a => a.Glaccname == loanTypeDto.InterestAcc &&
+                    .FirstOrDefaultAsync(a => a.Glcode == loanTypeDto.InterestAcc &&
                                              a.CompanyCode == loanTypeDto.CompanyCode);
                 if (interestAccount == null)
                     throw new ValidationException($"Interest account '{loanTypeDto.InterestAcc}' does not exist");
@@ -1310,7 +1336,7 @@ namespace SACCOBlockChainSystem.Services
             if (!string.IsNullOrEmpty(loanTypeDto.PenaltyAcc))
             {
                 var penaltyAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(a => a.Glaccname == loanTypeDto.PenaltyAcc &&
+                    .FirstOrDefaultAsync(a => a.Glcode == loanTypeDto.PenaltyAcc &&
                                              a.CompanyCode == loanTypeDto.CompanyCode);
                 if (penaltyAccount == null)
                     throw new ValidationException($"Penalty account '{loanTypeDto.PenaltyAcc}' does not exist");
@@ -1320,7 +1346,7 @@ namespace SACCOBlockChainSystem.Services
             if (!string.IsNullOrEmpty(loanTypeDto.Ppacc))
             {
                 var ppAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(a => a.Glaccname == loanTypeDto.Ppacc &&
+                    .FirstOrDefaultAsync(a => a.Glcode == loanTypeDto.Ppacc &&
                                              a.CompanyCode == loanTypeDto.CompanyCode);
                 if (ppAccount == null)
                     throw new ValidationException($"PP account '{loanTypeDto.Ppacc}' does not exist");
@@ -1330,7 +1356,7 @@ namespace SACCOBlockChainSystem.Services
             if (!string.IsNullOrEmpty(loanTypeDto.ContraAccount))
             {
                 var contraAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(a => a.Glaccname == loanTypeDto.ContraAccount &&
+                    .FirstOrDefaultAsync(a => a.Glcode == loanTypeDto.ContraAccount &&
                                              a.CompanyCode == loanTypeDto.CompanyCode);
                 if (contraAccount == null)
                     throw new ValidationException($"Contra account '{loanTypeDto.ContraAccount}' does not exist");
@@ -1529,7 +1555,9 @@ namespace SACCOBlockChainSystem.Services
                     loanType.Interest,
                     loanType.Bridging,
                     loanType.MobileLoan,
+                    loanType.InterestUpront,
                     loanType.IsProject,
+                    loanType.IsTopUp,
                     loanType.Priority,
                     loanType.Guarantor,
                     loanType.SelfGuarantee,

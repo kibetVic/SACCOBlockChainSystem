@@ -19,6 +19,9 @@ namespace SACCOBlockChainSystem.Services
         Task<List<SupplierResponseDTO>> SearchSuppliersAsync(SupplierSearchDTO searchDto);
         Task<SupplierViewModel> GetSupplierDashboardAsync(string companyCode);
         Task<decimal> GetSupplierOutstandingBalanceAsync(string supplierCode, string companyCode);
+        Task<List<GlAccountDTO>> GetGlAccountsForDropdownAsync(string companyCode);
+        Task<GlAccountDTO> GetGlAccountByCodeAsync(string glAccountNo, string companyCode);
+        Task<SupplierResponseDTO> GetSupplierByCodeAsync(string supplierCode, string companyCode);
     }
 
     public class SupplierService : ISupplierService
@@ -63,6 +66,24 @@ namespace SACCOBlockChainSystem.Services
                     throw new InvalidOperationException($"Supplier code '{dto.SupplierCode}' already exists.");
                 }
 
+                // Validate GL Account if provided
+                if (!string.IsNullOrEmpty(dto.GlAccountNo))
+                {
+                    var glAccount = await _context.GlSetup
+                        .FirstOrDefaultAsync(g => g.AccNo == dto.GlAccountNo && g.CompanyCode == dto.CompanyCode);
+
+                    if (glAccount == null)
+                    {
+                        throw new InvalidOperationException($"GL Account '{dto.GlAccountNo}' not found.");
+                    }
+
+                    // Auto-populate GL Account Name if not provided
+                    if (string.IsNullOrEmpty(dto.GlAccountName))
+                    {
+                        dto.GlAccountName = glAccount.Glaccname;
+                    }
+                }
+
                 var supplier = new Supplier
                 {
                     SupplierCode = dto.SupplierCode,
@@ -103,6 +124,8 @@ namespace SACCOBlockChainSystem.Services
                     SupplierId = supplier.Id,
                     SupplierCode = supplier.SupplierCode,
                     SupplierName = supplier.SupplierName,
+                    GlAccountNo = supplier.GlAccountNo,
+                    GlAccountName = supplier.GlAccountName,
                     CreatedBy = createdBy,
                     CreatedDate = DateTime.Now
                 };
@@ -165,12 +188,32 @@ namespace SACCOBlockChainSystem.Services
                     throw new InvalidOperationException($"Supplier with ID {id} not found");
                 }
 
+                // Validate GL Account if provided and changed
+                if (!string.IsNullOrEmpty(dto.GlAccountNo) && dto.GlAccountNo != supplier.GlAccountNo)
+                {
+                    var glAccount = await _context.GlSetup
+                        .FirstOrDefaultAsync(g => g.AccNo == dto.GlAccountNo && g.CompanyCode == supplier.CompanyCode);
+
+                    if (glAccount == null)
+                    {
+                        throw new InvalidOperationException($"GL Account '{dto.GlAccountNo}' not found.");
+                    }
+
+                    // Auto-populate GL Account Name if not provided
+                    if (string.IsNullOrEmpty(dto.GlAccountName))
+                    {
+                        dto.GlAccountName = glAccount.Glaccname;
+                    }
+                }
+
                 var oldSupplier = new
                 {
                     supplier.SupplierName,
                     supplier.ContactPerson,
                     supplier.PhoneNo,
                     supplier.Email,
+                    supplier.GlAccountNo,
+                    supplier.GlAccountName,
                     supplier.IsActive,
                     supplier.Status,
                     supplier.OpeningBalance,
@@ -208,6 +251,8 @@ namespace SACCOBlockChainSystem.Services
                     SupplierId = supplier.Id,
                     SupplierCode = supplier.SupplierCode,
                     SupplierName = supplier.SupplierName,
+                    GlAccountNo = supplier.GlAccountNo,
+                    GlAccountName = supplier.GlAccountName,
                     IsActive = supplier.IsActive,
                     UpdatedBy = updatedBy,
                     UpdatedDate = DateTime.Now
@@ -288,6 +333,8 @@ namespace SACCOBlockChainSystem.Services
                     supplier.SupplierName,
                     supplier.PhoneNo,
                     supplier.Email,
+                    supplier.GlAccountNo,
+                    supplier.GlAccountName,
                     DeletedBy = deletedBy,
                     DeletedDate = DateTime.Now
                 };
@@ -369,7 +416,6 @@ namespace SACCOBlockChainSystem.Services
 
         public async Task<List<SupplierResponseDTO>> SearchSuppliersAsync(SupplierSearchDTO searchDto)
         {
-            // FIX: Remove .Include() and use a separate query for Invoices
             var query = _context.Suppliers
                 .Where(s => s.CompanyCode == searchDto.CompanyCode);
 
@@ -420,6 +466,9 @@ namespace SACCOBlockChainSystem.Services
                 .Include(s => s.Invoices)
                 .ToListAsync();
 
+            // Get GL Accounts for dropdown
+            var glAccounts = await GetGlAccountsForDropdownAsync(companyCode);
+
             var viewModel = new SupplierViewModel
             {
                 Suppliers = suppliers.Select(MapToResponseDTO).ToList(),
@@ -428,7 +477,8 @@ namespace SACCOBlockChainSystem.Services
                 InactiveSuppliers = suppliers.Count(s => s.IsActive != true),
                 BlockchainVerifiedCount = suppliers.Count(s => !string.IsNullOrEmpty(s.BlockchainTxId)),
                 TotalSupplierBalance = suppliers.Sum(s => s.CurrentBalance ?? 0),
-                UserCompanyCode = companyCode
+                UserCompanyCode = companyCode,
+                GlAccounts = glAccounts
             };
 
             return viewModel;
@@ -440,6 +490,45 @@ namespace SACCOBlockChainSystem.Services
                 .FirstOrDefaultAsync(s => s.SupplierCode == supplierCode && s.CompanyCode == companyCode);
 
             return supplier?.CurrentBalance ?? 0;
+        }
+
+        public async Task<List<GlAccountDTO>> GetGlAccountsForDropdownAsync(string companyCode)
+        {
+            var glAccounts = await _context.GlSetup
+                .Where(g => g.CompanyCode == companyCode && g.Status == true)
+                .OrderBy(g => g.Glaccname)
+                .Select(g => new GlAccountDTO
+                {
+                    GlId = g.GlId,
+                    Glcode = g.Glcode,
+                    Glaccname = g.Glaccname,
+                    AccNo = g.AccNo,
+                    Glacctype = g.Glacctype,
+                    GlAccMainGroup = g.GlAccMainGroup,
+                    CurrentBal = g.CurrentBal
+                })
+                .ToListAsync();
+
+            return glAccounts;
+        }
+
+        public async Task<GlAccountDTO> GetGlAccountByCodeAsync(string glAccountNo, string companyCode)
+        {
+            var glAccount = await _context.GlSetup
+                .Where(g => g.AccNo == glAccountNo && g.CompanyCode == companyCode && g.Status == true)
+                .Select(g => new GlAccountDTO
+                {
+                    GlId = g.GlId,
+                    Glcode = g.Glcode,
+                    Glaccname = g.Glaccname,
+                    AccNo = g.AccNo,
+                    Glacctype = g.Glacctype,
+                    GlAccMainGroup = g.GlAccMainGroup,
+                    CurrentBal = g.CurrentBal
+                })
+                .FirstOrDefaultAsync();
+
+            return glAccount;
         }
 
         #region Helper Methods
@@ -466,6 +555,28 @@ namespace SACCOBlockChainSystem.Services
             }
 
             return $"{prefix}{year}{month}{sequence:D4}";
+        }
+
+        public async Task<SupplierResponseDTO> GetSupplierByCodeAsync(string supplierCode, string companyCode)
+        {
+            try
+            {
+                var supplier = await _context.Suppliers
+                    .Include(s => s.Invoices)
+                    .FirstOrDefaultAsync(s => s.SupplierCode == supplierCode && s.CompanyCode == companyCode);
+
+                if (supplier == null)
+                {
+                    return null;
+                }
+
+                return MapToResponseDTO(supplier);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting supplier by code: {supplierCode}");
+                throw;
+            }
         }
 
         private SupplierResponseDTO MapToResponseDTO(Supplier supplier)

@@ -9,6 +9,14 @@
     var processingFee = ViewBag.RegistrationFee as decimal? ?? 0; // Using RegistrationFee as ProcessingFee
     var isPercentage = ViewBag.RegistrationFeeIsPercentage as bool? ?? false;
     var percentageValue = ViewBag.RegistrationFeePercentage as decimal? ?? 0;
+    
+    // CHECK FOR UPFRONT INTEREST
+    var isUpfrontInterest = loan?.InterestUpront ?? false;
+    var upfrontInterestAmount = ViewBag.UpfrontInterestAmount as decimal? ?? 0;
+    var interestRate = loan?.Interest ?? 0;
+    var repayPeriod = loan?.RepayPeriod ?? 12;
+    var repayMethod = loan?.RepayMethod ?? "AMT";
+
     int deductionIndex = 0;
 }
 
@@ -163,7 +171,80 @@
                                         }
 
                                         <!-- ============================================================ -->
-                                        <!-- PROCESSING FEE DEDUCTION - Pulled from LoanType.Processingfee -->
+                                        <!-- UPFRONT INTEREST DEDUCTION (AUTOMATIC) -->
+                                        <!-- ============================================================ -->
+                                        @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                                        {
+                                            var interestIndex = deductionIndex++;
+                                            var displayInterestRate = interestRate;
+                                            <tr class="deduction-row table-info" data-index="@interestIndex" data-upfront-interest="true">
+                                                <td class="align-middle">
+                                                    <input type="hidden" name="Deductions[@interestIndex].DeductionCode" value="UPFRONT_INTEREST" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].DeductionName" value="Upfront Interest" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].IsMandatory" value="true" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].IsPercentage" id="IsPercentage_@interestIndex" value="false" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].PercentageValue" id="PercentageValue_@interestIndex" value="@displayInterestRate" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].Amount" value="@upfrontInterestAmount" />
+                                                    <strong>Upfront Interest</strong>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <select name="Deductions[@interestIndex].GlAccountNo"
+                                                            class="form-select form-select-sm deduction-account"
+                                                            data-index="@interestIndex"
+                                                            data-upfront-interest="true"
+                                                            onchange="updateGlAccountName(@interestIndex, this.value)">
+                                                        @foreach (var account in allGlAccounts)
+                                                        {
+                                                            var isSelected = account.AccountNo == (ViewBag.InterestIncomeAccount as string ?? "");
+                                                            <option value="@account.AccountNo"
+                                                                    data-account-name="@account.AccountName"
+                                                                    selected="@(isSelected ? "selected" : null)">
+                                                                @account.DisplayText
+                                                            </option>
+                                                        }
+                                                    </select>
+                                                    <input type="hidden" name="Deductions[@interestIndex].GlAccountName" id="GlAccountName_@interestIndex" value="" />
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="text"
+                                                           class="form-control text-end fw-bold"
+                                                           value="@upfrontInterestAmount.ToString("N0")"
+                                                           readonly />
+                                                </td>
+                                                <td class="align-middle">
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="number"
+                                                               class="form-control deduction-percentage"
+                                                               id="PercentageInput_@interestIndex"
+                                                               value="@displayInterestRate"
+                                                               min="0"
+                                                               max="1000"
+                                                               step="0.01"
+                                                               placeholder="%"
+                                                               disabled />
+                                                        <button type="button"
+                                                                class="btn btn-outline-secondary"
+                                                                disabled
+                                                                title="Percentage mode is fixed for upfront interest">
+                                                            <i class="bi bi-percent"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="text"
+                                                           name="Deductions[@interestIndex].Description"
+                                                           class="form-control form-control-sm"
+                                                           value="Upfront interest for @repayPeriod months at @displayInterestRate% p.a."
+                                                           readonly />
+                                                </td>
+                                                <td class="align-middle text-center">
+                                                    <span class="text-muted"><i class="bi bi-lock"></i></span>
+                                                </td>
+                                            </tr>
+                                        }
+
+                                        <!-- ============================================================ -->
+                                        <!-- PROCESSING FEE DEDUCTION -->
                                         <!-- ============================================================ -->
                                         @if (processingFee > 0)
                                         {
@@ -246,8 +327,9 @@
                                         @for (int i = 0; i < Model.Deductions.Count; i++)
                                         {
                                             var deduction = Model.Deductions[i];
-                                            // Skip if this is the processing fee (we already added it above)
-                                            if (deduction.DeductionCode == "PROC_FEE" || deduction.DeductionCode == "REG_FEE") continue;
+                                            if (deduction.DeductionCode == "PROC_FEE" ||
+                                            deduction.DeductionCode == "REG_FEE" ||
+                                            deduction.DeductionCode == "UPFRONT_INTEREST") continue;
 
                                             var currentIndex = deductionIndex++;
                                             <tr class="deduction-row" data-index="@currentIndex">
@@ -344,14 +426,12 @@
                             </div>
 
                             <div class="row mt-4">
-                                <!-- LEFT SIDE: Remarks -->
                                 <div class="col-md-6 mb-4">
                                     <label asp-for="Remarks" class="form-label fw-bold">Remarks</label>
                                     <textarea asp-for="Remarks" class="form-control" rows="5"
                                               placeholder="Enter any remarks about the endorsement"></textarea>
                                 </div>
 
-                                <!-- RIGHT SIDE: Summary Table -->
                                 <div class="col-md-6">
                                     <div class="card bg-light">
                                         <div class="card-body">
@@ -363,6 +443,15 @@
                                                         KES <span id="grossAmountDisplay">@grossAmount.ToString("N2")</span>
                                                     </td>
                                                 </tr>
+                                                @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                                                {
+                                                    <tr>
+                                                        <td><strong>Upfront Interest:</strong></td>
+                                                        <td class="text-end text-info">
+                                                            KES <span id="upfrontInterestDisplay">@upfrontInterestAmount.ToString("N2")</span>
+                                                        </td>
+                                                    </tr>
+                                                }
                                                 <tr>
                                                     <td><strong>Total Deductions:</strong></td>
                                                     <td class="text-end text-danger">
@@ -422,6 +511,10 @@
                             <li>All deductions with amount > 0 require an income account</li>
                             <li>Use percentage mode for interest-based calculations</li>
                             <li>Processing fee is pre-filled from the loan type</li>
+                            @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                            {
+                                <li class="text-info"><strong>Upfront Interest:</strong> @interestRate% p.a. for @repayPeriod months = KES @upfrontInterestAmount.ToString("N0")</li>
+                            }
                         </ul>
                     </div>
                 </div>
@@ -434,6 +527,7 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         var grossAmount = @grossAmount;
+        var upfrontInterestAmount = @upfrontInterestAmount;
         var deductionCounter = @(deductionIndex);
         var processingFee = @processingFee;
         var isPercentageFee = @(isPercentage.ToString().ToLower());
@@ -442,21 +536,18 @@
         function updateGlAccountName(index, accountNo) {
             var accountName = '';
 
-            // Find the selected account name from the dropdown
             var selectElement = document.querySelector(`select[name="Deductions[${index}].GlAccountNo"]`);
             if (selectElement && selectElement.selectedIndex > 0) {
                 var selectedOption = selectElement.options[selectElement.selectedIndex];
                 accountName = selectedOption.getAttribute('data-account-name') || selectedOption.textContent.split(' - ')[1] || '';
             }
 
-            // Update the hidden field
             var hiddenField = document.getElementById(`GlAccountName_${index}`);
             if (hiddenField) {
                 hiddenField.value = accountName;
             }
 
-            // Also update the validation
-            validateForm();
+            // Do NOT call validateForm here - only update the field
         }
 
         // Function to toggle between fixed amount and percentage mode
@@ -467,22 +558,18 @@
             var percentageValueField = document.getElementById(`PercentageValue_${index}`);
 
             if (isPercentageField && isPercentageField.value === 'true') {
-                // Switch to fixed amount mode
                 isPercentageField.value = 'false';
                 percentageInput.disabled = true;
                 percentageInput.value = '';
                 percentageValueField.value = '';
                 amountInput.disabled = false;
                 amountInput.value = 0;
-                // Trigger change event to update totals
                 amountInput.dispatchEvent(new Event('change'));
             } else {
-                // Switch to percentage mode
                 isPercentageField.value = 'true';
                 percentageInput.disabled = false;
                 amountInput.disabled = true;
                 amountInput.value = 0;
-                // Calculate percentage if percentage input has value
                 if (percentageInput.value && parseFloat(percentageInput.value) > 0) {
                     calculatePercentageAmount(index);
                 } else {
@@ -513,10 +600,7 @@
                 amountInput.value = calculatedAmount.toFixed(2);
                 percentageValueField.value = percentage;
 
-                // IMPORTANT: Trigger change event to update totals
                 amountInput.dispatchEvent(new Event('change'));
-
-                // Also trigger change on percentage input for real-time updates
                 updateTotals();
             }
         }
@@ -596,11 +680,8 @@
             `;
 
             tbody.appendChild(newRow);
-
-            // Force recalculation of totals
             updateTotals();
 
-            // Also trigger a change event to ensure validation runs
             var amountInput = document.getElementById(`Amount_${newIndex}`);
             if (amountInput) {
                 amountInput.dispatchEvent(new Event('change'));
@@ -625,15 +706,19 @@
             }
         }
 
-        // Function to update totals - REAL-TIME UPDATE
+        // Function to update totals - REAL-TIME UPDATE including upfront interest
         function updateTotals() {
             var totalDeductions = 0;
             var hasInvalidAmount = false;
 
+            // Add upfront interest to total deductions
+            if (upfrontInterestAmount > 0) {
+                totalDeductions += upfrontInterestAmount;
+            }
+
             // Loop through all deduction amount inputs
             var amountInputs = document.querySelectorAll('.deduction-amount');
             amountInputs.forEach(function(input) {
-                // Always check value regardless of disabled state
                 var amount = parseFloat(input.value) || 0;
                 if (amount < 0) {
                     hasInvalidAmount = true;
@@ -683,7 +768,6 @@
             if (row) {
                 row.remove();
                 updateTotals();
-                // Reindex remaining rows
                 reindexRows();
             }
         }
@@ -725,7 +809,7 @@
         }
 
         // ============================================================
-        // VALIDATE FORM
+        // VALIDATE FORM - ONLY CALLED ON SUBMIT
         // ============================================================
         function validateForm() {
             var acceptCheckbox = document.getElementById('acceptCheckbox');
@@ -745,6 +829,7 @@
                     var amount = parseFloat(amountInput?.value) || 0;
                     var glAccount = glSelect?.value || '';
 
+                    // Only validate if amount > 0 AND glAccount is empty
                     if (amount > 0 && !glAccount) {
                         isValid = false;
                         errorMessage = 'Please select an income account for all deductions with amounts greater than 0';
@@ -785,12 +870,20 @@
         // INITIALIZATION
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
-            // Set initial values for GL Account Names
+            // Set initial values for GL Account Names - WITHOUT validating
             var deductionCount = @(deductionIndex);
             for (var i = 0; i < deductionCount; i++) {
                 var selectElement = document.querySelector(`select[name="Deductions[${i}].GlAccountNo"]`);
                 if (selectElement && selectElement.value) {
-                    updateGlAccountName(i, selectElement.value);
+                    var accountName = '';
+                    var selectedOption = selectElement.options[selectElement.selectedIndex];
+                    if (selectedOption) {
+                        accountName = selectedOption.getAttribute('data-account-name') || '';
+                    }
+                    var hiddenField = document.getElementById(`GlAccountName_${i}`);
+                    if (hiddenField) {
+                        hiddenField.value = accountName;
+                    }
                 }
             }
 
@@ -841,22 +934,17 @@
                 rejectCheckbox.checked = false;
                 if (hiddenField) hiddenField.value = 'true';
 
-                // Hide rejection sections
                 if (rejectionReasonDiv) rejectionReasonDiv.style.display = 'none';
                 if (rejectionWarningDiv) rejectionWarningDiv.style.display = 'none';
 
-                // Clear rejection reason if any
                 if (remarksTextarea) remarksTextarea.value = '';
 
-                // SHOW the entire deductions wrapper
                 if (deductionsWrapper) {
                     deductionsWrapper.style.display = '';
                 }
 
-                // Enable submit button
                 if (submitBtn) submitBtn.disabled = false;
 
-                // Update totals
                 updateTotals();
             }
 
@@ -866,25 +954,20 @@
                 rejectCheckbox.checked = true;
                 if (hiddenField) hiddenField.value = 'false';
 
-                // Show rejection sections
                 if (rejectionReasonDiv) rejectionReasonDiv.style.display = 'block';
                 if (rejectionWarningDiv) rejectionWarningDiv.style.display = 'block';
 
-                // HIDE the entire deductions wrapper
                 if (deductionsWrapper) {
                     deductionsWrapper.style.display = 'none';
                 }
 
-                // Clear any deduction values
                 var amountInputs = document.querySelectorAll('.deduction-amount');
                 amountInputs.forEach(function(input) {
                     input.value = 0;
                 });
 
-                // Enable submit button (will be validated in validateForm)
                 if (submitBtn) submitBtn.disabled = false;
 
-                // Update totals
                 updateTotals();
             }
 
@@ -894,7 +977,6 @@
                     if (this.checked) {
                         setAcceptState();
                     } else {
-                        // If accept is unchecked and reject is also unchecked, default to accept
                         if (!rejectCheckbox.checked) {
                             setAcceptState();
                         }
@@ -907,7 +989,6 @@
                     if (this.checked) {
                         setRejectState();
                     } else {
-                        // If reject is unchecked and accept is also unchecked, default to accept
                         if (!acceptCheckbox.checked) {
                             setAcceptState();
                         }

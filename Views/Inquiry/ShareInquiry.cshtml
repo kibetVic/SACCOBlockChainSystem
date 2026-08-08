@@ -632,7 +632,6 @@
                                                 <th class="text-end">Deposits</th>
                                                 <th>Receipt No</th>
                                                 <th>Remarks</th>
-                                                <th>Blockchain Tx</th>
                                             </tr>
                                         </thead>
                                         <tbody>`;
@@ -652,9 +651,6 @@
                                                 <td class="text-end">${formatCurrency(trans.deposits || 0)}</td>
                                                 <td>${escapeHtml(trans.receiptNo || '-')}</td>
                                                 <td>${escapeHtml(trans.remarks || '-')}</td>
-                                                <td>
-                                                    <code class="small">${escapeHtml(trans.blockchainTxId ? (trans.blockchainTxId.length > 12 ? trans.blockchainTxId.substring(0, 12) + '...' : trans.blockchainTxId) : 'N/A')}</code>
-                                                </td>
                                             </tr>`;
                         });
 

@@ -8,6 +8,14 @@
     var registrationFee = ViewBag.RegistrationFee as decimal? ?? 0;
     var isEdit = ViewBag.IsEdit as bool? ?? true;
     var banks = ViewBag.Banks as IEnumerable<dynamic> ?? new List<dynamic>();
+
+    // CHECK FOR UPFRONT INTEREST
+    var isUpfrontInterest = loan?.InterestUpront ?? false;
+    var upfrontInterestAmount = ViewBag.UpfrontInterestAmount as decimal? ?? 0;
+    var interestRate = loan?.Interest ?? 0;
+    var repayPeriod = loan?.RepayPeriod ?? 12;
+    var repayMethod = loan?.RepayMethod ?? "AMT";
+
     int deductionIndex = 0;
 }
 
@@ -170,10 +178,87 @@
                                             deductionIndex = 0;
                                         }
 
+                                        <!-- ============================================================ -->
+                                        <!-- UPFRONT INTEREST DEDUCTION (AUTOMATIC) -->
+                                        <!-- ============================================================ -->
+                                        @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                                        {
+                                            var interestIndex = deductionIndex++;
+                                            var displayInterestRate = interestRate;
+                                            <tr class="deduction-row table-info" data-index="@interestIndex" data-upfront-interest="true">
+                                                <td class="align-middle">
+                                                    <input type="hidden" name="Deductions[@interestIndex].DeductionCode" value="UPFRONT_INTEREST" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].DeductionName" value="Upfront Interest" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].IsMandatory" value="true" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].IsPercentage" id="IsPercentage_@interestIndex" value="false" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].PercentageValue" id="PercentageValue_@interestIndex" value="@displayInterestRate" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].Amount" value="@upfrontInterestAmount" />
+                                                    <strong>Upfront Interest</strong>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <select name="Deductions[@interestIndex].GlAccountNo"
+                                                            class="form-select form-select-sm deduction-account"
+                                                            data-index="@interestIndex"
+                                                            data-upfront-interest="true"
+                                                            onchange="updateGlAccountName(@interestIndex, this.value)">
+                                                        @foreach (var account in allGlAccounts)
+                                                        {
+                                                            var isSelected = account.AccountNo == (ViewBag.InterestIncomeAccount as string ?? "");
+                                                            <option value="@account.AccountNo"
+                                                                    data-account-name="@account.AccountName"
+                                                                    selected="@(isSelected ? "selected" : null)">
+                                                                @account.DisplayText
+                                                            </option>
+                                                        }
+                                                    </select>
+                                                    <input type="hidden" name="Deductions[@interestIndex].GlAccountName" id="GlAccountName_@interestIndex" value="" />
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="text"
+                                                           class="form-control text-end fw-bold"
+                                                           value="@upfrontInterestAmount.ToString("N0")"
+                                                           readonly />
+                                                </td>
+                                                <td class="align-middle">
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="number"
+                                                               class="form-control deduction-percentage"
+                                                               id="PercentageInput_@interestIndex"
+                                                               value="@displayInterestRate"
+                                                               min="0"
+                                                               max="1000"
+                                                               step="0.01"
+                                                               placeholder="%"
+                                                               disabled />
+                                                        <button type="button"
+                                                                class="btn btn-outline-secondary"
+                                                                disabled
+                                                                title="Percentage mode is fixed for upfront interest">
+                                                            <i class="bi bi-percent"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="text"
+                                                           name="Deductions[@interestIndex].Description"
+                                                           class="form-control form-control-sm"
+                                                           value="Upfront interest for @repayPeriod months at @displayInterestRate% p.a."
+                                                           readonly />
+                                                </td>
+                                                <td class="align-middle text-center">
+                                                    <span class="text-muted"><i class="bi bi-lock"></i></span>
+                                                </td>
+                                            </tr>
+                                        }
+
                                         @for (int i = 0; i < Model.Deductions.Count; i++)
                                         {
                                             var deduction = Model.Deductions[i];
                                             var isRegFee = deduction.DeductionCode == "REG_FEE";
+                                            var isUpfrontInterestDeduction = deduction.DeductionCode == "UPFRONT_INTEREST";
+                                            // Skip if this is the upfront interest (we already added it above)
+                                            if (isUpfrontInterestDeduction) continue;
+
                                             var currentIndex = deductionIndex++;
 
                                             <tr class="deduction-row" data-index="@currentIndex" @(isRegFee ? "data-reg-fee='true'" : "")>
@@ -289,13 +374,22 @@
                                                     <td><strong>Gross Amount:</strong></td>
                                                     <td class="text-end">KES <span id="grossAmountDisplay">@grossAmount.ToString("N2")</span></td>
                                                 </tr>
+                                                @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                                                {
+                                                    <tr>
+                                                        <td><strong>Upfront Interest:</strong></td>
+                                                        <td class="text-end text-info">
+                                                            KES <span id="upfrontInterestDisplay">@upfrontInterestAmount.ToString("N2")</span>
+                                                        </td>
+                                                    </tr>
+                                                }
                                                 <tr>
                                                     <td><strong>Total Deductions:</strong></td>
-                                                    <td class="text-end text-danger">KES <span id="totalDeductions">@Model.TotalDeductions.ToString("N2")</span></td>
+                                                    <td class="text-end text-danger">KES <span id="totalDeductions">0.00</span></td>
                                                 </tr>
                                                 <tr class="border-top">
                                                     <td><strong>Net Amount:</strong></td>
-                                                    <td class="text-end fw-bold text-primary">KES <span id="netAmount">@Model.NetDisbursementAmount.ToString("N2")</span></td>
+                                                    <td class="text-end fw-bold text-primary">KES <span id="netAmount">0.00</span></td>
                                                 </tr>
                                             </table>
                                         </div>
@@ -341,6 +435,10 @@
                             <li>For each deduction with amount > 0, select an income account</li>
                             <li>Net amount cannot be negative</li>
                             <li>All deductions with amount > 0 require an income account</li>
+                            @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                            {
+                                <li class="text-info"><strong>Upfront Interest:</strong> @interestRate% p.a. for @repayPeriod months = KES @upfrontInterestAmount.ToString("N0")</li>
+                            }
                         </ul>
                     </div>
                     <div class="alert alert-info small">
@@ -362,6 +460,7 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         var grossAmount = @grossAmount;
+        var upfrontInterestAmount = @upfrontInterestAmount;
         var deductionCounter = @(deductionIndex);
 
         // Function to update GL Account Name
@@ -522,9 +621,15 @@
             }
         }
 
-        // Function to update totals
+        // Function to update totals - INCLUDING UPFRONT INTEREST
         function updateTotals() {
             var totalDeductions = 0;
+
+            // Add upfront interest to total deductions
+            if (upfrontInterestAmount > 0) {
+                totalDeductions += upfrontInterestAmount;
+            }
+
             var amountInputs = document.querySelectorAll('.deduction-amount');
             amountInputs.forEach(function(input) {
                 var amount = parseFloat(input.value) || 0;
@@ -588,12 +693,14 @@
             var errorMessage = '';
 
             if (acceptCheckbox && acceptCheckbox.checked) {
-                var amountInputs = document.querySelectorAll('.deduction-amount');
-                var glSelects = document.querySelectorAll('.deduction-account');
+                var deductionRows = document.querySelectorAll('#deductionsTable tbody tr');
 
-                for (var i = 0; i < amountInputs.length; i++) {
-                    var amount = parseFloat(amountInputs[i].value) || 0;
-                    var glAccount = glSelects[i] ? glSelects[i].value : '';
+                for (var i = 0; i < deductionRows.length; i++) {
+                    var amountInput = deductionRows[i].querySelector('.deduction-amount');
+                    var glSelect = deductionRows[i].querySelector('.deduction-account');
+
+                    var amount = parseFloat(amountInput?.value) || 0;
+                    var glAccount = glSelect?.value || '';
 
                     if (amount > 0 && !glAccount) {
                         isValid = false;

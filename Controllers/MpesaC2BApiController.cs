@@ -208,8 +208,8 @@ namespace SACCOBlockChainSystem.Controllers.Api
                 Recipient = callback.PhoneNumber,
                 StatusCode = 1, // 1 = Pending
                 ResultDescription = "C2B payment pending confirmation",
-                CreatedAt = DateTime.Now,
-                UpdatedAt = DateTime.Now,
+                created_at = DateTime.Now,
+                updated_at = DateTime.Now,
                 LoanNo = reference,
                 AuditDateTime = DateTime.Now
             };
@@ -305,7 +305,7 @@ namespace SACCOBlockChainSystem.Controllers.Api
                     PaymentDate = DateTime.Now,
                     AmountPaid = callback.Amount,  // ANY amount - the method handles it!
                     PaymentMethod = "MPESA",
-                    GlAccountNo = mpesaGlAccount,
+                    //GlAccountNo = mpesaGlAccount,
                     ReferenceNo = callback.TransactionId,
                     Remarks = $"C2B Repayment via M-Pesa. Phone: {callback.PhoneNumber}",
                     ReceivedBy = "MPESA_C2B_SYSTEM",
@@ -322,7 +322,7 @@ namespace SACCOBlockChainSystem.Controllers.Api
                 {
                     apiTransaction.StatusCode = 0; // 0 = Success
                     apiTransaction.ResultDescription = $"Loan repayment processed successfully. Receipt: {repayment.ReceiptNo}";
-                    apiTransaction.UpdatedAt = DateTime.Now;
+                    apiTransaction.updated_at = DateTime.Now;
                     apiTransaction.AuditDateTime = DateTime.Now;
                     _context.ApiTransactions.Update(apiTransaction);
                 }
@@ -364,7 +364,7 @@ namespace SACCOBlockChainSystem.Controllers.Api
                     {
                         apiTransaction.StatusCode = 2; // 2 = Failed
                         apiTransaction.ResultDescription = $"Error: {ex.Message}";
-                        apiTransaction.UpdatedAt = DateTime.Now;
+                        apiTransaction.updated_at = DateTime.Now;
                         _context.ApiTransactions.Update(apiTransaction);
                     }
 
@@ -609,8 +609,8 @@ namespace SACCOBlockChainSystem.Controllers.Api
                 Recipient = callback.PhoneNumber,
                 StatusCode = 1,
                 ResultDescription = "C2B contribution pending confirmation",
-                CreatedAt = DateTime.Now,
-                UpdatedAt = DateTime.Now,
+                created_at = DateTime.Now,
+                updated_at = DateTime.Now,
                 LoanNo = memberNo,
                 AuditDateTime = DateTime.Now
             };
@@ -649,7 +649,7 @@ namespace SACCOBlockChainSystem.Controllers.Api
             {
                 apiTransaction.StatusCode = 0;
                 apiTransaction.ResultDescription = $"Contribution processed. Receipt: {receiptNo}";
-                apiTransaction.UpdatedAt = DateTime.Now;
+                apiTransaction.updated_at = DateTime.Now;
                 _context.ApiTransactions.Update(apiTransaction);
             }
 
@@ -676,7 +676,7 @@ namespace SACCOBlockChainSystem.Controllers.Api
             {
                 apiTransaction.StatusCode = 2;
                 apiTransaction.ResultDescription = $"Error: {errorMessage}";
-                apiTransaction.UpdatedAt = DateTime.Now;
+                apiTransaction.updated_at = DateTime.Now;
                 _context.ApiTransactions.Update(apiTransaction);
             }
 

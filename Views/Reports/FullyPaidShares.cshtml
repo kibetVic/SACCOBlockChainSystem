@@ -1,11 +1,12 @@
-﻿@using System.Security.Claims
-@model SACCOBlockChainSystem.Models.ViewModels.FullyPaidSharesIndexViewModel
+﻿﻿@using System.Security.Claims
+@model SACCOBlockChainSystem.Models.ViewModels.FullyPaidSharesDynamicViewModel
 @{
-    ViewData["Title"] = "Fully Paid Shares Register";
+    ViewData["Title"] = "Fully Paid Shares Report";
     Layout = "~/Views/Shared/_Layout.cshtml";
     var hasData = Model != null && Model.Members != null && Model.Members.Any();
     var reportDate = Model?.ReportDate ?? (ViewBag.ReportDate as DateTime? ?? DateTime.Now);
     var companyName = Model?.CompanyName ?? ViewBag.CompanyName ?? "";
+    var shareTypes = Model?.ShareTypes ?? (ViewBag.ShareTypes as List<Sharetype> ?? new List<Sharetype>());
 }
 
 <style media="print">
@@ -27,7 +28,7 @@
     }
 
     .card-header {
-        background-color: #28a745 !important;
+        background-color: #6f42c1 !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -35,6 +36,7 @@
     .table {
         width: 100% !important;
         border-collapse: collapse !important;
+        font-size: 9pt !important;
     }
 
         .table th {
@@ -49,26 +51,29 @@
 
     body {
         background: white !important;
-        font-size: 11pt;
+        font-size: 9pt;
     }
 
-    .bg-success {
-        background-color: #28a745 !important;
+    .bg-purple {
+        background-color: #6f42c1 !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+    }
+
+    .table-responsive {
+        overflow: visible !important;
     }
 </style>
 
 <div class="card">
-    <div class="card-header bg-success text-white">
+    <div class="card-header bg-purple text-white">
         <h3 class="card-title">
-            <i class="fas fa-check-circle me-2"></i>Fully Paid Shares Register
+            <i class="fas fa-chart-pie me-2"></i>Fully Paid Shares Report
         </h3>
-       
     </div>
 
     <div class="card-body">
-        <!-- Filter Section - Hidden when printing -->
+        <!-- Filter Section -->
         <div class="row mb-4 no-print">
             <div class="col-md-12">
                 <div class="card">
@@ -94,13 +99,12 @@
                                             <button type="submit" class="btn btn-primary">
                                                 <i class="fas fa-search me-1"></i>Generate Report
                                             </button>
-                                            <button type="button" class="btn btn-success" id="exportExcelBtn" onclick="exportToExcel(); return false;">
+                                            <button type="button" class="btn btn-success" id="exportExcelBtn">
                                                 <i class="fas fa-file-excel me-1"></i>Excel
                                             </button>
-                                            <button type="button" class="btn btn-danger" id="exportPdfBtn" onclick="exportToPdf(); return false;">
+                                            <button type="button" class="btn btn-danger" id="exportPdfBtn">
                                                 <i class="fas fa-file-pdf me-1"></i>PDF
                                             </button>
-                                            
                                         </div>
                                     </div>
                                 </div>
@@ -121,105 +125,235 @@
 
         @if (hasData)
         {
-            <!-- SACCO Header -->
+            <!-- Header -->
             <div class="text-center mb-4">
-                <h2 class="display-6 fw-bold">@companyName.ToUpper()</h2>
-                <h4 class="text-muted">FULLY PAID SACCO SHARES AS AT @reportDate.ToString("dd/MM/yyyy")</h4>
-                <hr class="my-3" />
+                <h2 class="display-6 fw-bold">FULLY PAID SHARES REPORT</h2>
+                <h1 class="display-5 fw-bold text-purple">@companyName.ToUpper()</h1>
+                <h5 class="text-muted">As At @reportDate.ToString("dd/MM/yyyy")</h5>
+                <hr class="my-4" />
             </div>
 
-            <!-- Members Table - Exactly as in the image -->
+            <!-- Summary Cards -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="small-box bg-info">
+                        <div class="inner">
+                            <h3>@Model.TotalMembers</h3>
+                            <p>Total Members</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="small-box bg-success">
+                        <div class="inner">
+                            <h3>@Model.TotalShareCapital.ToString("N0")</h3>
+                            <p>Total Contributions</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-coins"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="small-box bg-warning">
+                        <div class="inner">
+                            <h3>@Model.MinimumShareRequirement.ToString("N0")</h3>
+                            <p>Min Share Requirement</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-bullseye"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Requirements Summary -->
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Minimum Share Requirement:</strong> @Model.MinimumShareRequirement.ToString("N0")
+                        <span class="ms-3">
+                            <span class="badge bg-success">Fully Paid</span>
+                            <span class="badge bg-danger ms-2">Not Fully Paid</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Members Table - Dynamic Columns -->
             <div class="table-responsive">
                 <table class="table table-bordered table-striped table-hover" id="membersTable">
-                    <thead class="bg-light">
+                    <thead class="bg-purple text-white">
                         <tr>
-                            <th width="50">#</th>
-                            <th>MEMBERNO</th>
-                            <th>NAMES</th>
-                            <th>SEX</th>
-                            <th class="text-end">SHARE CAPITAL</th>
-                            <th class="text-end">SAVINGS/DEPOSITS</th>
-                            <th class="text-end">REGISTRATION FEE</th>
+                            <th>#</th>
+                            <th>MemberNo</th>
+                            <th>Names</th>
+                            <th>Sex</th>
+
+                            @foreach (var shareType in shareTypes)
+                            {
+                                <th class="text-center">@shareType.SharesType</th>
+                            }
+                            <th class="text-center">Total</th>
+                            <th class="text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         @{
-                            int counter = 1;
-                        }
-                        @foreach (var item in Model.Members)
-                        {
-                            <tr>
-                                <td class="text-center">@counter</td>
-                                <td>@item.MemberNo</td>
-                                <td>@item.FullName</td>
-                                <td>@item.Sex</td>
-                                <td class="text-end">@item.ShareCapital.ToString("N2")</td>
-                                <td class="text-end">@item.SavingsDeposits.ToString("N2")</td>
-                                <td class="text-end">@item.RegistrationFee.ToString("N2")</td>
-                            </tr>
-                            counter++;
+                            int serialNo = 1;
+                            foreach (var member in Model.Members)
+                            {
+                                var isFullyPaid = Convert.ToBoolean(member["IsFullyPaid"]);
+                                var rowClass = isFullyPaid ? "table-success" : "table-danger";
+                                <tr class="@rowClass">
+                                    <td class="text-center">@(serialNo++)</td>
+                                    <td>@member["MemberNo"]</td>
+                                    <td>@member["FullName"]</td>
+                                    <td>@member["Sex"]</td>
+
+                                    @foreach (var shareType in shareTypes)
+                                    {
+                                        var prefix = shareType.SharesCode.Replace(" ", "_").Replace("-", "_").ToUpper();
+                                        var amount = member.ContainsKey($"{prefix}_Amount") ? Convert.ToDecimal(member[$"{prefix}_Amount"]) : 0;
+
+                                        <td class="text-end">@amount.ToString("N2")</td>
+                                    }
+
+                                    <td class="text-end fw-bold">@Convert.ToDecimal(member["TotalAmount"]).ToString("N2")</td>
+
+                                    <td class="text-center">
+                                        @if (isFullyPaid)
+                                        {
+                                            <span class="badge bg-success">FULLY PAID</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger">NOT FULLY PAID</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                     <tfoot class="bg-light fw-bold">
                         <tr>
                             <td colspan="4" class="text-end">GRAND TOTAL:</td>
+                            @foreach (var shareType in shareTypes)
+                            {
+                                var prefix = shareType.SharesCode.Replace(" ", "_").Replace("-", "_").ToUpper();
+                                var totalAmount = Model.Members.Sum(m => Convert.ToDecimal(m.ContainsKey($"{prefix}_Amount") ? m[$"{prefix}_Amount"] : 0));
+
+                                <td class="text-end text-primary">@totalAmount.ToString("N2")</td>
+                            }
                             <td class="text-end text-primary">@Model.TotalShareCapital.ToString("N2")</td>
-                            <td class="text-end text-primary">@Model.TotalSavingsDeposits.ToString("N2")</td>
-                            <td class="text-end text-primary">@Model.TotalRegistrationFee.ToString("N2")</td>
+                            <td></td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
 
-            <!-- Statistics Section - Exactly as in the image -->
+            <!-- Statistics Section -->
             <div class="row mt-4">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <div class="card">
                         <div class="card-header bg-light">
-                            <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Member Statistics</h5>
+                            <h5 class="mb-0"><i class="fas fa-venus-mars me-2"></i>Member Demographics</h5>
                         </div>
                         <div class="card-body">
                             <table class="table table-sm">
                                 <tr>
-                                    <td width="50%"><strong>TOTAL MEMBERS:</strong></td>
-                                    <td><strong>@Model.TotalMembers</strong></td>
+                                    <td width="60%"><strong>Total Members:</strong></td>
+                                    <td class="text-end"><strong>@Model.TotalMembers</strong></td>
                                 </tr>
                                 <tr>
-                                    <td><strong>MALE:</strong></td>
-                                    <td><strong>@Model.MaleCount.ToString("N0")</strong></td>
+                                    <td>Male:</td>
+                                    <td class="text-end">@Model.MaleCount (@((Model.MaleCount * 100 / (Model.TotalMembers == 0 ? 1 : Model.TotalMembers)).ToString("N0"))%)</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>FEMALE:</strong></td>
-                                    <td><strong>@Model.FemaleCount.ToString("N0")</strong></td>
+                                    <td>Female:</td>
+                                    <td class="text-end">@Model.FemaleCount (@((Model.FemaleCount * 100 / (Model.TotalMembers == 0 ? 1 : Model.TotalMembers)).ToString("N0"))%)</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>OTHERS:</strong></td>
-                                    <td><strong>@Model.OtherCount.ToString("N0")</strong></td>
+                                    <td>Other:</td>
+                                    <td class="text-end">@Model.OtherCount (@((Model.OtherCount * 100 / (Model.TotalMembers == 0 ? 1 : Model.TotalMembers)).ToString("N0"))%)</td>
                                 </tr>
                             </table>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <div class="card">
                         <div class="card-header bg-light">
-                            <h5 class="mb-0"><i class="fas fa-coins me-2"></i>Financial Summary</h5>
+                            <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Fully Paid Status</h5>
+                        </div>
+                        <div class="card-body">
+                            @{
+                                var fullyPaidCount = Model.Members.Count(m => Convert.ToBoolean(m["IsFullyPaid"]));
+                                var notFullyPaidCount = Model.TotalMembers - fullyPaidCount;
+                            }
+                            <table class="table table-sm">
+                                <tr>
+                                    <td width="60%"><strong>Fully Paid:</strong></td>
+                                    <td class="text-end text-success"><strong>@fullyPaidCount (@((fullyPaidCount * 100 / (Model.TotalMembers == 0 ? 1 : Model.TotalMembers)).ToString("N0"))%)</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Not Fully Paid:</td>
+                                    <td class="text-end text-danger"><strong>@notFullyPaidCount (@((notFullyPaidCount * 100 / (Model.TotalMembers == 0 ? 1 : Model.TotalMembers)).ToString("N0"))%)</strong></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Financial Summary</h5>
                         </div>
                         <div class="card-body">
                             <table class="table table-sm">
                                 <tr>
-                                    <td width="50%"><strong>TOTAL SHARE CAPITAL:</strong></td>
-                                    <td class="text-end"><strong>@Model.TotalShareCapital.ToString("N2")</strong></td>
+                                    <td width="60%"><strong>Avg Contribution:</strong></td>
+                                    <td class="text-end"><strong>@((Model.TotalShareCapital / (Model.TotalMembers == 0 ? 1 : Model.TotalMembers)).ToString("N2"))</strong></td>
                                 </tr>
                                 <tr>
-                                    <td><strong>TOTAL SAVINGS/DEPOSITS:</strong></td>
-                                    <td class="text-end"><strong>@Model.TotalSavingsDeposits.ToString("N2")</strong></td>
-                                </tr>
-                                <tr>
-                                    <td><strong>TOTAL REGISTRATION FEE:</strong></td>
-                                    <td class="text-end"><strong>@Model.TotalRegistrationFee.ToString("N2")</strong></td>
+                                    <td><strong>Min Share Requirement:</strong></td>
+                                    <td class="text-end"><strong>@Model.MinimumShareRequirement.ToString("N2")</strong></td>
                                 </tr>
                             </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Share Types Legend -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0"><i class="fas fa-tags me-2"></i>Share Types Legend</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                @foreach (var shareType in shareTypes)
+                                {
+                                    <div class="col-md-3 col-sm-6 mb-2">
+                                        <span class="badge bg-purple me-1">@shareType.SharesCode</span>
+                                        <span>@shareType.SharesType</span>
+                                        @if (shareType.IsMainShares)
+                                        {
+                                            <span class="badge bg-info ms-1">Main</span>
+                                        }
+                                        @if (shareType.MinAmount > 0)
+                                        {
+                                            <span class="badge bg-secondary ms-1">Min: @shareType.MinAmount.ToString("N0")</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -232,7 +366,9 @@
                         <i class="fas fa-info-circle"></i>
                         Generated By: @User.Identity.Name on @DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss") |
                         As At: @Model.ReportDate.ToString("dd/MM/yyyy") |
-                        Company: @companyName
+                        Company: @companyName |
+                        Total Records: @Model.TotalMembers |
+                        Share Types: @shareTypes.Count
                     </div>
                 </div>
             </div>
@@ -240,190 +376,243 @@
         else
         {
             <div class="alert alert-info text-center py-5">
-                <i class="fas fa-check-circle fa-3x mb-3"></i>
-                <p>Select the date and click "Generate Report" to view  data.</p>
-                <p class="small">
-                    Requirements:
-                    Minimum Share Capital: Minimum Amount basing on Sacco parameters
-                    Registration Fee: Minimum Amount basing on Sacco parameters |
-                    Must have Savings/Deposits
-                </p>
+                <i class="fas fa-chart-pie fa-3x mb-3"></i>
+                <h5>No Data Found</h5>
+                <p>There are no members with share contributions as at @reportDate.ToString("dd/MM/yyyy")</p>
+                <p class="text-muted small">Note: Only members with at least one contribution are displayed.</p>
             </div>
         }
     </div>
 </div>
- 
+
 @section Scripts {
     <script>
-        // Wait for DOM to be ready
-        document.addEventListener('DOMContentLoaded', function() {
+        (function() {
             'use strict';
 
-            // Get all required elements
-            const exportExcelBtn = document.getElementById('exportExcelBtn');
-            const exportPdfBtn = document.getElementById('exportPdfBtn');
-            const reportDate = document.getElementById('reportDate');
-            const excelReportDate = document.getElementById('excelReportDate');
-            const pdfReportDate = document.getElementById('pdfReportDate');
-            const excelForm = document.getElementById('excelForm');
-            const pdfForm = document.getElementById('pdfForm');
-            const membersTable = document.getElementById('membersTable');
-
-            // Export to Excel
-            if (exportExcelBtn) {
-                exportExcelBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-
-                    if (!reportDate) {
-                        alert('Report date input not found');
-                        return;
-                    }
-
-                    const date = reportDate.value;
-                    if (!date) {
-                        alert('Please select a report date');
-                        return;
-                    }
-
-                    if (!excelReportDate) {
-                        alert('Excel form hidden input not found');
-                        return;
-                    }
-
-                    if (!excelForm) {
-                        alert('Excel form not found');
-                        return;
-                    }
-
-                    // Set the date value and submit
-                    excelReportDate.value = date;
-                    excelForm.submit();
-                });
+            function domReady(fn) {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', fn);
+                } else {
+                    fn();
+                }
             }
 
-            // Export to PDF
-            if (exportPdfBtn) {
-                exportPdfBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-
-                    if (!reportDate) {
-                        alert('Report date input not found');
-                        return;
-                    }
-
-                    const date = reportDate.value;
-                    if (!date) {
-                        alert('Please select a report date');
-                        return;
-                    }
-
-                    if (!pdfReportDate) {
-                        alert('PDF form hidden input not found');
-                        return;
-                    }
-
-                    if (!pdfForm) {
-                        alert('PDF form not found');
-                        return;
-                    }
-
-                    // Set the date value and submit
-                    pdfReportDate.value = date;
-                    pdfForm.submit();
-                });
-            }
-
-            // Initialize DataTable if there's data and DataTable is available
-            @if (hasData)
-            {
-                    <text>
-                    // Check if DataTable function exists (from jQuery plugin)
-                    if (membersTable && typeof $.fn !== 'undefined' && $.fn.DataTable) {
-                        try {
-                            $(membersTable).DataTable({
-                                pageLength: 25,
-                                ordering: true,
-                                responsive: true,
-                                language: {
-                                    search: "Search:",
-                                    lengthMenu: "Show _MENU_ entries",
-                                    info: "Showing _START_ to _END_ of _TOTAL_ entries"
-                                }
-                            });
-                        } catch (error) {
-                            console.error('DataTable initialization error:', error);
-                        }
-                    } else {
-                        // Fallback if DataTable is not available
-                        console.log('DataTable not available, using standard table');
-                    }
-                    </text>
-            }
-
-            // Also handle the form submission via the Generate Report button
-            const reportForm = document.getElementById('reportForm');
-            if (reportForm) {
-                reportForm.addEventListener('submit', function(e) {
-                    const date = reportDate.value;
-                    if (!date) {
-                        e.preventDefault();
-                        alert('Please select a report date');
-                    }
-                });
-            }
-        });
-
-        // Alternative: Add direct onclick handlers as backup
-        (function() {
-            // Excel export fallback
-            window.exportToExcel = function() {
+            domReady(function() {
+                // Export to Excel
+                const exportExcelBtn = document.getElementById('exportExcelBtn');
+                const exportPdfBtn = document.getElementById('exportPdfBtn');
                 const reportDate = document.getElementById('reportDate');
                 const excelReportDate = document.getElementById('excelReportDate');
-                const excelForm = document.getElementById('excelForm');
-
-                if (!reportDate || !excelReportDate || !excelForm) return;
-
-                const date = reportDate.value;
-                if (!date) {
-                    alert('Please select a report date');
-                    return;
-                }
-
-                excelReportDate.value = date;
-                excelForm.submit();
-            };
-
-            // PDF export fallback
-            window.exportToPdf = function() {
-                const reportDate = document.getElementById('reportDate');
                 const pdfReportDate = document.getElementById('pdfReportDate');
+                const excelForm = document.getElementById('excelForm');
                 const pdfForm = document.getElementById('pdfForm');
+                const reportForm = document.getElementById('reportForm');
+                const membersTable = document.getElementById('membersTable');
 
-                if (!reportDate || !pdfReportDate || !pdfForm) return;
+                if (exportExcelBtn) {
+                    exportExcelBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
 
-                const date = reportDate.value;
-                if (!date) {
-                    alert('Please select a report date');
-                    return;
+                        if (!reportDate) {
+                            alert('Report date input not found');
+                            return;
+                        }
+
+                        const date = reportDate.value;
+                        if (!date) {
+                            alert('Please select a report date');
+                            return;
+                        }
+
+                        if (!excelReportDate || !excelForm) {
+                            alert('Export form not properly configured');
+                            return;
+                        }
+
+                        const originalText = exportExcelBtn.innerHTML;
+                        exportExcelBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+                        exportExcelBtn.disabled = true;
+
+                        excelReportDate.value = date;
+                        excelForm.submit();
+
+                        setTimeout(function() {
+                            exportExcelBtn.innerHTML = originalText;
+                            exportExcelBtn.disabled = false;
+                        }, 3000);
+                    });
                 }
 
-                pdfReportDate.value = date;
-                pdfForm.submit();
-            };
+                if (exportPdfBtn) {
+                    exportPdfBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
 
-            // Add onclick attributes as backup if buttons exist
-            document.addEventListener('DOMContentLoaded', function() {
-                const excelBtn = document.getElementById('exportExcelBtn');
-                const pdfBtn = document.getElementById('exportPdfBtn');
+                        if (!reportDate) {
+                            alert('Report date input not found');
+                            return;
+                        }
 
-                if (excelBtn && !excelBtn.hasAttribute('onclick')) {
-                    excelBtn.setAttribute('onclick', 'exportToExcel(); return false;');
+                        const date = reportDate.value;
+                        if (!date) {
+                            alert('Please select a report date');
+                            return;
+                        }
+
+                        if (!pdfReportDate || !pdfForm) {
+                            alert('Export form not properly configured');
+                            return;
+                        }
+
+                        const originalText = exportPdfBtn.innerHTML;
+                        exportPdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+                        exportPdfBtn.disabled = true;
+
+                        pdfReportDate.value = date;
+                        pdfForm.submit();
+
+                        setTimeout(function() {
+                            exportPdfBtn.innerHTML = originalText;
+                            exportPdfBtn.disabled = false;
+                        }, 3000);
+                    });
                 }
 
-                if (pdfBtn && !pdfBtn.hasAttribute('onclick')) {
-                    pdfBtn.setAttribute('onclick', 'exportToPdf(); return false;');
+                // Handle report form submission
+                if (reportForm) {
+                    reportForm.addEventListener('submit', function(e) {
+                        if (!reportDate) return;
+
+                        const date = reportDate.value;
+                        if (!date) {
+                            e.preventDefault();
+                            alert('Please select a report date');
+                            return false;
+                        }
+                    });
+                }
+
+                // Initialize DataTable
+                @if (hasData)
+                {
+                            <text>
+                            if (membersTable && typeof $.fn !== 'undefined' && $.fn.DataTable) {
+                                try {
+                                    $(membersTable).DataTable({
+                                        pageLength: 25,
+                                        ordering: true,
+                                        responsive: true,
+                                        scrollX: true,
+                                        language: {
+                                            search: "Search:",
+                                            lengthMenu: "Show _MENU_ entries",
+                                            info: "Showing _START_ to _END_ of _TOTAL_ entries"
+                                        }
+                                    });
+                                } catch (error) {
+                                    console.error('DataTable initialization error:', error);
+                                }
+                            }
+                            </text>
+                }
+
+                // Auto-focus
+                if (reportDate) {
+                    reportDate.focus();
                 }
             });
         })();
     </script>
 }
+
+<style>
+    .small-box {
+        border-radius: 0.25rem;
+        box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+        display: block;
+        margin-bottom: 20px;
+        position: relative;
+    }
+
+        .small-box > .inner {
+            padding: 10px;
+        }
+
+        .small-box h3 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin: 0 0 10px;
+            padding: 0;
+            white-space: nowrap;
+            color: white;
+        }
+
+        .small-box p {
+            color: white;
+            font-size: 1rem;
+            margin: 0;
+        }
+
+        .small-box .icon {
+            color: rgba(0,0,0,0.15);
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            transition: all .3s linear;
+            z-index: 0;
+        }
+
+            .small-box .icon > i {
+                font-size: 70px;
+            }
+
+        .small-box:hover .icon {
+            font-size: 75px;
+        }
+
+    .bg-purple {
+        background-color: #6f42c1 !important;
+    }
+
+    .text-purple {
+        color: #6f42c1 !important;
+    }
+
+    .table-success {
+        background-color: #d4edda !important;
+    }
+
+    .table-danger {
+        background-color: #f8d7da !important;
+    }
+
+    .badge.bg-purple {
+        background-color: #6f42c1 !important;
+    }
+
+    @@media print {
+        .table-responsive {
+            overflow: visible !important;
+        }
+
+        .table {
+            font-size: 8pt !important;
+        }
+
+            .table th, .table td {
+                padding: 3px !important;
+            }
+    }
+
+    @@media (max-width: 767px) {
+        .small-box {
+            text-align: center;
+        }
+
+            .small-box .icon {
+                display: none;
+            }
+    }
+</style>

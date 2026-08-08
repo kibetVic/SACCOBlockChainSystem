@@ -121,6 +121,7 @@ namespace SACCOBlockChainSystem.Models.ViewModels
             get => _balanceSheetBalanced;
             set => _balanceSheetBalanced = value; // Add setter
         }
+        public bool IsRetainedEarnings { get; internal set; }
     }
 }
 

@@ -1,5 +1,6 @@
 ﻿//using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,18 +25,21 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _webHostEnvironment;
         private readonly IDashboardCacheService _dashboardCacheService;
+        private readonly IWebHostEnvironment _env;
         private WalletService _walletService;
 
         public HomeController(
             IDashboardService dashboardService,
             IBlockchainService blockchainService,
             ILogger<HomeController> logger,
+            IWebHostEnvironment env,
             ApplicationDbContext context,WalletService walletService,
             IWebHostEnvironment webHostEnvironment, IDashboardCacheService dashboardCacheService)
         {
             _dashboardService = dashboardService;
             _blockchainService = blockchainService;
             _logger = logger;
+            _env = env;
             _context = context;
             _walletService = walletService;
             _webHostEnvironment = webHostEnvironment;
@@ -733,126 +737,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        //// SHARE CAPITAL - From ContribShares table (ShareCapitalAmount)
-        //private async Task<(decimal Total, decimal Women, decimal Men, decimal Others)> GetShareCapitalDataAsync(string? companyCode, bool isSuperAdmin)
-        //{
-        //    try
-        //    {
-        //        var membersQuery = _context.Members.AsQueryable();
-
-        //        if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-        //        {
-        //            membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
-        //        }
-        //        else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-        //        {
-        //            membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
-        //        }
-
-        //        var members = await membersQuery
-        //            .Select(m => new { MemberNo = m.MemberNo.Trim(), m.Sex })
-        //            .ToListAsync();
-
-        //        if (!members.Any())
-        //        {
-        //            _logger.LogInformation("No members found for share capital calculation");
-        //            return (0, 0, 0, 0);
-        //        }
-
-        //        string targetCompanyCode = null;
-        //        if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-        //        {
-        //            targetCompanyCode = companyCode;
-        //        }
-        //        else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-        //        {
-        //            targetCompanyCode = companyCode;
-        //        }
-
-        //        decimal totalShareCapital = 0;
-        //        decimal womenShares = 0;
-        //        decimal menShares = 0;
-        //        decimal othersShares = 0;
-
-        //        if (targetCompanyCode != null)
-        //        {
-        //            var allShares = await _context.ContribShares
-        //                .Where(s => s.CompanyCode == targetCompanyCode
-        //                    && s.ShareCapitalAmount.HasValue
-        //                    && s.ShareCapitalAmount.Value > 0
-        //                    && s.MemberNo != null)
-        //                .Select(s => new { MemberNo = s.MemberNo.Trim(), s.ShareCapitalAmount })
-        //                .ToListAsync();
-
-        //            var genderDict = members
-        //                .GroupBy(m => m.MemberNo)
-        //                .ToDictionary(g => g.Key, g => g.First().Sex, StringComparer.OrdinalIgnoreCase);
-
-        //            foreach (var share in allShares)
-        //            {
-        //                if (!genderDict.TryGetValue(share.MemberNo, out var gender)) continue;
-
-        //                var amount = share.ShareCapitalAmount ?? 0;
-        //                var normalizedGender = NormalizeGender(gender);
-
-        //                if (normalizedGender == "FEMALE")
-        //                    womenShares += amount;
-        //                else if (normalizedGender == "MALE")
-        //                    menShares += amount;
-        //                else
-        //                    othersShares += amount;
-        //            }
-
-        //            totalShareCapital = womenShares + menShares + othersShares;
-        //        }
-        //        else
-        //        {
-        //            var allShares = await _context.ContribShares
-        //                .Where(s => s.ShareCapitalAmount.HasValue
-        //                    && s.ShareCapitalAmount.Value > 0
-        //                    && s.MemberNo != null)
-        //                .Select(s => new { MemberNo = s.MemberNo.Trim(), s.ShareCapitalAmount })
-        //                .ToListAsync();
-
-        //            var allMembers = await _context.Members
-        //                .Select(m => new { MemberNo = m.MemberNo.Trim(), m.Sex })
-        //                .ToListAsync();
-
-        //            var genderDict = allMembers
-        //                .GroupBy(m => m.MemberNo)
-        //                .ToDictionary(g => g.Key, g => g.First().Sex, StringComparer.OrdinalIgnoreCase);
-
-        //            foreach (var share in allShares)
-        //            {
-        //                if (!genderDict.TryGetValue(share.MemberNo, out var gender)) continue;
-
-        //                var amount = share.ShareCapitalAmount ?? 0;
-        //                var normalizedGender = NormalizeGender(gender);
-
-        //                if (normalizedGender == "FEMALE")
-        //                    womenShares += amount;
-        //                else if (normalizedGender == "MALE")
-        //                    menShares += amount;
-        //                else
-        //                    othersShares += amount;
-        //            }
-
-        //            totalShareCapital = womenShares + menShares + othersShares;
-        //        }
-
-        //        _logger.LogInformation($"Share Capital Summary - Total: {totalShareCapital:C}, Women: {womenShares:C}, Men: {menShares:C}, Others: {othersShares:C}");
-        //        _logger.LogInformation($"Company filter: {(targetCompanyCode ?? "ALL COMPANIES")}");
-
-        //        return (totalShareCapital, womenShares, menShares, othersShares);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error calculating share capital from ContribShare");
-        //        return (0, 0, 0, 0);
-        //    }
-        //}
-
-        // NON-WITHDRAWABLE DEPOSITS - From ContribShare table (DepositsAmount)
         private async Task<(decimal Total, decimal Women, decimal Men, decimal Others)> GetDepositsDataAsync(string? companyCode, bool isSuperAdmin)
         {
             try
@@ -1364,37 +1248,6 @@ namespace SACCOBlockChainSystem.Controllers
                 return 0;
             }
         }
-
-
-        //private async Task<decimal> GetGrantTotalAsync(string keyword, string? companyCode, bool isSuperAdmin)
-        //{
-        //    try
-        //    {
-        //        var query = _context.Gltransactions
-        //            .Where(j =>
-        //                j.TransDescript != null &&
-        //                (j.TransDescript == "CR" || j.TransDescript == "DR") &&
-        //                j.TransDescript.ToLower().Contains(keyword));
-
-        //        // Apply company filter based on role
-        //        if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-        //        {
-        //            query = query.Where(j => j.CompanyCode == companyCode);
-        //        }
-        //        else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-        //        {
-        //            query = query.Where(j => j.CompanyCode == companyCode);
-        //        }
-        //        // If SuperAdmin and no companyCode, include ALL grants
-
-        //        return await query.SumAsync(j => (decimal?)j.Amount) ?? 0;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, $"Error getting grant total for {keyword}");
-        //        return 0;
-        //    }
-        //}
 
         #endregion
 
@@ -2689,82 +2542,6 @@ namespace SACCOBlockChainSystem.Controllers
             return stats;
         }
 
-
-
-        //private async Task<DashboardQuickStats> GetQuickStats(string? companyCode, bool isSuperAdmin)
-        //{
-        //    var today = DateTime.Today;
-        //    var stats = new DashboardQuickStats();
-
-        //    try
-        //    {
-        //        var transactionsQuery = _context.Transactions2
-        //            .Where(t => t.ContributionDate.Date == today && t.Status == "COMPLETED");
-
-        //        var membersQuery = _context.Members.AsQueryable();
-        //        var depositsQuery = _context.Transactions2
-        //            .Where(t => t.TransactionType == "DEPOSIT" && t.Status == "COMPLETED");
-        //        var loansQuery = _context.Loans.Where(l => l.Status == 1);
-
-        //        // Apply company filter based on role
-        //        if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-        //        {
-        //            var membersInCompany = await _context.Members
-        //                .Where(m => m.CompanyCode == companyCode)
-        //                .Select(m => m.MemberNo)
-        //                .ToListAsync();
-
-        //            if (membersInCompany.Any())
-        //            {
-        //                transactionsQuery = transactionsQuery.Where(t => membersInCompany.Contains(t.MemberNo));
-        //                membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
-        //                depositsQuery = depositsQuery.Where(t => membersInCompany.Contains(t.MemberNo));
-        //                loansQuery = loansQuery.Where(l => membersInCompany.Contains(l.MemberNo));
-        //            }
-        //            else
-        //            {
-        //                return stats;
-        //            }
-        //        }
-        //        else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-        //        {
-        //            var membersInCompany = await _context.Members
-        //                .Where(m => m.CompanyCode == companyCode)
-        //                .Select(m => m.MemberNo)
-        //                .ToListAsync();
-
-        //            if (membersInCompany.Any())
-        //            {
-        //                transactionsQuery = transactionsQuery.Where(t => membersInCompany.Contains(t.MemberNo));
-        //                membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
-        //                depositsQuery = depositsQuery.Where(t => membersInCompany.Contains(t.MemberNo));
-        //                loansQuery = loansQuery.Where(l => membersInCompany.Contains(l.MemberNo));
-        //            }
-        //            else
-        //            {
-        //                return stats;
-        //            }
-        //        }
-        //        // If SuperAdmin and no companyCode, include ALL data
-
-        //        stats.TransactionsToday = await transactionsQuery.CountAsync();
-        //        stats.NewMembersToday = await membersQuery
-        //            .CountAsync(m => m.EffectDate.HasValue && m.EffectDate.Value.Date == today);
-        //        stats.AverageDeposit = await depositsQuery.AverageAsync(t => t.Amount);
-        //        stats.AverageLoan = await loansQuery.AverageAsync(l => l.LoanAmt ?? 0);
-        //        stats.BlockchainUptime = 99.9m;
-
-        //        var totalLoans = await loansQuery.CountAsync();
-        //        var approvedLoans = await loansQuery.CountAsync(l => l.Status == 1);
-        //        stats.LoanApprovalRate = totalLoans > 0 ? (approvedLoans * 100m / totalLoans) : 0;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error getting quick stats");
-        //    }
-
-        //    return stats;
-        //}
         private async Task<List<MonthlyTransactionData>> GetMonthlyTransactionsDataAsync(int months, string? companyCode, bool isSuperAdmin)
         {
             var data = new List<MonthlyTransactionData>();
@@ -3455,8 +3232,22 @@ namespace SACCOBlockChainSystem.Controllers
         {
             var errorViewModel = new ErrorViewModel
             {
-                RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier
+                RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier,
+                ShowErrorDetails = _env.IsDevelopment() // Use injected environment
             };
+
+            // Get the last exception from the current context
+            var exception = HttpContext.Features.Get<IExceptionHandlerFeature>();
+            if (exception != null)
+            {
+                errorViewModel.ErrorMessage = exception.Error.Message;
+                errorViewModel.StackTrace = exception.Error.StackTrace;
+                errorViewModel.ExceptionType = exception.Error.GetType().FullName;
+
+                // Try to get HTTP status code if available
+                var statusCode = HttpContext.Response.StatusCode;
+                errorViewModel.StatusCode = statusCode;
+            }
 
             return View(errorViewModel);
         }

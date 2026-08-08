@@ -410,14 +410,14 @@
                     </div>
 
                     <div class="col-md-3">
-                        <label class="form-label fw-bold">Loan Type Name <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold">Loan Product Name <span class="text-danger">*</span></label>
                         <input asp-for="LoanType" class="form-control" placeholder="e.g., Personal Loan, Business Loan" />
                         <span asp-validation-for="LoanType" class="text-danger"></span>
                     </div>
 
                     <!-- Row: Loan Types and Maximum Amount -->
                     <div class="col-md-3">
-                        <label class="form-label fw-bold">Loan Type Options</label>
+                        <label class="form-label fw-bold">Loan Product Options</label>
                         <div class="form-check mt-2">
                             <input asp-for="MobileLoan" class="form-check-input" id="MobileLoan" />
                             <label class="form-check-label" for="MobileLoan">Mobile Loan</label>
@@ -549,7 +549,14 @@
 
                     <!-- Row 4: Penalty Section -->
                     <div class="row mt-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Interest Upront</label>
+                            <div class="form-check mt-2">
+                                <input asp-for="InterestUpront" class="form-check-input" id="InterestUpront" />
+                                <label class="form-check-label" for="InterestUpront">Interest Upront</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Attracts Penalty</label>
                             <div class="form-check mt-2">
                                 <input type="checkbox" id="AttractsPenaltyCheckbox" class="form-check-input"
@@ -558,7 +565,7 @@
                             </div>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Penalty Mode</label>
                             <select id="PenaltyMode" class="form-select">
                                 <option value="Percentage">Percentage (%)</option>
@@ -566,7 +573,7 @@
                             </select>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Penalty Value</label>
                             <div class="input-group">
                                 <input type="text" id="PenaltyValue" class="form-control" placeholder="0" />
@@ -582,7 +589,7 @@
                             <select asp-for="LoanAcc" class="form-select" asp-items="ViewBag.AvailableAccounts">
                                 <option value="">-- Select Account --</option>
                             </select>
-                            <small class="text-muted">GL account for loan disbursements</small>
+                            <small class="text-muted">GL account for loan disbursements (Account Number)</small>
                             <span asp-validation-for="LoanAcc" class="text-danger"></span>
                         </div>
 
@@ -591,7 +598,7 @@
                             <select asp-for="InterestAcc" class="form-select" asp-items="ViewBag.InterestAccounts">
                                 <option value="">-- Select Account --</option>
                             </select>
-                            <small class="text-muted">GL account for interest income</small>
+                            <small class="text-muted">GL account for interest income (Account Number)</small>
                             <span asp-validation-for="InterestAcc" class="text-danger"></span>
                         </div>
 
@@ -600,14 +607,14 @@
                             <select asp-for="PenaltyAcc" class="form-select" asp-items="ViewBag.PenaltyAccounts">
                                 <option value="">-- Select Account --</option>
                             </select>
-                            <small class="text-muted">GL account for penalty income</small>
+                            <small class="text-muted">GL account for penalty income (Account Number)</small>
                             <span asp-validation-for="PenaltyAcc" class="text-danger"></span>
                         </div>
                     </div>
 
                     <!-- Row 6: Can Refinance, Guarantors, Self Guarantee -->
                     <div class="row mt-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Can Refinance</label>
                             <div class="form-check mt-2">
                                 <input asp-for="Bridging" class="form-check-input" />
@@ -619,7 +626,7 @@
                             </div>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Requires Guarantors</label>
                             <div class="form-check mt-2">
                                 @{
@@ -636,11 +643,23 @@
                             </div>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Guarantee Own Loan</label>
                             <div class="form-check mt-2">
                                 <input asp-for="SelfGuarantee" class="form-check-input" />
                                 <label class="form-check-label">Yes, members can guarantee their own loan</label>
+                                @if (isEdit && usageCount > 0)
+                                {
+                                    <i class="fas fa-info-circle text-info ms-2" title="Changes will only affect NEW loan applications"></i>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Is TopUp Loan</label>
+                            <div class="form-check mt-2">
+                                <input asp-for="IsTopUp" class="form-check-input" id="IsTopUp" />
+                                <label class="form-check-label" for="IsTopUp">Yes, members can apply another loan on top of existing loan</label>
                                 @if (isEdit && usageCount > 0)
                                 {
                                     <i class="fas fa-info-circle text-info ms-2" title="Changes will only affect NEW loan applications"></i>
@@ -755,7 +774,7 @@
 
     <!-- Loan Types Table -->
     <div style="overflow-x: auto; width: 100%;">
-        <table class="loan-types-table" border="1" cellpadding="5" cellspacing="0" width="100%" style="border-collapse:collapse; min-width: 1000px;">
+        <table class="loan-types-table" border="1" cellpadding="5" cellspacing="0" width="100%" style="border-collapse:collapse; min-width: 1200px;">
             <thead>
                 <tr>
                     <th>Loan Code</th>
@@ -765,8 +784,8 @@
                     <th>Interest</th>
                     <th>Priority</th>
                     <th>Type</th>
+                    <th>Top-Up</th>
                     <th>Mobile</th>
-                    <th>Project</th>
                     <th>Total Loans</th>
                     <th>Active Loans</th>
                     <th>Status</th>
@@ -778,6 +797,7 @@
                 {
                     foreach (var item in ViewBag.LoanTypes)
                     {
+                        // Status
                         var statusClass = "";
                         var statusText = "";
 
@@ -797,29 +817,41 @@
                             statusText = item.ApprovalStatus ?? "Draft";
                         }
 
+                        // Mobile
                         var isMobile = item.MobileLoan == true;
                         var mobileLabel = isMobile ? "Yes" : "No";
-                        var mobileBadge = isMobile ? "badge-mobile" : "badge-secondary";
+                        var mobileBadge = isMobile ? "badge-mobile bg-success" : "badge-secondary bg-light text-dark";
 
+                        // Project
                         var isProject = item.IsProject == true;
-                        var projectLabel = isProject ? "Yes" : "No";
-                        var projectBadge = isProject ? "badge-project" : "badge-normal";
-                        var typeLabel = isProject ? "Project" : "Normal";
+                        var projectLabel = isProject ? "Project" : "Normal";
+                        var projectBadge = isProject ? "badge-project bg-primary" : "badge-normal bg-secondary";
+                        var typeLabel = isProject ? "Project" : "Standard";
 
-                        <tr data-status="@(item.ApprovalStatus ?? "Draft")">
+                        // Top-Up
+                        var isTopUp = item.IsTopUp == true;
+                        var topupLabel = isTopUp ? "Top-Up" : "New";
+                        var topupBadge = isTopUp ? "badge-topup bg-warning text-dark" : "badge-normal bg-info text-white";
+
+                        <tr data-status="@(item.ApprovalStatus ?? "Draft")" data-project="@(isProject ? "true" : "false")" data-topup="@(isTopUp ? "true" : "false")">
                             <td><strong>@item.LoanCode</strong></td>
                             <td>@item.LoanType</td>
                             <td>@(item.MaxAmount?.ToString("N2") ?? "-")</td>
                             <td>@(item.RepayPeriod?.ToString() ?? "-") months</td>
                             <td>@(item.Interest ?? "-")</td>
                             <td>
-                                <span class="badge bg-@(item.Priority <= 3 ? "danger" : item.Priority <= 6 ? "warning" : "info")">
+                                <span class="badge @(item.Priority <= 3 ? "bg-danger" : item.Priority <= 6 ? "bg-warning text-dark" : "bg-info")">
                                     @item.Priority
                                 </span>
                             </td>
                             <td>
-                                <span class="badge @(isProject ? "badge-project" : "badge-normal")">
-                                    @typeLabel
+                                <span class="badge @projectBadge">
+                                    @projectLabel
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge @topupBadge">
+                                    @topupLabel
                                 </span>
                             </td>
                             <td>
@@ -828,12 +860,11 @@
                                 </span>
                             </td>
                             <td>
-                                <span class="badge @projectBadge">
-                                    @projectLabel
-                                </span>
+                                <span class="badge bg-secondary">@item.TotalLoans</span>
                             </td>
-                            <td>@item.TotalLoans</td>
-                            <td>@item.ActiveLoans</td>
+                            <td>
+                                <span class="badge @(item.ActiveLoans > 0 ? "bg-success" : "bg-secondary")">@item.ActiveLoans</span>
+                            </td>
                             <td>
                                 <span class="badge @statusClass">
                                     <span class="status-indicator status-@(item.ApprovalStatus?.ToLower() ?? "inactive")"></span>
@@ -841,30 +872,32 @@
                                 </span>
                             </td>
                             <td>
-                                <a href="@Url.Action("LoanTypeManagement", new { loanCode = item.LoanCode })"
-                                   class="btn btn-sm btn-primary" title="Edit">
-                                    <i class="fas fa-edit">Select</i>
-                                </a>
-
-                                @if (item.ApprovalStatus == "Pending")
-                                {
-                                    <form method="post" action="@Url.Action("Approve", new { loanCode = item.LoanCode })" style="display: inline;">
-                                        @Html.AntiForgeryToken()
-                                        <button type="submit" class="btn btn-sm btn-success approve-btn"
-                                                title="Approve this loan type" onclick="return confirm('Approve this loan type? It will become active and available for use.');">
-                                            <i class="fas fa-check-circle"></i> Approve
-                                        </button>
-                                    </form>
-                                }
-
-                                @if (item.TotalLoans == 0)
-                                {
-                                    <a href="@Url.Action("Delete", new { loanCode = item.LoanCode })"
-                                       class="btn btn-sm btn-danger" title="Delete"
-                                       onclick="return confirm('Are you sure you want to delete this loan type? This action cannot be undone.');">
-                                        <i class="fas fa-trash">Delete</i>
+                                <div class="btn-group" role="group">
+                                    <a href="@Url.Action("LoanTypeManagement", new { loanCode = item.LoanCode })"
+                                       class="btn btn-sm btn-primary" title="Edit">
+                                        <i class="fas fa-edit"></i> Select
                                     </a>
-                                }
+
+                                    @if (item.ApprovalStatus == "Pending")
+                                    {
+                                        <form method="post" action="@Url.Action("Approve", new { loanCode = item.LoanCode })" style="display: inline;">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm btn-success approve-btn"
+                                                    title="Approve this loan type" onclick="return confirm('Approve this loan type? It will become active and available for use.');">
+                                                <i class="fas fa-check-circle"></i> Approve
+                                            </button>
+                                        </form>
+                                    }
+
+                                    @if (item.TotalLoans == 0)
+                                    {
+                                        <a href="@Url.Action("Delete", new { loanCode = item.LoanCode })"
+                                           class="btn btn-sm btn-danger" title="Delete"
+                                           onclick="return confirm('Are you sure you want to delete this loan type? This action cannot be undone.');">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </a>
+                                    }
+                                </div>
                             </td>
                         </tr>
                     }
@@ -872,7 +905,7 @@
                 else
                 {
                     <tr>
-                        <td colspan="13" style="text-align:center; padding:20px;">
+                        <td colspan="14" style="text-align:center; padding:20px;">
                             <em>No loan types found. Please add your first loan type.</em>
                         </td>
                     </tr>
@@ -889,6 +922,7 @@
             // Function to update penalty hidden fields
             function updatePenaltyHiddenFields() {
                 var attractsPenalty = $('#AttractsPenaltyCheckbox').is(':checked');
+                var attractsPenalty = $('#InterestUpront').is(':checked');
                 var penaltyMode = $('#PenaltyMode').val();
                 var penaltyValue = $('#PenaltyValue').val();
                 var penaltyRateType = $('input[name="Rate"]:checked').val();
@@ -986,6 +1020,21 @@
                 }
             }
 
+
+            // Toggle IsTopUp Section
+            function toggleIsTopUpSection() {
+                var IsTopUp = $('#IsTopUp').is(':checked');
+                var section = $('#projectSection');
+
+                if (IsTopUp) {
+                    section.addClass('visible');
+                    section.show();
+                } else {
+                    section.removeClass('visible');
+                    section.hide();
+                }
+            }
+
             // Handle Guarantor checkbox
             function setupGuarantorCheckbox() {
                 var guarantorHidden = $('#GuarantorHidden');
@@ -1014,6 +1063,9 @@
             // Initialize project section based on initial state
             toggleProjectSection();
 
+            // Initialize Istopup section based on initial state
+            toggleIsTopUpSection();
+
             // Bind change events for penalty
             $('#AttractsPenaltyCheckbox, #PenaltyMode, #PenaltyValue, input[name="Rate"], input[name="WhatToCharge"]').on('change', function() {
                 updatePenaltyHiddenFields();
@@ -1037,6 +1089,12 @@
                 toggleProjectSection();
                 // No hidden field needed - the checkbox value is bound directly to the model
             });
+
+            // // Bind change event for IsTopUp checkbox - just toggle the section
+            // $('#IsTopUp').on('change', function() {
+            //     toggleIsTopUpSection();
+            //     // No hidden field needed - the checkbox value is bound directly to the model
+            // });
 
             // Update MobileLoanApproval hidden field
             function updateMobileLoanApprovalHidden() {

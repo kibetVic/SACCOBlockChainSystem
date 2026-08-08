@@ -19,6 +19,8 @@ namespace SACCOBlockChainSystem.Services
         Task<List<InvoiceReceiveResponseDTO>> SearchInvoicesAsync(InvoiceSearchDTO searchDto);
         Task<InvoiceReceiveResponseDTO> GetInvoiceByNumberAsync(string invoiceNo, string companyCode);
         Task<InvoiceReceiveViewModel> GetInvoiceDashboardAsync(string companyCode);
+        Task<List<GlAccountDTO>> GetGlAccountsForDropdownAsync(string companyCode);
+        Task<GlAccountDTO> GetGlAccountByCodeAsync(string glAccountNo, string companyCode);
     }
 
     public class InvoiceService : IInvoiceService
@@ -66,6 +68,36 @@ namespace SACCOBlockChainSystem.Services
                     throw new InvalidOperationException($"Supplier '{dto.SupplierCode}' not found.");
                 }
 
+                // Validate GL Account if provided
+                if (!string.IsNullOrEmpty(dto.GlAccountNo))
+                {
+                    var glAccount = await _context.GlSetup
+                        .FirstOrDefaultAsync(g => g.AccNo == dto.GlAccountNo && g.CompanyCode == dto.CompanyCode && g.Status == true);
+
+                    if (glAccount == null)
+                    {
+                        throw new InvalidOperationException($"GL Account '{dto.GlAccountNo}' not found or inactive.");
+                    }
+
+                    // Auto-populate GL Account Name if not provided
+                    if (string.IsNullOrEmpty(dto.GlAccountName))
+                    {
+                        dto.GlAccountName = glAccount.Glaccname;
+                    }
+                }
+
+                // Calculate Tax Amount from Tax Percentage
+                decimal calculatedTaxAmount = 0;
+                if (dto.TaxPercentage.HasValue && dto.TaxPercentage.Value > 0)
+                {
+                    calculatedTaxAmount = (dto.InvoiceAmount * dto.TaxPercentage.Value) / 100;
+                    dto.TaxAmount = calculatedTaxAmount;
+                }
+
+                // Calculate Total Amount
+                decimal totalAmount = dto.InvoiceAmount + (dto.TaxAmount ?? 0) - (dto.DiscountAmount ?? 0);
+                dto.TotalAmount = totalAmount;
+
                 var invoice = new InvoiceReceive
                 {
                     InvoiceNo = dto.InvoiceNo,
@@ -73,7 +105,8 @@ namespace SACCOBlockChainSystem.Services
                     SupplierName = supplier.SupplierName,
                     InvoiceAmount = dto.InvoiceAmount,
                     AmountPaid = 0,
-                    Balance = dto.InvoiceAmount,
+                    Balance = totalAmount, // Balance is now the total amount after tax and discount
+                    TaxPercentage = dto.TaxPercentage,
                     TaxAmount = dto.TaxAmount,
                     DiscountAmount = dto.DiscountAmount,
                     InvoiceDate = dto.InvoiceDate ?? DateTime.Now,
@@ -86,18 +119,21 @@ namespace SACCOBlockChainSystem.Services
                     CompanyCode = dto.CompanyCode,
                     Status = "Pending",
                     PaymentStatus = "Unpaid",
-                    TotalAmount = dto.InvoiceAmount,
-                    Remarks = dto.Remarks,
+                    TotalAmount = totalAmount,
                     AuditId = createdBy,
                     AuditTime = DateTime.Now,
-                    TransactionNo = $"INV-{DateTime.Now:yyyyMMddHHmmss}"
+                    TransactionNo = $"INV-{DateTime.Now:yyyyMMddHHmmss}",
+                    ReceiptNo = dto.ReceiptNo
                 };
+
+                // Update status based on payment
+                UpdateInvoiceStatus(invoice);
 
                 _context.InvoiceReceive.Add(invoice);
                 await _context.SaveChangesAsync();
 
                 // Update supplier current balance
-                supplier.CurrentBalance = (supplier.CurrentBalance ?? 0) + dto.InvoiceAmount;
+                supplier.CurrentBalance = (supplier.CurrentBalance ?? 0) + totalAmount;
                 await _context.SaveChangesAsync();
 
                 var blockchainData = new
@@ -107,8 +143,13 @@ namespace SACCOBlockChainSystem.Services
                     SupplierCode = invoice.SupplierCode,
                     SupplierName = invoice.SupplierName,
                     InvoiceAmount = invoice.InvoiceAmount,
+                    TaxAmount = invoice.TaxAmount,
+                    DiscountAmount = invoice.DiscountAmount,
+                    TotalAmount = invoice.TotalAmount,
                     InvoiceDate = invoice.InvoiceDate,
                     DueDate = invoice.DueDate,
+                    GlAccountNo = invoice.GlAccountNo,
+                    GlAccountName = invoice.GlAccountName,
                     CreatedBy = createdBy,
                     CreatedDate = DateTime.Now
                 };
@@ -119,7 +160,7 @@ namespace SACCOBlockChainSystem.Services
                     TransactionType = "INVOICE_CREATED",
                     MemberNo = null,
                     CompanyCode = dto.CompanyCode,
-                    Amount = invoice.InvoiceAmount,
+                    Amount = invoice.TotalAmount ?? 0,
                     Timestamp = DateTime.Now,
                     DataHash = await _blockchainService.GenerateTransactionHash(blockchainData),
                     PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData),
@@ -179,39 +220,67 @@ namespace SACCOBlockChainSystem.Services
                     throw new InvalidOperationException("Cannot edit a fully paid invoice.");
                 }
 
+                // Validate GL Account if provided and changed
+                if (!string.IsNullOrEmpty(dto.GlAccountNo) && dto.GlAccountNo != invoice.GlAccountNo)
+                {
+                    var glAccount = await _context.GlSetup
+                        .FirstOrDefaultAsync(g => g.AccNo == dto.GlAccountNo && g.CompanyCode == invoice.CompanyCode && g.Status == true);
+
+                    if (glAccount == null)
+                    {
+                        throw new InvalidOperationException($"GL Account '{dto.GlAccountNo}' not found or inactive.");
+                    }
+
+                    if (string.IsNullOrEmpty(dto.GlAccountName))
+                    {
+                        dto.GlAccountName = glAccount.Glaccname;
+                    }
+                }
+
                 var oldInvoice = new
                 {
                     invoice.InvoiceAmount,
+                    invoice.TaxAmount,
+                    invoice.DiscountAmount,
+                    invoice.TotalAmount,
                     invoice.DueDate,
                     invoice.Description,
+                    invoice.GlAccountNo,
+                    invoice.GlAccountName,
                     invoice.Status,
                     invoice.PaymentStatus
                 };
 
+                // Calculate Tax Amount from Tax Percentage
+                decimal calculatedTaxAmount = 0;
+                if (dto.TaxPercentage.HasValue && dto.TaxPercentage.Value > 0)
+                {
+                    calculatedTaxAmount = (dto.InvoiceAmount * dto.TaxPercentage.Value) / 100;
+                    dto.TaxAmount = calculatedTaxAmount;
+                }
+
+                // Calculate Total Amount
+                decimal totalAmount = dto.InvoiceAmount + (dto.TaxAmount ?? 0) - (dto.DiscountAmount ?? 0);
+                dto.TotalAmount = totalAmount;
+
+                // Update invoice
                 invoice.InvoiceAmount = dto.InvoiceAmount;
-                invoice.Balance = dto.InvoiceAmount - (invoice.AmountPaid ?? 0);
+                invoice.TaxPercentage = dto.TaxPercentage;
                 invoice.TaxAmount = dto.TaxAmount;
                 invoice.DiscountAmount = dto.DiscountAmount;
+                invoice.TotalAmount = totalAmount;
+                invoice.Balance = totalAmount - (invoice.AmountPaid ?? 0);
                 invoice.DueDate = dto.DueDate ?? invoice.DueDate;
                 invoice.Description = dto.Description ?? invoice.Description;
                 invoice.PurchaseOrderNo = dto.PurchaseOrderNo ?? invoice.PurchaseOrderNo;
                 invoice.GlAccountNo = dto.GlAccountNo ?? invoice.GlAccountNo;
                 invoice.GlAccountName = dto.GlAccountName ?? invoice.GlAccountName;
-                invoice.Remarks = dto.Remarks ?? invoice.Remarks;
-                invoice.TotalAmount = dto.InvoiceAmount;
+                invoice.ReceiptNo = dto.ReceiptNo ?? invoice.ReceiptNo;
                 invoice.AuditId = updatedBy;
                 invoice.AuditTime = DateTime.Now;
 
-                if (invoice.Balance <= 0)
-                {
-                    invoice.PaymentStatus = "Paid";
-                    invoice.Status = "Paid";
-                }
-                else if (invoice.AmountPaid > 0)
-                {
-                    invoice.PaymentStatus = "Partially Paid";
-                    invoice.Status = "Partially Paid";
-                }
+                // Update status
+                UpdateInvoiceStatus(invoice);
 
                 await _context.SaveChangesAsync();
 
@@ -220,9 +289,14 @@ namespace SACCOBlockChainSystem.Services
                     InvoiceId = invoice.Id,
                     InvoiceNo = invoice.InvoiceNo,
                     InvoiceAmount = invoice.InvoiceAmount,
+                    TaxAmount = invoice.TaxAmount,
+                    DiscountAmount = invoice.DiscountAmount,
+                    TotalAmount = invoice.TotalAmount,
                     Balance = invoice.Balance,
                     DueDate = invoice.DueDate,
                     PaymentStatus = invoice.PaymentStatus,
+                    GlAccountNo = invoice.GlAccountNo,
+                    GlAccountName = invoice.GlAccountName,
                     UpdatedBy = updatedBy,
                     UpdatedDate = DateTime.Now
                 };
@@ -233,7 +307,7 @@ namespace SACCOBlockChainSystem.Services
                     TransactionType = "INVOICE_UPDATED",
                     MemberNo = null,
                     CompanyCode = invoice.CompanyCode,
-                    Amount = invoice.InvoiceAmount,
+                    Amount = invoice.TotalAmount ?? 0,
                     Timestamp = DateTime.Now,
                     DataHash = await _blockchainService.GenerateTransactionHash(blockchainData),
                     PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData),
@@ -280,7 +354,7 @@ namespace SACCOBlockChainSystem.Services
             try
             {
                 var invoice = await _context.InvoiceReceive
-                    .Include(i => i.AmountPaid)
+                    .Include(i => i.Payments)
                     .FirstOrDefaultAsync(i => i.Id == id);
 
                 if (invoice == null)
@@ -299,6 +373,9 @@ namespace SACCOBlockChainSystem.Services
                     invoice.InvoiceNo,
                     invoice.SupplierCode,
                     invoice.InvoiceAmount,
+                    invoice.TaxAmount,
+                    invoice.DiscountAmount,
+                    invoice.TotalAmount,
                     invoice.Balance,
                     invoice.Status,
                     DeletedBy = deletedBy,
@@ -314,6 +391,7 @@ namespace SACCOBlockChainSystem.Services
                     InvoiceNo = invoice.InvoiceNo,
                     SupplierCode = invoice.SupplierCode,
                     InvoiceAmount = invoice.InvoiceAmount,
+                    TotalAmount = invoice.TotalAmount,
                     DeletedBy = deletedBy,
                     DeletedDate = DateTime.Now
                 };
@@ -324,7 +402,7 @@ namespace SACCOBlockChainSystem.Services
                     TransactionType = "INVOICE_DELETED",
                     MemberNo = null,
                     CompanyCode = invoice.CompanyCode,
-                    Amount = invoice.InvoiceAmount,
+                    Amount = invoice.TotalAmount ?? 0,
                     Timestamp = DateTime.Now,
                     DataHash = await _blockchainService.GenerateTransactionHash(blockchainData),
                     PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockchainData),
@@ -383,7 +461,6 @@ namespace SACCOBlockChainSystem.Services
 
         public async Task<List<InvoiceReceiveResponseDTO>> SearchInvoicesAsync(InvoiceSearchDTO searchDto)
         {
-            // FIX: Remove .Include() and use a separate query for Payments
             var query = _context.InvoiceReceive
                 .Where(i => i.CompanyCode == searchDto.CompanyCode);
 
@@ -457,6 +534,8 @@ namespace SACCOBlockChainSystem.Services
                 .Where(s => s.CompanyCode == companyCode)
                 .ToListAsync();
 
+            var glAccounts = await GetGlAccountsForDropdownAsync(companyCode);
+
             var viewModel = new InvoiceReceiveViewModel
             {
                 Invoices = invoices.Select(MapToResponseDTO).ToList(),
@@ -476,13 +555,93 @@ namespace SACCOBlockChainSystem.Services
                     PhoneNo = s.PhoneNo,
                     Email = s.Email,
                     IsActive = s.IsActive
-                }).ToList()
+                }).ToList(),
+                GlAccounts = glAccounts
             };
 
             return viewModel;
         }
 
+        public async Task<List<GlAccountDTO>> GetGlAccountsForDropdownAsync(string companyCode)
+        {
+            var glAccounts = await _context.GlSetup
+                .Where(g => g.CompanyCode == companyCode && g.Status == true)
+                .OrderBy(g => g.Glaccname)
+                .Select(g => new GlAccountDTO
+                {
+                    GlId = g.GlId,
+                    Glcode = g.Glcode,
+                    Glaccname = g.Glaccname,
+                    AccNo = g.AccNo,
+                    Glacctype = g.Glacctype,
+                    GlAccMainGroup = g.GlAccMainGroup,
+                    CurrentBal = g.CurrentBal
+                })
+                .ToListAsync();
+
+            return glAccounts;
+        }
+
+        public async Task<GlAccountDTO> GetGlAccountByCodeAsync(string glAccountNo, string companyCode)
+        {
+            var glAccount = await _context.GlSetup
+                .Where(g => g.AccNo == glAccountNo && g.CompanyCode == companyCode && g.Status == true)
+                .Select(g => new GlAccountDTO
+                {
+                    GlId = g.GlId,
+                    Glcode = g.Glcode,
+                    Glaccname = g.Glaccname,
+                    AccNo = g.AccNo,
+                    Glacctype = g.Glacctype,
+                    GlAccMainGroup = g.GlAccMainGroup,
+                    CurrentBal = g.CurrentBal
+                })
+                .FirstOrDefaultAsync();
+
+            return glAccount;
+        }
+
         #region Helper Methods
+
+        private void UpdateInvoiceStatus(InvoiceReceive invoice)
+        {
+            // Update Payment Status
+            if (invoice.AmountPaid.HasValue && invoice.AmountPaid.Value > 0)
+            {
+                if (invoice.AmountPaid.Value >= invoice.TotalAmount)
+                {
+                    invoice.PaymentStatus = "Paid";
+                    invoice.Status = "Paid";
+                }
+                else
+                {
+                    invoice.PaymentStatus = "Partially Paid";
+                    invoice.Status = "Partially Paid";
+                }
+            }
+            else
+            {
+                invoice.PaymentStatus = "Unpaid";
+                // Check if overdue
+                if (invoice.DueDate.HasValue && invoice.DueDate.Value < DateTime.Now)
+                {
+                    invoice.Status = "Overdue";
+                }
+                else
+                {
+                    invoice.Status = "Pending";
+                }
+            }
+
+            // If paid or partially paid but overdue, keep status as paid/partially paid
+            if (invoice.Status != "Paid" && invoice.Status != "Partially Paid")
+            {
+                if (invoice.DueDate.HasValue && invoice.DueDate.Value < DateTime.Now && invoice.Balance > 0)
+                {
+                    invoice.Status = "Overdue";
+                }
+            }
+        }
 
         private InvoiceReceiveResponseDTO MapToResponseDTO(InvoiceReceive invoice)
         {
@@ -503,6 +662,7 @@ namespace SACCOBlockChainSystem.Services
                 InvoiceAmount = invoice.InvoiceAmount,
                 AmountPaid = invoice.AmountPaid,
                 Balance = invoice.Balance,
+                TaxPercentage = invoice.TaxPercentage,
                 TaxAmount = invoice.TaxAmount,
                 DiscountAmount = invoice.DiscountAmount,
                 InvoiceDate = invoice.InvoiceDate,
@@ -516,7 +676,7 @@ namespace SACCOBlockChainSystem.Services
                 Status = invoice.Status,
                 PaymentStatus = invoice.PaymentStatus,
                 TotalAmount = invoice.TotalAmount,
-                Remarks = invoice.Remarks,
+                ReceiptNo = invoice.ReceiptNo,
                 BlockchainTxId = invoice.BlockchainTxId,
                 CreatedBy = invoice.AuditId,
                 CreatedDate = invoice.AuditTime?.ToString("dd/MM/yyyy HH:mm"),

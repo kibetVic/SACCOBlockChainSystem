@@ -1,5 +1,5 @@
 ﻿@using System.Security.Claims
-@using Radzen.Blazor
+@* @using Radzen.Blazor *@
 
 @{
     // ============================================================
@@ -20,14 +20,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/AdminLte/dist/assets/img/Easyblock.png" />
-    <title>@ViewData["Title"] - EasySacco </title>
+    <title>@ViewData["Title"] - EasySacco MIS </title>
     <link href="~/Syncfusion/styles/material.css" rel="stylesheet" />
     <script src="~/Syncfusion/scripts/ej2.min.js"></script>
     <link rel="stylesheet" href="~/AdminLte/dist/css/adminlte.css" />
     <!-- Radzen CSS - Make sure these come after Bootstrap -->
-    <link rel="stylesheet" href="/blazorcss/material-base.css" />
+    @* <link rel="stylesheet" href="/blazorcss/material-base.css" />
     <link rel="stylesheet" href="/blazorcss/standard-base.css" />
-    <link rel="stylesheet" href="/blazorcss/standard.css" />
+    <link rel="stylesheet" href="/blazorcss/standard.css" /> *@
     <link href="~/css/member.css" rel="stylesheet" />
 
     <!-- Chart.js -->
@@ -53,7 +53,7 @@
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.11.0/styles/overlayscrollbars.min.css"
           crossorigin="anonymous" />
-    <!--end::Third Party Plugin(OverlayScrollbars)-->
+    <!--end::Third Party Plugin(OverlayScrollbars
     <!--begin::Third Party Plugin(Bootstrap Icons)-->
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css"
@@ -88,8 +88,8 @@ input:invalid:focus {
             border-radius: 5px;
         }
     </style>
-    <base href="~/" />
-    <component type="typeof(RadzenTheme)" render-mode="ServerPrerendered" param-Theme="@("material")" />
+    @* <base href="~/" />
+    <component type="typeof(RadzenTheme)" render-mode="ServerPrerendered" param-Theme="@("material")" /> *@
 
     @RenderSection("Styles", required: false)
 
@@ -111,7 +111,7 @@ input:invalid:focus {
 
                     <li class="nav-item">
                         @using System.Security.Claims
-                        @using Radzen.Blazor
+                        @* @using Radzen.Blazor *@
 
                         @if (User.Identity.IsAuthenticated)
                         {
@@ -412,14 +412,7 @@ input:invalid:focus {
                                             <i class="bi bi-gear me-2"></i>
                                             <span>Eneble SMS</span>
                                         </a>
-                                    </li>
-
-                                    <li class="nav-item">
-                                        <a class="nav-link" asp-controller="CIGs" asp-action="Index">
-                                            <i class="bi bi-people-fill me-2"></i>
-                                            <p>CIG</p>
-                                        </a>
-                                    </li>
+                                    </li>                                    
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="Location" asp-action="Counties">
@@ -548,12 +541,12 @@ input:invalid:focus {
                                             <p>Wallets</p>
                                         </a>
                                     </li>
-                                    @* <li class="nav-item">
-                                        <a asp-controller="Migration" asp-action="Index" class="nav-link">
-                                            <i class="nav-icon bi bi-person-lines-fill"></i>
-                                            <p>Migration Dashboard</p>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="CIGs" asp-action="Index">
+                                            <i class="bi bi-people-fill me-2"></i>
+                                            <p>VMG / CIG</p>
                                         </a>
-                                    </li> *@
+                                    </li>
 
                                     <li class="nav-item">
                                         <a asp-controller="NextOfKeen" asp-action="Index" class="nav-link">
@@ -578,7 +571,7 @@ input:invalid:focus {
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="Agent" asp-action="Index">
-                                            <i class="nav-icon bi bi-people"></i>Recruit Agents
+                                            <i class="nav-icon bi bi-people"></i>Recruit Agents/Staffs
                                         </a>
                                     </li>
 
@@ -677,6 +670,13 @@ input:invalid:focus {
                                                 </li>
                                             }
 
+                                            <li class="nav-item">
+                                                <a class="nav-link" asp-controller="LoanMvc" asp-action="Schedule">
+                                                    <i class="nav-icon bi bi-calculator-fill"></i>
+                                                    <p>Loan Repayment Schedule</p>
+                                                </a>
+                                            </li>
+
                                         <li class="nav-item">
                                             <a asp-controller="LoanCalculator" asp-action="Index" class="nav-link">
                                                 <i class="nav-icon bi bi-calculator-fill"></i>
@@ -737,11 +737,11 @@ input:invalid:focus {
                                        </a>
                                     </li>
 
-                                    <li class="nav-item">
+                                    @* <li class="nav-item">
                                         <a class="nav-link" asp-controller="ContributionMvc" asp-action="Multiple">
                                             <i class="nav-icon bi bi-collection-fill"></i>Post Multiple Shares
                                         </a>
-                                    </li>
+                                    </li> *@
 
                                     @if (User.IsInRole("System Administrator") || User.IsInRole("Super Admin") || User.IsInRole("Finance Officer") || User.IsInRole("Loan Officer"))
                                     {
@@ -834,14 +834,6 @@ input:invalid:focus {
                                         </a>
                                     </li>
 
-                                    @* <!-- Member Details (Direct Search) -->
-                                    <li class="nav-item">
-                                        <a asp-controller="Inquiry" asp-action="MemberDetails" asp-route-memberNo="" class="nav-link" onclick="return promptMemberNo(this.href)">
-                                            <i class="nav-icon bi bi-person-badge"></i>
-                                            <p>Member Details</p>
-                                        </a>
-                                    </li> *@
-
                                     <!-- Share Variations -->
                                     <li class="nav-item">
                                         <a asp-controller="Inquiry" asp-action="ShareInquiry" class="nav-link">
@@ -881,13 +873,6 @@ input:invalid:focus {
                                         </a>
                                     </li>
 
-                                    @* <li class="nav-item">
-                                    <a asp-controller="Varification" asp-action="Index" class="nav-link">
-                                        <i class="nav-icon bi bi-search"></i>
-                                        <p>Varify transaction</p>
-                                    </a>
-                                </li> *@
-
                                     <li class="nav-item">
                                         <a asp-controller="Reports" asp-action="Index" class="nav-link">
                                             <i class="nav-icon bi bi-file-earmark-bar-graph"></i>
@@ -912,7 +897,7 @@ input:invalid:focus {
                                     <li class="nav-item">
                                         <a asp-controller="InvoicePayment" asp-action="Index" class="nav-link">
                                             <i class="nav-icon bi bi-credit-card-2-front"></i>
-                                            <p>Payments</p>
+                                            <p>Invoice Payment</p>
                                         </a>
                                     </li>
 
@@ -1028,10 +1013,17 @@ input:invalid:focus {
                                             <p>Loans Issued Per Product</p>
                                         </a>
                                     </li>
+
                                     <li class="nav-item">
-                                        <a asp-controller="GIGReport" asp-action="Index" class="nav-link">
-                                            <i class="nav-icon bi bi-x-circle"></i>
-                                            <p>CIGs/VMGS Reports</p>
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="CompletedLoansReport">
+                                            <i class="nav-icon bi bi-check-circle"></i>
+                                            <p>Completed Loans</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="LoanReport" asp-action="ActiveLoansReport">
+                                            <i class="nav-icon bi bi-clock-history"></i>
+                                            <p>Active Loans</p>
                                         </a>
                                     </li>
                                     <li class="nav-item">
@@ -1081,6 +1073,13 @@ input:invalid:focus {
                                         <a asp-controller="GIGReport" asp-action="Index" class="nav-link">
                                             <i class="nav-icon bi bi-people-fill"></i>
                                             <p>CIG Per Sacco</p>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a asp-controller="GIGReport" asp-action="MembersPerCIG" class="nav-link">
+                                            <i class="nav-icon bi bi-people-fill"></i>
+                                            <p>Mambers per CIGs/VMGS</p>
                                         </a>
                                     </li>
 
@@ -1217,6 +1216,18 @@ input:invalid:focus {
                                             <i class="bi bi-bar-chart-steps me-1"></i> Loan Types Performance
                                         </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="EmployeePayment" asp-action="PaymentReport">
+                                            <i class="nav-icon bi bi-cash-stack"></i>
+                                            <p>Employee Payment Report</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="SupplierPaymentReport" asp-action="SupplierPaymentSummary">
+                                            <i class="nav-icon bi bi-file-earmark-text"></i>
+                                            <p>Supplier Invoice Report</p>
+                                        </a>
+                                    </li>
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="AuditTrailReport" asp-action="Index">
@@ -1239,10 +1250,43 @@ input:invalid:focus {
                                         </p>
                                     </a>
                                     <ul class="nav nav-teeview ms-2 border-start border-primary border-opacity-25 ps-2">
+                                        <!-- 1. Shares & Loans Summary -->
                                         <li class="nav-item">
                                             <a asp-controller="MemberReport" asp-action="SharesLoansMember" class="nav-link">
                                                 <i class="nav-icon bi bi-pie-chart-fill"></i>
-                                                <p>Shares/Loans Report</p>
+                                                <p>Shares & Loans Summary</p>
+                                            </a>
+                                        </li>
+
+                                        <!-- 2. Share Contributions Statement -->
+                                        <li class="nav-item">
+                                            <a asp-controller="MemberReport" asp-action="ShareContributionsStatement" class="nav-link">
+                                                <i class="nav-icon bi bi-wallet2"></i>
+                                                <p>Share Contributions</p>
+                                            </a>
+                                        </li>
+
+                                        <!-- 3. Member Loans Report -->
+                                        <li class="nav-item">
+                                            <a asp-controller="MemberReport" asp-action="MemberLoansReport" class="nav-link">
+                                                <i class="nav-icon bi bi-bank"></i>
+                                                <p>My Loans</p>
+                                            </a>
+                                        </li>
+
+                                        <!-- 4. Loan Repayments Report -->
+                                        <li class="nav-item">
+                                            <a asp-controller="MemberReport" asp-action="LoanRepaymentsReport" class="nav-link">
+                                                <i class="nav-icon bi bi-clock-history"></i>
+                                                <p>Loan Repayments</p>
+                                            </a>
+                                        </li>
+
+                                        <!-- 5. Guarantor Loans Report -->
+                                        <li class="nav-item">
+                                            <a asp-controller="MemberReport" asp-action="GuarantorLoansReport" class="nav-link">
+                                                <i class="nav-icon bi bi-people-fill"></i>
+                                                <p>Guarantor Loans</p>
                                             </a>
                                         </li>
                                     </ul>
@@ -1342,7 +1386,7 @@ input:invalid:focus {
 
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" crossorigin="anonymous"></script>
     <script src="_framework/blazor.server.js"></script>
-    <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
+    @* <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script> *@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <script>

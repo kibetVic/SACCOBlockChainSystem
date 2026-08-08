@@ -18,18 +18,18 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly ICompanyService _companyService;
         private readonly ApplicationDbContext _context;
         private readonly ILogger<CompanyController> _logger;
-        private readonly IUserService _userService; // Add this
+        private readonly IUserService _userService;
 
         public CompanyController(
             ICompanyService companyService,
             ApplicationDbContext context,
             ILogger<CompanyController> logger,
-            IUserService userService) // Add this parameter
+            IUserService userService)
         {
             _companyService = companyService;
             _context = context;
             _logger = logger;
-            _userService = userService; // Initialize it
+            _userService = userService;
         }
 
         private async Task LoadDropdowns()
@@ -37,7 +37,6 @@ namespace SACCOBlockChainSystem.Controllers
             var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
             var currentUserCompanyCode = User.FindFirstValue("CompanyCode");
 
-            // Load User Groups - all groups for Super Admin, filtered for others
             if (currentUserRole == "Super Admin")
             {
                 ViewBag.UserGroups = await _userService.GetUserGroupsAsync();
@@ -45,7 +44,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
             else
             {
-                // Only show current user's company and relevant roles
                 var userCompany = await _context.Companies
                     .FirstOrDefaultAsync(c => c.CompanyCode == currentUserCompanyCode);
 
@@ -55,7 +53,6 @@ namespace SACCOBlockChainSystem.Controllers
                     : new List<object>();
             }
 
-            // Load other dropdowns (these can remain the same)
             ViewBag.SubCounties = await _context.SubCounties
                 .Where(s => s.Status == "Active")
                 .OrderBy(s => s.SubCountyName)
@@ -72,25 +69,20 @@ namespace SACCOBlockChainSystem.Controllers
         [Authorize]
         public async Task<IActionResult> Index(string search = null)
         {
-            // Get current user's role and company
             var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
             var currentUserCompanyCode = User.FindFirstValue("CompanyCode");
 
-            List<CompanyResponseDTO> companies;  // Changed from List<Company> to List<CompanyResponseDTO>
+            List<CompanyResponseDTO> companies;
 
-            // Super Admin sees ALL companies
             if (currentUserRole == "Super Admin")
             {
                 companies = await _companyService.GetAllCompaniesAsync(search);
             }
             else
             {
-                // Non-Super Admin sees ONLY their own company
                 var userCompany = await _companyService.GetCompanyByCodeAsync(currentUserCompanyCode);
-
                 companies = userCompany != null ? new List<CompanyResponseDTO> { userCompany } : new List<CompanyResponseDTO>();
 
-                // If there's a search term, filter the single company if it matches
                 if (!string.IsNullOrEmpty(search) && companies.Any())
                 {
                     companies = companies.Where(c =>
@@ -100,7 +92,6 @@ namespace SACCOBlockChainSystem.Controllers
                 }
             }
 
-            // Generate new company code for the form (only show for Super Admin)
             if (currentUserRole == "Super Admin")
             {
                 var newCompanyCode = await _companyService.GenerateCompanyCodeAsync();
@@ -108,14 +99,13 @@ namespace SACCOBlockChainSystem.Controllers
             }
             else
             {
-                ViewBag.NewCompanyCode = null; // Non-Super Admins cannot create companies
+                ViewBag.NewCompanyCode = null;
             }
 
             ViewBag.CurrentSearch = search;
             ViewBag.CurrentUserRole = currentUserRole;
             ViewBag.CurrentUserCompany = currentUserCompanyCode;
 
-            // Load dropdown data from database
             await LoadDropdowns();
 
             return View(companies);
@@ -127,18 +117,15 @@ namespace SACCOBlockChainSystem.Controllers
         {
             var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
 
-            // Only Super Admin can create companies
             if (currentUserRole != "Super Admin")
             {
                 TempData["ErrorMessage"] = "You don't have permission to create companies. Only Super Administrators can create companies.";
                 return RedirectToAction("Index");
             }
 
-            // Generate a new company code
             var newCompanyCode = await _companyService.GenerateCompanyCodeAsync();
             ViewBag.NewCompanyCode = newCompanyCode;
 
-            // Load dropdown data
             await LoadDropdowns();
 
             return View(new CompanyDTO());
@@ -150,29 +137,15 @@ namespace SACCOBlockChainSystem.Controllers
         {
             try
             {
-                // Debug: Log the raw request
                 _logger.LogInformation("=== CREATE COMPANY REQUEST ===");
 
-                // Check if companyDto is null
                 if (companyDto == null)
                 {
-                    _logger.LogWarning("companyDto is null - possible JSON deserialization issue");
-
-                    // Try to read the raw request body
-                    string rawBody = "";
-                    using (var reader = new StreamReader(Request.Body))
-                    {
-                        Request.Body.Position = 0;
-                        rawBody = await reader.ReadToEndAsync();
-                        _logger.LogInformation($"Raw request body: {rawBody}");
-                    }
-
                     return Json(new { success = false, message = "Invalid request data. Please check the form and try again." });
                 }
 
                 _logger.LogInformation($"Received company data: CompanyName={companyDto.CompanyName}, Email={companyDto.Email}");
 
-                // Validate required fields
                 var validationErrors = new System.Text.StringBuilder();
 
                 if (string.IsNullOrWhiteSpace(companyDto.CompanyName))
@@ -198,7 +171,6 @@ namespace SACCOBlockChainSystem.Controllers
                     return Json(new { success = false, message = validationErrors.ToString() });
                 }
 
-                // Auto-generate company code if not provided
                 if (string.IsNullOrEmpty(companyDto.CompanyCode))
                 {
                     companyDto.CompanyCode = await _companyService.GenerateCompanyCodeAsync();
@@ -214,10 +186,9 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpGet]
         [Authorize]
-        public async Task<IActionResult> Edit(int id, CompanyDTO model)
+        public async Task<IActionResult> Edit(int id)
         {
             var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
             var currentUserCompanyCode = User.FindFirstValue("CompanyCode");
@@ -230,75 +201,105 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("Index");
             }
 
-            // Check permission: Super Admin OR user from the same company
             if (currentUserRole != "Super Admin" && existingCompany.CompanyCode != currentUserCompanyCode)
             {
                 TempData["ErrorMessage"] = "You don't have permission to edit this company.";
                 return RedirectToAction("Index");
             }
 
-            if (!ModelState.IsValid)
-            {
-                await LoadDropdowns();
-                return View(model);
-            }
+            var locationIds = await GetLocationIds(existingCompany.County, existingCompany.SubCounty, existingCompany.Ward);
 
+            var companyWithIds = new
+            {
+                existingCompany.Id,
+                existingCompany.CompanyCode,
+                existingCompany.CompanyName,
+                existingCompany.Contactperson,
+                existingCompany.Telephone,
+                existingCompany.Email,
+                existingCompany.Address,
+                existingCompany.NoEmployees,
+                CSRegNO = existingCompany.CSRegNO ?? string.Empty,
+                County = existingCompany.County ?? string.Empty,
+                SubCounty = existingCompany.SubCounty ?? string.Empty,
+                Ward = existingCompany.Ward ?? string.Empty,
+                existingCompany.Village,
+                CountyId = locationIds.CountyId,
+                SubCountyId = locationIds.SubCountyId,
+                WardId = locationIds.WardId,
+                existingCompany.BusinessStatus
+            };
+
+            await LoadDropdowns();
+
+            return Json(new { success = true, company = companyWithIds });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize]
+        public async Task<IActionResult> Edit(int id, [FromBody] CompanyDTO model)
+        {
             try
             {
+                _logger.LogInformation($"=== EDIT COMPANY REQUEST: ID={id} ===");
+
+                if (model == null)
+                {
+                    return Json(new { success = false, message = "Invalid request data." });
+                }
+
+                var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
+                var currentUserCompanyCode = User.FindFirstValue("CompanyCode");
+
+                var existingCompany = await _companyService.GetCompanyByIdAsync(id);
+
+                if (existingCompany == null)
+                {
+                    return Json(new { success = false, message = "Company not found." });
+                }
+
+                if (currentUserRole != "Super Admin" && existingCompany.CompanyCode != currentUserCompanyCode)
+                {
+                    return Json(new { success = false, message = "You don't have permission to edit this company." });
+                }
+
+                var validationErrors = new System.Text.StringBuilder();
+
+                if (string.IsNullOrWhiteSpace(model.CompanyName))
+                    validationErrors.AppendLine("- Company Name is required");
+
+                if (string.IsNullOrWhiteSpace(model.Contactperson))
+                    validationErrors.AppendLine("- Contact Person is required");
+
+                if (string.IsNullOrWhiteSpace(model.Telephone))
+                    validationErrors.AppendLine("- Telephone Number is required");
+
+                if (string.IsNullOrWhiteSpace(model.Email))
+                    validationErrors.AppendLine("- Email Address is required");
+
+                if (string.IsNullOrWhiteSpace(model.Address))
+                    validationErrors.AppendLine("- Postal Address is required");
+
+                if (!model.NoEmployees.HasValue || model.NoEmployees.Value <= 0)
+                    validationErrors.AppendLine("- Number of Members is required");
+
+                if (validationErrors.Length > 0)
+                {
+                    return Json(new { success = false, message = validationErrors.ToString() });
+                }
+
+                model.CompanyCode = existingCompany.CompanyCode;
+
                 var result = await _companyService.UpdateCompanyAsync(id, model);
-                TempData["SuccessMessage"] = $"Company '{result.CompanyName}' updated successfully!";
-                return RedirectToAction("Index");
+                return Json(new { success = true, message = $"Company '{result.CompanyName}' updated successfully!", company = result });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating company");
-                ModelState.AddModelError(string.Empty, ex.Message);
-                await LoadDropdowns();
-                return View(model);
+                return Json(new { success = false, message = $"Error: {ex.Message}" });
             }
         }
-
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> Edit(int id, [FromBody] CompanyDTO companyDto)
-        //{
-        //    try
-        //    {
-        //        // Validate required fields
-        //        var validationErrors = new System.Text.StringBuilder();
-
-        //        if (string.IsNullOrWhiteSpace(companyDto.CompanyName))
-        //            validationErrors.AppendLine("- Company Name is required");
-
-        //        if (string.IsNullOrWhiteSpace(companyDto.Contactperson))
-        //            validationErrors.AppendLine("- Contact Person is required");
-
-        //        if (string.IsNullOrWhiteSpace(companyDto.Telephone))
-        //            validationErrors.AppendLine("- Telephone Number is required");
-
-        //        if (string.IsNullOrWhiteSpace(companyDto.Email))
-        //            validationErrors.AppendLine("- Email Address is required");
-
-        //        if (string.IsNullOrWhiteSpace(companyDto.Address))
-        //            validationErrors.AppendLine("- Postal Address is required");
-
-        //        if (!companyDto.NoEmployees.HasValue || companyDto.NoEmployees.Value <= 0)
-        //            validationErrors.AppendLine("- Number of Members is required");
-
-        //        if (validationErrors.Length > 0)
-        //        {
-        //            return Json(new { success = false, message = validationErrors.ToString() });
-        //        }
-
-        //        var result = await _companyService.UpdateCompanyAsync(id, companyDto);
-        //        return Json(new { success = true, message = "Company updated successfully", company = result });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error updating company");
-        //        return Json(new { success = false, message = ex.Message });
-        //    }
-        //}
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -326,13 +327,67 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     return Json(new { success = false, message = "Company not found" });
                 }
-                return Json(new { success = true, company });
+
+                var locationIds = await GetLocationIds(company.County, company.SubCounty, company.Ward);
+
+                var companyWithIds = new
+                {
+                    company.Id,
+                    company.CompanyCode,
+                    company.CompanyName,
+                    company.Contactperson,
+                    company.Telephone,
+                    company.Email,
+                    company.Address,
+                    company.NoEmployees,
+                    CSRegNO = company.CSRegNO ?? string.Empty,
+                    company.County,
+                    company.SubCounty,
+                    company.Ward,
+                    company.Village,
+                    CountyId = locationIds.CountyId,
+                    SubCountyId = locationIds.SubCountyId,
+                    WardId = locationIds.WardId,
+                    company.BusinessStatus
+                };
+
+                return Json(new { success = true, company = companyWithIds });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting company details");
                 return Json(new { success = false, message = ex.Message });
             }
+        }
+
+        private async Task<(int? CountyId, int? SubCountyId, int? WardId)> GetLocationIds(string countyName, string subCountyName, string wardName)
+        {
+            int? countyId = null;
+            int? subCountyId = null;
+            int? wardId = null;
+
+            if (!string.IsNullOrEmpty(countyName))
+            {
+                var county = await _context.Counties
+                    .FirstOrDefaultAsync(c => c.CountyName == countyName && c.Status == "Active");
+                countyId = county?.Id;
+            }
+
+            if (!string.IsNullOrEmpty(subCountyName))
+            {
+                var subCounty = await _context.SubCounties
+                    .FirstOrDefaultAsync(s => s.SubCountyName == subCountyName && s.Status == "Active");
+                subCountyId = subCounty?.Id;
+            }
+
+            if (!string.IsNullOrEmpty(wardName))
+            {
+                var ward = await _context.Wards
+                    .FirstOrDefaultAsync(w => w.WardName == wardName && w.Status == "Active");
+                wardId = ward?.Id;
+            }
+
+            return (countyId, subCountyId, wardId);
         }
 
         [HttpGet]
@@ -349,10 +404,6 @@ namespace SACCOBlockChainSystem.Controllers
                 return Json(new { success = false, message = ex.Message });
             }
         }
-
-        // =====================================================
-        // LOCATION API ENDPOINTS
-        // =====================================================
 
         [HttpGet]
         public async Task<IActionResult> GetCounties()

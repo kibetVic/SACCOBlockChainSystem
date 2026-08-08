@@ -1,0 +1,268 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.MemberGuarantorLoansViewModel
+
+@{
+    ViewData["Title"] = "Guarantor Loans Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var companyName = ViewBag.CompanyName ?? "";
+}
+
+<style>
+    .status-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .status-active {
+        background-color: #28a745;
+        color: white;
+    }
+
+    .status-overdue {
+        background-color: #dc3545;
+        color: white;
+    }
+
+    .status-closed {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .summary-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 15px;
+    }
+
+        .summary-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .summary-card .label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .summary-card.green {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+        .summary-card.orange {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        }
+
+        .summary-card.blue {
+            background: linear-gradient(135deg, #17a2b8 0%, #0dcaf0 100%);
+        }
+
+    .no-print {
+        display: block;
+    }
+
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-3 no-print">
+        <div class="col-md-8">
+            <h2 style="color: #3f2b96;">
+                <i class="bi bi-handshake"></i> Guarantor Loans Report
+            </h2>
+            <p class="text-muted">
+                <strong>@Model.MemberName</strong> (@Model.MemberNo)
+                @if (!string.IsNullOrEmpty(Model.MemberPhone))
+                {
+                    <span>| Phone: @Model.MemberPhone</span>
+                }
+            </p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="@Url.Action("Index", "Home")" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+            @if (Model.HasData)
+            {
+                <button type="button" class="btn btn-danger ms-2" onclick="exportToPdf()">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Hidden form for PDF export -->
+    <form id="pdfExportForm" action="@Url.Action("ExportGuarantorLoansReportToPdf")" method="post" target="_blank">
+        @Html.AntiForgeryToken()
+    </form>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="number">@Model.TotalGuaranteedLoans</div>
+                <div class="label">Total Guarantees</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card green">
+                <div class="number">@Model.ActiveGuarantees</div>
+                <div class="label">Active Guarantees</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card orange">
+                <div class="number">@Model.TotalGuaranteeAmount.ToString("N0")</div>
+                <div class="label">Total Guarantee Amount</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card" style="background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);">
+                <div class="number">@Model.TotalRemainingGuarantee.ToString("N0")</div>
+                <div class="label">Remaining Guarantee</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Guaranteed Loans Table -->
+    @if (Model.HasData)
+    {
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-ul"></i> Loans Guaranteed by @Model.MemberName
+                </h5>
+                <span class="badge bg-light text-dark float-end">@Model.TotalGuaranteedLoans loans</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="guarantorTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Loan No</th>
+                                <th>Loan Type</th>
+                                <th>Loanee</th>
+                                <th>Principal</th>
+                                <th>Outstanding</th>
+                                <th>Guarantee Amt</th>
+                                <th>Remaining</th>
+                                <th>App Date</th>
+                                <th>Expected Completion</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var loan in Model.GuaranteedLoans.Select((l, i) => new { l, Index = i + 1 }))
+                            {
+                                var rowClass = loan.l.IsOverdue ? "table-danger" : (loan.l.IsActive ? "" : "table-secondary");
+                                <tr class="@rowClass">
+                                    <td>@loan.Index</td>
+                                    <td>
+                                        <strong>@loan.l.LoanNo</strong>
+                                    </td>
+                                    <td>@loan.l.LoanType</td>
+                                    <td>
+                                        <strong>@loan.l.LoaneeName</strong>
+                                        <br />
+                                        <small class="text-muted">@loan.l.LoaneeMemberNo</small>
+                                        <br />
+                                        <small class="text-muted">Phone: @loan.l.LoaneePhone</small>
+                                    </td>
+                                    <td class="text-end">@loan.l.PrincipalAmount.ToString("N2")</td>
+                                    <td class="text-end text-danger">@loan.l.OutstandingBalance.ToString("N2")</td>
+                                    <td class="text-end">@loan.l.GuaranteeAmount.ToString("N2")</td>
+                                    <td class="text-end">@loan.l.RemainingGuarantee.ToString("N2")</td>
+                                    <td>@loan.l.ApplicationDate?.ToString("dd/MM/yyyy")</td>
+                                    <td>@(loan.l.ExpectedCompletionDate?.ToString("dd/MM/yyyy") ?? "N/A")</td>
+                                    <td>
+                                        @if (loan.l.IsOverdue)
+                                        {
+                                            <span class="status-badge status-overdue">
+                                                <i class="bi bi-exclamation-triangle"></i> Overdue
+                                            </span>
+                                            <br />
+                                            <small class="text-danger">@loan.l.DaysOverdue days</small>
+                                        }
+                                        else if (loan.l.IsActive)
+                                        {
+                                            <span class="status-badge status-active">
+                                                <i class="bi bi-check-circle"></i> Active
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="status-badge status-closed">@loan.l.LoanStatus</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-dark">
+                            <tr>
+                                <th colspan="6" class="text-end">Totals:</th>
+                                <th class="text-end">@Model.GuaranteedLoans.Sum(l => l.GuaranteeAmount).ToString("N2")</th>
+                                <th class="text-end">@Model.GuaranteedLoans.Sum(l => l.RemainingGuarantee).ToString("N2")</th>
+                                <th colspan="3"></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            You are not a guarantor for any active loans.
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            try {
+                if ($.fn.DataTable.isDataTable('#guarantorTable')) {
+                    $('#guarantorTable').DataTable().destroy();
+                }
+                $('#guarantorTable').DataTable({
+                    "order": [[8, "desc"]],
+                    "pageLength": 10,
+                    "responsive": true,
+                    "language": {
+                        "search": "Search:"
+                    },
+                    "columnDefs": [
+                        { "orderable": false, "targets": [0] }
+                    ]
+                });
+            } catch (e) {
+                console.log('DataTable initialization error:', e);
+            }
+        });
+
+        function exportToPdf() {
+            var btn = document.querySelector('.btn-danger');
+            if (btn) {
+                btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating PDF...';
+                btn.disabled = true;
+            }
+            document.getElementById('pdfExportForm').submit();
+            setTimeout(function() {
+                if (btn) {
+                    btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Export PDF';
+                    btn.disabled = false;
+                }
+            }, 5000);
+        }
+    </script>
+}

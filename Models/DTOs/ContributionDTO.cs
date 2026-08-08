@@ -59,10 +59,11 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public DateTime DepositedDate { get; set; }
         public DateTime ReceiptDate { get; set; }
         public string? PromptPayment { get; set; }
-        public string TransactionSignature { get; internal set; }
-        public string TransactionHash { get; internal set; }
-        public bool IsSignatureVerified { get; internal set; }
-        public string Status { get; internal set; }
+        public string TransactionSignature { get; set; }
+        public string TransactionHash { get; set; }
+        public bool IsSignatureVerified { get; set; }
+        public string Status { get; set; }
+        public string? PaymentMethod { get; set; }
     }
 
     public class ShareTypeDTO
@@ -206,5 +207,58 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string CompanyCode { get; set; } = string.Empty;
 
         public string? CreatedBy { get; set; }
+    }
+
+    // Bulk Contribution DTOs with Dates
+    public class BulkContributionRequestDTO
+    {
+        [Required]
+        public string MemberNo { get; set; } = null!;
+
+        [Required]
+        public string CompanyCode { get; set; } = null!;
+
+        [Required]
+        public List<BulkContributionItemDTO> Contributions { get; set; } = new();
+
+        public bool PrintReceipt { get; set; } = true;
+
+        public bool PromptPayment { get; set; } = false;
+
+        public string? CreatedBy { get; set; }
+    }
+
+    public class BulkContributionItemDTO
+    {
+        [Required]
+        public string SharesCode { get; set; } = null!;
+
+        [Required]
+        [Range(0.01, double.MaxValue)]
+        public decimal Amount { get; set; }
+
+        public string? PaymentMethod { get; set; } = "CASH";
+
+        public string? ReferenceNo { get; set; }
+
+        [Required]
+        public string Remarks { get; set; } = null!;
+
+        public DateTime? DepositedDate { get; set; }
+
+        public DateTime? TransactionDate { get; set; }
+
+        public DateTime? ReceiptDate { get; set; }
+    }
+
+    public class BulkContributionResponseDTO
+    {
+        public bool Success { get; set; }
+        public string? Message { get; set; }
+        public string? ReceiptNo { get; set; }
+        public int SavedCount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public List<string> Errors { get; set; } = new();
+        public List<ContributionResponseDTO> Contributions { get; set; } = new();
     }
 }

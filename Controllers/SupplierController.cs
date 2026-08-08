@@ -186,5 +186,44 @@ namespace SACCOBlockChainSystem.Controllers
                 return Json(new { success = false, message = ex.Message });
             }
         }
+
+        [HttpGet]
+        public async Task<IActionResult> GetGlAccounts()
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+                var glAccounts = await _supplierService.GetGlAccountsForDropdownAsync(companyCode);
+
+                return Json(new { success = true, glAccounts = glAccounts });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting GL accounts");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetGlAccountDetails(string glAccountNo)
+        {
+            try
+            {
+                var companyCode = _companyContextService.GetCurrentCompanyCode();
+                var glAccount = await _supplierService.GetGlAccountByCodeAsync(glAccountNo, companyCode);
+
+                if (glAccount == null)
+                {
+                    return Json(new { success = false, message = "GL Account not found" });
+                }
+
+                return Json(new { success = true, glAccount = glAccount });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting GL account details for: {glAccountNo}");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
     }
 }

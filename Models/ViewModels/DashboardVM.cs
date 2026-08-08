@@ -208,36 +208,30 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public string? CountyName { get; set; }
         public List<string> CountyCompanyCodes { get; set; } = new List<string>();
 
-        // ============================================================
-        // LOAN COUNT STATISTICS (Total Loans)
-        // ============================================================
-        public int TotalLoanCount { get; set; }         
-        public int WomenLoanCount { get; set; }         
-        public int MenLoanCount { get; set; }           
-        public int OthersLoanCount { get; set; }        
+        // Total Loans by Gender
+        public int TotalLoanCount { get; set; }
+        public int WomenLoanCount { get; set; }
+        public int MenLoanCount { get; set; }
+        public int OthersLoanCount { get; set; }
 
-        // ============================================================
-        // LOAN STATUS BREAKDOWN
-        // ============================================================
-        public int CompletedLoansCount { get; set; }     
-        public int UncompletedLoansCount { get; set; }  
-        public int OverdueLoansCount { get; set; }      
-        public int ActiveLoansCount { get; set; }       
-
-        // ============================================================
-        // LOAN STATUS BREAKDOWN BY GENDER
-        // ============================================================
+        // Completed Loans
+        public int CompletedLoansCount { get; set; }
         public int WomenCompletedLoans { get; set; }
         public int MenCompletedLoans { get; set; }
         public int OthersCompletedLoans { get; set; }
 
+        // Active Loans
+        public int ActiveLoansCount { get; set; }
         public int WomenActiveLoans { get; set; }
         public int MenActiveLoans { get; set; }
         public int OthersActiveLoans { get; set; }
 
+        // Overdue Loans
+        public int OverdueLoansCount { get; set; }
         public int WomenOverdueLoans { get; set; }
         public int MenOverdueLoans { get; set; }
-        public int OthersOverdueLoans { get; set; }
+        public int OthersOverdueLoans { get; set; }    
+        public int UncompletedLoansCount { get; set; }  
     }
 
     // Rest of your existing classes remain the same...

@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "Invoice Management";
     Layout = "~/Views/Shared/_Layout.cshtml";
-    var companyName = ViewBag.CompanyName as string ?? "JUHUDI SACCO";
+    var companyName = ViewBag.CompanyName as string ?? "AMTECH SACCO";
 }
 
 <div class="container-fluid">
@@ -62,18 +62,50 @@
 
                         <!-- Amount Row -->
                         <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label class="required">Invoice Amount (KES) *</label>
-                                <input type="number" id="InvoiceAmount" class="form-control" step="0.01" min="0.01" />
+                            <div class="col-md-3">
+                                <label class="required">Invoice Amount *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input type="number" id="InvoiceAmount" class="form-control" step="0.01" min="0.01" />
+                                </div>
                                 <span id="amountError" class="text-danger"></span>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
+                                <label>Tax (%)</label>
+                                <input type="number" id="TaxPercentage" class="form-control" step="0.01" min="0" max="100" placeholder="e.g., 16" />
+                            </div>
+                            <div class="col-md-3">
                                 <label>Tax Amount (KES)</label>
-                                <input type="number" id="TaxAmount" class="form-control" step="0.01" min="0" />
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input type="number" id="TaxAmount" class="form-control" step="0.01" min="0" readonly style="background-color: #e9ecef;" />
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Discount (KES)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input type="number" id="DiscountAmount" class="form-control" step="0.01" min="0" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Total Amount Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Total Amount (KES)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input type="number" id="TotalAmount" class="form-control" step="0.01" readonly style="background-color: #e9ecef; font-weight: bold;" />
+                                </div>
                             </div>
                             <div class="col-md-4">
-                                <label>Discount Amount (KES)</label>
-                                <input type="number" id="DiscountAmount" class="form-control" step="0.01" min="0" />
+                                <label>Receipt No</label>
+                                <input type="text" id="ReceiptNo" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Status</label>
+                                <input type="text" id="StatusDisplay" class="form-control" readonly style="background-color: #e9ecef;" />
                             </div>
                         </div>
 
@@ -96,12 +128,24 @@
                         <!-- GL Account Row -->
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <label>GL Account No</label>
-                                <input type="text" id="GlAccountNo" class="form-control" />
+                                <label>GL Account</label>
+                                <select id="GlAccountNo" class="form-control">
+                                    <option value="">-- Select GL Account --</option>
+                                    @if (Model.GlAccounts != null && Model.GlAccounts.Any())
+                                    {
+                                        foreach (var gl in Model.GlAccounts)
+                                        {
+                                            <option value="@gl.AccNo" data-glname="@gl.Glaccname">
+                                                @gl.DisplayName
+                                            </option>
+                                        }
+                                    }
+                                </select>
+                                <span id="glAccountError" class="text-danger"></span>
                             </div>
                             <div class="col-md-6">
                                 <label>GL Account Name</label>
-                                <input type="text" id="GlAccountName" class="form-control" />
+                                <input type="text" id="GlAccountName" class="form-control" readonly />
                             </div>
                         </div>
 
@@ -118,32 +162,38 @@
                     <div class="col-md-4">
                         <div class="card bg-light mb-3">
                             <div class="card-header bg-secondary text-white">
-                                <h6 class="mb-0"><i class="fas fa-check-square"></i> Invoice Settings</h6>
+                                <h6 class="mb-0"><i class="fas fa-check-square"></i> Invoice Status</h6>
                             </div>
                             <div class="card-body">
                                 <div class="mb-3">
-                                    <label>Status</label>
-                                    <select id="Status" class="form-control">
-                                        <option value="Pending">Pending</option>
-                                        <option value="Partially Paid">Partially Paid</option>
-                                        <option value="Paid">Paid</option>
-                                        <option value="Overdue">Overdue</option>
-                                        <option value="Cancelled">Cancelled</option>
-                                    </select>
-                                </div>
-
-                                <div class="mb-3">
                                     <label>Payment Status</label>
-                                    <select id="PaymentStatus" class="form-control">
-                                        <option value="Unpaid">Unpaid</option>
-                                        <option value="Partially Paid">Partially Paid</option>
-                                        <option value="Paid">Paid</option>
-                                    </select>
+                                    <input type="text" id="PaymentStatus" class="form-control" readonly style="background-color: #e9ecef;" />
                                 </div>
 
                                 <div class="mb-3">
-                                    <label>Remarks</label>
-                                    <textarea id="Remarks" class="form-control" rows="2"></textarea>
+                                    <label>Amount Paid</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">KES</span>
+                                        <input type="number" id="AmountPaid" class="form-control" step="0.01" min="0" readonly style="background-color: #e9ecef;" />
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Balance</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">KES</span>
+                                        <input type="number" id="Balance" class="form-control" step="0.01" readonly style="background-color: #e9ecef; font-weight: bold;" />
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Created By</label>
+                                    <input type="text" id="CreatedBy" class="form-control" readonly style="background-color: #e9ecef;" />
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Created Date</label>
+                                    <input type="text" id="CreatedDate" class="form-control" readonly style="background-color: #e9ecef;" />
                                 </div>
                             </div>
                         </div>
@@ -212,12 +262,14 @@
                             <th>Invoice No</th>
                             <th>Supplier</th>
                             <th class="text-end">Amount</th>
+                            <th class="text-end">Tax</th>
+                            <th class="text-end">Discount</th>
+                            <th class="text-end">Total</th>
                             <th class="text-end">Paid</th>
                             <th class="text-end">Balance</th>
                             <th>Status</th>
-                            <th>Payment Status</th>
+                            <th>Payment</th>
                             <th>Due Date</th>
-                            <th>Blockchain</th>
                             <th style="width: 100px;">Action</th>
                         </tr>
                     </thead>
@@ -231,15 +283,20 @@
                             invoice.Status == "Partially Paid" ? "bg-warning" :
                             invoice.Status == "Overdue" ? "bg-danger" : "bg-secondary";
 
+                            var paymentStatusClass = invoice.PaymentStatus == "Paid" ? "bg-success" :
+                            invoice.PaymentStatus == "Partially Paid" ? "bg-warning" : "bg-secondary";
+
                             <tr data-id="@invoice.Id"
                                 data-invoiceno="@invoice.InvoiceNo"
                                 data-suppliercode="@invoice.SupplierCode"
                                 data-suppliername="@invoice.SupplierName"
                                 data-invoiceamount="@invoice.InvoiceAmount"
-                                data-amountpaid="@invoice.AmountPaid"
-                                data-balance="@invoice.Balance"
+                                data-taxpercentage="@invoice.TaxPercentage"
                                 data-taxamount="@invoice.TaxAmount"
                                 data-discountamount="@invoice.DiscountAmount"
+                                data-totalamount="@invoice.TotalAmount"
+                                data-amountpaid="@invoice.AmountPaid"
+                                data-balance="@invoice.Balance"
                                 data-invoicedate="@invoice.InvoiceDate?.ToString("yyyy-MM-dd")"
                                 data-duedate="@invoice.DueDate?.ToString("yyyy-MM-dd")"
                                 data-receiveddate="@invoice.ReceivedDate?.ToString("yyyy-MM-dd")"
@@ -249,7 +306,9 @@
                                 data-glaccountname="@invoice.GlAccountName"
                                 data-status="@invoice.Status"
                                 data-paymentstatus="@invoice.PaymentStatus"
-                                data-remarks="@invoice.Remarks">
+                                data-receiptno="@invoice.ReceiptNo"
+                                data-createdby="@invoice.CreatedBy"
+                                data-createddate="@invoice.CreatedDate">
                                 <td class="row-number">@counter</td>
                                 <td>
                                     <strong>@invoice.InvoiceNo</strong>
@@ -261,28 +320,19 @@
                                     }
                                 </td>
                                 <td class="supplier-name">@invoice.SupplierName</td>
-                                <td class="text-end fw-bold">KES @invoice.InvoiceAmount.ToString("N0")</td>
+                                <td class="text-end">KES @invoice.InvoiceAmount.ToString("N0")</td>
+                                <td class="text-end">@(invoice.TaxPercentage?.ToString("0.##") ?? "0")%<br /><small>KES @(invoice.TaxAmount?.ToString("N0") ?? "0")</small></td>
+                                <td class="text-end">KES @(invoice.DiscountAmount?.ToString("N0") ?? "0")</td>
+                                <td class="text-end fw-bold">KES @(invoice.TotalAmount?.ToString("N0") ?? "0")</td>
                                 <td class="text-end">KES @(invoice.AmountPaid?.ToString("N0") ?? "0")</td>
                                 <td class="text-end fw-bold @(invoice.Balance > 0 ? "text-danger" : "text-success")">KES @(invoice.Balance?.ToString("N0") ?? "0")</td>
                                 <td>
                                     <span class="badge @statusClass status-badge">@invoice.Status</span>
                                 </td>
-                                <td>@invoice.PaymentStatus</td>
-                                <td>@(invoice.DueDate?.ToString("dd/MM/yyyy") ?? "N/A")</td>
-                                <td class="text-center">
-                                    @if (!string.IsNullOrEmpty(invoice.BlockchainTxId))
-                                    {
-                                        <span class="badge bg-success" title="Verified">
-                                            <i class="fas fa-link"></i>
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-secondary" title="Not Verified">
-                                            <i class="fas fa-unlink"></i>
-                                        </span>
-                                    }
+                                <td>
+                                    <span class="badge @paymentStatusClass">@invoice.PaymentStatus</span>
                                 </td>
+                                <td>@(invoice.DueDate?.ToString("dd/MM/yyyy") ?? "N/A")</td>
                                 <td>
                                     <button type="button" class="btn btn-sm btn-info select-btn w-100" data-id="@invoice.Id">
                                         <i class="fas fa-edit"></i> Select
@@ -294,7 +344,7 @@
                         @if (!Model.Invoices.Any())
                         {
                             <tr id="noInvoicesRow">
-                                <td colspan="11" class="text-center text-muted py-4">
+                                <td colspan="14" class="text-center text-muted py-4">
                                     <i class="fas fa-info-circle"></i> No invoices found. Click "New" to create one.
                                 </td>
                             </tr>
@@ -417,6 +467,15 @@
     .gap-2 {
         gap: 0.5rem;
     }
+
+    .input-validation-error {
+        border-color: #dc3545 !important;
+        background-color: #fff0f0 !important;
+    }
+
+    .text-danger {
+        font-size: 0.875rem;
+    }
 </style>
 
 @section Scripts {
@@ -425,9 +484,22 @@
         let currentInvoiceId = null;
         let deleteInvoiceId = null;
         let deleteInvoiceName = null;
+        let isEditing = false;
 
         $(document).ready(function() {
             setDefaultDates();
+
+            // GL Account selection change - auto populate GL Account Name
+            $('#GlAccountNo').on('change', function() {
+                const selectedOption = $(this).find('option:selected');
+                const glName = selectedOption.data('glname') || '';
+                $('#GlAccountName').val(glName);
+            });
+
+            // Calculate tax and total on amount or tax percentage change
+            $('#InvoiceAmount, #TaxPercentage, #DiscountAmount').on('input', function() {
+                calculateTotals();
+            });
 
             $('#invoiceSearchInput').on('keyup', performSearch);
             $('#statusFilter').on('change', performSearch);
@@ -448,14 +520,6 @@
             $('#btnNew').on('click', resetForm);
             $('#confirmDeleteBtn').on('click', confirmDelete);
 
-            // Auto-calculate balance
-            $('#InvoiceAmount, #AmountPaid').on('input', function() {
-                const amount = parseFloat($('#InvoiceAmount').val()) || 0;
-                const paid = parseFloat($('#AmountPaid').val()) || 0;
-                const balance = amount - paid;
-                $('#Balance').val(balance > 0 ? balance.toFixed(2) : '0.00');
-            });
-
             $(document).on('click', '.select-btn', function() {
                 const id = $(this).data('id');
                 if (id) {
@@ -463,6 +527,26 @@
                 }
             });
         });
+
+        function calculateTotals() {
+            const amount = parseFloat($('#InvoiceAmount').val()) || 0;
+            const taxPercentage = parseFloat($('#TaxPercentage').val()) || 0;
+            const discount = parseFloat($('#DiscountAmount').val()) || 0;
+
+            // Calculate tax amount
+            const taxAmount = (amount * taxPercentage) / 100;
+            $('#TaxAmount').val(taxAmount.toFixed(2));
+
+            // Calculate total
+            const total = amount + taxAmount - discount;
+            $('#TotalAmount').val(total.toFixed(2));
+
+            // If not editing, update balance
+            if (!isEditing) {
+                const balance = total;
+                $('#Balance').val(balance.toFixed(2));
+            }
+        }
 
         function setDefaultDates() {
             const today = new Date().toISOString().split('T')[0];
@@ -485,23 +569,37 @@
                     if (response.success && response.invoice) {
                         const inv = response.invoice;
                         currentInvoiceId = inv.id;
+                        isEditing = true;
 
                         $('#InvoiceId').val(inv.id);
                         $('#InvoiceNo').val(inv.invoiceNo).prop('readonly', true);
                         $('#SupplierCode').val(inv.supplierCode);
                         $('#InvoiceAmount').val(inv.invoiceAmount);
+                        $('#TaxPercentage').val(inv.taxPercentage || 0);
                         $('#TaxAmount').val(inv.taxAmount || 0);
                         $('#DiscountAmount').val(inv.discountAmount || 0);
+                        $('#TotalAmount').val(inv.totalAmount || 0);
                         $('#InvoiceDate').val(inv.invoiceDate);
                         $('#DueDate').val(inv.dueDate);
                         $('#ReceivedDate').val(inv.receivedDate);
                         $('#Description').val(inv.description || '');
                         $('#PurchaseOrderNo').val(inv.purchaseOrderNo || '');
-                        $('#GlAccountNo').val(inv.glAccountNo || '');
-                        $('#GlAccountName').val(inv.glAccountName || '');
-                        $('#Status').val(inv.status);
-                        $('#PaymentStatus').val(inv.paymentStatus);
-                        $('#Remarks').val(inv.remarks || '');
+                        $('#ReceiptNo').val(inv.receiptNo || '');
+                        $('#StatusDisplay').val(inv.status || 'Pending');
+                        $('#PaymentStatus').val(inv.paymentStatus || 'Unpaid');
+                        $('#AmountPaid').val(inv.amountPaid || 0);
+                        $('#Balance').val(inv.balance || 0);
+                        $('#CreatedBy').val(inv.createdBy || '');
+                        $('#CreatedDate').val(inv.createdDate || '');
+
+                        // Set GL Account
+                        if (inv.glAccountNo) {
+                            $('#GlAccountNo').val(inv.glAccountNo);
+                            $('#GlAccountNo').trigger('change');
+                        } else {
+                            $('#GlAccountNo').val('');
+                            $('#GlAccountName').val('');
+                        }
 
                         $('#btnSave').hide();
                         $('#btnUpdate').show();
@@ -526,19 +624,26 @@
 
         function resetForm() {
             currentInvoiceId = null;
+            isEditing = false;
             $('#InvoiceId').val('');
             $('#InvoiceNo').val('').prop('readonly', false);
             $('#SupplierCode').val('');
             $('#InvoiceAmount').val('');
+            $('#TaxPercentage').val('');
             $('#TaxAmount').val('');
             $('#DiscountAmount').val('');
+            $('#TotalAmount').val('');
             $('#Description').val('');
             $('#PurchaseOrderNo').val('');
+            $('#ReceiptNo').val('');
+            $('#StatusDisplay').val('');
+            $('#PaymentStatus').val('');
+            $('#AmountPaid').val('');
+            $('#Balance').val('');
+            $('#CreatedBy').val('');
+            $('#CreatedDate').val('');
             $('#GlAccountNo').val('');
             $('#GlAccountName').val('');
-            $('#Status').val('Pending');
-            $('#PaymentStatus').val('Unpaid');
-            $('#Remarks').val('');
 
             setDefaultDates();
 
@@ -578,28 +683,41 @@
             return isValid;
         }
 
-        function saveInvoice() {
-            if (!validateInvoice()) return;
-            showLoading(true);
+        function getFormData() {
+            const totalAmount = parseFloat($('#TotalAmount').val()) || 0;
+            const balance = totalAmount - (parseFloat($('#AmountPaid').val()) || 0);
 
-            const formData = {
-                InvoiceNo: $('#InvoiceNo').val(),
+            return {
+                InvoiceNo: $('#InvoiceNo').val().trim(),
                 SupplierCode: $('#SupplierCode').val(),
-                InvoiceAmount: parseFloat($('#InvoiceAmount').val()),
+                InvoiceAmount: parseFloat($('#InvoiceAmount').val()) || 0,
+                TaxPercentage: parseFloat($('#TaxPercentage').val()) || 0,
                 TaxAmount: parseFloat($('#TaxAmount').val()) || 0,
                 DiscountAmount: parseFloat($('#DiscountAmount').val()) || 0,
+                TotalAmount: totalAmount,
                 InvoiceDate: $('#InvoiceDate').val(),
                 DueDate: $('#DueDate').val(),
                 ReceivedDate: $('#ReceivedDate').val(),
-                Description: $('#Description').val(),
-                PurchaseOrderNo: $('#PurchaseOrderNo').val(),
+                Description: $('#Description').val().trim(),
+                PurchaseOrderNo: $('#PurchaseOrderNo').val().trim(),
+                ReceiptNo: $('#ReceiptNo').val().trim(),
                 GlAccountNo: $('#GlAccountNo').val(),
-                GlAccountName: $('#GlAccountName').val(),
-                Status: $('#Status').val(),
-                PaymentStatus: $('#PaymentStatus').val(),
-                Remarks: $('#Remarks').val(),
-                CompanyCode: $('#CompanyCode').val()
+                GlAccountName: $('#GlAccountName').val().trim(),
+                CompanyCode: $('#CompanyCode').val(),
+                // These will be auto-calculated by the server
+                Status: null,
+                PaymentStatus: null,
+                AmountPaid: 0,
+                Balance: 0
             };
+        }
+
+        function saveInvoice() {
+            if (!validateInvoice()) return;
+
+            const formData = getFormData();
+
+            showLoading(true);
 
             $.ajax({
                 url: '/Invoice/Create',
@@ -636,27 +754,10 @@
                 return;
             }
 
-            showLoading(true);
+            const formData = getFormData();
+            formData.Id = currentInvoiceId;
 
-            const formData = {
-                Id: currentInvoiceId,
-                InvoiceNo: $('#InvoiceNo').val(),
-                SupplierCode: $('#SupplierCode').val(),
-                InvoiceAmount: parseFloat($('#InvoiceAmount').val()),
-                TaxAmount: parseFloat($('#TaxAmount').val()) || 0,
-                DiscountAmount: parseFloat($('#DiscountAmount').val()) || 0,
-                InvoiceDate: $('#InvoiceDate').val(),
-                DueDate: $('#DueDate').val(),
-                ReceivedDate: $('#ReceivedDate').val(),
-                Description: $('#Description').val(),
-                PurchaseOrderNo: $('#PurchaseOrderNo').val(),
-                GlAccountNo: $('#GlAccountNo').val(),
-                GlAccountName: $('#GlAccountName').val(),
-                Status: $('#Status').val(),
-                PaymentStatus: $('#PaymentStatus').val(),
-                Remarks: $('#Remarks').val(),
-                CompanyCode: $('#CompanyCode').val()
-            };
+            showLoading(true);
 
             $.ajax({
                 url: '/Invoice/Update',
@@ -736,7 +837,7 @@
                 if (row.attr('id') === 'noInvoicesRow') return;
 
                 const invoiceNo = row.find('td:eq(1)').text().toLowerCase();
-                const supplier = row.find('td.supplier-name').text().toLowerCase();
+                const supplier = row.find('.supplier-name').text().toLowerCase();
                 const status = row.data('status');
 
                 let matchesSearch = true;
@@ -800,16 +901,25 @@
         }
 
         function showNotification(message, type) {
+            const icon = type === 'error' ? 'exclamation-triangle' :
+                        type === 'success' ? 'check-circle' : 'info';
+            const alertClass = type === 'error' ? 'danger' : type;
+
             const alertDiv = $(`
-                <div class="alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed top-0 end-0 m-3"
-                     style="z-index: 9999; min-width: 300px;" role="alert">
-                    <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info'} me-2"></i>
+                <div class="alert alert-${alertClass} alert-dismissible fade show position-fixed top-0 end-0 m-3"
+                     style="z-index: 9999; min-width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" role="alert">
+                    <i class="fas fa-${icon} me-2"></i>
                     ${message}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             `);
             $('body').append(alertDiv);
-            setTimeout(() => alertDiv.fadeOut('slow', function() { $(this).remove(); }), 5000);
+
+            setTimeout(() => {
+                alertDiv.fadeOut('slow', function() {
+                    $(this).remove();
+                });
+            }, 5000);
         }
 
         function showLoading(show) {
@@ -818,6 +928,101 @@
             } else {
                 $('#loadingOverlay').fadeOut(200);
             }
+        }
+
+        function savePayment() {
+            if (!validatePayment()) return;
+            showLoading(true);
+
+            const formData = getFormData();
+
+            $.ajax({
+                url: '/InvoicePayment/Create',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+
+                        // Check if receipt URL is provided and open it
+                        if (response.receiptUrl) {
+                            // Open receipt in new window/tab
+                            var receiptWindow = window.open(response.receiptUrl, '_blank');
+                            if (!receiptWindow) {
+                                // If popup blocked, show message
+                                showNotification('Please allow popups to view receipt or click OK to continue', 'info');
+                            }
+                        }
+
+                        // Reload after a delay
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    let errorMsg = 'Error recording payment';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error');
+                }
+            });
+        }
+
+        function updatePayment() {
+            if (!validatePayment()) return;
+            if (!currentPaymentId) {
+                showNotification('Payment not selected. Please select a payment to update.', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            const formData = getFormData();
+            formData.Id = currentPaymentId;
+
+            $.ajax({
+                url: '/InvoicePayment/Update',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+
+                        // Check if receipt URL is provided and open it
+                        if (response.receiptUrl) {
+                            var receiptWindow = window.open(response.receiptUrl, '_blank');
+                            if (!receiptWindow) {
+                                showNotification('Please allow popups to view receipt', 'info');
+                            }
+                        }
+
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    let errorMsg = 'Error updating payment';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error');
+                }
+            });
         }
     </script>
 }

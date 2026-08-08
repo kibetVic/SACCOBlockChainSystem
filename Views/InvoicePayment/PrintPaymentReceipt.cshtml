@@ -1,0 +1,655 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.PaymentReceiptViewModel
+@{
+    Layout = null;
+    var companyName = Model.CompanyName ?? "AMTECH SACCO";
+    var companyAddress = Model.CompanyAddress ?? "P.O. Box 12345 - 00100, Nairobi, Kenya";
+    var amountInWords = NumberToWords(Model.Amount);
+
+    // Fix date display - use the payment date from the model
+    var displayDate = Model.PaymentDate.HasValue
+        ? Model.PaymentDate.Value.ToString("dd/MM/yyyy HH:mm")
+        : DateTime.Now.ToString("dd/MM/yyyy HH:mm");
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Payment Receipt</title>
+    <style>
+        @@page {
+            size: A5 portrait;
+            margin: 0.5cm;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            margin: 0;
+            padding: 10px;
+            background: white;
+            color: #333;
+        }
+
+        .receipt-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 3px double #333;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+            .header .company-name {
+                font-size: 18px;
+                font-weight: bold;
+                letter-spacing: 2px;
+                color: #1a237e;
+            }
+
+            .header .company-details {
+                font-size: 9px;
+                color: #666;
+                margin-top: 3px;
+            }
+
+            .header .receipt-title {
+                font-size: 16px;
+                font-weight: bold;
+                margin-top: 8px;
+                background: #1a237e;
+                color: white;
+                padding: 5px 20px;
+                display: inline-block;
+                border-radius: 3px;
+            }
+
+        .receipt-no {
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            margin: 8px 0;
+            padding: 8px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            border: 1px solid #90caf9;
+        }
+
+            .receipt-no .label {
+                color: #1565c0;
+            }
+
+        .payment-badge {
+            text-align: center;
+            margin: 5px 0;
+        }
+
+            .payment-badge .badge {
+                display: inline-block;
+                padding: 4px 20px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: bold;
+                color: white;
+            }
+
+            .payment-badge .badge-success {
+                background: #2e7d32;
+            }
+
+            .payment-badge .badge-warning {
+                background: #f57f17;
+            }
+
+            .payment-badge .badge-danger {
+                background: #c62828;
+            }
+
+            .payment-badge .badge-info {
+                background: #0d47a1;
+            }
+
+        .transaction-refs {
+            font-size: 9px;
+            text-align: center;
+            color: #555;
+            margin: 5px 0;
+            padding: 5px;
+            background: #f5f5f5;
+            border-radius: 3px;
+            word-break: break-all;
+            border: 1px dashed #ccc;
+        }
+
+        .date-time {
+            text-align: center;
+            font-size: 11px;
+            color: #555;
+            margin: 5px 0 10px 0;
+            font-weight: bold;
+        }
+
+        .supplier-info {
+            background: #f5f5f5;
+            padding: 10px 12px;
+            margin: 10px 0;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 11px;
+        }
+
+            .supplier-info .row {
+                display: flex;
+                padding: 2px 0;
+            }
+
+            .supplier-info .label {
+                font-weight: bold;
+                color: #333;
+                width: 120px;
+                min-width: 120px;
+            }
+
+            .supplier-info .value {
+                color: #333;
+            }
+
+        .payment-details {
+            background: #e8f5e9;
+            padding: 10px 12px;
+            margin: 10px 0;
+            border: 1px solid #a5d6a7;
+            border-radius: 5px;
+        }
+
+            .payment-details .row {
+                display: flex;
+                padding: 3px 0;
+                border-bottom: 1px dashed #c8e6c9;
+            }
+
+                .payment-details .row:last-child {
+                    border-bottom: none;
+                }
+
+            .payment-details .label {
+                font-weight: bold;
+                width: 140px;
+                min-width: 140px;
+            }
+
+            .payment-details .value {
+                font-weight: bold;
+                color: #1a237e;
+            }
+
+            .payment-details .amount-large {
+                font-size: 18px;
+                color: #1a237e;
+            }
+
+        .amount-in-words {
+            background: #fff3e0;
+            padding: 8px 12px;
+            margin: 10px 0;
+            border: 1px solid #ffcc80;
+            border-radius: 5px;
+            font-size: 11px;
+            font-style: italic;
+            text-align: center;
+        }
+
+            .amount-in-words .label {
+                font-weight: bold;
+                font-style: normal;
+            }
+
+        .blockchain-tx {
+            font-size: 8px;
+            word-break: break-all;
+            background: #fafafa;
+            padding: 8px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+            font-family: monospace;
+        }
+
+            .blockchain-tx .label {
+                font-weight: bold;
+                font-family: 'Courier New', Courier, monospace;
+            }
+
+        .footer {
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 3px double #333;
+            font-size: 9px;
+            color: #666;
+        }
+
+            .footer .thank-you {
+                font-size: 12px;
+                font-weight: bold;
+                color: #1a237e;
+                margin: 5px 0;
+            }
+
+        .print-button {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+            .print-button button {
+                padding: 10px 40px;
+                background: #1a237e;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                cursor: pointer;
+                font-weight: bold;
+            }
+
+                .print-button button:hover {
+                    background: #0d47a1;
+                }
+
+            .print-button .btn-close {
+                padding: 10px 30px;
+                background: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                cursor: pointer;
+                margin-left: 10px;
+            }
+
+                .print-button .btn-close:hover {
+                    background: #5a6268;
+                }
+
+            .print-button .btn-home {
+                padding: 10px 30px;
+                background: #28a745;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                cursor: pointer;
+                margin-left: 10px;
+            }
+
+                .print-button .btn-home:hover {
+                    background: #1e7e34;
+                }
+
+        .status-summary {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 8px 12px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            border: 1px solid #90caf9;
+        }
+
+            .status-summary .item {
+                text-align: center;
+            }
+
+            .status-summary .label {
+                font-size: 9px;
+                color: #555;
+            }
+
+            .status-summary .value {
+                font-size: 14px;
+                font-weight: bold;
+                color: #1a237e;
+            }
+
+        .divider {
+            border: none;
+            border-top: 1px dashed #ccc;
+            margin: 10px 0;
+        }
+
+        @@media print {
+            body {
+                padding: 0;
+                background: white;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .receipt-container {
+                border: none;
+                border-radius: 0;
+                padding: 15px;
+                box-shadow: none;
+            }
+
+                .receipt-container .header .company-name {
+                    font-size: 16px;
+                }
+
+            .receipt-no {
+                background: #e3f2fd !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .supplier-info {
+                background: #f5f5f5 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .payment-details {
+                background: #e8f5e9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .amount-in-words {
+                background: #fff3e0 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .header .receipt-title {
+                background: #1a237e !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .status-summary {
+                background: #e3f2fd !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .payment-badge .badge-success {
+                background: #2e7d32 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .payment-badge .badge-warning {
+                background: #f57f17 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .payment-badge .badge-danger {
+                background: #c62828 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .payment-badge .badge-info {
+                background: #0d47a1 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container" id="receipt">
+        <!-- Header -->
+        <div class="header">
+            <div class="company-name">@companyName</div>
+            <div class="company-details">@companyAddress</div>
+            <div class="company-details">Tel: @Model.CompanyPhone | Email: @Model.CompanyEmail</div>
+            <div class="receipt-title">PAYMENT RECEIPT</div>
+        </div>
+
+        <!-- Payment Status Badge -->
+        <div class="payment-badge">
+            @{
+                var statusClass = Model.PaymentStatus == "Paid" ? "badge-success" :
+                Model.PaymentStatus == "Partially Paid" ? "badge-warning" :
+                Model.PaymentStatus == "Overdue" ? "badge-danger" : "badge-info";
+            }
+            <span class="badge @statusClass">@(Model.PaymentStatus ?? "Confirmed")</span>
+        </div>
+
+        <!-- Receipt Number -->
+        <div class="receipt-no">
+            <span class="label">Receipt No:</span> @Model.ReceiptNo
+        </div>
+
+        <!-- Transaction References -->
+        <div class="transaction-refs">
+            <strong>Invoice No:</strong> @Model.InvoiceNo &nbsp;|&nbsp; <strong>Transaction Ref:</strong> @(Model.TransactionType ?? "PAYMENT")
+        </div>
+
+        <!-- Date - Fixed to show correct date -->
+        <div class="date-time">
+            Date:  @DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")
+        </div>
+
+        <!-- Supplier Information -->
+        <div class="supplier-info">
+            <div class="row">
+                <span class="label">Supplier Code:</span>
+                <span class="value">@Model.SupplierCode</span>
+            </div>
+            <div class="row">
+                <span class="label">Supplier Name:</span>
+                <span class="value">@Model.SupplierName</span>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.SupplierContact))
+            {
+                <div class="row">
+                    <span class="label">Contact Person:</span>
+                    <span class="value">@Model.SupplierContact</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.SupplierPhone))
+            {
+                <div class="row">
+                    <span class="label">Phone:</span>
+                    <span class="value">@Model.SupplierPhone</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.SupplierEmail))
+            {
+                <div class="row">
+                    <span class="label">Email:</span>
+                    <span class="value">@Model.SupplierEmail</span>
+                </div>
+            }
+        </div>
+
+        <!-- Payment Details -->
+        <div class="payment-details">
+            <div class="row">
+                <span class="label">Amount Paid:</span>
+                <span class="value amount-large">KES @Model.Amount.ToString("N0")</span>
+            </div>
+            <div class="row">
+                <span class="label">Opening Balance:</span>
+                <span class="value">KES @(Model.OpeningBalance?.ToString("N0") ?? "0")</span>
+            </div>
+            <div class="row">
+                <span class="label">Balance:</span>
+                <span class="value">KES @(Model.BalanceAfter?.ToString("N0") ?? "0")</span>
+            </div>
+            <div class="row">
+                <span class="label">Payment Method:</span>
+                <span class="value">@(Model.PaymentMethod ?? "Bank Transfer")</span>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.ChequeNo))
+            {
+                <div class="row">
+                    <span class="label">Cheque No:</span>
+                    <span class="value">@Model.ChequeNo</span>
+                </div>
+            }
+            <div class="row">
+                <span class="label">Transaction Type:</span>
+                <span class="value">@(Model.TransactionType ?? "Payment")</span>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.Particulars))
+            {
+                <div class="row">
+                    <span class="label">Particulars:</span>
+                    <span class="value">@Model.Particulars</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.Remarks))
+            {
+                <div class="row">
+                    <span class="label">Remarks:</span>
+                    <span class="value">@Model.Remarks</span>
+                </div>
+            }
+        </div>
+
+        <!-- Amount in Words -->
+        <div class="amount-in-words">
+            <span class="label">Amount in Words:</span> @amountInWords
+        </div>
+
+        <hr class="divider" />
+
+        <!-- Total Paid Summary -->
+        @if (Model.TotalPaid.HasValue)
+        {
+            <div style="text-align:center; margin:5px 0; font-size:11px;">
+                <strong>Total Paid to Date:</strong> KES @Model.TotalPaid.Value.ToString("N0")
+            </div>
+        }
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="thank-you">Thank you for your payment!</div>
+            <div>Processed By: @Model.CreatedBy</div>
+            <div>Printed At: @DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")</div>
+            <div style="margin-top:5px; font-size:8px; color:#999;">
+                This is a system generated receipt. Blockchain verified.
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Button -->
+    <div class="print-button no-print">
+        <button onclick="window.print()">
+            <i class="fas fa-print"></i> Print Receipt
+        </button>
+        <button class="btn-close" onclick="window.location.href='@Url.Action("Index", "InvoicePayment")'">
+            <i class="fas fa-times"></i> Close
+        </button>
+        <button class="btn-home" onclick="window.location.href='@Url.Action("Index", "InvoicePayment")'">
+            <i class="fas fa-home"></i> Home
+        </button>
+    </div>
+
+    <script>
+        // Auto-print if ViewBag.AutoPrint is true
+        @if (ViewBag.AutoPrint != null && ViewBag.AutoPrint == true)
+        {
+                <text>
+                window.onload = function() {
+                    setTimeout(function() {
+                        window.print();
+                    }, 1000);
+                };
+                </text>
+        }
+        else
+        {
+                <text>
+                window.onload = function() {
+                    // Just display the receipt, user can click print
+                };
+                </text>
+        }
+    </script>
+
+    @functions {
+        public string NumberToWords(decimal number)
+        {
+            if (number == 0)
+                return "Zero";
+
+            var wholePart = (int)Math.Floor(number);
+            var decimalPart = (int)Math.Round((number - wholePart) * 100);
+
+            var words = ConvertWholeNumberToWords(wholePart);
+
+            if (decimalPart > 0)
+            {
+                words += " and " + ConvertWholeNumberToWords(decimalPart) + " Cents";
+            }
+            else
+            {
+                words += " Shillings Only";
+            }
+
+            return words;
+        }
+
+        private string ConvertWholeNumberToWords(int number)
+        {
+            if (number == 0)
+                return "Zero";
+
+            var words = "";
+
+            if (number / 1000000 > 0)
+            {
+                words += ConvertWholeNumberToWords(number / 1000000) + " Million ";
+                number %= 1000000;
+            }
+
+            if (number / 1000 > 0)
+            {
+                words += ConvertWholeNumberToWords(number / 1000) + " Thousand ";
+                number %= 1000;
+            }
+
+            if (number / 100 > 0)
+            {
+                words += ConvertWholeNumberToWords(number / 100) + " Hundred ";
+                number %= 100;
+            }
+
+            if (number > 0)
+            {
+                if (words != "")
+                    words += "and ";
+
+                var unitsMap = new[] { "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen" };
+                var tensMap = new[] { "Zero", "Ten", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety" };
+
+                if (number < 20)
+                    words += unitsMap[number];
+                else
+                {
+                    words += tensMap[number / 10];
+                    if ((number % 10) > 0)
+                        words += "-" + unitsMap[number % 10];
+                }
+            }
+
+            return words.Trim();
+        }
+    }
+</body>
+</html>

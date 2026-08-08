@@ -32,6 +32,9 @@ namespace SACCOBlockChainSystem.Models
         [Column(TypeName = "money")]
         public decimal? Balance { get; set; }
 
+        // Tax Percentage (e.g., 16 for 16%)
+        public decimal? TaxPercentage { get; set; }
+
         [Column(TypeName = "money")]
         public decimal? TaxAmount { get; set; }
 
@@ -68,8 +71,8 @@ namespace SACCOBlockChainSystem.Models
         [Column(TypeName = "money")]
         public decimal? TotalAmount { get; set; }
 
-        [StringLength(500)]
-        public string? Remarks { get; set; }
+        [StringLength(50)]
+        public string? ReceiptNo { get; set; }
 
         [StringLength(50)]
         public string? AuditId { get; set; }
@@ -78,9 +81,6 @@ namespace SACCOBlockChainSystem.Models
 
         [StringLength(50)]
         public string? TransactionNo { get; set; }
-
-        [StringLength(50)]
-        public string? ReceiptNo { get; set; }
 
         [StringLength(255)]
         public string? BlockchainTxId { get; set; }

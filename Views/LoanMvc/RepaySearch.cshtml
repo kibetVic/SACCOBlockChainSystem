@@ -146,23 +146,17 @@
                         <hr />
                         <h6 class="mb-3">Payment Details</h6>
 
-                        <!-- GL Account Selection from GLSETUP -->
+                        <!-- GL Account Selection from GLSETUP 
                         <div class="row mb-3">
                             <label asp-for="GlAccountNo" class="col-sm-3 col-form-label fw-bold">GL Account (Source) *</label>
                             <div class="col-sm-9">
                                 <select asp-for="GlAccountNo" class="form-select" required id="glAccountSelect">
                                     <option value="">-- Select GL Account --</option>
-                                    @foreach (var account in glAccounts)
-                                    {
-                                        <option value="@account.AccNo" data-account-name="@account.Glaccname" data-account-type="@account.Glacctype">
-                                            @account.DisplayText
-                                        </option>
-                                    }
                                 </select>
                                 <small class="text-muted">Select the GL account where the payment will be deposited (Cash/Bank account)</small>
                                 <span asp-validation-for="GlAccountNo" class="text-danger"></span>
                             </div>
-                        </div>
+                        </div> -->
 
                         <!-- Payment Date -->
                         <div class="row mb-3">

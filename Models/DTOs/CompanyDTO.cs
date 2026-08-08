@@ -41,6 +41,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [Required(ErrorMessage = "Number of Members is required")]
         [Display(Name = "Number of Members")]
         public int? NoEmployees { get; set; }
+
         public string? County { get; set; }
         public string? SubCounty { get; set; }
         public string? Ward { get; set; }
@@ -53,8 +54,19 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? Location { get; set; }
         public string? Type { get; set; }
         public decimal? Capital { get; set; }
+
+        // CSRegNO is now OPTIONAL - can be saved later
+        [StringLength(50)]
+        [Display(Name = "Registration/Cert No")]
+        public string? CSRegNO { get; set; }
+
         public bool Project { get; set; } = true;
         public string? BusinessStatus { get; set; }
+
+        // Location IDs for dropdown population
+        public int? CountyId { get; set; }
+        public int? SubCountyId { get; set; }
+        public int? WardId { get; set; }
     }
 
     public class CompanyResponseDTO
@@ -82,11 +94,17 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public bool Project { get; set; }
         public string? BusinessStatus { get; set; }
         public string? AuditId { get; set; }
+        public string? CSRegNO { get; set; }
         public DateTime? AuditTime { get; set; }
         public string? CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }
         public string? ModifiedBy { get; set; }
         public DateTime? ModifiedAt { get; set; }
         public string? BlockchainTxId { get; set; }
+
+        // Location IDs for dropdown population
+        public int? CountyId { get; set; }
+        public int? SubCountyId { get; set; }
+        public int? WardId { get; set; }
     }
 }

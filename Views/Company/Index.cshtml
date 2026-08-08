@@ -39,129 +39,127 @@
         </div>
     }
 
-    @if (ViewBag.CurrentUserRole == "Super Admin")
-    {
-        <!-- Company Form (Top Section) -->
-        <div class="card shadow-sm mb-4" id="companyFormCard">
-            <div class="card-header bg-primary text-white">
-                <h5 class="card-title mb-0" id="formTitle">
-                    <i class="bi bi-plus-circle me-2"></i>Add New Company
-                </h5>
-            </div>
-            <div class="card-body">
-                <form id="companyForm" method="post">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" id="companyId" name="Id" />
-
-                    <div class="row">
-                        <!-- Company Code - Auto-generated, read-only -->
-                        <div class="col-md-4 mb-3">
-                            <label for="CompanyCode" class="form-label fw-bold">Company Code *</label>
-                            <input type="text" class="form-control bg-light" id="CompanyCode" name="CompanyCode"
-                                   value="@newCompanyCode" required maxlength="50" readonly />
-                            <small class="text-muted">Auto-generated unique code</small>
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="CompanyName" class="form-label fw-bold">Company Name *</label>
-                            <input type="text" class="form-control" id="CompanyName" name="CompanyName" required maxlength="200" />
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="Contactperson" class="form-label fw-bold">Contact Person *</label>
-                            <input type="text" class="form-control" id="Contactperson" name="Contactperson" required maxlength="100" />
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="Telephone" class="form-label fw-bold">Telephone No *</label>
-                            <input type="tel" class="form-control" id="Telephone" name="Telephone" required maxlength="50" />
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="Email" class="form-label fw-bold">Email Address *</label>
-                            <input type="email" class="form-control" id="Email" name="Email" required maxlength="100" />
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="Address" class="form-label fw-bold">Postal Address *</label>
-                            <input type="text" class="form-control" id="Address" name="Address" required maxlength="200" placeholder="P.O. Box 123-00100" />
-                        </div>
-
-                        <!-- County Dropdown -->
-                        <div class="col-md-4 mb-3">
-                            <label for="County" class="form-label fw-bold">County *</label>
-                            <select class="form-select" id="County" name="County" required>
-                                <option value="">-- Select County --</option>
-                            </select>
-                        </div>
-
-                        <!-- Sub County Dropdown -->
-                        <div class="col-md-4 mb-3">
-                            <label for="SubCounty" class="form-label fw-bold">Sub County *</label>
-                            <select class="form-select" id="SubCounty" name="SubCounty" required>
-                                <option value="">-- Select Sub County --</option>
-                            </select>
-                        </div>
-
-                        <!-- Ward Dropdown -->
-                        <div class="col-md-4 mb-3">
-                            <label for="Ward" class="form-label fw-bold">Ward *</label>
-                            <select class="form-select" id="Ward" name="Ward" required>
-                                <option value="">-- Select Ward --</option>
-                            </select>
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="Village" class="form-label">Village</label>
-                            <input type="text" class="form-control" id="Village" name="Village" maxlength="100" />
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="NoEmployees" class="form-label fw-bold">Number of Members *</label>
-                            <input type="number" class="form-control" id="NoEmployees" name="NoEmployees" required min="1" />
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="BusinessStatus" class="form-label fw-bold">Business Status *</label>
-                            <select class="form-select" id="BusinessStatus" name="BusinessStatus" required>
-                                <option value="Active">Active</option>
-                                <option value="Inactive">Inactive</option>
-                                <option value="Pending">Pending</option>
-                                <option value="Suspended">Suspended</option>
-                            </select>
-                        </div>
-
-                        <!-- Hidden fields -->
-                        <input type="hidden" id="CountyId" name="CountyId" />
-                        <input type="hidden" id="SubCountyId" name="SubCountyId" />
-                        <input type="hidden" id="WardId" name="WardId" />
-                        <input type="hidden" id="Cigcode" name="Cigcode" />
-                        <input type="hidden" id="Unitcode" name="Unitcode" />
-                        <input type="hidden" id="AccountNo" name="AccountNo" />
-                        <input type="hidden" id="NoYears" name="NoYears" />
-                        <input type="hidden" id="Type" name="Type" />
-                        <input type="hidden" id="Capital" name="Capital" />
-                        <input type="hidden" id="Project" name="Project" value="true" />
-                        <input type="hidden" id="CountyCode" name="CountyCode" />
-                        <input type="hidden" id="Location" name="Location" />
-                    </div>
-
-                    <hr />
-
-                    <div class="d-flex justify-content-end gap-2">
-                        <button type="button" class="btn btn-secondary" onclick="resetForm()">
-                            <i class="bi bi-eraser me-2"></i>Reset
-                        </button>
-                        <button type="submit" class="btn btn-primary" id="submitBtn">
-                            <i class="bi bi-save me-2"></i>Save Company
-                        </button>
-                    </div>
-                </form>
-            </div>
+    <!-- Company Form (Top Section) -->
+    <div class="card shadow-sm mb-4" id="companyFormCard">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0" id="formTitle">
+                <i class="bi bi-plus-circle me-2"></i>Add New Company
+            </h5>
         </div>
-    }
+        <div class="card-body">
+            <form id="companyForm" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="companyId" name="Id" />
 
-    <!-- Companies List (Bottom Section) -->
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="CompanyCode" class="form-label fw-bold">Company Code *</label>
+                        <input type="text" class="form-control bg-light" id="CompanyCode" name="CompanyCode"
+                               value="@newCompanyCode" required maxlength="50" readonly />
+                        <small class="text-muted">Auto-generated unique code (not editable)</small>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="CompanyName" class="form-label fw-bold">Company Name *</label>
+                        <input type="text" class="form-control" id="CompanyName" name="CompanyName" required maxlength="200" />
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="Contactperson" class="form-label fw-bold">Contact Person *</label>
+                        <input type="text" class="form-control" id="Contactperson" name="Contactperson" required maxlength="100" />
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="Telephone" class="form-label fw-bold">Telephone No *</label>
+                        <input type="tel" class="form-control" id="Telephone" name="Telephone" required maxlength="50" />
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="Email" class="form-label fw-bold">Email Address *</label>
+                        <input type="email" class="form-control" id="Email" name="Email" required maxlength="100" />
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="Address" class="form-label fw-bold">Postal Address *</label>
+                        <input type="text" class="form-control" id="Address" name="Address" required maxlength="200" placeholder="P.O. Box 123-00100" />
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="CSRegNO" class="form-label fw-bold">Registration/Cert No</label>
+                        <input type="text" class="form-control" id="CSRegNO" name="CSRegNO" maxlength="50" placeholder="CS/12345 (Optional)" />
+                        <small class="text-muted">Optional - can be added later</small>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="County" class="form-label fw-bold">County *</label>
+                        <select class="form-select" id="County" name="County" required>
+                            <option value="">-- Select County --</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="SubCounty" class="form-label fw-bold">Sub County *</label>
+                        <select class="form-select" id="SubCounty" name="SubCounty" required>
+                            <option value="">-- Select Sub County --</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="Ward" class="form-label fw-bold">Ward *</label>
+                        <select class="form-select" id="Ward" name="Ward" required>
+                            <option value="">-- Select Ward --</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="Village" class="form-label">Village</label>
+                        <input type="text" class="form-control" id="Village" name="Village" maxlength="100" />
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="NoEmployees" class="form-label fw-bold">Number of Members *</label>
+                        <input type="number" class="form-control" id="NoEmployees" name="NoEmployees" required min="1" />
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="BusinessStatus" class="form-label fw-bold">Business Status *</label>
+                        <select class="form-select" id="BusinessStatus" name="BusinessStatus" required>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Suspended">Suspended</option>
+                        </select>
+                    </div>
+
+                    <input type="hidden" id="CountyId" name="CountyId" />
+                    <input type="hidden" id="SubCountyId" name="SubCountyId" />
+                    <input type="hidden" id="WardId" name="WardId" />
+                    <input type="hidden" id="Cigcode" name="Cigcode" />
+                    <input type="hidden" id="Unitcode" name="Unitcode" />
+                    <input type="hidden" id="AccountNo" name="AccountNo" />
+                    <input type="hidden" id="NoYears" name="NoYears" />
+                    <input type="hidden" id="Type" name="Type" />
+                    <input type="hidden" id="Capital" name="Capital" />
+                    <input type="hidden" id="Project" name="Project" value="true" />
+                    <input type="hidden" id="CountyCode" name="CountyCode" />
+                    <input type="hidden" id="Location" name="Location" />
+                </div>
+
+                <hr />
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                        <i class="bi bi-eraser me-2"></i>Reset
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <i class="bi bi-save me-2"></i>Save Company
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Companies List -->
     <div class="card shadow-sm">
         <div class="card-header bg-light">
             <div class="row align-items-center">
@@ -174,7 +172,7 @@
                 <div class="col-md-4 offset-md-4">
                     <form asp-action="Index" method="get" class="d-flex gap-2" id="searchForm">
                         <div class="input-group">
-                            <input type="text" name="search" class="form-control" placeholder="Search by code, name, email, contact..." value="@ViewBag.CurrentSearch" id="searchInput" />
+                            <input type="text" name="search" class="form-control" placeholder="Search..." value="@ViewBag.CurrentSearch" id="searchInput" />
                             <button type="submit" class="btn btn-outline-secondary">
                                 <i class="bi bi-search"></i>
                             </button>
@@ -205,6 +203,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Company Code</th>
+                                <th>Cert NO</th>
                                 <th>Company Name</th>
                                 <th>Contact Person</th>
                                 <th>Telephone</th>
@@ -219,11 +218,12 @@
                             {
                                 <tr id="company-row-@company.Id">
                                     <td><strong>@company.CompanyCode</strong></td>
+                                    <td><strong>@(string.IsNullOrEmpty(company.CSRegNO) ? "-" : company.CSRegNO)</strong></td>
                                     <td>@company.CompanyName</td>
                                     <td>@company.Contactperson</td>
                                     <td>@company.Telephone</td>
                                     <td>@company.Email</td>
-                                    <td>@company.County</td> 
+                                    <td>@company.County</td>
                                     <td>
                                         <span class="badge bg-success">Active</span>
                                     </td>
@@ -265,6 +265,10 @@
                     <div class="col-md-4 mb-3">
                         <label class="fw-bold text-muted">Company Code:</label>
                         <p class="mb-0" id="view_CompanyCode">-</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="fw-bold text-muted">Cert No:</label>
+                        <p class="mb-0" id="view_CSRegNO">-</p>
                     </div>
                     <div class="col-md-4 mb-3">
                         <label class="fw-bold text-muted">Company Name:</label>
@@ -321,18 +325,14 @@
 
 @section Scripts {
     <script>
-        // Make sure jQuery is loaded
         if (typeof jQuery === 'undefined') {
             console.error('jQuery is not loaded!');
         }
 
         $(document).ready(function() {
             console.log('Document ready, loading counties...');
-
-            // Load counties on page load
             loadCounties();
 
-            // Initialize DataTable
             if ($.fn.DataTable) {
                 $('#companiesTable').DataTable({
                     pageLength: 10,
@@ -349,11 +349,9 @@
                 });
             }
 
-            // Handle form submission
             $('#companyForm').on('submit', function(e) {
                 e.preventDefault();
 
-                // Validate form
                 var isValid = true;
                 var errorMessages = [];
 
@@ -434,7 +432,6 @@
                     return;
                 }
 
-                // Build form data
                 var formData = {
                     Id: $('#companyId').val() || null,
                     CompanyCode: $('#CompanyCode').val(),
@@ -442,17 +439,18 @@
                     Contactperson: $('#Contactperson').val().trim(),
                     Telephone: $('#Telephone').val().trim(),
                     Email: $('#Email').val().trim(),
+                    CSRegNO: $('#CSRegNO').val().trim() || null,
                     Address: $('#Address').val().trim(),
                     NoEmployees: parseInt($('#NoEmployees').val()),
-                    CountyId: parseInt($('#County').val()),
-                    SubCountyId: parseInt($('#SubCounty').val()),
-                    WardId: parseInt($('#Ward').val()),
-                    Village: $('#Village').val().trim() || null,
+                    CountyId: parseInt($('#County').val()) || null,
+                    SubCountyId: parseInt($('#SubCounty').val()) || null,
+                    WardId: parseInt($('#Ward').val()) || null,
                     County: $('#County option:selected').text(),
                     SubCounty: $('#SubCounty option:selected').text(),
                     Ward: $('#Ward option:selected').text(),
+                    Village: $('#Village').val().trim() || null,
                     Project: true,
-                    BusinessStatus: 'Active'
+                    BusinessStatus: $('#BusinessStatus').val() || 'Active'
                 };
 
                 console.log('Sending data:', formData);
@@ -513,21 +511,18 @@
                             countySelect.append('<option value="' + county.value + '">' + county.text + '</option>');
                         });
                     } else {
-                        console.warn('No counties returned from server');
                         countySelect.append('<option value="">No counties available</option>');
                     }
                 },
                 error: function(xhr, status, error) {
                     console.error('Error loading counties:', error);
-                    console.error('Status:', status);
-                    console.error('Response:', xhr.responseText);
                     showToast('error', 'Error loading counties. Please check the console for details.');
                 }
             });
         }
 
-        function loadSubCounties(countyId) {
-            console.log('Loading sub counties for countyId:', countyId);
+        function loadSubCounties(countyId, selectedId) {
+            console.log('Loading sub counties for countyId:', countyId, 'selectedId:', selectedId);
             if (!countyId) {
                 $('#SubCounty').empty().append('<option value="">-- Select Sub County --</option>');
                 $('#Ward').empty().append('<option value="">-- Select Ward --</option>');
@@ -549,11 +544,17 @@
                         $.each(subCounties, function(index, sc) {
                             subCountySelect.append('<option value="' + sc.value + '">' + sc.text + '</option>');
                         });
+
+                        // Set the selected value if provided
+                        if (selectedId) {
+                            console.log('Setting SubCounty to:', selectedId);
+                            subCountySelect.val(selectedId);
+                            // Trigger change to load wards
+                            subCountySelect.trigger('change');
+                        }
                     } else {
                         subCountySelect.append('<option value="">No sub counties available</option>');
                     }
-
-                    $('#Ward').empty().append('<option value="">-- Select Ward --</option>');
                 },
                 error: function(xhr, status, error) {
                     console.error('Error loading sub counties:', error);
@@ -562,8 +563,8 @@
             });
         }
 
-        function loadWards(subCountyId) {
-            console.log('Loading wards for subCountyId:', subCountyId);
+        function loadWards(subCountyId, selectedId) {
+            console.log('Loading wards for subCountyId:', subCountyId, 'selectedId:', selectedId);
             if (!subCountyId) {
                 $('#Ward').empty().append('<option value="">-- Select Ward --</option>');
                 return;
@@ -584,6 +585,12 @@
                         $.each(wards, function(index, ward) {
                             wardSelect.append('<option value="' + ward.value + '">' + ward.text + '</option>');
                         });
+
+                        // Set the selected value if provided
+                        if (selectedId) {
+                            console.log('Setting Ward to:', selectedId);
+                            wardSelect.val(selectedId);
+                        }
                     } else {
                         wardSelect.append('<option value="">No wards available</option>');
                     }
@@ -596,16 +603,25 @@
         }
 
         // Event handlers for cascading dropdowns
-        $('#County').on('change', function() {
+        $(document).on('change', '#County', function() {
             var countyId = $(this).val();
             console.log('County changed to:', countyId);
-            loadSubCounties(countyId);
+            if (countyId) {
+                loadSubCounties(countyId, null);
+            } else {
+                $('#SubCounty').empty().append('<option value="">-- Select Sub County --</option>');
+                $('#Ward').empty().append('<option value="">-- Select Ward --</option>');
+            }
         });
 
-        $('#SubCounty').on('change', function() {
+        $(document).on('change', '#SubCounty', function() {
             var subCountyId = $(this).val();
             console.log('SubCounty changed to:', subCountyId);
-            loadWards(subCountyId);
+            if (subCountyId) {
+                loadWards(subCountyId, null);
+            } else {
+                $('#Ward').empty().append('<option value="">-- Select Ward --</option>');
+            }
         });
 
         function resetForm() {
@@ -614,12 +630,10 @@
             $('#formTitle').html('<i class="bi bi-plus-circle me-2"></i>Add New Company');
             $('#submitBtn').html('<i class="bi bi-save me-2"></i>Save Company');
 
-            // Reset dropdowns
             loadCounties();
             $('#SubCounty').empty().append('<option value="">-- Select Sub County --</option>');
             $('#Ward').empty().append('<option value="">-- Select Ward --</option>');
 
-            // Generate new company code
             $.ajax({
                 url: '/Company/GenerateCompanyCode',
                 type: 'GET',
@@ -636,55 +650,79 @@
 
         function editCompany(id) {
             console.log('Editing company:', id);
+
+            $('#formTitle').html('<i class="bi bi-hourglass-split me-2"></i>Loading...');
+
             $.ajax({
-                url: '/Company/GetCompanyDetails',
+                url: '/Company/Edit',
                 type: 'GET',
                 data: { id: id },
                 dataType: 'json',
                 success: function(response) {
+                    console.log('Edit response:', response);
+
                     if (response.success) {
                         var company = response.company;
+
+                        console.log('Company data received:', company);
+                        console.log('CSRegNO value:', company.CSRegNO);
+                        console.log('CountyId:', company.countyId);
+                        console.log('SubCountyId:', company.subCountyId);
+                        console.log('WardId:', company.wardId);
+
+                        // Populate basic form fields
                         $('#companyId').val(company.id);
                         $('#CompanyCode').val(company.companyCode);
-                        $('#CompanyName').val(company.companyName);
-                        $('#Contactperson').val(company.contactperson);
-                        $('#Telephone').val(company.telephone);
-                        $('#Email').val(company.email);
-                        $('#Address').val(company.address);
-                        $('#Village').val(company.village);
-                        $('#NoEmployees').val(company.noEmployees);
-                        $('#BusinessStatus').val('Active');
+                        $('#CSRegNO').val(company.CSRegNO || '');
+                        $('#CompanyName').val(company.companyName || '');
+                        $('#Contactperson').val(company.contactperson || '');
+                        $('#Telephone').val(company.telephone || '');
+                        $('#Email').val(company.email || '');
+                        $('#Address').val(company.address || '');
+                        $('#Village').val(company.village || '');
+                        $('#NoEmployees').val(company.noEmployees || '');
 
-                        // Set county and load sub counties
-                        if (company.countyId) {
-                            $('#County').val(company.countyId);
-                            loadSubCounties(company.countyId);
-
-                            setTimeout(function() {
-                                if (company.subCountyId) {
-                                    $('#SubCounty').val(company.subCountyId);
-                                    loadWards(company.subCountyId);
-
-                                    setTimeout(function() {
-                                        if (company.wardId) {
-                                            $('#Ward').val(company.wardId);
-                                        }
-                                    }, 100);
-                                }
-                            }, 200);
+                        if (company.businessStatus) {
+                            $('#BusinessStatus').val(company.businessStatus);
                         }
 
-                        $('#formTitle').html('<i class="bi bi-pencil-square me-2"></i>Edit Company');
+                        // Reset dropdowns first
+                        $('#SubCounty').empty().append('<option value="">-- Select Sub County --</option>');
+                        $('#Ward').empty().append('<option value="">-- Select Ward --</option>');
+
+                        // Set County and load Sub Counties
+                        if (company.countyId) {
+                            console.log('Setting County to:', company.countyId);
+                            $('#County').val(company.countyId);
+
+                            // Load sub counties and set the selected value
+                            loadSubCounties(company.countyId, company.subCountyId);
+                        } else {
+                            console.warn('No countyId provided for company');
+                        }
+
+                        // Update form title and button
+                        $('#formTitle').html('<i class="bi bi-pencil-square me-2"></i>Edit Company - ' + company.companyName);
                         $('#submitBtn').html('<i class="bi bi-save me-2"></i>Update Company');
 
                         $('#companyFormCard')[0].scrollIntoView({ behavior: 'smooth' });
+
+                        console.log('Form populated:');
+                        console.log('CSRegNO:', $('#CSRegNO').val());
+                        console.log('County:', $('#County').val());
+                        console.log('SubCounty:', $('#SubCounty').val());
+                        console.log('Ward:', $('#Ward').val());
+
+                        showToast('success', 'Company loaded for editing');
                     } else {
-                        showToast('error', response.message);
+                        showToast('error', response.message || 'Error loading company data');
+                        resetForm();
                     }
                 },
                 error: function(xhr, status, error) {
-                    console.error('Error loading company details:', error);
-                    showToast('error', 'Error loading company details');
+                    console.error('Error loading company for edit:', error);
+                    showToast('error', 'Error loading company data. Please try again.');
+                    resetForm();
                 }
             });
         }
@@ -699,38 +737,39 @@
                 success: function(response) {
                     if (response.success) {
                         var company = response.company;
-                        $('#view_CompanyCode').text(company.companyCode);
-                        $('#view_CompanyName').text(company.companyName);
-                        $('#view_Contactperson').text(company.contactperson);
-                        $('#view_Telephone').text(company.telephone);
+                        $('#view_CompanyCode').text(company.companyCode || '-');
+                        $('#view_CompanyName').text(company.companyName || '-');
+                        $('#view_CSRegNO').text(company.CSRegNO || '-');
+                        $('#view_Contactperson').text(company.contactperson || '-');
+                        $('#view_Telephone').text(company.telephone || '-');
                         $('#view_Email').text(company.email || '-');
-                        $('#view_Address').text(company.address);
+                        $('#view_Address').text(company.address || '-');
                         $('#view_County').text(company.county || '-');
                         $('#view_SubCounty').text(company.subCounty || '-');
                         $('#view_Ward').text(company.ward || '-');
                         $('#view_Village').text(company.village || '-');
                         $('#view_NoEmployees').text(company.noEmployees || '-');
-                        $('#view_BusinessStatus').text('Active');
+                        $('#view_BusinessStatus').text(company.businessStatus || 'Active');
 
                         $('#viewCompanyModal').modal('show');
                     } else {
-                        showToast('error', response.message);
+                        showToast('error', response.message || 'Error loading company details');
                     }
                 },
                 error: function(xhr, status, error) {
                     console.error('Error loading company details:', error);
-                    showToast('error', 'Error loading company details');
+                    showToast('error', 'Error loading company details. Please try again.');
                 }
             });
         }
 
         function showToast(type, message) {
             var toastHtml = `
-                <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 position-fixed bottom-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index: 1100;">
+                <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 position-fixed bottom-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index: 1100; max-width: 400px;">
                     <div class="d-flex">
                         <div class="toast-body">
                             <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
-                            ${message}
+                            ${message.replace(/\n/g, '<br>')}
                         </div>
                         <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
                     </div>

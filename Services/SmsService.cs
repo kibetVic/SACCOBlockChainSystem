@@ -443,55 +443,6 @@ namespace SACCOBlockChainSystem.Services
                 .FirstOrDefaultAsync(t => t.TemplateCode == templateCode && t.CompanyCode == companyCode);
         }
 
-        //public async Task<SmsSetting> GetSmsSettingsAsync(string companyCode)
-        //{
-        //    var settings = await _context.SmsSettings
-        //        .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
-
-        //    if (settings == null)
-        //    {
-        //        // Get company name from SaccoParram
-        //        var company = await _context.SaccoParram
-        //            .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
-
-        //        var companyName = company?.SaccoName ?? "JUHUDI SACCO";
-
-        //        // Clean company name for sender ID (max 11 chars, uppercase, no spaces)
-        //        var senderId = CleanSenderId(companyName);
-
-        //        // Create default settings with all fields
-        //        settings = new SmsSetting
-        //        {
-        //            CompanyCode = companyCode,
-        //            Provider = "AfricaTalking",
-        //            IsEnabled = true,
-        //            SendOnRegistration = true,
-        //            SendOnWithdrawal = true,
-        //            SendOnLoanApproval = true,
-        //            SendOnShareTransfer = true,
-        //            SendOnContribution = true,
-        //            SendOnLoanRepayment = true,
-        //            SendOnAGM = true,
-        //            SendOnDeposits = true,
-        //            CostPerSms = 0.50m,
-        //            SenderId = senderId,
-        //            ApiKey = null,
-        //            ApiSecret = null,
-        //            Username = null,
-        //            ShortCode = null,
-        //            ApiEndpoint = "https://api.africastalking.com/version1/messaging",
-        //            CreatedAt = DateTime.Now,
-        //            UpdatedAt = null,
-        //            UpdatedBy = null,
-        //            BlockchainTxId = null
-        //        };
-
-        //        _context.SmsSettings.Add(settings);
-        //        await _context.SaveChangesAsync();
-        //    }
-
-        //    return settings;
-        //}
 
 
         public async Task<SmsSetting> GetSmsSettingsAsync(string companyCode)

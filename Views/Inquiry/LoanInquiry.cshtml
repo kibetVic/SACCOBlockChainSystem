@@ -904,13 +904,6 @@
                                         <p>${escapeHtml(data.addSecurity || 'N/A')}</p>
                                     </div>
                                 </div>
-                                ${data.blockchainTxId ? `
-                                <div class="row">
-                                    <div class="col-md-12">
-                                        <strong>Blockchain Transaction ID:</strong>
-                                        <p><code>${escapeHtml(data.blockchainTxId)}</code></p>
-                                    </div>
-                                </div>` : ''}
                             </div>
                         </div>
                     </div>
@@ -936,7 +929,6 @@
                                                     <th class="text-end">Guarantee Amount</th>
                                                     <th class="text-end">Balance</th>
                                                     <th>Collateral</th>
-                                                    <th>Blockchain Tx</th>
                                                 </tr>
                                             </thead>
                                             <tbody>`;
@@ -950,7 +942,6 @@
                             <td class="text-end">${formatCurrency(guarantor.amount || 0)}</td>
                             <td class="text-end">${formatCurrency(guarantor.balance || 0)}</td>
                             <td>${escapeHtml(guarantor.collateral || 'N/A')}</td>
-                            <td><code class="small">${guarantor.blockchainTxId ? (guarantor.blockchainTxId.length > 12 ? guarantor.blockchainTxId.substring(0, 12) + '...' : guarantor.blockchainTxId) : 'N/A'}</code></td>
                         </tr>`;
                 });
 

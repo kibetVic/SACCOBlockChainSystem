@@ -64,7 +64,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
         public bool SelfGuarantee { get; set; }
         public bool IsProject { get; set; } 
+        public bool IsTopUp { get; set; } 
         public bool MobileLoan { get; set; }
+        public bool InterestUpront { get; set; }
         public bool MobileLoanApproval { get; set; }
 
         public decimal? MinLoanAmount { get; set; }
@@ -137,8 +139,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
         public bool SelfGuarantee { get; set; }
         public bool IsProject { get; set; }
+        public bool IsTopUp { get; set; }
         public bool MobileLoan { get; set; }
-
+        public bool? InterestUpront { get; set; }
         public bool MobileLoanApproval { get; set; }
 
         [StringLength(20)]
@@ -189,7 +192,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public bool Bridging { get; set; }
         public bool SelfGuarantee { get; set; }
         public bool IsProject { get; set; }
+        public bool IsTopUp { get; set; }
         public bool MobileLoan { get; set; }
+        public bool InterestUpront { get; set; }
         public bool MobileLoanApproval { get; set; }
         public string Ppacc { get; set; } = null!;
         public string ContraAccount { get; set; } = null!;
@@ -229,7 +234,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? ProcessingFee { get; set; }
         public bool Bridging { get; set; }
         public bool IsProject { get; set; }
+        public bool IsTopUp { get; set; }
         public bool MobileLoan { get; set; }
+        public bool InterestUpront { get; set; }
         public bool? MobileLoanApproval { get; set; }
         public int Priority { get; set; }
         public bool IsEligible { get; set; } = true; // Add this property

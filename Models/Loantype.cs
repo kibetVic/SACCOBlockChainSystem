@@ -113,7 +113,9 @@ public partial class Loantype
 
     public string? ApprovalStatus { get; set; }
     public bool? IsProject { get; set; }
+    public bool? IsTopUp { get; set; } // Additional loan on existing loan
     public bool? MobileLoan { get; set; }
+    public bool? InterestUpront { get; set; }
     public bool? MobileLoanApproval { get; set; }
     public DateTime? MobileCreatedOn { get; set; }
 

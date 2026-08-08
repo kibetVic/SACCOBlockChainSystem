@@ -658,46 +658,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        //// GET: /Blockchain/VerifyBlock/{blockHash}
-        //[HttpGet("Blockchain/VerifyBlock/{blockHash}")]
-        //public async Task<IActionResult> VerifyBlock(string blockHash)
-        //{
-        //    try
-        //    {
-        //        var isValid = await _blockchainService.VerifyBlockchainAsync();
-
-        //        if (isValid)
-        //        {
-        //            var block = await _blockchainService.GetBlockAsync(blockHash);
-        //            return Ok(new
-        //            {
-        //                success = true,
-        //                message = "Blockchain is valid",
-        //                block = block?.BlockHash,
-        //                blockId = block?.BlockId,
-        //                confirmed = block?.Confirmed ?? false
-        //            });
-        //        }
-        //        else
-        //        {
-        //            return Ok(new
-        //            {
-        //                success = false,
-        //                message = "Blockchain integrity check failed"
-        //            });
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error verifying blockchain");
-        //        return BadRequest(new
-        //        {
-        //            success = false,
-        //            message = ex.Message
-        //        });
-        //    }
-        //}
-
         #endregion
 
         #region Helper Methods

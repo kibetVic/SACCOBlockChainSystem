@@ -96,4 +96,51 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal TotalByBank { get; set; }
         public decimal TotalByCheque { get; set; }
     }
+    public class EmployeePaymentReceiptViewModel
+    {
+        // Receipt Details
+        public string? ReceiptNo { get; set; }
+        public string? VoucherNo { get; set; }
+        public string? TransactionNo { get; set; }
+
+        // Employee Details
+        public string? EmployeeIdNo { get; set; }
+        public string? EmployeeName { get; set; }
+        public string? EmployeePhone { get; set; }
+        public string? EmployeeEmail { get; set; }
+
+        // Payment Details
+        public decimal Amount { get; set; }
+        public string? PaymentType { get; set; }
+        public string? PaymentTypeCode { get; set; }
+        public DateTime PaymentDate { get; set; }
+        public string? PaymentMethod { get; set; }
+        public string? ChequeNo { get; set; }
+        public string? Description { get; set; }
+        public string? Remarks { get; set; }
+
+        // Account Details
+        public string? ExpenseAccountNo { get; set; }
+        public string? ExpenseAccountName { get; set; }
+        public string? CashAccountNo { get; set; }
+        public string? CashAccountName { get; set; }
+
+        // Status
+        public string? Status { get; set; }
+
+        // Blockchain
+        public string? BlockchainTxId { get; set; }
+
+        // Created By
+        public string? CreatedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+
+        // Company Details
+        public string? CompanyName { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? CompanyPhone { get; set; }
+        public string? CompanyEmail { get; set; }
+        public string? CompanyLogo { get; set; }
+    }
 }
+

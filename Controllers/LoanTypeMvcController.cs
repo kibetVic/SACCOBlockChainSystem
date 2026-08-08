@@ -376,11 +376,11 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 var accounts = await _context.GlSetup
                     .Where(a => a.CompanyCode == companyCode && a.Status == true)
-                    .OrderBy(a => a.Glaccname)
+                    .OrderBy(a => a.Glcode)
                     .Select(a => new SelectListItem
                     {
-                        Value = a.Glaccname,
-                        Text = $"{a.Glaccname} - {a.Glaccname}"
+                        Value = a.Glcode,
+                        Text = $"{a.Glcode} - {a.Glaccname}"
                     })
                     .ToListAsync();
 

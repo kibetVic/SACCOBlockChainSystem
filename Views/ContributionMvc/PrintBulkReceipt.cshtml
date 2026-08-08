@@ -1,0 +1,528 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.ReceiptViewModel
+@{
+    Layout = null;
+    var totalAmount = Model.Contributions?.Sum(c => c.Amount) ?? 0;
+    var companyName = Model.CompanyName ?? "SACCO BlockChain System";
+    var companyAddress = Model.CompanyAddress ?? "P.O. Box 12345 - 00100, Nairobi, Kenya";
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Shares Contribution Receipt</title>
+    <style>
+        @@page {
+            size: A5 portrait;
+            margin: 0.5cm;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            margin: 0;
+            padding: 10px;
+            background: white;
+            color: #333;
+        }
+
+        .receipt-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 3px double #333;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+            .header .company-name {
+                font-size: 18px;
+                font-weight: bold;
+                letter-spacing: 2px;
+                color: #1a237e;
+            }
+
+            .header .company-details {
+                font-size: 9px;
+                color: #666;
+                margin-top: 3px;
+            }
+
+            .header .receipt-title {
+                font-size: 16px;
+                font-weight: bold;
+                margin-top: 8px;
+                background: #1a237e;
+                color: white;
+                padding: 5px 20px;
+                display: inline-block;
+                border-radius: 3px;
+            }
+
+        .bulk-badge {
+            background: #ff6f00;
+            color: white;
+            padding: 3px 15px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: bold;
+            text-align: center;
+            display: inline-block;
+            margin: 5px 0;
+        }
+
+        .receipt-no {
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            margin: 8px 0;
+            padding: 8px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            border: 1px solid #90caf9;
+        }
+
+            .receipt-no .label {
+                color: #1565c0;
+            }
+
+        .transaction-refs {
+            font-size: 9px;
+            text-align: center;
+            color: #555;
+            margin: 5px 0;
+            padding: 5px;
+            background: #f5f5f5;
+            border-radius: 3px;
+            word-break: break-all;
+            border: 1px dashed #ccc;
+        }
+
+        .date-time {
+            text-align: center;
+            font-size: 11px;
+            color: #555;
+            margin: 5px 0 10px 0;
+            font-weight: bold;
+        }
+
+        .member-info {
+            background: #f5f5f5;
+            padding: 10px 12px;
+            margin: 10px 0;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 11px;
+        }
+
+            .member-info .row {
+                display: flex;
+                padding: 2px 0;
+            }
+
+            .member-info .label {
+                font-weight: bold;
+                color: #333;
+                width: 100px;
+                min-width: 100px;
+            }
+
+            .member-info .value {
+                color: #333;
+            }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 10px;
+        }
+
+            table thead th {
+                background: #1a237e;
+                color: white;
+                padding: 6px 8px;
+                text-align: left;
+                font-weight: bold;
+                font-size: 10px;
+            }
+
+            table tbody td {
+                padding: 5px 8px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+
+            table tbody tr:nth-child(even) {
+                background: #f9f9f9;
+            }
+
+            table tbody tr:hover {
+                background: #e3f2fd;
+            }
+
+            table .text-right {
+                text-align: right;
+            }
+
+            table .text-center {
+                text-align: center;
+            }
+
+        .total-row {
+            background: #e8f5e9 !important;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+            .total-row td {
+                padding: 8px !important;
+                border-top: 2px solid #333;
+            }
+
+        .summary {
+            margin: 10px 0;
+            padding: 10px 12px;
+            background: #e8f5e9;
+            border: 1px solid #a5d6a7;
+            border-radius: 5px;
+            font-size: 11px;
+        }
+
+            .summary .row {
+                display: flex;
+                padding: 3px 0;
+            }
+
+            .summary .label {
+                font-weight: bold;
+                width: 160px;
+                min-width: 160px;
+            }
+
+            .summary .value {
+                font-weight: bold;
+                color: #1a237e;
+            }
+
+        .blockchain-tx {
+            font-size: 8px;
+            word-break: break-all;
+            background: #fafafa;
+            padding: 8px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+            font-family: monospace;
+        }
+
+            .blockchain-tx .label {
+                font-weight: bold;
+                font-family: 'Courier New', Courier, monospace;
+            }
+
+        .footer {
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 3px double #333;
+            font-size: 9px;
+            color: #666;
+        }
+
+            .footer .thank-you {
+                font-size: 12px;
+                font-weight: bold;
+                color: #1a237e;
+                margin: 5px 0;
+            }
+
+        .print-button {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+            .print-button button {
+                padding: 10px 40px;
+                background: #1a237e;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                cursor: pointer;
+                font-weight: bold;
+            }
+
+                .print-button button:hover {
+                    background: #0d47a1;
+                }
+
+            .print-button .btn-close {
+                padding: 10px 30px;
+                background: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                cursor: pointer;
+                margin-left: 10px;
+            }
+
+                .print-button .btn-close:hover {
+                    background: #5a6268;
+                }
+
+            .print-button .btn-home {
+                padding: 10px 30px;
+                background: #28a745;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                cursor: pointer;
+                margin-left: 10px;
+            }
+
+                .print-button .btn-home:hover {
+                    background: #1e7e34;
+                }
+
+        .no-contributions {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+        }
+
+            .no-contributions i {
+                font-size: 48px;
+                display: block;
+                margin-bottom: 10px;
+            }
+
+        @@media print {
+            body {
+                padding: 0;
+                background: white;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .receipt-container {
+                border: none;
+                border-radius: 0;
+                padding: 15px;
+                box-shadow: none;
+            }
+
+                .receipt-container .header .company-name {
+                    font-size: 16px;
+                }
+
+            table thead th {
+                background: #333 !important;
+                color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            table tbody tr:nth-child(even) {
+                background: #f5f5f5 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .total-row {
+                background: #e8f5e9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .summary {
+                background: #e8f5e9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .receipt-no {
+                background: #e3f2fd !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .bulk-badge {
+                background: #ff6f00 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .header .receipt-title {
+                background: #1a237e !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .member-info {
+                background: #f5f5f5 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container" id="receipt">
+        <!-- Header -->
+        <div class="header">
+            <div class="company-name">@companyName</div>
+            <div class="company-details">@companyAddress</div>
+            <div class="company-details">Tel: @Model.CompanyPhone | Email: @Model.CompanyEmail</div>
+            <div class="receipt-title">CONTRIBUTION RECEIPT</div>
+        </div>
+
+        <!-- Bulk Badge -->
+        <div style="text-align:center;">
+            <span class="bulk-badge">📋 BULK TRANSACTION - @(Model.TotalContributions) Contributions</span>
+        </div>
+
+        <!-- Receipt Number -->
+        <div class="receipt-no">
+            <span class="label">Receipt No:</span> @Model.ReceiptNo
+        </div>
+
+        <!-- Transaction References -->
+        @if (!string.IsNullOrEmpty(Model.TransactionReceiptNo))
+        {
+            <div class="transaction-refs">
+                <strong>Transaction Receipts:</strong> @Model.TransactionReceiptNo
+            </div>
+        }
+
+        <!-- Date -->
+        <div class="date-time">
+            Date: @Model.TransactionDate.ToString("dd/MM/yyyy HH:mm")
+        </div>
+
+        <!-- Member Information -->
+        <div class="member-info">
+            <div class="row">
+                <span class="label">Member No:</span>
+                <span class="value">@Model.MemberNo</span>
+            </div>
+            <div class="row">
+                <span class="label">Member Name:</span>
+                <span class="value">@Model.MemberName</span>
+            </div>
+            <div class="row">
+                <span class="label">ID Number:</span>
+                <span class="value">@(Model.MemberIdNo ?? "N/A")</span>
+            </div>
+            <div class="row">
+                <span class="label">Phone Number:</span>
+                <span class="value">@(Model.MemberPhone ?? "N/A")</span>
+            </div>
+        </div>
+
+        <!-- Contributions Table -->
+        @if (Model.Contributions != null && Model.Contributions.Any())
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:35px;">#</th>
+                        <th style="width:30%;">Share Type</th>
+                        <th style="width:22%;" class="text-right">Amount (KES)</th>
+                        <th style="width:18%;">Payment</th>
+                        <th style="width:25%;">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        var index = 1;
+                        foreach (var item in Model.Contributions)
+                        {
+                            <tr>
+                                <td class="text-center">@index</td>
+                                <td>@item.ShareTypeName</td>
+                                <td class="text-right">@item.Amount.ToString("N0")</td>
+                                <td>@item.PaymentMethod</td>
+                                <td>@(string.IsNullOrEmpty(item.Remarks) ? "-" : (item.Remarks.Length > 20 ? item.Remarks.Substring(0, 20) + "..." : item.Remarks))</td>
+                            </tr>
+                            index++;
+                        }
+                    }
+
+                    <!-- Total Row -->
+                    <tr class="total-row">
+                        <td colspan="2" style="text-align:right; font-size:12px;">TOTAL:</td>
+                        <td class="text-right" style="font-size:13px; color:#1a237e;">@totalAmount.ToString("N0")</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="no-contributions">
+                <i>📭</i>
+                <p>No contributions found for this bulk transaction.</p>
+            </div>
+        }
+
+        <!-- Summary -->
+        <div class="summary">
+            <div class="row">
+                <span class="label">Total Contributions:</span>
+                <span class="value">@Model.TotalContributions</span>
+            </div>
+            <div class="row">
+                <span class="label">Total Amount:</span>
+                <span class="value">KES @totalAmount.ToString("N0")</span>
+            </div>
+            <div class="row">
+                <span class="label">Processed By:</span>
+                <span class="value">@Model.CreatedBy</span>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="thank-you">Thank you for your contribution!</div>
+            <div>Printed By: @Model.CreatedBy</div>
+            <div>Printed At: @DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")</div>
+            <div style="margin-top:5px; font-size:8px; color:#999;">
+                This is a system generated receipt. Blockchain verified.
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Button -->
+    <div class="print-button no-print">
+        <button onclick="window.print()">
+            <i class="fas fa-print"></i> Print Receipt
+        </button>
+        <button class="btn-close" onclick="window.close()">
+            <i class="fas fa-times"></i> Close
+        </button>
+        <button class="btn-home" onclick="window.location.href='@Url.Action("Index", "ContributionMvc")'">
+            <i class="fas fa-home"></i> Home
+        </button>
+    </div>
+
+    <script>
+        // Auto-print when page loads (optional - uncomment to enable)
+        window.onload = function() {
+            // Uncomment to auto-print
+            // window.print();
+        };
+    </script>
+</body>
+</html>

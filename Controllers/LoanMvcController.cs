@@ -105,68 +105,82 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 var companyCode = _companyContextService.GetCurrentCompanyCode();
 
-                // Use the existing method name (it now returns the new tuple)
+                // Use the existing method (signature unchanged)
                 var eligibility = await _loanService.CheckMemberEligibilityWithContributionsAsync(memberNo, companyCode);
 
                 // Get member details
                 var member = await _contributionService.GetMemberByMemberNoAsync(memberNo);
 
-                // Check for existing active loans
+                // Check for existing active loans and bridging eligibility
                 var existingLoansResult = await _loanService.CheckExistingLoansAsync(memberNo, companyCode);
 
-                // ============================================================
-                // KEY: Find the first active loan that has bridging allowed
-                // This is the loan that can be topped up
-                // ============================================================
-                string topUpLoanTypeCode = null;
-                string topUpLoanTypeName = null;
+                bool hasExistingLoan = existingLoansResult.HasExistingLoan;
                 bool hasBridgingAllowed = false;
+                string bridgingLoanTypeCode = null;
+                string bridgingLoanTypeName = null;
                 List<object> activeLoans = new List<object>();
 
-                if (existingLoansResult.ExistingLoans != null && existingLoansResult.ExistingLoans.Any())
+                if (hasExistingLoan && existingLoansResult.ExistingLoans != null)
                 {
-                    // Get all active loans with their bridging status
                     foreach (var loanSummary in existingLoansResult.ExistingLoans)
                     {
                         var loan = await _loanService.GetLoanByNoAsync(loanSummary.LoanNo, companyCode);
                         if (loan != null)
                         {
                             var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
+
+                            // Get outstanding balance from Loanbal
+                            var loanbal = await _context.Loanbal
+                                .FirstOrDefaultAsync(lb => lb.LoanNo == loan.LoanNo && lb.Companycode == companyCode);
+
+                            decimal outstandingBalance = loanbal?.Balance ?? 0;
+                            decimal originalPrincipal = loan.LoanAmt ?? 0;
+                            decimal percentagePaid = originalPrincipal > 0 ? ((originalPrincipal - outstandingBalance) / originalPrincipal) * 100 : 0;
+
                             activeLoans.Add(new
                             {
                                 loanSummary.LoanNo,
                                 loanSummary.LoanType,
                                 loanSummary.LoanStatus,
-                                loanSummary.OutstandingBalance,
-                                BridgingAllowed = loan.Bridging == true
+                                OutstandingBalance = outstandingBalance,
+                                OriginalPrincipal = originalPrincipal,
+                                PercentagePaid = Math.Round(percentagePaid, 2),
+                                BridgingAllowed = loan.Bridging == true,
+                                LoanCode = loan.LoanCode
                             });
 
-                            // Find the FIRST loan that has bridging allowed
-                            if (loan.Bridging == true && string.IsNullOrEmpty(topUpLoanTypeCode))
+                            // Check if this loan has bridging allowed AND >=50% paid
+                            if (loan.Bridging == true && percentagePaid >= 50)
                             {
                                 hasBridgingAllowed = true;
-                                topUpLoanTypeCode = loan.LoanCode;
-                                topUpLoanTypeName = loanType?.LoanType ?? loan.LoanCode;
+                                bridgingLoanTypeCode = loan.LoanCode;
+                                bridgingLoanTypeName = loanType?.LoanType ?? loan.LoanCode;
                             }
                         }
                     }
                 }
 
-                // Only block if there are existing loans AND no bridging is allowed
-                bool shouldBlock = existingLoansResult.HasExistingLoan && !hasBridgingAllowed;
+                // Determine if member can apply for a top-up loan
+                bool canApplyForTopUp = hasExistingLoan && hasBridgingAllowed;
+
+                // Get top-up eligible loan types (IsTopUp = true)
+                var topUpLoanTypes = await _context.Loantypes
+                    .Where(lt => lt.CompanyCode == companyCode &&
+                                lt.IsTopUp == true &&
+                                lt.ApprovalStatus == "Approved")
+                    .Select(lt => lt.LoanCode)
+                    .ToListAsync();
 
                 return Json(new
                 {
                     success = eligibility.IsEligible,
                     message = eligibility.Message,
-                    hasExistingLoan = shouldBlock,
-                    existingLoans = existingLoansResult.ExistingLoans?.Select(l => new
-                    {
-                        l.LoanNo,
-                        l.LoanType,
-                        l.LoanStatus,
-                        l.OutstandingBalance
-                    }),
+                    hasExistingLoan = hasExistingLoan,
+                    canApplyForTopUp = canApplyForTopUp,
+                    topUpLoanTypeCodes = topUpLoanTypes,
+                    bridgingLoanTypeCode = bridgingLoanTypeCode,
+                    bridgingLoanTypeName = bridgingLoanTypeName,
+                    existingLoans = activeLoans,
                     data = new
                     {
                         memberNo = member?.MemberNo,
@@ -182,17 +196,6 @@ namespace SACCOBlockChainSystem.Controllers
                         availableShares = eligibility.TotalEligibleShares,
                         totalContributions = eligibility.TotalEligibleShares,
                         maxLoanAmountFromShares = eligibility.MaxLoanAmount
-                    },
-                    bridgingInfo = new
-                    {
-                        hasExistingLoans = existingLoansResult.HasExistingLoan,
-                        hasBridgingAllowed = hasBridgingAllowed,
-                        // ============================================================
-                        // KEY: Only the EXACT loan type that has bridging allowed
-                        // ============================================================
-                        topUpLoanTypeCode = topUpLoanTypeCode,
-                        topUpLoanTypeName = topUpLoanTypeName,
-                        loans = activeLoans
                     }
                 });
             }
@@ -613,7 +616,7 @@ namespace SACCOBlockChainSystem.Controllers
         #region All Loans View
 
         [HttpGet]
-        public async Task<IActionResult> AllLoans(int page = 1, int pageSize = 10)
+        public async Task<IActionResult> AllLoans(int page = 1, int pageSize = 10, bool loadFull = false)
         {
             try
             {
@@ -623,10 +626,11 @@ namespace SACCOBlockChainSystem.Controllers
                     CompanyCode = companyCode
                 };
 
-                var allLoans = await _loanService.SearchLoansAsync(searchDto);
-
-                // Load loan types for filter dropdown
+                // Load loan types for filter dropdown (lightweight query)
                 ViewBag.LoanTypes = await _loanTypeService.GetLoanTypesByCompanyAsync(companyCode);
+
+                // Get loans with basic data first (lightweight)
+                var allLoans = await _loanService.SearchLoansAsync(searchDto);
 
                 // Calculate pagination
                 var totalItems = allLoans.Count;
@@ -641,6 +645,9 @@ namespace SACCOBlockChainSystem.Controllers
                 ViewBag.TotalPages = totalPages;
                 ViewBag.PageSize = pageSize;
                 ViewBag.TotalItems = totalItems;
+                ViewBag.TotalPrincipal = allLoans.Sum(l => l.PrincipalAmount);
+                ViewBag.TotalApproved = allLoans.Sum(l => l.ApprovedAmount);
+                ViewBag.TotalOutstanding = allLoans.Sum(l => l.OutstandingBalance);
 
                 return View(loans);
             }
@@ -649,6 +656,84 @@ namespace SACCOBlockChainSystem.Controllers
                 _logger.LogError(ex, "Error loading all loans");
                 ViewBag.ErrorMessage = "Error loading loans";
                 return View(new List<LoanSummaryDTO>());
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetLoanSummaryData(string loanNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+
+                var loan = await _context.Loans
+                    .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.CompanyCode == companyCode);
+
+                if (loan == null)
+                {
+                    return Json(new { success = false, message = "Loan not found" });
+                }
+
+                // Get member details
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
+
+                // Get loan balance
+                var loanbal = await _context.Loanbal
+                    .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo && lb.Companycode == companyCode);
+
+                // Get guarantors
+                var guarantors = await _context.Loanguar
+                    .Where(g => g.LoanNo == loanNo && g.Transfered == false)
+                    .Select(g => new
+                    {
+                        g.MemberNo,
+                        g.FullNames,
+                        g.Amount
+                    })
+                    .ToListAsync();
+
+                var result = new
+                {
+                    success = true,
+                    loan = new
+                    {
+                        loan.LoanNo,
+                        loan.MemberNo,
+                        loan.LoanAmt,
+                        loan.Interest,
+                        loan.RepayPeriod,
+                        loan.RepayMethod,
+                        loan.Status,
+                        loan.ApplicDate
+                    },
+                    member = member != null ? new
+                    {
+                        member.MemberNo,
+                        member.Surname,
+                        member.OtherNames,
+                        member.Idno,
+                        member.PhoneNo
+                    } : null,
+                    loanBalance = loanbal != null ? new
+                    {
+                        loanbal.Balance,
+                        loanbal.IntrOwed,
+                        loanbal.Penalty,
+                        loanbal.RepayRate
+                    } : null,
+                    guarantors = guarantors,
+                    hasSchedule = await _context.LoanSchedules.AnyAsync(s => s.LoanNo == loanNo),
+                    hasEndorsement = await _context.Endmain.AnyAsync(e => e.LoanNo == loanNo && e.CompanyCode == companyCode),
+                    hasDisbursement = loanbal != null
+                };
+
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting loan summary data for {loanNo}");
+                return Json(new { success = false, message = ex.Message });
             }
         }
 
@@ -746,34 +831,51 @@ namespace SACCOBlockChainSystem.Controllers
                 application.CreatedBy = User.Identity?.Name ?? "SYSTEM";
 
                 // ============================================================
-                // NEW: Check bridging/refinancing eligibility
+                // CHECK: If member has existing loans, verify the selected loan type is a Top-Up
                 // ============================================================
-                var bridgingCheck = await _loanService.CanApplyForLoanTypeAsync(
+                var existingLoansCheck = await _loanService.CheckExistingLoansAsync(
                     application.MemberNo,
-                    application.LoanCode,
                     application.CompanyCode);
 
-                if (!bridgingCheck.CanApply)
+                if (existingLoansCheck.HasExistingLoan)
                 {
-                    ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
-                    ModelState.AddModelError("", bridgingCheck.Message);
+                    // Check if the selected loan type has IsTopUp = true
+                    var loantype = await _context.Loantypes
+                        .FirstOrDefaultAsync(lt => lt.LoanCode == application.LoanCode && lt.CompanyCode == application.CompanyCode);
 
-                    _logger.LogWarning($"Bridging check failed for member {application.MemberNo}, loan {application.LoanCode}: {bridgingCheck.Message}");
-                    return View(application);
+                    if (loantype == null)
+                    {
+                        ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
+                        ModelState.AddModelError("LoanCode", "Selected loan type not found.");
+                        return View(application);
+                    }
+
+                    if (loantype.IsTopUp != true)
+                    {
+                        ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
+                        ModelState.AddModelError("LoanCode",
+                            $"You have existing loans. The selected loan type '{loantype.LoanType1}' is not a Top-Up loan. " +
+                            $"Please select a loan type that has 'IsTopUp' enabled.");
+                        return View(application);
+                    }
+
+                    // Also verify the existing loan allows bridging
+                    var existingLoan = await _context.Loans
+                        .FirstOrDefaultAsync(l => l.MemberNo == application.MemberNo &&
+                                                 l.CompanyCode == application.CompanyCode &&
+                                                 l.Status != (int)Status.Closed &&
+                                                 l.Status != (int)Status.Rejected &&
+                                                 l.Status != (int)Status.WrittenOff);
+
+                    if (existingLoan != null && existingLoan.Bridging != true)
+                    {
+                        ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
+                        ModelState.AddModelError("",
+                            $"The existing loan does not allow bridging/top-up. " +
+                            $"Please clear the existing loan first before applying for a new loan.");
+                        return View(application);
+                    }
                 }
-
-                //// Existing loans check (general)
-                //var existingLoansCheck = await _loanService.CheckExistingLoansAsync(
-                //    application.MemberNo,
-                //    application.CompanyCode);
-
-                //if (existingLoansCheck.HasExistingLoan)
-                //{
-                //    ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
-                //    ViewBag.ExistingLoans = existingLoansCheck.ExistingLoans;
-                //    ModelState.AddModelError("MemberNo", existingLoansCheck.Message);
-                //    return View(application);
-                //}
 
                 // Eligibility check
                 var eligibility = await _loanService.CheckMemberEligibilityWithContributionsAsync(
@@ -818,7 +920,15 @@ namespace SACCOBlockChainSystem.Controllers
                     return RedirectToAction("AssignGuarantor", new { loanNo = loan.LoanNo });
                 }
 
-                TempData["SuccessMessage"] = $"Loan application {loan.LoanNo} submitted successfully!";
+                if (existingLoansCheck.HasExistingLoan)
+                {
+                    TempData["SuccessMessage"] = $"Top-Up loan application {loan.LoanNo} submitted successfully!";
+                }
+                else
+                {
+                    TempData["SuccessMessage"] = $"Loan application {loan.LoanNo} submitted successfully!";
+                }
+
                 return RedirectToAction("AllLoans");
             }
             catch (Exception ex)
@@ -2519,7 +2629,7 @@ namespace SACCOBlockChainSystem.Controllers
                     TempData["SuccessMessage"] = $"Endorsement has been rejected. Loan {endorsementDto.LoanNo} has been marked as Rejected.";
                 }
 
-                return RedirectToAction("EndorsementDetails");
+                return RedirectToAction("PendingEndorsement");
             }
             catch (Exception ex)
             {
@@ -2529,6 +2639,64 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+        private (decimal TotalInterest, decimal MonthlyPayment, decimal TotalRepayable) CalculateUpfrontInterest(
+            decimal principalAmount, decimal annualInterestRate, int repaymentPeriod, string repayMethod)
+        {
+            decimal monthlyInterestRate = (annualInterestRate / 100) / 12;
+            decimal totalInterest = 0;
+            decimal monthlyPayment = 0;
+            decimal totalRepayable = 0;
+
+            if (repayMethod == "AMT")
+            {
+                if (monthlyInterestRate > 0 && repaymentPeriod > 0)
+                {
+                    decimal factor = (decimal)Math.Pow((double)(1 + monthlyInterestRate), repaymentPeriod);
+                    monthlyPayment = principalAmount * monthlyInterestRate * factor / (factor - 1);
+                    totalInterest = (monthlyPayment * repaymentPeriod) - principalAmount;
+                }
+                else
+                {
+                    monthlyPayment = principalAmount / (repaymentPeriod > 0 ? repaymentPeriod : 1);
+                    totalInterest = 0;
+                }
+                totalRepayable = principalAmount + totalInterest;
+            }
+            else if (repayMethod == "STL")
+            {
+                // Simple interest: P * R * T
+                totalInterest = principalAmount * (annualInterestRate / 100) * (repaymentPeriod / 12m);
+                monthlyPayment = repaymentPeriod > 0 ? (principalAmount + totalInterest) / repaymentPeriod : principalAmount;
+                totalRepayable = principalAmount + totalInterest;
+            }
+            else if (repayMethod == "RBAL")
+            {
+                // Reducing balance interest
+                decimal remainingBalance = principalAmount;
+                decimal totalMinimumInterest = 0;
+
+                if (monthlyInterestRate > 0)
+                {
+                    for (int i = 1; i <= repaymentPeriod; i++)
+                    {
+                        decimal interestForMonth = remainingBalance * monthlyInterestRate;
+                        totalMinimumInterest += interestForMonth;
+                        // For RBAL, principal is not reduced in the schedule (interest only minimum)
+                        // So remainingBalance stays the same
+                    }
+                }
+
+                totalInterest = totalMinimumInterest;
+                monthlyPayment = repaymentPeriod > 0 ? totalInterest / repaymentPeriod : 0;
+                totalRepayable = principalAmount + totalInterest;
+            }
+
+            return (totalInterest, monthlyPayment, totalRepayable);
+        }
+
+        // ============================================================
+        // COMPLETE ENDORSE GET METHOD WITH UPFRONT INTEREST
+        // ============================================================
         [HttpGet]
         public async Task<IActionResult> Endorse(string loanNo)
         {
@@ -2616,9 +2784,40 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 // ============================================================
-                // CALCULATE REGISTRATION FEE - Supports both fixed and percentage
+                // CALCULATE GROSS AMOUNT
                 // ============================================================
                 var grossAmount = loan.LoanAmt ?? 0;
+
+                // ============================================================
+                // CHECK FOR UPFRONT INTEREST
+                // ============================================================
+                bool isUpfrontInterest = loan.InterestUpront ?? false;
+                decimal upfrontInterestAmount = 0;
+                string interestIncomeAccount = loanType?.InterestAcc ?? "INTEREST_INCOME_ACCOUNT";
+                string loanReceivableAccount = loanType?.LoanAcc ?? "LOAN_RECEIVABLE_ACCOUNT";
+
+                if (isUpfrontInterest)
+                {
+                    var interestRate = loan.Interest ?? 0;
+                    var repayPeriod = loan.RepayPeriod ?? 12;
+                    var repayMethod = loan.RepayMethod ?? "AMT";
+
+                    // Calculate upfront interest using the helper method
+                    var interestResult = CalculateUpfrontInterest(
+                        grossAmount,
+                        interestRate,
+                        repayPeriod,
+                        repayMethod
+                    );
+                    upfrontInterestAmount = interestResult.TotalInterest;
+
+                    _logger.LogInformation($"Upfront interest calculated: {upfrontInterestAmount:C} for loan {loanNo}");
+                    _logger.LogInformation($"Interest Rate: {interestRate}%, Period: {repayPeriod} months, Method: {repayMethod}");
+                }
+
+                // ============================================================
+                // CALCULATE REGISTRATION FEE
+                // ============================================================
                 decimal registrationFeeAmount = 0;
                 bool isPercentageFee = false;
                 decimal percentageValue = 0;
@@ -2629,39 +2828,52 @@ namespace SACCOBlockChainSystem.Controllers
 
                     if (processingFee > 0)
                     {
-                        // Determine if it's a percentage or fixed amount
-                        // If processing fee < 1000 and > 1, treat as percentage (2 = 2%)
-                        // If processing fee < 1, treat as decimal percentage (0.02 = 2%)
-                        // If processing fee >= 1000, treat as fixed amount
                         if (processingFee < 1000 && processingFee > 0)
                         {
                             isPercentageFee = true;
 
                             if (processingFee < 1)
                             {
-                                // e.g., 0.02 = 2%
                                 percentageValue = processingFee * 100;
                                 registrationFeeAmount = grossAmount * processingFee;
                             }
                             else
                             {
-                                // e.g., 2 = 2%
                                 percentageValue = processingFee;
                                 registrationFeeAmount = (grossAmount * processingFee) / 100;
                             }
                         }
                         else
                         {
-                            // Fixed amount
                             isPercentageFee = false;
                             registrationFeeAmount = processingFee;
                         }
                     }
                 }
 
+                // ============================================================
+                // BUILD DEFAULT DEDUCTIONS
+                // ============================================================
                 var defaultDeductions = new List<LoanDeductionDTO>();
 
-                // 1. Add Registration Fee from LoanType
+                // 1. Add Upfront Interest (if enabled) - MUST BE FIRST
+                if (isUpfrontInterest && upfrontInterestAmount > 0)
+                {
+                    defaultDeductions.Add(new LoanDeductionDTO
+                    {
+                        DeductionCode = "UPFRONT_INTEREST",
+                        DeductionName = "Upfront Interest",
+                        GlAccountNo = interestIncomeAccount,  // Auto-select the interest income account
+                        GlAccountName = "",
+                        Amount = upfrontInterestAmount,
+                        Description = $"Upfront interest for {loan.RepayPeriod ?? 12} months at {loan.Interest ?? 0}% p.a.",
+                        IsMandatory = true,
+                        IsPercentage = false,
+                        PercentageValue = 0
+                    });
+                }
+
+                // 2. Add Registration Fee from LoanType
                 if (registrationFeeAmount > 0)
                 {
                     defaultDeductions.Add(new LoanDeductionDTO
@@ -2680,7 +2892,7 @@ namespace SACCOBlockChainSystem.Controllers
                     });
                 }
 
-                // 2. Add other available deductions
+                // 3. Add other available deductions
                 foreach (var deduction in availableDeductions)
                 {
                     defaultDeductions.Add(new LoanDeductionDTO
@@ -2697,6 +2909,9 @@ namespace SACCOBlockChainSystem.Controllers
                     });
                 }
 
+                // ============================================================
+                // BUILD THE ENDORSEMENT DTO
+                // ============================================================
                 var endorsementDto = new LoanEndorsementDTO
                 {
                     LoanNo = loanNo,
@@ -2706,9 +2921,15 @@ namespace SACCOBlockChainSystem.Controllers
                     Deductions = defaultDeductions,
                     Remarks = "",
                     SourceAccountNo = defaultSourceAccountNo,
-                    IsAccepted = true
+                    IsAccepted = true,
+                    GrossAmount = grossAmount,
+                    TotalDeductions = defaultDeductions.Sum(d => d.Amount),
+                    NetDisbursementAmount = grossAmount - defaultDeductions.Sum(d => d.Amount)
                 };
 
+                // ============================================================
+                // SET ViewBag PROPERTIES
+                // ============================================================
                 ViewBag.Loan = loan;
                 ViewBag.GrossAmount = grossAmount;
                 ViewBag.AllGlAccounts = allGlAccounts;
@@ -2716,6 +2937,17 @@ namespace SACCOBlockChainSystem.Controllers
                 ViewBag.RegistrationFeeIsPercentage = isPercentageFee;
                 ViewBag.RegistrationFeePercentage = percentageValue;
                 ViewBag.LoanType = loanType;
+
+                // ============================================================
+                // PASS UPFRONT INTEREST TO VIEW
+                // ============================================================
+                ViewBag.IsUpfrontInterest = isUpfrontInterest;
+                ViewBag.UpfrontInterestAmount = upfrontInterestAmount;
+                ViewBag.InterestIncomeAccount = interestIncomeAccount;
+                ViewBag.LoanReceivableAccount = loanReceivableAccount;
+                ViewBag.InterestRate = loan.Interest ?? 0;
+                ViewBag.RepayPeriod = loan.RepayPeriod ?? 12;
+                ViewBag.RepayMethod = loan.RepayMethod ?? "AMT";
 
                 return View(endorsementDto);
             }
@@ -2761,6 +2993,30 @@ namespace SACCOBlockChainSystem.Controllers
                     return RedirectToAction("PendingEndorsement");
                 }
 
+                // ============================================================
+                // CALCULATE UPFRONT INTEREST IF ENABLED
+                // ============================================================
+                bool isUpfrontInterest = loan.InterestUpront ?? false;
+                decimal upfrontInterestAmount = 0;
+                string interestIncomeAccount = null;
+
+                var loanType = await _context.Loantypes
+                    .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
+
+                if (isUpfrontInterest)
+                {
+                    var interestResult = CalculateUpfrontInterest(
+                        loan.LoanAmt ?? 0,
+                        loan.Interest ?? 0,
+                        loan.RepayPeriod ?? 12,
+                        loan.RepayMethod ?? "AMT"
+                    );
+                    upfrontInterestAmount = interestResult.TotalInterest;
+                    interestIncomeAccount = loanType?.InterestAcc ?? "INTEREST_INCOME_ACCOUNT";
+
+                    _logger.LogInformation($"Upfront interest calculated for edit: {upfrontInterestAmount:C} for loan {loanNo}");
+                }
+
                 // Get endorsement data for editing
                 var endorsementDto = await _loanService.GetEndorsementForEditAsync(loanNo, companyCode);
 
@@ -2795,25 +3051,34 @@ namespace SACCOBlockChainSystem.Controllers
                     })
                     .ToListAsync();
 
-                // Get loan type for registration fee
-                var loanType = await _context.Loantypes
-                    .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
-
                 var grossAmount = loan.LoanAmt ?? 0;
 
-                // ✅ Ensure endorsementDto has the correct GrossAmount
+                // Ensure endorsementDto has the correct GrossAmount
                 if (endorsementDto.GrossAmount == 0 && grossAmount > 0)
                 {
                     endorsementDto.GrossAmount = grossAmount;
                 }
 
+                // ============================================================
+                // SET ViewBag PROPERTIES
+                // ============================================================
                 ViewBag.Loan = loan;
-                ViewBag.GrossAmount = loan.LoanAmt ?? 0;
+                ViewBag.GrossAmount = grossAmount;
                 ViewBag.AllGlAccounts = allGlAccounts;
                 ViewBag.Banks = banks;
                 ViewBag.RegistrationFee = loanType?.Processingfee ?? 0;
                 ViewBag.LoanType = loanType;
                 ViewBag.IsEdit = true;
+
+                // ============================================================
+                // PASS UPFRONT INTEREST TO VIEW
+                // ============================================================
+                ViewBag.IsUpfrontInterest = isUpfrontInterest;
+                ViewBag.UpfrontInterestAmount = upfrontInterestAmount;
+                ViewBag.InterestIncomeAccount = interestIncomeAccount;
+                ViewBag.InterestRate = loan.Interest ?? 0;
+                ViewBag.RepayPeriod = loan.RepayPeriod ?? 12;
+                ViewBag.RepayMethod = loan.RepayMethod ?? "AMT";
 
                 return View(endorsementDto);
             }
@@ -2824,8 +3089,8 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("PendingEndorsement");
             }
         }
+        
 
-        // POST: Edit Endorsement
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditEndorsement(LoanEndorsementDTO endorsementDto)
@@ -2977,7 +3242,7 @@ namespace SACCOBlockChainSystem.Controllers
                 var companyCode = GetUserCompanyCode();
                 _logger.LogInformation($"PendingDisbursement: User {userId} accessing pending disbursements for company {companyCode}");
 
-                // Get loans with Endorsed status (5)
+                // Get loans with Endorsed status (3)
                 var endorsedLoans = await _context.Loans
                     .Where(l => l.CompanyCode == companyCode && l.Status == (int)Status.Endorsed)
                     .OrderByDescending(l => l.AuditDateTime)
@@ -3009,6 +3274,11 @@ namespace SACCOBlockChainSystem.Controllers
                     var cheque = await _context.Cheques
                         .FirstOrDefaultAsync(c => c.LoanNo == loan.LoanNo && c.CompanyCode == companyCode);
 
+                    if (cheque == null)
+                    {
+                        continue; // Skip if no cheque found
+                    }
+
                     // Get member details
                     var member = await _context.Members
                         .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
@@ -3017,20 +3287,31 @@ namespace SACCOBlockChainSystem.Controllers
                     var loanType = await _context.Loantypes
                         .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
 
-                    // Calculate values
+                    // ✅ FIX: Calculate values correctly using Cheque record
                     decimal approvedAmount = endorsement.AmtApproved;
-                    decimal netAmount = cheque?.AmountIssued ?? (cheque?.Amount ?? approvedAmount);
+
+                    // ✅ Use AmountIssued from Cheque (this is the net amount after deductions)
+                    decimal netAmount = cheque.AmountIssued ?? approvedAmount;
+
+                    // ✅ Calculate total deductions from Cheque
                     decimal totalDeductions = approvedAmount - netAmount;
 
-                    // Get GL transactions for deductions
+                    // ✅ Optional: Verify with GL transactions if needed (for audit purposes)
+                    // But use Cheque as the source of truth
                     var glTransactions = await _context.Gltransactions
                         .Where(g => g.DocumentNo == cheque.Voucherno && g.Source == "LOAN_ENDORSEMENT")
                         .ToListAsync();
 
+                    // If GL transactions exist, use them for verification but keep Cheque values
                     if (glTransactions.Any())
                     {
-                        totalDeductions = glTransactions.Sum(g => g.Amount);
-                        netAmount = approvedAmount - totalDeductions;
+                        var glTotal = glTransactions.Sum(g => g.Amount);
+                        // Log if there's a discrepancy for debugging
+                        if (Math.Abs(glTotal - totalDeductions) > 0.01m)
+                        {
+                            _logger.LogWarning($"Deduction mismatch for loan {loan.LoanNo}: Cheque={totalDeductions}, GL={glTotal}");
+                        }
+                        // ✅ Use the Cheque values as the source of truth (they were set during endorsement)
                     }
 
                     pendingDisbursement.Add(new
@@ -3042,7 +3323,10 @@ namespace SACCOBlockChainSystem.Controllers
                         TotalDeductions = totalDeductions,
                         NetAmount = netAmount,
                         ApplicationDate = loan.ApplicDate,
-                        MemberMobile = member?.PhoneNo ?? member?.MobileNo ?? "N/A"
+                        MemberMobile = member?.PhoneNo ?? member?.MobileNo ?? "N/A",
+                        // ✅ Add these for debugging if needed
+                        // ChequeAmountIssued = cheque.AmountIssued,
+                        // ChequeAmount = cheque.Amount
                     });
                 }
 
@@ -3082,20 +3366,18 @@ namespace SACCOBlockChainSystem.Controllers
                     return RedirectToAction("PendingDisbursement");
                 }
 
-                // ✅ CHECK IF ALREADY DISBURSED FIRST (before status check)
+                // Check if already disbursed
                 var existingLoanbal = await _context.Loanbal
                     .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo && lb.Companycode == companyCode);
 
                 if (existingLoanbal != null)
                 {
                     TempData["ErrorMessage"] = "This loan has already been disbursed";
-                    return RedirectToAction("AllLoans");
+                    return RedirectToAction("PendingDisbursement");
                 }
 
-                // ✅ THEN CHECK STATUS
                 if (loan.Status != (int)Status.Endorsed)
                 {
-                    // If status is Disbursed (6), it's already been disbursed
                     if (loan.Status == (int)Status.Disbursed)
                     {
                         TempData["ErrorMessage"] = "This loan has already been disbursed";
@@ -3104,24 +3386,8 @@ namespace SACCOBlockChainSystem.Controllers
                     {
                         TempData["ErrorMessage"] = $"Loan cannot be disbursed in status '{loan.Status}'. Loan must be Endorsed.";
                     }
-                    return RedirectToAction("AllLoans");
+                    return RedirectToAction("PendingDisbursement");
                 }
-
-                if (loan.Status != (int)Status.Endorsed)
-                {
-                    TempData["ErrorMessage"] = $"Loan cannot be disbursed in status '{loan.Status}'. Loan must be Endorsed.";
-                    return RedirectToAction("AllLoans");
-                }
-
-                //// Check if already disbursed
-                //var existingLoanbal = await _context.Loanbal
-                //    .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo && lb.Companycode == companyCode);
-
-                //if (existingLoanbal != null)
-                //{
-                //    TempData["ErrorMessage"] = "This loan has already been disbursed";
-                //    return RedirectToAction("AllLoans");
-                //}
 
                 // GET MEMBER DETAILS
                 var member = await _context.Members
@@ -3131,24 +3397,37 @@ namespace SACCOBlockChainSystem.Controllers
                 var endorsement = await _context.Endmain
                     .FirstOrDefaultAsync(e => e.LoanNo == loanNo && e.CompanyCode == companyCode);
 
-                // Get cheque record from endorsement (contains AmountIssued = net amount after deductions)
+                // Get cheque record from endorsement
                 var cheque = await _context.Cheques
                     .FirstOrDefaultAsync(c => c.LoanNo == loanNo && c.CompanyCode == companyCode);
 
+                // Get Loan Type to retrieve Loan Control Account (DrAccNo)
                 var loanType = await _context.Loantypes
                     .FirstOrDefaultAsync(l => l.LoanCode == loan.LoanCode && l.CompanyCode == companyCode);
 
-                // Get GL Accounts for dropdown
-                var glAccounts = await _context.GlSetup
-                    .Where(g => g.CompanyCode == companyCode && g.Status == true)
-                    .OrderBy(g => g.AccNo)
-                    .Select(g => new
-                    {
-                        AccountNo = g.AccNo,
-                        AccountName = g.Glaccname,
-                        DisplayText = $"{g.Glaccname}"
-                    })
-                    .ToListAsync();
+                // Get the Loan Control Account from Loantype
+                string loanControlAccount = loanType?.LoanAcc ?? "LOAN_ASSET_ACCOUNT";
+
+                // ============================================================
+                // CHECK FOR UPFRONT INTEREST
+                // ============================================================
+                bool isUpfrontInterest = loan.InterestUpront ?? false;
+                decimal upfrontInterestAmount = 0;
+                string interestIncomeAccount = loanType?.InterestAcc ?? "INTEREST_INCOME_ACCOUNT";
+
+                if (isUpfrontInterest)
+                {
+                    // Calculate upfront interest from the loan data
+                    var interestResult = CalculateUpfrontInterest(
+                        loan.LoanAmt ?? 0,
+                        loan.Interest ?? 0,
+                        loan.RepayPeriod ?? 12,
+                        loan.RepayMethod ?? "AMT"
+                    );
+                    upfrontInterestAmount = interestResult.TotalInterest;
+
+                    _logger.LogInformation($"Upfront interest calculated for disbursement: {upfrontInterestAmount:C} for loan {loanNo}");
+                }
 
                 // Get Banks for dropdown
                 var banks = await _context.Banks
@@ -3162,20 +3441,30 @@ namespace SACCOBlockChainSystem.Controllers
                         AccountNumber = b.AccountNumber,
                         AccountName = b.AccountName,
                         Branch = b.Branch,
+                        GlAccountNo = b.GlAccountNo,
                         DisplayText = $"{b.BankName}"
                     })
                     .ToListAsync();
 
-                // CORRECT: Net amount to disburse is AmountIssued from Cheque (after deductions)
+                // Net amount to disburse is AmountIssued from Cheque (after deductions)
                 decimal netAmountToDisburse = cheque?.AmountIssued ?? endorsement?.AmtApproved ?? loan.LoanAmt ?? 0;
-
-                // Approved amount from endorsement (before deductions)
                 decimal approvedAmount = endorsement?.AmtApproved ?? loan.LoanAmt ?? 0;
-
-                // Calculate total deductions
                 decimal totalDeductions = approvedAmount - netAmountToDisburse;
 
-                ViewBag.CashGlAccounts = glAccounts;
+                // ============================================================
+                // GET INTEREST AMOUNT FROM CHEQUE
+                // ============================================================
+                decimal interestAmountFromCheque = cheque?.IntAmount ?? 0;
+
+                // If upfront interest is enabled, use the calculated amount
+                if (isUpfrontInterest && upfrontInterestAmount > 0)
+                {
+                    interestAmountFromCheque = upfrontInterestAmount;
+                }
+
+                // ============================================================
+                // SET ViewBag PROPERTIES
+                // ============================================================
                 ViewBag.Banks = banks;
                 ViewBag.Loan = loan;
                 ViewBag.Member = member;
@@ -3185,6 +3474,18 @@ namespace SACCOBlockChainSystem.Controllers
                 ViewBag.ApprovedAmount = approvedAmount;
                 ViewBag.NetAmount = netAmountToDisburse;
                 ViewBag.TotalDeductions = totalDeductions;
+                ViewBag.LoanControlAccount = loanControlAccount;
+
+                // ============================================================
+                // PASS UPFRONT INTEREST TO VIEW
+                // ============================================================
+                ViewBag.IsUpfrontInterest = isUpfrontInterest;
+                ViewBag.UpfrontInterestAmount = upfrontInterestAmount;
+                ViewBag.InterestIncomeAccount = interestIncomeAccount;
+                ViewBag.InterestAmountFromCheque = interestAmountFromCheque;
+                ViewBag.InterestRate = loan.Interest ?? 0;
+                ViewBag.RepayPeriod = loan.RepayPeriod ?? 12;
+                ViewBag.RepayMethod = loan.RepayMethod ?? "AMT";
 
                 var disbursementDto = new LoanDisbursementDTO
                 {
@@ -3198,7 +3499,8 @@ namespace SACCOBlockChainSystem.Controllers
                     InsuranceFee = 0,
                     LegalFees = 0,
                     OtherFees = 0,
-                    MobileNo = member?.PhoneNo ?? member?.MobileNo ?? ""
+                    MobileNo = member?.PhoneNo ?? member?.MobileNo ?? "",
+                    GlAccountNo = loanControlAccount
                 };
 
                 return View(disbursementDto);
@@ -3220,6 +3522,7 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 _logger.LogInformation($"=== DISBURSE POST CALLED ===");
                 _logger.LogInformation($"LoanNo: {disbursementDto.LoanNo}");
+                _logger.LogInformation($"PrintReceipt: {disbursementDto.PrintReceipt}");
 
                 if (string.IsNullOrEmpty(disbursementDto.DisbursementMethod))
                 {
@@ -3242,13 +3545,11 @@ namespace SACCOBlockChainSystem.Controllers
                     : result.MemberNo;
 
                 // ✅ CHECK B2C STATUS FROM ApiTransaction TABLE (NOT from result)
-                // Use _appDbContext to query the B2C transaction records
                 var b2cTransaction = await _appDbContext.ApiTransactions
                     .FirstOrDefaultAsync(t => t.LoanNo == disbursementDto.LoanNo && t.CompanyCode == disbursementDto.CompanyCode);
 
                 if (b2cTransaction != null)
                 {
-                    // Get the corresponding transaction detail
                     var transactionDetail = await _appDbContext.Transaction_detail
                         .FirstOrDefaultAsync(td => td.ConversationId == b2cTransaction.ConversationId);
 
@@ -3278,11 +3579,17 @@ namespace SACCOBlockChainSystem.Controllers
                 }
                 else
                 {
-                    // No B2C transaction found - B2C was not enabled or phone missing
                     TempData["SuccessMessage"] = $"Loan disbursed successfully to {memberFullName}. Net Amount: KES {result.Amount:N0}";
                 }
 
-                return RedirectToAction("AllLoans");
+                // ✅ FIX: Check if PrintReceipt is true, then redirect to print
+                if (disbursementDto.PrintReceipt)
+                {
+                    _logger.LogInformation($"PrintReceipt is TRUE, redirecting to PrintDisbursementReceipt for loan {disbursementDto.LoanNo}");
+                    return RedirectToAction("PrintDisbursementReceipt", new { loanNo = disbursementDto.LoanNo });
+                }
+
+                return RedirectToAction("PendingDisbursement");
             }
             catch (DbUpdateException ex)
             {
@@ -3305,7 +3612,6 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 _logger.LogError(ex, $"Error disbursing loan: {ex.Message}");
 
-                // Check if there's a B2C transaction even if exception occurred
                 try
                 {
                     var failedB2C = await _appDbContext.ApiTransactions
@@ -3457,7 +3763,7 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 _logger.LogError(ex, $"Error printing disbursement receipt for loan {loanNo}");
                 TempData["ErrorMessage"] = "Error printing receipt: " + ex.Message;
-                return RedirectToAction("AllLoans");
+                return RedirectToAction("PendingDisbursement");
             }
         }
 
@@ -3493,22 +3799,22 @@ namespace SACCOBlockChainSystem.Controllers
 
                 _logger.LogInformation($"Repay page loading - CompanyCode: {companyCode}");
 
-                // Load active GL accounts from GLSETUP
-                var glAccounts = await _context.GlSetup
-                    .Where(g => g.CompanyCode == companyCode && g.Status == true)
-                    .OrderBy(g => g.AccNo)
-                    .Select(g => new
-                    {
-                        AccNo = g.AccNo,
-                        Glaccname = g.Glaccname,
-                        Glacctype = g.Glacctype ?? "General",
-                        GlAccMainGroup = g.GlAccMainGroup,
-                        DisplayText = $"{g.Glaccname}"
-                    })
-                    .ToListAsync();
+                //// Load active GL accounts from GLSETUP
+                //var glAccounts = await _context.GlSetup
+                //    .Where(g => g.CompanyCode == companyCode && g.Status == true)
+                //    .OrderBy(g => g.AccNo)
+                //    .Select(g => new
+                //    {
+                //        AccNo = g.AccNo,
+                //        Glaccname = g.Glaccname,
+                //        Glacctype = g.Glacctype ?? "General",
+                //        GlAccMainGroup = g.GlAccMainGroup,
+                //        DisplayText = $"{g.Glaccname}"
+                //    })
+                //    .ToListAsync();
 
-                _logger.LogInformation($"GL Accounts found: {glAccounts.Count}");
-                ViewBag.GlAccounts = glAccounts;
+                //_logger.LogInformation($"GL Accounts found: {glAccounts.Count}");
+                //ViewBag.GlAccounts = glAccounts;
 
                 var repaymentDto = new LoanRepaymentDTO
                 {
@@ -3552,6 +3858,99 @@ namespace SACCOBlockChainSystem.Controllers
                 });
             }
         }
+
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Repay(LoanRepaymentDTO repaymentDto, bool printReceipt = true)
+        {
+            try
+            {
+                _logger.LogInformation($"=== REPAY POST CALLED ===");
+                _logger.LogInformation($"LoanNo: {repaymentDto.LoanNo}");
+                _logger.LogInformation($"Amount: {repaymentDto.AmountPaid:C}");
+                _logger.LogInformation($"PaymentMethod: {repaymentDto.PaymentMethod}");
+                _logger.LogInformation($"PrintReceipt: {printReceipt}");
+
+                if (!ModelState.IsValid)
+                {
+                    var errors = string.Join(", ", ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage));
+                    _logger.LogWarning($"ModelState invalid: {errors}");
+
+                    TempData["ErrorMessage"] = $"Validation error: {errors}";
+                    return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
+                }
+
+                if (string.IsNullOrEmpty(repaymentDto.LoanNo))
+                {
+                    TempData["ErrorMessage"] = "Please select a loan to repay";
+                    return RedirectToAction("Repay");
+                }
+
+                if (string.IsNullOrEmpty(repaymentDto.PaymentMethod))
+                {
+                    TempData["ErrorMessage"] = "Please select a payment method";
+                    return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
+                }
+
+                if (repaymentDto.AmountPaid <= 0)
+                {
+                    TempData["ErrorMessage"] = "Please enter a valid payment amount greater than zero";
+                    return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
+                }
+
+                repaymentDto.CompanyCode = GetUserCompanyCode();
+                repaymentDto.ReceivedBy = User.Identity?.Name ?? "SYSTEM";
+
+                var repayment = await _loanService.ProcessRepaymentAsync(repaymentDto);
+
+                TempData["SuccessMessage"] = $"Repayment of KES {repaymentDto.AmountPaid:N0} processed successfully. Receipt: {repayment.ReceiptNo}";
+
+                if (printReceipt)
+                {
+                    return RedirectToAction("PrintRepaymentReceipt", new { receiptNo = repayment.ReceiptNo });
+                }
+
+                return RedirectToAction("Repay");
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, $"Database error processing repayment: {ex.Message}");
+
+                string errorMessage = "Error processing repayment. ";
+                if (ex.InnerException != null)
+                {
+                    if (ex.InnerException.Message.Contains("String or binary data would be truncated"))
+                    {
+                        errorMessage += "One or more fields exceed the maximum length allowed.";
+                    }
+                    else if (ex.InnerException.Message.Contains("FOREIGN KEY"))
+                    {
+                        errorMessage += "Referenced record does not exist.";
+                    }
+                    else
+                    {
+                        errorMessage += ex.InnerException.Message;
+                    }
+                }
+                else
+                {
+                    errorMessage += ex.Message;
+                }
+
+                TempData["ErrorMessage"] = errorMessage;
+                return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error processing repayment: {ex.Message}");
+                TempData["ErrorMessage"] = $"Error processing repayment: {ex.Message}";
+                return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
+            }
+        }
+
 
         [HttpGet]
         public async Task<IActionResult> GetActiveLoans(string memberNo = null, string loanNo = null, string companyCode = null)
@@ -4241,104 +4640,7 @@ namespace SACCOBlockChainSystem.Controllers
                 return Json(new { success = false, message = ex.Message });
             }
         }
-
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Repay(LoanRepaymentDTO repaymentDto, bool printReceipt = true)
-        {
-            try
-            {
-                _logger.LogInformation($"=== REPAY POST CALLED ===");
-                _logger.LogInformation($"LoanNo: {repaymentDto.LoanNo}");
-                _logger.LogInformation($"Amount: {repaymentDto.AmountPaid:C}");
-                _logger.LogInformation($"PaymentMethod: {repaymentDto.PaymentMethod}");
-                _logger.LogInformation($"PrintReceipt: {printReceipt}");
-
-                if (!ModelState.IsValid)
-                {
-                    var errors = string.Join(", ", ModelState.Values
-                        .SelectMany(v => v.Errors)
-                        .Select(e => e.ErrorMessage));
-                    _logger.LogWarning($"ModelState invalid: {errors}");
-
-                    TempData["ErrorMessage"] = $"Validation error: {errors}";
-                    return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
-                }
-
-                if (string.IsNullOrEmpty(repaymentDto.LoanNo))
-                {
-                    TempData["ErrorMessage"] = "Please select a loan to repay";
-                    return RedirectToAction("Repay");
-                }
-
-                if (string.IsNullOrEmpty(repaymentDto.PaymentMethod))
-                {
-                    TempData["ErrorMessage"] = "Please select a payment method";
-                    return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
-                }
-
-                if (string.IsNullOrEmpty(repaymentDto.GlAccountNo))
-                {
-                    TempData["ErrorMessage"] = "Please select a GL Account";
-                    return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
-                }
-
-                if (repaymentDto.AmountPaid <= 0)
-                {
-                    TempData["ErrorMessage"] = "Please enter a valid payment amount greater than zero";
-                    return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
-                }
-
-                repaymentDto.CompanyCode = GetUserCompanyCode();
-                repaymentDto.ReceivedBy = User.Identity?.Name ?? "SYSTEM";
-
-                var repayment = await _loanService.ProcessRepaymentAsync(repaymentDto);
-
-                TempData["SuccessMessage"] = $"Repayment of KES {repaymentDto.AmountPaid:N0} processed successfully. Receipt: {repayment.ReceiptNo}";
-
-                if (printReceipt)
-                {
-                    return RedirectToAction("PrintRepaymentReceipt", new { receiptNo = repayment.ReceiptNo });
-                }
-
-                return RedirectToAction("AllLoans");
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, $"Database error processing repayment: {ex.Message}");
-
-                string errorMessage = "Error processing repayment. ";
-                if (ex.InnerException != null)
-                {
-                    if (ex.InnerException.Message.Contains("String or binary data would be truncated"))
-                    {
-                        errorMessage += "One or more fields exceed the maximum length allowed.";
-                    }
-                    else if (ex.InnerException.Message.Contains("FOREIGN KEY"))
-                    {
-                        errorMessage += "Referenced record does not exist.";
-                    }
-                    else
-                    {
-                        errorMessage += ex.InnerException.Message;
-                    }
-                }
-                else
-                {
-                    errorMessage += ex.Message;
-                }
-
-                TempData["ErrorMessage"] = errorMessage;
-                return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error processing repayment: {ex.Message}");
-                TempData["ErrorMessage"] = $"Error processing repayment: {ex.Message}";
-                return RedirectToAction("Repay", new { loanNo = repaymentDto.LoanNo });
-            }
-        }
+                
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -4600,37 +4902,6 @@ namespace SACCOBlockChainSystem.Controllers
 
         #endregion
 
-        #region Loan Search
-
-        [HttpGet]
-        public IActionResult Search()
-        {
-            return View();
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> SearchResults(LoanSearchDTO searchDto)
-        {
-            try
-            {
-                searchDto.CompanyCode = GetUserCompanyCode();
-
-                var results = await _loanService.SearchLoansAsync(searchDto);
-
-                ViewBag.SearchCriteria = searchDto;
-                ViewBag.ResultCount = results.Count;
-
-
-                return View(results);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error searching loans");
-                return View("Error");
-            }
-        }
-
-        #endregion
 
         #region Member Loans
 
@@ -4661,70 +4932,620 @@ namespace SACCOBlockChainSystem.Controllers
 
         #endregion
 
-        #region Loan Schedule
 
-       
+        #region Loan Schedule Management
+
         [HttpGet]
         public IActionResult Schedule()
-        {
-            return View();
-        }
-        [HttpPost]
-        public async Task<IActionResult> Schedule(string loanNo)
-        {
-            if (string.IsNullOrEmpty(loanNo))
-            {
-                ViewBag.Error = "Please enter Loan Number";
-                return View();
-            }
-
-            var companyCode = GetUserCompanyCode();
-
-            var loan = await _loanService.GetLoanByNoAsync(loanNo, companyCode);
-            if (loan == null)
-            {
-                ViewBag.Error = "Loan not found";
-                return View();
-            }
-
-            var schedule = await _context.LoanSchedules
-                .Where(s => s.LoanNo == loanNo)
-                .ToListAsync();
-
-            ViewBag.Loan = loan;
-
-            return View(schedule);
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> ExportSchedule(string loanNo)
         {
             try
             {
                 var companyCode = GetUserCompanyCode();
-                var loan = await _loanService.GetLoanByNoAsync(loanNo, companyCode);
-                var schedule = await _loanService.GetLoanScheduleAsync(loanNo);
-                var repayments = await _loanService.GetLoanRepaymentsAsync(loanNo);
-
-                var csv = new StringBuilder();
-                csv.AppendLine("Installment,Due Date,Principal,Interest,Total,Paid,Outstanding,Penalty,Status,Paid Date");
-
-                foreach (var inst in schedule)
-                {
-                    csv.AppendLine($"\"{inst.InstallmentNo}\",\"{inst.DueDate:dd/MM/yyyy}\",{inst.PrincipalAmount:N2},{inst.InterestAmount:N2},{inst.TotalInstallment:N2},{inst.PaidAmount:N2},{inst.OutstandingAmount:N2},{inst.PenaltyAmount:N2},\"{inst.Status}\",\"{inst.PaidDate?.ToString("dd/MM/yyyy") ?? ""}\"");
-                }
-
-                var bytes = Encoding.UTF8.GetBytes(csv.ToString());
-                return File(bytes, "text/csv", $"Schedule_{loanNo}_{DateTime.Now:yyyyMMdd}.csv");
+                ViewBag.CompanyCode = companyCode;
+                ViewBag.LoanTypes = _context.Loantypes
+                    .Where(lt => lt.CompanyCode == companyCode)
+                    .Select(lt => new { lt.LoanCode, lt.LoanType1 })
+                    .ToList();
+                return View();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error exporting schedule for {loanNo}");
+                _logger.LogError(ex, "Error loading schedule page");
+                TempData["ErrorMessage"] = "Error loading schedule page";
+                return View();
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchLoansForSchedule(string searchTerm, string companyCode)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    companyCode = GetUserCompanyCode();
+                }
+
+                if (string.IsNullOrEmpty(searchTerm) || searchTerm.Length < 2)
+                {
+                    return Json(new { success = true, loans = new List<object>() });
+                }
+
+                var query = _context.Loans
+                    .Where(l => l.CompanyCode == companyCode);
+
+                // Search by Loan No, Member No, Member Name, or ID No
+                var loans = await query
+                    .Where(l => l.LoanNo.Contains(searchTerm) ||
+                                l.MemberNo.Contains(searchTerm) ||
+                                _context.Members.Any(m => m.MemberNo == l.MemberNo &&
+                                    (m.Surname.Contains(searchTerm) ||
+                                     m.OtherNames.Contains(searchTerm) ||
+                                     m.Idno.Contains(searchTerm) ||
+                                     (m.Surname + " " + m.OtherNames).Contains(searchTerm))))
+                    .OrderByDescending(l => l.ApplicDate)
+                    .Take(50)
+                    .Select(l => new
+                    {
+                        l.LoanNo,
+                        l.MemberNo,
+                        l.LoanAmt,
+                        l.Status,
+                        l.ApplicDate,
+                        l.Interest,
+                        l.RepayPeriod,
+                        l.RepayMethod,
+                        l.InterestUpront,
+                        MemberName = _context.Members
+                            .Where(m => m.MemberNo == l.MemberNo)
+                            .Select(m => m.Surname + " " + m.OtherNames)
+                            .FirstOrDefault() ?? l.MemberNo,
+                        LoanTypeName = _context.Loantypes
+                            .Where(lt => lt.LoanCode == l.LoanCode)
+                            .Select(lt => lt.LoanType1)
+                            .FirstOrDefault() ?? l.LoanCode,
+                        StatusName = ((Status)l.Status).ToString(),
+                        HasSchedule = _context.LoanSchedules.Any(s => s.LoanNo == l.LoanNo)
+                    })
+                    .ToListAsync();
+
+                return Json(new { success = true, loans = loans });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching loans for schedule");
                 return Json(new { success = false, message = ex.Message });
             }
         }
 
+        [HttpGet]
+        public async Task<IActionResult> ViewSchedule(string loanNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+
+                // Get loan details
+                var loan = await _context.Loans
+                    .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.CompanyCode == companyCode);
+
+                if (loan == null)
+                {
+                    return Json(new { success = false, message = "Loan not found" });
+                }
+
+                // Get member details
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
+
+                // Get loan balance
+                var loanBalance = await _context.Loanbal
+                    .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo && lb.Companycode == companyCode);
+
+                // Get endorsement
+                var endmain = await _context.Endmain
+                    .FirstOrDefaultAsync(e => e.LoanNo == loanNo && e.CompanyCode == companyCode);
+
+                // Get schedule
+                var schedule = await _context.LoanSchedules
+                    .Where(s => s.LoanNo == loanNo)
+                    .OrderBy(s => s.InstallmentNo)
+                    .ToListAsync();
+
+                // Get repayments
+                var repayments = await _context.Repay
+                    .Where(r => r.LoanNo == loanNo && r.Posted == true)
+                    .OrderByDescending(r => r.DateReceived)
+                    .ToListAsync();
+
+                // Calculate totals
+                decimal approvedAmount = endmain?.AmtApproved ?? loan.LoanAmt ?? 0;
+                decimal totalPrincipal = schedule.Sum(s => s.PrincipalAmount);
+                decimal totalInterest = schedule.Sum(s => s.InterestAmount);
+                decimal totalRepayable = schedule.Sum(s => s.TotalInstallment);
+                decimal totalPaid = repayments.Sum(r => r.Amount ?? 0);
+                decimal totalPrincipalPaid = repayments.Sum(r => r.Principal ?? 0);
+                decimal totalInterestPaid = repayments.Sum(r => r.Interest ?? 0);
+                decimal totalPenaltyPaid = repayments.Sum(r => r.Penalty ?? 0);
+                decimal totalOutstanding = schedule.Where(s => s.Status != "Paid").Sum(s => s.OutstandingTotal);
+
+                // Convert to DTOs
+                var scheduleDTOs = schedule.Select(s => new LoanScheduleDTO
+                {
+                    InstallmentNo = s.InstallmentNo,
+                    DueDate = s.DueDate,
+                    PrincipalAmount = s.PrincipalAmount,
+                    InterestAmount = s.InterestAmount,
+                    TotalInstallment = s.TotalInstallment,
+                    PaidAmount = s.PaidTotal,
+                    OutstandingAmount = s.OutstandingTotal,
+                    PenaltyAmount = s.PenaltyAmount,
+                    Status = s.Status,
+                    PaidDate = s.PaidDate,
+                    OutstandingPrincipal = s.OutstandingPrincipal.ToString("N2"),
+                    OutstandingInterest = s.OutstandingInterest.ToString("N2"),
+                    OutstandingTotal = s.OutstandingTotal.ToString("N2"),
+                    IsFlexible = s.IsFlexible,
+                    MinimumPayment = s.MinimumPayment
+                }).ToList();
+
+                // Check if upfront interest
+                bool isUpfrontInterest = loan.InterestUpront ?? false;
+                decimal upfrontInterestAmount = 0;
+
+                if (isUpfrontInterest)
+                {
+                    var interestResult = CalculateUpfrontInterest(
+                        approvedAmount,
+                        loan.Interest ?? 0,
+                        loan.RepayPeriod ?? 12,
+                        loan.RepayMethod ?? "AMT"
+                    );
+                    upfrontInterestAmount = interestResult.TotalInterest;
+                }
+
+                var result = new
+                {
+                    success = true,
+                    loan = new
+                    {
+                        loan.LoanNo,
+                        loan.MemberNo,
+                        loan.LoanAmt,
+                        loan.Interest,
+                        loan.RepayPeriod,
+                        loan.RepayMethod,
+                        loan.ApplicDate,
+                        loan.Status,
+                        loan.InterestUpront,
+                        loan.Bridging,
+                        loan.Guaranteed
+                    },
+                    member = member != null ? new
+                    {
+                        member.MemberNo,
+                        member.Surname,
+                        member.OtherNames,
+                        member.Idno,
+                        member.PhoneNo,
+                        member.Email
+                    } : null,
+                    loanBalance = loanBalance != null ? new
+                    {
+                        loanBalance.Balance,
+                        loanBalance.IntrOwed,
+                        loanBalance.Penalty,
+                        loanBalance.RepayRate,
+                        loanBalance.Duedate,
+                        loanBalance.Nextduedate,
+                        loanBalance.FirstDate,
+                        loanBalance.LastDate
+                    } : null,
+                    approvedAmount = approvedAmount,
+                    totalPrincipal = totalPrincipal,
+                    totalInterest = totalInterest,
+                    totalRepayable = totalRepayable,
+                    totalPaid = totalPaid,
+                    totalPrincipalPaid = totalPrincipalPaid,
+                    totalInterestPaid = totalInterestPaid,
+                    totalPenaltyPaid = totalPenaltyPaid,
+                    totalOutstanding = totalOutstanding,
+                    repaymentMethod = loan.RepayMethod ?? "AMT",
+                    schedule = scheduleDTOs,
+                    repayments = repayments.Select(r => new
+                    {
+                        r.Id,
+                        r.ReceiptNo,
+                        r.DateReceived,
+                        r.Amount,
+                        r.Principal,
+                        r.Interest,
+                        r.Penalty,
+                        r.TransactionNo,
+                        r.ApiKey
+                    }),
+                    isUpfrontInterest = isUpfrontInterest,
+                    upfrontInterestAmount = upfrontInterestAmount
+                };
+
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error viewing schedule for loan {loanNo}");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GenerateSchedule(string loanNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+
+                var loan = await _context.Loans
+                    .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.CompanyCode == companyCode);
+
+                if (loan == null)
+                {
+                    return Json(new { success = false, message = "Loan not found" });
+                }
+
+                var loanBal = await _context.Loanbal
+                    .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo && lb.Companycode == companyCode);
+
+                if (loanBal == null)
+                {
+                    return Json(new { success = false, message = "Loan balance not found. Please disburse the loan first." });
+                }
+
+                var endmain = await _context.Endmain
+                    .FirstOrDefaultAsync(e => e.LoanNo == loanNo && e.CompanyCode == companyCode);
+
+                decimal principalAmount = endmain?.AmtApproved ?? loan.LoanAmt ?? 0;
+                bool isUpfrontInterest = loan.InterestUpront ?? false;
+
+                await _loanService.GenerateLoanScheduleAsync(loanNo,principalAmount, loan.Interest ?? 0,loan.RepayPeriod ?? 12, loanBal.FirstDate, companyCode,loan.RepayMethod ?? "AMT", isUpfrontInterest );
+
+                return Json(new { success = true, message = "Loan schedule generated successfully!" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error generating schedule for loan {loanNo}");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportScheduleToExcel(string loanNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+
+                var loan = await _context.Loans
+                    .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.CompanyCode == companyCode);
+
+                if (loan == null)
+                {
+                    TempData["ErrorMessage"] = "Loan not found";
+                    return RedirectToAction("Schedule");
+                }
+
+                var schedule = await _context.LoanSchedules
+                    .Where(s => s.LoanNo == loanNo)
+                    .OrderBy(s => s.InstallmentNo)
+                    .ToListAsync();
+
+                var repayments = await _context.Repay
+                    .Where(r => r.LoanNo == loanNo && r.Posted == true)
+                    .OrderByDescending(r => r.DateReceived)
+                    .ToListAsync();
+
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
+
+                var endmain = await _context.Endmain
+                    .FirstOrDefaultAsync(e => e.LoanNo == loanNo && e.CompanyCode == companyCode);
+
+                using var workbook = new XLWorkbook();
+                var worksheet = workbook.Worksheets.Add("Loan Schedule");
+
+                int currentRow = 1;
+
+                // Header
+                worksheet.Cell(currentRow, 1).Value = $"Loan Schedule - {loan.LoanNo}";
+                worksheet.Range(currentRow, 1, currentRow, 10).Merge();
+                worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(16);
+                worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                // Loan Information
+                worksheet.Cell(currentRow, 1).Value = "Loan Number:";
+                worksheet.Cell(currentRow, 2).Value = loan.LoanNo;
+                worksheet.Cell(currentRow, 3).Value = "Member:";
+                worksheet.Cell(currentRow, 4).Value = member != null ? $"{member.Surname} {member.OtherNames}" : loan.MemberNo;
+                worksheet.Cell(currentRow, 5).Value = "Amount:";
+                worksheet.Cell(currentRow, 6).Value = (endmain?.AmtApproved ?? loan.LoanAmt ?? 0);
+                worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
+                currentRow += 2;
+
+                // Headers
+                string[] headers = { "Installment", "Due Date", "Principal (KES)", "Interest (KES)", "Total Due (KES)", "Paid (KES)", "Outstanding (KES)", "Penalty (KES)", "Status", "Paid Date" };
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    worksheet.Cell(currentRow, i + 1).Value = headers[i];
+                    worksheet.Cell(currentRow, i + 1).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                }
+                currentRow++;
+
+                // Data
+                foreach (var inst in schedule)
+                {
+                    worksheet.Cell(currentRow, 1).Value = inst.InstallmentNo;
+                    worksheet.Cell(currentRow, 2).Value = inst.DueDate.ToString("dd/MM/yyyy");
+                    worksheet.Cell(currentRow, 3).Value = inst.PrincipalAmount;
+                    worksheet.Cell(currentRow, 3).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 4).Value = inst.InterestAmount;
+                    worksheet.Cell(currentRow, 4).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 5).Value = inst.TotalInstallment;
+                    worksheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 6).Value = inst.PaidTotal;
+                    worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 7).Value = inst.OutstandingTotal;
+                    worksheet.Cell(currentRow, 7).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 8).Value = inst.PenaltyAmount;
+                    worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 9).Value = inst.Status;
+                    worksheet.Cell(currentRow, 10).Value = inst.PaidDate?.ToString("dd/MM/yyyy") ?? "-";
+                    currentRow++;
+                }
+
+                // Totals
+                currentRow++;
+                worksheet.Cell(currentRow, 4).Value = "TOTALS:";
+                worksheet.Cell(currentRow, 4).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 5).Value = schedule.Sum(s => s.TotalInstallment);
+                worksheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 5).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 6).Value = schedule.Sum(s => s.PaidTotal);
+                worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 6).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 7).Value = schedule.Sum(s => s.OutstandingTotal);
+                worksheet.Cell(currentRow, 7).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 7).Style.Font.SetBold();
+
+                // Summary section
+                currentRow += 3;
+                worksheet.Cell(currentRow, 1).Value = "SUMMARY";
+                worksheet.Range(currentRow, 1, currentRow, 3).Merge();
+                worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                currentRow += 2;
+
+                var repaymentTotals = new
+                {
+                    TotalPaid = repayments.Sum(r => r.Amount ?? 0),
+                    TotalPrincipal = repayments.Sum(r => r.Principal ?? 0),
+                    TotalInterest = repayments.Sum(r => r.Interest ?? 0),
+                    TotalPenalty = repayments.Sum(r => r.Penalty ?? 0)
+                };
+
+                worksheet.Cell(currentRow, 1).Value = "Total Paid:";
+                worksheet.Cell(currentRow, 2).Value = repaymentTotals.TotalPaid;
+                worksheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                currentRow++;
+                worksheet.Cell(currentRow, 1).Value = "Total Principal Paid:";
+                worksheet.Cell(currentRow, 2).Value = repaymentTotals.TotalPrincipal;
+                worksheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                currentRow++;
+                worksheet.Cell(currentRow, 1).Value = "Total Interest Paid:";
+                worksheet.Cell(currentRow, 2).Value = repaymentTotals.TotalInterest;
+                worksheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                currentRow++;
+                worksheet.Cell(currentRow, 1).Value = "Total Penalty Paid:";
+                worksheet.Cell(currentRow, 2).Value = repaymentTotals.TotalPenalty;
+                worksheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                currentRow++;
+                worksheet.Cell(currentRow, 1).Value = "Outstanding Balance:";
+                worksheet.Cell(currentRow, 2).Value = schedule.Where(s => s.Status != "Paid").Sum(s => s.OutstandingTotal);
+                worksheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+
+                worksheet.Columns().AdjustToContents();
+
+                using var stream = new MemoryStream();
+                workbook.SaveAs(stream);
+                var content = stream.ToArray();
+
+                return File(content,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"LoanSchedule_{loanNo}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error exporting schedule to Excel for loan {loanNo}");
+                TempData["ErrorMessage"] = $"Error exporting: {ex.Message}";
+                return RedirectToAction("Schedule");
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportScheduleToPdf(string loanNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+
+                var loan = await _context.Loans
+                    .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.CompanyCode == companyCode);
+
+                if (loan == null)
+                {
+                    TempData["ErrorMessage"] = "Loan not found";
+                    return RedirectToAction("Schedule");
+                }
+
+                var schedule = await _context.LoanSchedules
+                    .Where(s => s.LoanNo == loanNo)
+                    .OrderBy(s => s.InstallmentNo)
+                    .ToListAsync();
+
+                var repayments = await _context.Repay
+                    .Where(r => r.LoanNo == loanNo && r.Posted == true)
+                    .OrderByDescending(r => r.DateReceived)
+                    .ToListAsync();
+
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
+
+                var endmain = await _context.Endmain
+                    .FirstOrDefaultAsync(e => e.LoanNo == loanNo && e.CompanyCode == companyCode);
+
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                using var stream = new MemoryStream();
+
+                QuestPDF.Fluent.Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(PageSizes.A4.Landscape());
+                        page.MarginTop(1.5f, Unit.Centimetre);
+                        page.MarginBottom(1.5f, Unit.Centimetre);
+                        page.MarginLeft(1.2f, Unit.Centimetre);
+                        page.MarginRight(1.2f, Unit.Centimetre);
+                        page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
+
+                        page.Header().Column(header =>
+                        {
+                            header.Item().AlignCenter().Text(company?.CompanyName?.ToUpper() ?? "SACCO BLOCKCHAIN SYSTEM").FontSize(16).Bold();
+                            header.Item().AlignCenter().Text($"LOAN REPAYMENT SCHEDULE").FontSize(12).Bold();
+                            header.Item().AlignCenter().Text($"Loan No: {loan.LoanNo} | Member: {member?.Surname} {member?.OtherNames}").FontSize(10);
+                            header.Item().AlignCenter().Text($"Generated: {DateTime.Now:dd/MM/yyyy HH:mm}").FontSize(9).Italic();
+                            header.Item().PaddingTop(0.3f, Unit.Centimetre).LineHorizontal(0.5f);
+                            header.Item().PaddingBottom(0.5f, Unit.Centimetre);
+                        });
+
+                        page.Content().Column(contentCol =>
+                        {
+                            // Summary Statistics
+                            contentCol.Item().Table(summaryTable =>
+                            {
+                                summaryTable.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                });
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Principal Amount:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{endmain?.AmtApproved ?? loan.LoanAmt ?? 0:N2}");
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Interest:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{schedule.Sum(s => s.InterestAmount):N2}");
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Repayable:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{schedule.Sum(s => s.TotalInstallment):N2}");
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Paid:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{repayments.Sum(r => r.Amount ?? 0):N2}");
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Outstanding:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{schedule.Where(s => s.Status != "Paid").Sum(s => s.OutstandingTotal):N2}");
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Repayment Method:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).Text(loan.RepayMethod ?? "AMT");
+                            });
+
+                            // Schedule Table
+                            contentCol.Item().PaddingTop(1, Unit.Centimetre);
+                            contentCol.Item().Text("REPAYMENT SCHEDULE").FontSize(11).Bold();
+
+                            contentCol.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(0.5f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(0.8f);
+                                    cols.RelativeColumn(1.0f);
+                                });
+
+                                table.Header(header =>
+                                {
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("#").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Due Date").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Principal").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Interest").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Total Due").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Paid").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Outstanding").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Status").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Paid Date").Bold().FontSize(8);
+                                });
+
+                                foreach (var inst in schedule)
+                                {
+                                    string status = inst.Status ?? "Pending";
+                                    // ✅ FIX: Always provide a valid color - never empty string
+                                    string statusColor = status == "Paid" ? "#d4edda" :
+                                                        status == "Partial" ? "#fff3cd" :
+                                                        status == "Overdue" ? "#f8d7da" :
+                                                        "#ffffff"; // Default white for Pending
+
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(inst.InstallmentNo.ToString()).FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(inst.DueDate.ToString("dd/MM/yyyy")).FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{inst.PrincipalAmount:N2}").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{inst.InterestAmount:N2}").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{inst.TotalInstallment:N2}").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{inst.PaidTotal:N2}").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{inst.OutstandingTotal:N2}").FontSize(8);
+                                    table.Cell().Border(0.2f).Background(statusColor).Padding(4).AlignCenter().Text(status).FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(inst.PaidDate?.ToString("dd/MM/yyyy") ?? "-").FontSize(8);
+                                }
+
+                                // Totals row
+                                table.Cell().ColumnSpan(4).Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text("TOTAL:").Bold().FontSize(9);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{schedule.Sum(s => s.TotalInstallment):N2}").Bold().FontSize(9);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{schedule.Sum(s => s.PaidTotal):N2}").Bold().FontSize(9);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{schedule.Where(s => s.Status != "Paid").Sum(s => s.OutstandingTotal):N2}").Bold().FontSize(9);
+                                table.Cell().ColumnSpan(2).Border(0.2f).Background("#f9f9f9").Padding(4);
+                            });
+                        });
+
+                        page.Footer()
+                            .AlignCenter()
+                            .Text(x =>
+                            {
+                                x.DefaultTextStyle(t => t.FontSize(8));
+                                x.Span("Page ");
+                                x.CurrentPageNumber();
+                                x.Span(" of ");
+                                x.TotalPages();
+                                x.Span($" | Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+                            });
+                    });
+                }).GeneratePdf(stream);
+
+                var content = stream.ToArray();
+                return File(content, "application/pdf", $"LoanSchedule_{loanNo}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error exporting schedule to PDF for loan {loanNo}");
+                TempData["ErrorMessage"] = $"Error exporting to PDF: {ex.Message}";
+                return RedirectToAction("Schedule");
+            }
+        }
+
         #endregion
+
+
 
         #region Loan Offset with Shares
 

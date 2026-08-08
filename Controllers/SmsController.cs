@@ -136,7 +136,7 @@ namespace SACCOBlockChainSystem.Controllers
                     var company = await _context.Companies
                         .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
 
-                    ViewBag.CompanyName = company?.CompanyName ?? companyCode ?? "JUHUDI SACCO";
+                    ViewBag.CompanyName = company?.CompanyName ?? companyCode ?? "AMTECH SACCO";
                     ViewBag.Templates = templates;
                     ViewBag.CompanyCode = companyCode;
 
@@ -466,7 +466,7 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     var company = await _context.SaccoParram
                         .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
-                    parameters["CompanyName"] = company?.SaccoName ?? "JUHUDI SACCO";
+                    parameters["CompanyName"] = company?.SaccoName ?? "AMTECH SACCO";
                 }
                 if (!parameters.ContainsKey("Date"))
                 {

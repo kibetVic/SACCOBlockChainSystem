@@ -216,9 +216,7 @@ namespace SACCOBlockChainSystem.Services
                 if (usageCount > 0)
                 {
                     // Validate that critical fields aren't being changed when in use
-                    if (shareType.IsMainShares != shareTypeDto.IsMainShares ||
-                        shareType.MinAmount != shareTypeDto.MinAmount ||
-                        shareType.Withdrawable != shareTypeDto.Withdrawable)
+                    if (shareType.SharesCode != shareTypeDto.SharesCode)
                     {
                         throw new ValidationException(
                             "Cannot change critical properties when share type is in use by members");
@@ -230,6 +228,9 @@ namespace SACCOBlockChainSystem.Services
                 shareType.SharesAcc = shareTypeDto.SharesAcc;
                 shareType.ContraAcc = shareTypeDto.ContraAcc;
                 shareType.PlacePeriod = shareTypeDto.PlacePeriod;
+                shareType.IsMainShares = shareTypeDto.IsMainShares;
+                shareType.MinAmount = shareTypeDto.MinAmount;
+                shareType.Withdrawable = shareTypeDto.Withdrawable;
                 shareType.LoanToShareRatio = shareTypeDto.LoanToShareRatio;
                 shareType.Issharecapital = shareTypeDto.Issharecapital;
                 shareType.Interest = shareTypeDto.Interest;

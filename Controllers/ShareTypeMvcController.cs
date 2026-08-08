@@ -52,7 +52,7 @@ namespace SACCOBlockChainSystem.Controllers
                 // Get company name
                 var companyName = User.FindFirst("CompanyName")?.Value ??
                                  HttpContext.Session.GetString("CompanyName") ??
-                                 "JUHUDI SACCO";
+                                 "AMTECH SACCO";
 
                 // Convert share types to ViewModel for the table
                 var shareTypeViewModels = shareTypes.Select(st => new ShareTypeViewModel
@@ -343,7 +343,7 @@ namespace SACCOBlockChainSystem.Controllers
                 }).ToList();
 
                 ViewBag.ShareTypes = shareTypeViewModels;
-                ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "JUHUDI SACCO";
+                ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "AMTECH SACCO";
 
                 return View(updateDto);
             }
@@ -388,7 +388,7 @@ namespace SACCOBlockChainSystem.Controllers
                     }).ToList();
 
                     ViewBag.ShareTypes = shareTypeViewModels;
-                    ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "JUHUDI SACCO";
+                    ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "AMTECH SACCO";
 
                     return View(updateDto);
                 }

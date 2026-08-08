@@ -101,6 +101,7 @@ namespace SACCOBlockChainSystem.Services
                     Type = companyDto.Type,
                     Capital = companyDto.Capital,
                     Project = companyDto.Project,
+                    CSRegNO = companyDto.CSRegNO,
                     AuditId = currentUser,
                     AuditTime = DateTime.Now
                 };
@@ -117,6 +118,7 @@ namespace SACCOBlockChainSystem.Services
                         CompanyId = company.Id,
                         CompanyCode = company.CompanyCode,
                         CompanyName = company.CompanyName,
+                        CSRegNO = company.CSRegNO,
                         Email = company.Email,
                         Contactperson = company.Contactperson,
                         Telephone = company.Telephone,
@@ -182,11 +184,6 @@ namespace SACCOBlockChainSystem.Services
 
                 var currentUser = _companyContextService.GetCurrentUserName() ?? "SYSTEM";
 
-                // Get location names if IDs are provided
-                string countyName = null;
-                string subCountyName = null;
-                string wardName = null;
-
                 // Store old values for blockchain record
                 var oldValues = new
                 {
@@ -196,20 +193,21 @@ namespace SACCOBlockChainSystem.Services
                     company.Contactperson,
                     company.Telephone,
                     company.Address,
-                    company.Location
+                    company.Location,
+                    company.CSRegNO
                 };
 
-                // Update company details
-                company.CompanyCode = companyDto.CompanyCode;
+                // Update company details (CompanyCode is NOT updated - it's read-only)
+                // company.CompanyCode = companyDto.CompanyCode; // DO NOT UPDATE THIS
                 company.CompanyName = companyDto.CompanyName;
                 company.Contactperson = companyDto.Contactperson;
                 company.Telephone = companyDto.Telephone;
                 company.Email = companyDto.Email;
                 company.Address = companyDto.Address;
                 company.NoEmployees = companyDto.NoEmployees;
-                company.County = countyName ?? companyDto.County;
-                company.SubCounty = subCountyName ?? companyDto.SubCounty;
-                company.Ward = wardName ?? companyDto.Ward;
+                company.County = companyDto.County;
+                company.SubCounty = companyDto.SubCounty;
+                company.Ward = companyDto.Ward;
                 company.Village = companyDto.Village;
                 company.Cigcode = companyDto.Cigcode;
                 company.CountyCode = companyDto.CountyCode;
@@ -220,6 +218,7 @@ namespace SACCOBlockChainSystem.Services
                 company.Type = companyDto.Type;
                 company.Capital = companyDto.Capital;
                 company.Project = companyDto.Project;
+                company.CSRegNO = companyDto.CSRegNO;
                 company.AuditId = currentUser;
                 company.AuditTime = DateTime.Now;
 
@@ -236,13 +235,13 @@ namespace SACCOBlockChainSystem.Services
                         OldValues = oldValues,
                         NewValues = new
                         {
-                            company.CompanyCode,
                             company.CompanyName,
                             company.Email,
                             company.Contactperson,
                             company.Telephone,
                             company.Address,
-                            company.Location
+                            company.Location,
+                            company.CSRegNO
                         },
                         ModifiedBy = currentUser,
                         ModifiedAt = DateTime.Now
@@ -281,6 +280,43 @@ namespace SACCOBlockChainSystem.Services
                 _logger.LogError(ex, "Error updating company");
                 throw;
             }
+        }
+
+        private CompanyResponseDTO MapToResponseDTO(Company company, string blockchainTxId)
+        {
+            return new CompanyResponseDTO
+            {
+                Id = company.Id,
+                CompanyCode = company.CompanyCode,
+                CompanyName = company.CompanyName,
+                Contactperson = company.Contactperson,
+                Telephone = company.Telephone,
+                Email = company.Email,
+                Address = company.Address,
+                NoEmployees = company.NoEmployees,
+                County = company.County,
+                SubCounty = company.SubCounty,
+                Ward = company.Ward,
+                Village = company.Village,
+                Cigcode = company.Cigcode,
+                CountyCode = company.CountyCode,
+                Unitcode = company.Unitcode,
+                AccountNo = company.AccountNo,
+                NoYears = company.NoYears,
+                Location = company.Location,
+                Type = company.Type,
+                Capital = company.Capital,
+                Project = company.Project,
+                CSRegNO = company.CSRegNO,
+                AuditId = company.AuditId,
+                AuditTime = company.AuditTime,
+                CreatedBy = company.AuditId,
+                CreatedAt = company.AuditTime ?? DateTime.Now,
+                ModifiedBy = company.AuditId,
+                ModifiedAt = company.AuditTime,
+                BlockchainTxId = blockchainTxId,
+                BusinessStatus = "Active"
+            };
         }
 
         public async Task<bool> DeleteCompanyAsync(int id)
@@ -396,64 +432,6 @@ namespace SACCOBlockChainSystem.Services
             return companies.Select(c => MapToResponseDTO(c, c.BlockchainTxId)).ToList();
         }
 
-
-        //public async Task<CompanyResponseDTO> GetCompanyByIdAsync(int id)
-        //{
-        //    var company = await _context.Companies
-        //        .Include(c => c.CountyNavigation)
-        //        .Include(c => c.SubCountyNavigation)
-        //        .Include(c => c.WardNavigation)
-        //        .FirstOrDefaultAsync(c => c.Id == id);
-
-        //    if (company == null)
-        //    {
-        //        return null;
-        //    }
-
-        //    return MapToResponseDTO(company, company.BlockchainTxId);
-        //}
-
-        //public async Task<CompanyResponseDTO> GetCompanyByCodeAsync(string companyCode)
-        //{
-        //    var company = await _context.Companies
-        //        .Include(c => c.CountyNavigation)
-        //        .Include(c => c.SubCountyNavigation)
-        //        .Include(c => c.WardNavigation)
-        //        .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
-
-        //    if (company == null)
-        //    {
-        //        return null;
-        //    }
-
-        //    return MapToResponseDTO(company, company.BlockchainTxId);
-        //}
-
-        //public async Task<List<CompanyResponseDTO>> GetAllCompaniesAsync(string search = null)
-        //{
-        //    var query = _context.Companies
-        //        .Include(c => c.CountyNavigation)
-        //        .Include(c => c.SubCountyNavigation)
-        //        .Include(c => c.WardNavigation)
-        //        .AsQueryable();
-
-        //    if (!string.IsNullOrEmpty(search))
-        //    {
-        //        query = query.Where(c =>
-        //            c.CompanyCode.Contains(search) ||
-        //            (c.CompanyName != null && c.CompanyName.Contains(search)) ||
-        //            (c.Email != null && c.Email.Contains(search)) ||
-        //            (c.Contactperson != null && c.Contactperson.Contains(search)) ||
-        //            (c.Telephone != null && c.Telephone.Contains(search)));
-        //    }
-
-        //    var companies = await query
-        //        .OrderBy(c => c.CompanyName)
-        //        .ToListAsync();
-
-        //    return companies.Select(c => MapToResponseDTO(c, c.BlockchainTxId)).ToList();
-        //}
-
         public async Task<string> GenerateCompanyCodeAsync()
         {
             var prefix = "SACCO";
@@ -487,42 +465,6 @@ namespace SACCOBlockChainSystem.Services
             }
 
             return !await query.AnyAsync();
-        }
-
-        private CompanyResponseDTO MapToResponseDTO(Company company, string blockchainTxId)
-        {
-            return new CompanyResponseDTO
-            {
-                Id = company.Id,
-                CompanyCode = company.CompanyCode,
-                CompanyName = company.CompanyName,
-                Contactperson = company.Contactperson,
-                Telephone = company.Telephone,
-                Email = company.Email,
-                Address = company.Address,
-                NoEmployees = company.NoEmployees,
-                County = company.County,
-                SubCounty = company.SubCounty,
-                Ward = company.Ward,
-                Village = company.Village,
-                Cigcode = company.Cigcode,
-                CountyCode = company.CountyCode,
-                Unitcode = company.Unitcode,
-                AccountNo = company.AccountNo,
-                NoYears = company.NoYears,
-                Location = company.Location,
-                Type = company.Type,
-                Capital = company.Capital,
-                Project = company.Project,
-                AuditId = company.AuditId,
-                AuditTime = company.AuditTime,
-                CreatedBy = company.AuditId,
-                CreatedAt = company.AuditTime ?? DateTime.Now,
-                ModifiedBy = company.AuditId,
-                ModifiedAt = company.AuditTime,
-                BlockchainTxId = blockchainTxId,
-                BusinessStatus = "Active"
-            };
         }
     }
 }

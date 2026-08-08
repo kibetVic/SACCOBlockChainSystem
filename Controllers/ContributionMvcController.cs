@@ -1,4 +1,5 @@
 ﻿// Controllers/ContributionMvcController.cs
+using DocumentFormat.OpenXml.Office.CoverPageProps;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -274,59 +275,315 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+
+
         // GET: /ContributionMvc/PrintReceipt/{receiptNo}
         public async Task<IActionResult> PrintReceipt(string receiptNo)
         {
             try
             {
-                var contributions = await _contributionService.SearchContributionsAsync(null, null, null, null);
-                var contribution = contributions.FirstOrDefault(c => c.ReceiptNo == receiptNo);
+                var companyCode = GetUserCompanyCode();
+
+                // ============================================================
+                // Check if this is a BULK receipt (starts with "BULK-")
+                // ============================================================
+                if (receiptNo != null && receiptNo.StartsWith("BULK-"))
+                {
+                    return await PrintBulkReceipt(receiptNo, companyCode);
+                }
+
+                // ============================================================
+                // SINGLE RECEIPT - Direct database access
+                // ============================================================
+                var contribution = await _context.Contribs
+                    .FirstOrDefaultAsync(c => c.ReceiptNo == receiptNo && c.CompanyCode == companyCode);
 
                 if (contribution == null)
                 {
+                    // Try to find by TransactionNo
+                    contribution = await _context.Contribs
+                        .FirstOrDefaultAsync(c => c.TransactionNo == receiptNo && c.CompanyCode == companyCode);
+                }
+
+                if (contribution == null)
+                {
+                    _logger.LogWarning($"Contribution not found: {receiptNo}");
                     return NotFound();
                 }
 
-                var member = await _contributionService.GetMemberByMemberNoAsync(contribution.MemberNo);
-                var companyCode = GetUserCompanyCode();
-                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-                var shareType = shareTypes.FirstOrDefault(st => st.SharesCode == contribution.SharesCode);
+                // Get member details
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == contribution.MemberNo && m.CompanyCode == companyCode);
 
-                var companyName = await GetCompanyNameAsync(companyCode);
-                var companyAddress = await GetCompanyAddressAsync(companyCode);
-                var companyPhone = await GetCompanyPhoneAsync(companyCode);
-                var companyEmail = await GetCompanyEmailAsync(companyCode);
+                // Get share type
+                var shareType = await _context.Sharetypes
+                    .FirstOrDefaultAsync(st => st.SharesCode == contribution.Sharescode && st.CompanyCode == companyCode);
+
+                // Get company details
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                var sacco = await _context.SaccoParram
+                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
+
+                var companyName = company?.CompanyName ?? sacco?.SaccoName ?? "SACCO System";
+                var companyAddress = company?.Address ?? sacco?.PhysicalAddress ?? "P.O. Box 12345 - 00100, Nairobi, Kenya";
+                var companyPhone = company?.Telephone ?? sacco?.Telephone ?? "+254 700 000 000";
+                var companyEmail = company?.Email ?? sacco?.EmailAddress ?? "info@sacco.co.ke";
+
+                var memberName = member != null
+                    ? $"{member.Surname} {member.OtherNames}".Trim()
+                    : contribution.MemberNo;
+
+                // Generate a display receipt number for single receipt
+                var displayReceiptNo = $"REC-{DateTime.Now:yyyyMMddHHmmss}";
 
                 var receiptModel = new ReceiptViewModel
                 {
-                    ReceiptNo = contribution.ReceiptNo,
+                    ReceiptNo = displayReceiptNo,
+                    TransactionReceiptNo = contribution.ReceiptNo,
                     MemberNo = contribution.MemberNo,
-                    MemberName = contribution.MemberName,
-                    TransactionDate = contribution.TransactionDate,
-                    Amount = contribution.Amount,
-                    ShareTypeName = shareType?.SharesType ?? contribution.ShareTypeName,
-                    PaymentMethod = "CASH", // You can store this in your Contrib table
-                    ReferenceNo = contribution.ReferenceNo,
+                    MemberName = string.IsNullOrEmpty(memberName) ? contribution.MemberNo : memberName,
+                    TransactionDate = contribution.ContrDate ?? DateTime.Now,
+                    Amount = contribution.Amount ?? 0,
+                    ShareTypeName = shareType?.SharesType ?? contribution.Sharescode ?? "Unknown",
+                    PaymentMethod = "CASH",
+                    ReferenceNo = contribution.RefNo,
                     Remarks = contribution.Remarks,
                     BlockchainTxId = contribution.BlockchainTxId,
                     CompanyCode = companyCode,
-                    CreatedBy = contribution.CreatedBy,
-                    MemberPhone = member?.PhoneNo,
+                    CreatedBy = contribution.AuditId ?? "SYSTEM",
+                    MemberPhone = member?.PhoneNo ?? member?.MobileNo,
                     MemberIdNo = member?.Idno,
-                    ShareBalanceAfter = contribution.TotalSharesAfter,
+                    ShareBalanceAfter = contribution.ShareBal ?? 0,
                     CompanyName = companyName,
                     CompanyAddress = companyAddress,
                     CompanyPhone = companyPhone,
                     CompanyEmail = companyEmail,
-                    PrintedAt = DateTime.Now
+                    PrintedAt = DateTime.Now,
+                    IsBulkReceipt = false,
+                    TotalContributions = 1,
+                    Contributions = new List<ReceiptContributionItem>()
                 };
 
-                return View(receiptModel);
+                return View("PrintReceipt", receiptModel);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error printing receipt {receiptNo}");
                 TempData["ErrorMessage"] = "Error printing receipt: " + ex.Message;
+                return RedirectToAction("Index");
+            }
+        }
+
+        // ============================================================
+        // Print Bulk Receipt - Direct database access to get ALL contributions
+        // ============================================================
+        private async Task<IActionResult> PrintBulkReceipt(string bulkReceiptNo, string companyCode)
+        {
+            try
+            {
+                _logger.LogInformation($"Printing bulk receipt: {bulkReceiptNo}");
+
+                // ============================================================
+                // STEP 1: Get ALL contributions directly from Contribs table
+                // ============================================================
+                // Get all contributions for this company (no date filter to get everything)
+                var allContribs = await _context.Contribs
+                    .Where(c => c.CompanyCode == companyCode)
+                    .OrderByDescending(c => c.ContrDate)
+                    .ToListAsync();
+
+                _logger.LogInformation($"Total contributions found: {allContribs.Count}");
+
+                // ============================================================
+                // STEP 2: Find contributions with this bulk receipt number in Remarks
+                // ============================================================
+                // Method 1: Exact match in remarks
+                var bulkContribs = allContribs
+                    .Where(c => c.Remarks != null && c.Remarks.Contains($"[BULK: {bulkReceiptNo}]"))
+                    .OrderBy(c => c.ContrDate)
+                    .ToList();
+
+                _logger.LogInformation($"Found {bulkContribs.Count} contributions with exact bulk match");
+
+                // Method 2: If no exact match, try partial match
+                if (!bulkContribs.Any())
+                {
+                    bulkContribs = allContribs
+                        .Where(c => c.Remarks != null && c.Remarks.Contains(bulkReceiptNo))
+                        .OrderBy(c => c.ContrDate)
+                        .ToList();
+
+                    _logger.LogInformation($"Found {bulkContribs.Count} contributions with partial bulk match");
+                }
+
+                // Method 3: If still no match, find by time window (all contributions from same day)
+                if (!bulkContribs.Any())
+                {
+                    // Get the member from the most recent contribution
+                    var latestContrib = allContribs
+                        .OrderByDescending(c => c.ContrDate)
+                        .FirstOrDefault();
+
+                    if (latestContrib != null)
+                    {
+                        // Get all contributions from the same member on the same day
+                        bulkContribs = allContribs
+                            .Where(c => c.MemberNo == latestContrib.MemberNo &&
+                                        c.ContrDate.HasValue &&
+                                        c.ContrDate.Value.Date == latestContrib.ContrDate.Value.Date)
+                            .OrderBy(c => c.ContrDate)
+                            .ToList();
+
+                        _logger.LogInformation($"Found {bulkContribs.Count} contributions from same day");
+                    }
+                }
+
+                // Method 4: Last resort - get all contributions from today for this member
+                if (!bulkContribs.Any())
+                {
+                    var latestContrib = allContribs
+                        .OrderByDescending(c => c.ContrDate)
+                        .FirstOrDefault();
+
+                    if (latestContrib != null)
+                    {
+                        bulkContribs = allContribs
+                            .Where(c => c.MemberNo == latestContrib.MemberNo &&
+                                        c.ContrDate.HasValue &&
+                                        c.ContrDate.Value.Date == DateTime.Now.Date)
+                            .OrderBy(c => c.ContrDate)
+                            .ToList();
+
+                        _logger.LogInformation($"Found {bulkContribs.Count} today's contributions");
+                    }
+                }
+
+                // ============================================================
+                // STEP 3: If still no contributions, show error
+                // ============================================================
+                if (!bulkContribs.Any())
+                {
+                    _logger.LogWarning($"No contributions found for bulk receipt: {bulkReceiptNo}");
+                    TempData["ErrorMessage"] = "No contributions found for this bulk receipt.";
+                    return RedirectToAction("Index");
+                }
+
+                // ============================================================
+                // STEP 4: Get member details
+                // ============================================================
+                var firstContribution = bulkContribs.First();
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == firstContribution.MemberNo && m.CompanyCode == companyCode);
+
+                // ============================================================
+                // STEP 5: Get share types
+                // ============================================================
+                var shareTypes = await _context.Sharetypes
+                    .Where(st => st.CompanyCode == companyCode)
+                    .ToDictionaryAsync(st => st.SharesCode, st => st);
+
+                // ============================================================
+                // STEP 6: Build the receipt items list
+                // ============================================================
+                var receiptItems = new List<ReceiptContributionItem>();
+                decimal totalAmount = 0;
+
+                foreach (var contrib in bulkContribs)
+                {
+                    string shareTypeName = "Unknown";
+                    if (!string.IsNullOrEmpty(contrib.Sharescode) && shareTypes.ContainsKey(contrib.Sharescode))
+                    {
+                        shareTypeName = shareTypes[contrib.Sharescode].SharesType ?? contrib.Sharescode;
+                    }
+
+                    // Clean up remarks - remove bulk markers
+                    var cleanRemarks = contrib.Remarks;
+                    if (!string.IsNullOrEmpty(cleanRemarks))
+                    {
+                        cleanRemarks = System.Text.RegularExpressions.Regex.Replace(
+                            cleanRemarks,
+                            @"\[BULK:[^\]]*\]",
+                            "").Trim();
+                        cleanRemarks = cleanRemarks.Replace("  ", " ").Trim();
+                    }
+
+                    receiptItems.Add(new ReceiptContributionItem
+                    {
+                        ShareTypeName = shareTypeName,
+                        Amount = contrib.Amount ?? 0,
+                        PaymentMethod = "CASH", // Default, can be enhanced if payment method stored
+                        ReferenceNo = contrib.RefNo,
+                        Remarks = string.IsNullOrEmpty(cleanRemarks) ? shareTypeName : cleanRemarks,
+                        ReceiptNo = contrib.ReceiptNo,
+                        TransactionDate = contrib.ContrDate ?? DateTime.Now
+                    });
+
+                    totalAmount += contrib.Amount ?? 0;
+                }
+
+                // ============================================================
+                // STEP 7: Get company details
+                // ============================================================
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+                var sacco = await _context.SaccoParram
+                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
+
+                var companyName = company?.CompanyName ?? sacco?.SaccoName ?? "SACCO System";
+                var companyAddress = company?.Address ?? sacco?.PhysicalAddress ?? "P.O. Box 12345 - 00100, Nairobi, Kenya";
+                var companyPhone = company?.Telephone ?? sacco?.Telephone ?? "+254 700 000 000";
+                var companyEmail = company?.Email ?? sacco?.EmailAddress ?? "info@sacco.co.ke";
+
+                // ============================================================
+                // STEP 8: Get BlockchainTxId
+                // ============================================================
+                var blockchainTxId = bulkContribs
+                    .FirstOrDefault(c => !string.IsNullOrEmpty(c.BlockchainTxId))?.BlockchainTxId;
+
+                // ============================================================
+                // STEP 9: Build the receipt model
+                // ============================================================
+                var memberName = member != null
+                    ? $"{member.Surname} {member.OtherNames}".Trim()
+                    : firstContribution.MemberNo;
+
+                var receiptModel = new ReceiptViewModel
+                {
+                    ReceiptNo = bulkReceiptNo,
+                    TransactionReceiptNo = string.Join(", ", receiptItems.Select(r => r.ReceiptNo)),
+                    MemberNo = firstContribution.MemberNo,
+                    MemberName = string.IsNullOrEmpty(memberName) ? firstContribution.MemberNo : memberName,
+                    TransactionDate = firstContribution.ContrDate ?? DateTime.Now,
+                    Amount = totalAmount,
+                    ShareTypeName = receiptItems.Count > 1 ? "Multiple Share Types" : receiptItems.First().ShareTypeName,
+                    PaymentMethod = receiptItems.Count > 1 ? "Multiple" : receiptItems.First().PaymentMethod,
+                    ReferenceNo = string.Join(", ", receiptItems.Select(r => r.ReferenceNo).Where(r => !string.IsNullOrEmpty(r))),
+                    Remarks = $"Bulk Contribution - {receiptItems.Count} items",
+                    BlockchainTxId = blockchainTxId,
+                    CompanyCode = companyCode,
+                    CreatedBy = firstContribution.AuditId ?? "SYSTEM",
+                    MemberPhone = member?.PhoneNo ?? member?.MobileNo,
+                    MemberIdNo = member?.Idno,
+                    ShareBalanceAfter = firstContribution.ShareBal ?? 0,
+                    CompanyName = companyName,
+                    CompanyAddress = companyAddress,
+                    CompanyPhone = companyPhone,
+                    CompanyEmail = companyEmail,
+                    PrintedAt = DateTime.Now,
+                    IsBulkReceipt = true,
+                    TotalContributions = receiptItems.Count,
+                    Contributions = receiptItems
+                };
+
+                return View("PrintBulkReceipt", receiptModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error printing bulk receipt: {bulkReceiptNo}");
+                TempData["ErrorMessage"] = "Error printing bulk receipt: " + ex.Message;
                 return RedirectToAction("Index");
             }
         }
