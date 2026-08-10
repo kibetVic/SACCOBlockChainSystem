@@ -148,7 +148,6 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
 
     #region InvoiceReceive DTOs
-
     public class InvoiceReceiveDTO
     {
         public long? Id { get; set; }
@@ -172,14 +171,11 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
         public decimal? Balance { get; set; }
 
-        // Tax Percentage (e.g., 16 for 16%)
         [Range(0, 100, ErrorMessage = "Tax percentage must be between 0 and 100")]
         public decimal? TaxPercentage { get; set; }
 
-        // Calculated Tax Amount based on TaxPercentage
         public decimal? TaxAmount { get; set; }
 
-        // Discount Amount (direct value entered by user)
         [Range(0, double.MaxValue, ErrorMessage = "Discount must be a positive number")]
         public decimal? DiscountAmount { get; set; }
 
@@ -208,18 +204,17 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [StringLength(50)]
         public string? CompanyCode { get; set; }
 
-        // System calculated - not required in input
         public string? Status { get; set; }
-
-        // System calculated - not required in input
         public string? PaymentStatus { get; set; }
-
         public decimal? TotalAmount { get; set; }
 
         [StringLength(50)]
         public string? ReceiptNo { get; set; }
 
         public string? BlockchainTxId { get; set; }
+
+        // NEW: Invoice Items
+        public List<InvoiceItemDTO> InvoiceItems { get; set; } = new List<InvoiceItemDTO>();
     }
 
     public class InvoiceReceiveResponseDTO
@@ -252,7 +247,24 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public int PaymentCount { get; set; }
         public decimal? TotalPaid { get; set; }
         public int DaysOverdue { get; set; }
+
+        // Invoice Items
+        public List<InvoiceItemResponseDTO> InvoiceItems { get; set; } = new List<InvoiceItemResponseDTO>();
     }
+
+    // NEW: Invoice Item Response DTO
+    public class InvoiceItemResponseDTO
+    {
+        public long Id { get; set; }
+        public string? Description { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Total { get; set; }
+        public long InvoiceId { get; set; }
+        public string? CompanyCode { get; set; }
+        public string? BlockchainTxId { get; set; }
+    }
+
 
     public class InvoiceSearchDTO
     {
@@ -418,5 +430,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         // Payment status
         public string? PaymentStatus { get; set; }
         public decimal? TotalPaid { get; set; }
+        public List<InvoiceItemResponseDTO> InvoiceItems { get; set; } = new List<InvoiceItemResponseDTO>();
+        public decimal InvoiceTotal { get; set; }
     }
 }

@@ -365,15 +365,7 @@
                                 data-idfront="@member.IdFrontImage"
                                 data-idback="@member.IdBackImage">
                                 <td class="row-number">@counter</td>
-                                <td>
-                                    <strong>@member.MemberNo</strong>
-                                    @if (!string.IsNullOrEmpty(member.BlockchainTxId))
-                                    {
-                                        <span class="badge bg-success ms-1" title="On Blockchain">
-                                            <i class="fas fa-link fa-xs"></i>
-                                        </span>
-                                    }
-                                </td>
+                                <td><strong>@member.MemberNo</strong></td>
                                 <td class="member-name">@fullName</td>
                                 <td class="member-idno">@member.Idno</td>
                                 <td class="member-phone">@member.PhoneNo</td>

@@ -255,6 +255,8 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+
+
         /// <summary>
         /// Print Payment Receipt - Called after successful payment
         /// </summary>
@@ -277,7 +279,7 @@ namespace SACCOBlockChainSystem.Controllers
                 // Get supplier details
                 var supplier = await _supplierService.GetSupplierByCodeAsync(payment.SupplierId, companyCode);
 
-                // Get invoice details
+                // Get invoice details with items
                 var invoice = await _invoiceService.GetInvoiceByNumberAsync(payment.InvoiceNo, companyCode);
 
                 // Get company details
@@ -324,6 +326,9 @@ namespace SACCOBlockChainSystem.Controllers
                     CompanyAddress = companyAddress,
                     CompanyPhone = companyPhone,
                     CompanyEmail = companyEmail,
+                    // NEW: Invoice Items
+                    InvoiceItems = invoice?.InvoiceItems ?? new List<InvoiceItemResponseDTO>(),
+                    InvoiceTotal = invoice?.TotalAmount ?? 0
                 };
 
                 return View("PrintPaymentReceipt", receiptViewModel);
@@ -358,7 +363,7 @@ namespace SACCOBlockChainSystem.Controllers
                 // Get supplier details
                 var supplier = await _supplierService.GetSupplierByCodeAsync(payment.SupplierId, companyCode);
 
-                // Get invoice details
+                // Get invoice details with items
                 var invoice = await _invoiceService.GetInvoiceByNumberAsync(payment.InvoiceNo, companyCode);
 
                 // Get company details
@@ -405,6 +410,9 @@ namespace SACCOBlockChainSystem.Controllers
                     CompanyAddress = companyAddress,
                     CompanyPhone = companyPhone,
                     CompanyEmail = companyEmail,
+                    // NEW: Invoice Items
+                    InvoiceItems = invoice?.InvoiceItems ?? new List<InvoiceItemResponseDTO>(),
+                    InvoiceTotal = invoice?.TotalAmount ?? 0
                 };
 
                 // Add flag to auto-print

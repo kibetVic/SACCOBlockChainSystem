@@ -387,15 +387,7 @@
                                     data-createdby="@contribution.CreatedBy">
                                     <td class="row-number">@counter</td>
                                     <td>@contribution.TransactionDate.ToString("dd/MM/yyyy")</td>
-                                    <td>
-                                        <strong>@contribution.MemberNo</strong>
-                                        @if (!string.IsNullOrEmpty(contribution.BlockchainTxId))
-                                        {
-                                            <span class="badge bg-success ms-1" title="On Blockchain">
-                                                <i class="fas fa-link fa-xs"></i>
-                                            </span>
-                                        }
-                                    </td>
+                                    <td><strong>@contribution.MemberNo</strong></td>
                                     <td class="member-name-cell">@(contribution.MemberName ?? contribution.MemberNo)</td>
                                     <td><span class="badge bg-primary">@contribution.ReceiptNo</span></td>
                                     <td class="share-type-cell">@contribution.ShareTypeName</td>

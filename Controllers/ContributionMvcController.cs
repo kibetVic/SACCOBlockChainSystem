@@ -779,11 +779,7 @@ namespace SACCOBlockChainSystem.Controllers
 
         // GET: /ContributionMvc/SearchResults
         [HttpGet]
-        public async Task<IActionResult> SearchResults(
-            DateTime? fromDate,
-            DateTime? toDate,
-            string? memberNo,
-            string? shareType)
+        public async Task<IActionResult> SearchResults( DateTime? fromDate, DateTime? toDate,string? memberNo,string? shareType)
         {
             try
             {

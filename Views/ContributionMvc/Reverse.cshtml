@@ -52,7 +52,7 @@
                                     <table class="table table-sm table-borderless">
                                         <tr>
                                             <td><strong>Amount:</strong></td>
-                                            <td class="text-danger fw-bold">@Model.Amount?.ToString("2N")</td>
+                                            <td class="text-danger fw-bold">@Model.Amount?.ToString("N2")</td>
                                         </tr>
                                         <tr>
                                             <td><strong>Transaction Date:</strong></td>
@@ -82,9 +82,9 @@
                                 <i class="fas fa-info-circle me-2"></i>
                                 <strong>What will happen:</strong>
                                 <ul class="mb-0 mt-2">
-                                    <li>A new reversal transaction with <strong>NEGATIVE @Model.Amount?.ToString("2N")</strong> will be created</li>
+                                    <li>A new reversal transaction with <strong>NEGATIVE @Model.Amount?.ToString("N2")</strong> will be created</li>
                                     <li>The original transaction will be marked as "REVERSED"</li>
-                                    <li>Member's wallet balance will be reduced by @Model.Amount?.ToString("2N")</li>
+                                    <li>Member's wallet balance will be reduced by @Model.Amount?.ToString("N2")</li>
                                     <li>Share balance will be decreased accordingly</li>
                                     <li>GL reversal entry will be created (swapped DR/CR)</li>
                                     <li>Blockchain reversal record will be added</li>

@@ -382,7 +382,7 @@ input:invalid:focus {
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="Sacco" asp-action="Index">
                                             <i class="bi bi-building me-2"></i>
-                                            <span>System Parameters</span>
+                                            <p>System Parameters</p>
                                         </a>
                                     </li>
 
@@ -410,7 +410,7 @@ input:invalid:focus {
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="Sms" asp-action="Settings">
                                             <i class="bi bi-gear me-2"></i>
-                                            <span>Eneble SMS</span>
+                                            <p>Eneble SMS</p>
                                         </a>
                                     </li>                                    
 
@@ -445,13 +445,13 @@ input:invalid:focus {
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="Account" asp-action="Index">
                                             <i class="bi bi-people-fill me-2"></i>
-                                            <span>System Users</span>
+                                            <p>System Users</p>
                                         </a>
                                     </li>
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="PaymentType" asp-action="Index">
-                                            <i class="nav-icon bi bi-gear-fill"></i> Set Payments
+                                            <i class="nav-icon bi bi-gear-fill"></i> <p>Set Payments</p>
                                         </a>
                                     </li>
 
@@ -460,7 +460,7 @@ input:invalid:focus {
                                         <li class="nav-item">
                                             <a class="nav-link" asp-controller="Account" asp-action="PendingApprovals">
                                                 <i class="bi bi-person-check-fill me-2"></i>
-                                                <span>Pending Approvals</span>
+                                                <p>Pending Approvals</p>
                                                 @if (ViewBag.PendingCount > 0)
                                                 {
                                                     <span class="badge bg-warning ms-2">@ViewBag.PendingCount</span>
@@ -471,7 +471,7 @@ input:invalid:focus {
                                         <li class="nav-item">
                                             <a class="nav-link" asp-controller="Account" asp-action="LockedUsers">
                                                 <i class="bi bi-lock-fill me-2"></i>
-                                                <span>Locked Users</span>
+                                                <p>Locked Users</p>
                                                 @if (ViewBag.LockedCount > 0)
                                                 {
                                                     <span class="badge bg-danger ms-2">@ViewBag.LockedCount</span>
@@ -481,7 +481,7 @@ input:invalid:focus {
 
                                         <li class="nav-item">
                                             <a class="nav-link" asp-controller="Account" asp-action="UserManagement">
-                                                <i class="bi bi-people"></i> User Management
+                                                <i class="bi bi-people"></i> <p>User Management</p>
                                             </a>
                                         </li>
                                     }
@@ -503,7 +503,7 @@ input:invalid:focus {
                                     {
                                         <li class="nav-item">
                                             <a class="nav-link" asp-controller="Account" asp-action="UserGroups">
-                                                <i class="bi bi-arrow-left-right"></i> UserGroups
+                                                <i class="bi bi-arrow-left-right"></i> <p>UserGroups</p>
                                             </a>
                                         </li>
                                     }
@@ -512,7 +512,7 @@ input:invalid:focus {
                                     {
                                         <li class="nav-item">
                                             <a class="nav-link" asp-controller="Account" asp-action="CompanySwitch">
-                                                <i class="bi bi-arrow-left-right"></i> Switch Company
+                                                <i class="bi bi-arrow-left-right"></i> <p>Switch Company</p>
                                             </a>
                                         </li>
                                     }
@@ -571,21 +571,28 @@ input:invalid:focus {
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="Agent" asp-action="Index">
-                                            <i class="nav-icon bi bi-people"></i>Recruit Agents/Staffs
+                                            <i class="nav-icon bi bi-people"></i> <p>Recruit Agents/Staffs</p>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a asp-controller="AssetsRegister" asp-action="Index" class="nav-link">
+                                            <i class="nav-icon bi bi-clipboard-check"></i>
+                                            <p>Assets</p>
                                         </a>
                                     </li>
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="Sms" asp-action="Templates">
                                             <i class="bi bi-file-text me-2"></i>
-                                            <span>Generate SMS</span>
+                                            <p>Generate SMS</p>
                                         </a>
                                     </li>
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="Sms" asp-action="Index">
                                             <i class="bi bi-envelope-paper me-2"></i>
-                                            <span>Send SMS</span>
+                                            <p>Send SMS</p>
                                         </a>
                                     </li>
                                 </ul>
@@ -719,14 +726,14 @@ input:invalid:focus {
                                     {
                                         <li class="nav-item">
                                             <a asp-controller="LoanMvc" asp-action="DeleteLoanIndex" class="nav-link">
-                                                <i class="nav-icon bi bi-trash"></i> Delete Loan
+                                                <i class="nav-icon bi bi-trash"></i> <p>Delete Loan</p>
                                             </a>
                                         </li>
                                     }
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="EmployeePayment" asp-action="Index">
-                                            <i class="nav-icon bi bi-cash-stack"></i> Payments
+                                            <i class="nav-icon bi bi-cash-stack"></i> <p>Payments</p>
                                         </a>
                                     </li>
 
@@ -898,13 +905,6 @@ input:invalid:focus {
                                         <a asp-controller="InvoicePayment" asp-action="Index" class="nav-link">
                                             <i class="nav-icon bi bi-credit-card-2-front"></i>
                                             <p>Invoice Payment</p>
-                                        </a>
-                                    </li>
-
-                                    <li class="nav-item">
-                                        <a asp-controller="AssetsRegister" asp-action="Index" class="nav-link">
-                                            <i class="nav-icon bi bi-clipboard-check"></i>
-                                            <p>Assets</p>
                                         </a>
                                     </li>
                                 </ul>
@@ -1133,7 +1133,7 @@ input:invalid:focus {
 
                                     <li class="nav-item">
                                         <a asp-controller="NextOfKeenReport" asp-action="Index" class="nav-link">
-                                            <i class="bi bi-file-text me-2"></i>Next of keen Report
+                                            <i class="bi bi-file-text me-2"></i> <p>Next of keen Report</p>
                                         </a>
                                     </li>
 
@@ -1145,7 +1145,7 @@ input:invalid:focus {
                                     </li>
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="ChequeReceivedReport" asp-action="Index">
-                                            <i class="bi bi-cash-stack me-1"></i> Cheques Received
+                                            <i class="bi bi-cash-stack me-1"></i> <p>Cheques Received</p>
                                         </a>
                                     </li>
                                     <li class="nav-item">
@@ -1157,13 +1157,13 @@ input:invalid:focus {
                                     <li class="nav-item">
                                         <a asp-controller="LoanMvc" asp-action="GuarantorsPerLoanReport" class="nav-link">
                                             <i class="nav-icon bi bi-people-fill"></i>
-                                            <span>Guarantors Per Loan</span>
+                                            <p>Guarantors Per Loan</p>
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a asp-controller="LoanMvc" asp-action="AllGuarantorsReport" class="nav-link">
                                             <i class="nav-icon bi bi-person-lines-fill"></i>
-                                            <span>All Guarantors Report</span>
+                                            <p>All Guarantors Report</p>
                                         </a>
                                     </li>
 
@@ -1208,12 +1208,12 @@ input:invalid:focus {
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="LoanReport" asp-action="PortfolioAtRiskReport">
-                                            <i class="bi bi-graph-up me-1"></i> Portfolio at Risk
+                                            <i class="bi bi-graph-up me-1"></i> <p>Portfolio at Risk</p>
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="LoanReport" asp-action="LoanTypePerformanceReport">
-                                            <i class="bi bi-bar-chart-steps me-1"></i> Loan Types Performance
+                                            <i class="bi bi-bar-chart-steps me-1"></i> <p>Loan Types Performance</p>
                                         </a>
                                     </li>
                                     <li class="nav-item">
@@ -1231,7 +1231,7 @@ input:invalid:focus {
 
                                     <li class="nav-item">
                                         <a class="nav-link" asp-controller="AuditTrailReport" asp-action="Index">
-                                            <i class="bi bi-file-earmark-text me-1"></i> Audit Trail Report
+                                            <i class="bi bi-file-earmark-text me-1"></i> <p>Audit Trail Report</p>
                                         </a>
                                     </li>
                                 </ul>

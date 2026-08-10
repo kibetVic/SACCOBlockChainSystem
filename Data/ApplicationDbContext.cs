@@ -71,6 +71,7 @@ namespace SACCOBlockChainSystem.Data
         public DbSet<Supplier> Suppliers { get; set; }
         public DbSet<InvoiceReceive> InvoiceReceive { get; set; }
         public DbSet<InvoicePayment> InvoicePayments { get; set; }
+        public DbSet<InvoiceItem> InvoiceItems { get; set; }
         public DbSet<County> Counties { get; set; }
         public DbSet<SubCounty> SubCounties { get; set; }
         public DbSet<Ward> Wards { get; set; }

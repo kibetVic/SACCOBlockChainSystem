@@ -5,7 +5,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SACCOBlockChainSystem.Models
 {
-    [Table("InvoiceReceive")]
     public class InvoiceReceive
     {
         [Key]
@@ -47,8 +46,7 @@ namespace SACCOBlockChainSystem.Models
 
         public DateTime? ReceivedDate { get; set; }
 
-        [StringLength(500)]
-        public string? Description { get; set; }
+        // Removed Description field - now using line items
 
         [StringLength(50)]
         public string? PurchaseOrderNo { get; set; }
@@ -90,5 +88,46 @@ namespace SACCOBlockChainSystem.Models
         public virtual Supplier? Supplier { get; set; }
 
         public virtual ICollection<InvoicePayment>? Payments { get; set; } = new List<InvoicePayment>();
+
+        // NEW: Invoice Items
+        public virtual ICollection<InvoiceItem>? InvoiceItems { get; set; } = new List<InvoiceItem>();
+    
+    }    
+
+    // NEW: Invoice Item Model
+    [Table("InvoiceItems")]
+    public class InvoiceItem
+    {
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public long Id { get; set; }
+
+        [Required]
+        public long InvoiceId { get; set; }
+
+        [Required]
+        [StringLength(200)]
+        public string? Description { get; set; }
+
+        [Required]
+        public decimal Quantity { get; set; }
+
+        [Required]
+        [Column(TypeName = "money")]
+        public decimal UnitPrice { get; set; }
+
+        [Column(TypeName = "money")]
+        public decimal Total { get; set; }
+
+        [StringLength(50)]
+        public string? CompanyCode { get; set; }
+
+        [StringLength(255)]
+        public string? BlockchainTxId { get; set; }
+
+        [ForeignKey(nameof(InvoiceId))]
+        public virtual InvoiceReceive? Invoice { get; set; }
     }
 }
+
+

@@ -21,13 +21,57 @@
             background-color: #f0f8ff;
         }
 
-    .search-type-btn.active {
-        background-color: #0d6efd;
-        color: white;
+    .search-results-table tbody tr {
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+        .search-results-table tbody tr:hover {
+            background-color: rgba(13, 110, 253, 0.05);
+        }
+
+    .selected-member-card {
+        border-left: 4px solid #28a745;
+    }
+
+    .btn-select-member {
+        min-width: 80px;
     }
 
     .loan-row-selected {
         background-color: rgba(13, 110, 253, 0.1) !important;
+    }
+
+    .section-hidden {
+        display: none !important;
+    }
+
+    .section-visible {
+        display: block !important;
+    }
+
+    #upperSection {
+        transition: all 0.3s ease;
+    }
+
+    #lowerSection {
+        transition: all 0.3s ease;
+    }
+
+    #loansTableContainer {
+        transition: all 0.3s ease;
+    }
+
+    #sharesSection {
+        transition: all 0.3s ease;
+    }
+
+    #offsetAmountSection {
+        transition: all 0.3s ease;
+    }
+
+    #offsetPreview {
+        transition: all 0.3s ease;
     }
 </style>
 
@@ -61,58 +105,135 @@
             <input type="hidden" asp-for="SharesCode" id="SharesCode" />
             <input type="hidden" asp-for="AmountToOffset" id="AmountToOffset" />
 
-            <!-- Search Section -->
-            <div class="card bg-light mb-3">
-                <div class="card-body">
-                    <div class="mb-2">
-                        <label class="fw-bold me-2">Search By:</label>
-                        <div class="btn-group btn-group-sm">
-                            <button type="button" class="btn btn-outline-secondary search-type-btn active" data-search-type="memberNo">Member No</button>
-                            <button type="button" class="btn btn-outline-secondary search-type-btn" data-search-type="loanNo">Loan No</button>
-                            <button type="button" class="btn btn-outline-secondary search-type-btn" data-search-type="idNo">ID No</button>
-                            <button type="button" class="btn btn-outline-secondary search-type-btn" data-search-type="fullName">Full Name</button>
-                            <button type="button" class="btn btn-outline-secondary search-type-btn" data-search-type="phoneNo">Phone No</button>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-8">
-                            <label class="fw-bold" id="searchLabel">Member Number</label>
-                            <div class="input-group">
-                                <input type="text" id="searchValue" class="form-control" placeholder="Enter member number..." />
-                                <button type="button" class="btn btn-primary" onclick="performSearch()"><i class="bi bi-search"></i> Search</button>
+            <!-- ============================================================ -->
+            <!-- UPPER SECTION - SEARCH & SELECT MEMBER -->
+            <!-- ============================================================ -->
+            <div id="upperSection">
+                <div class="card bg-light mb-3">
+                    <div class="card-body">
+                        <div class="row mb-2">
+                            <div class="col-md-12">
+                                <h6 class="card-title mb-3">Step 1: Search & Select Member</h6>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <label>&nbsp;</label>
-                            <button type="button" class="btn btn-outline-secondary w-100" onclick="resetForm()"><i class="bi bi-eraser"></i> Clear</button>
+
+                        <!-- Search Input -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label class="fw-bold">Search Member</label>
+                                    <div class="input-group">
+                                        <input type="text" id="searchInput" class="form-control"
+                                               placeholder="Search by Member Number, Name, ID Number, or Phone Number..." />
+                                        <button type="button" class="btn btn-secondary" onclick="clearSearch()">
+                                            <i class="bi bi-x-lg"></i> Clear
+                                        </button>
+                                    </div>
+                                    <small class="text-muted">Enter at least 3 characters to search</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Search Results -->
+                        <div id="searchResults" style="display: none;">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover search-results-table">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Select</th>
+                                            <th>Member No</th>
+                                            <th>Full Name</th>
+                                            <th>ID Number</th>
+                                            <th>Phone Number</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="searchResultsBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Loading Indicator -->
+                        <div id="searchLoading" style="display: none;" class="text-center p-3">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p>Searching for members...</p>
+                        </div>
+
+                        <!-- Selected Member Display -->
+                        <div id="selectedMemberCard" style="display: none;" class="mt-3">
+                            <div class="alert alert-success selected-member-card">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        <strong>Selected Member:</strong>
+                                        <span id="selectedMemberName"></span>
+                                        <br />
+                                        <small>
+                                            <span id="selectedMemberNoDisplay"></span> |
+                                            ID: <span id="selectedMemberIdNo"></span> |
+                                            Phone: <span id="selectedMemberPhone"></span>
+                                        </small>
+                                    </div>
+                                    <div>
+                                        <button type="button" class="btn btn-sm btn-primary me-1" onclick="loadMemberLoans()">
+                                            <i class="bi bi-search"></i> View Loans
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearSelectedMember()">
+                                            <i class="bi bi-arrow-left"></i> Change
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Results -->
-            <div id="resultsSection" style="display:none">
-                <div class="alert alert-success" id="memberInfo">
+            <!-- ============================================================ -->
+            <!-- LOWER SECTION - RESULTS & OFFSET -->
+            <!-- ============================================================ -->
+            <div id="lowerSection" class="d-none">
+                <!-- Member Info -->
+                <div id="memberInfo" class="alert alert-info mb-3">
+                    <i class="bi bi-person-check-fill me-2"></i>
                     <strong id="memberName"></strong>
-                    <div id="memberDetails" class="small mt-1"></div>
+                    <div id="memberDetails" class="mt-2"></div>
                 </div>
 
-                <div class="table-responsive mb-3">
-                    <table class="table table-hover table-sm">
-                        <thead class="table-light">
-                            <tr>
-                            <th>Loan No</th>
-                            <th>Type</th>
-                            <th class="text-end">Principal</th>
-                            <th class="text-end">Interest</th>
-                            <th class="text-end">Penalty</th>
-                            <th class="text-end">Total</th>
-                            <th></th></tr>
-                        </thead>
-                        <tbody id="loansTableBody"><tr><td colspan="7" class="text-center text-muted">Search for a loan</td></tr></tbody>
-                    </table>
+                <!-- Active Loans Table Container -->
+                <div id="loansTableContainer">
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <h6 class="fw-bold mb-3">Active Loans Found</h6>
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="loansTable">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Action</th>
+                                            <th>Loan No</th>
+                                            <th>Type</th>
+                                            <th class="text-end">Principal</th>
+                                            <th class="text-end">Interest</th>
+                                            <th class="text-end">Penalty</th>
+                                            <th class="text-end">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="loansTableBody">
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted py-4">
+                                                <i class="bi bi-search me-2"></i>Search for a member to see loans
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
+                <!-- Selected Loan Summary -->
                 <div id="loanSummaryCard" class="card mb-3" style="display:none">
                     <div class="card-header bg-primary text-white py-1"><small>Selected Loan</small></div>
                     <div class="card-body py-2">
@@ -132,65 +253,68 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Available Shares -->
-            <div id="sharesSection" class="mb-3" style="display:none">
-                <hr />
-                <h6>Available Shares for Offset</h6>
-                <div class="row" id="sharesList"></div>
-            </div>
+                <!-- Available Shares -->
+                <div id="sharesSection" class="mb-3" style="display:none">
+                    <hr />
+                    <h6>Step 2: Select Share Type for Offset</h6>
+                    <div class="row" id="sharesList"></div>
+                </div>
 
-            <!-- Offset Amount Section -->
-            <div id="offsetAmountSection" style="display:none">
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="card bg-light mb-2">
-                            <div class="card-body py-2">
-                                <div class="row">
-                                    <div class="col-6">
-                                        <small class="text-muted">Monthly Due:</small>
-                                        <strong class="text-primary" id="displayMonthlyDue">KES 0.00</strong>
-                                    </div>
-                                    <div class="col-6">
-                                        <small class="text-muted">Full Loan Balance:</small>
-                                        <strong class="text-success" id="displayFullLoanBalance">KES 0.00</strong>
+                <!-- Offset Amount Section -->
+                <div id="offsetAmountSection" style="display:none">
+                    <hr />
+                    <h6>Step 3: Enter Offset Amount</h6>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="card bg-light mb-2">
+                                <div class="card-body py-2">
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <small class="text-muted">Monthly Due:</small>
+                                            <strong class="text-primary" id="displayMonthlyDue">KES 0.00</strong>
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted">Full Loan Balance:</small>
+                                            <strong class="text-success" id="displayFullLoanBalance">KES 0.00</strong>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <label class="fw-bold">Amount to Offset (KES)</label>
-                                <div class="input-group">
-                                    <input type="number" id="offsetAmount" class="form-control" step="0.01" min="0" />
-                                    <button type="button" class="btn btn-outline-primary" id="monthlyDueBtn" disabled>Monthly Due</button>
-                                    <button type="button" class="btn btn-outline-success" id="fullBalanceBtn" disabled>Full Balance</button>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="fw-bold">Amount to Offset (KES)</label>
+                                    <div class="input-group">
+                                        <input type="number" id="offsetAmount" class="form-control" step="0.01" min="0" />
+                                        <button type="button" class="btn btn-outline-primary" id="monthlyDueBtn" disabled>Monthly Due</button>
+                                        <button type="button" class="btn btn-outline-success" id="fullBalanceBtn" disabled>Full Balance</button>
+                                    </div>
+                                    <small class="text-muted" id="amountHint"></small>
                                 </div>
-                                <small class="text-muted" id="amountHint"></small>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Preview -->
-            <div id="offsetPreview" class="mt-3" style="display:none">
-                <div class="card bg-light">
-                    <div class="card-body py-2">
-                        <div class="row">
-                            <div class="col-4">Penalty: <strong class="text-danger">KES <span id="allocatedPenalty">0.00</span></strong></div>
-                            <div class="col-4">Interest: <strong class="text-warning">KES <span id="allocatedInterest">0.00</span></strong></div>
-                            <div class="col-4">Principal: <strong class="text-success">KES <span id="allocatedPrincipal">0.00</span></strong></div>
-                        </div>
-                        <div class="row mt-1">
-                            <div class="col-4">Total: <strong>KES <span id="totalOffset">0.00</span></strong></div>
-                            <div class="col-4">Overpayment: <span class="text-info">KES <span id="overpayment">0.00</span></span></div>
-                            <div class="col-4">Balance After: <strong class="text-primary">KES <span id="balanceAfter">0.00</span></strong></div>
+                <!-- Preview -->
+                <div id="offsetPreview" class="mt-3" style="display:none">
+                    <div class="card bg-light">
+                        <div class="card-body py-2">
+                            <h6 class="mb-2">Offset Breakdown</h6>
+                            <div class="row">
+                                <div class="col-4">Penalty: <strong class="text-danger">KES <span id="allocatedPenalty">0.00</span></strong></div>
+                                <div class="col-4">Interest: <strong class="text-warning">KES <span id="allocatedInterest">0.00</span></strong></div>
+                                <div class="col-4">Principal: <strong class="text-success">KES <span id="allocatedPrincipal">0.00</span></strong></div>
+                            </div>
+                            <div class="row mt-1">
+                                <div class="col-4">Total: <strong>KES <span id="totalOffset">0.00</span></strong></div>
+                                <div class="col-4">Overpayment: <span class="text-info">KES <span id="overpayment">0.00</span></span></div>
+                                <div class="col-4">Balance After: <strong class="text-primary">KES <span id="balanceAfter">0.00</span></strong></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -206,175 +330,298 @@
 </div>
 
 @section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         const companyCode = '@companyCode';
-        let selectedLoan = null, selectedShare = null, loansData = null, sharesData = null, currentMemberNo = null, currentSearchType = 'memberNo';
+        let selectedLoan = null, selectedShare = null, loansData = null, sharesData = null, currentMemberNo = null;
+        let selectedMemberData = null;
+        let searchTimeout = null;
 
         $(document).ready(function() {
-            $('.search-type-btn').click(function() {
-                $('.search-type-btn').removeClass('active');
-                $(this).addClass('active');
-                currentSearchType = $(this).data('search-type');
-                const labels = { memberNo: 'Member Number', loanNo: 'Loan Number', idNo: 'ID Number', fullName: 'Full Name', phoneNo: 'Phone Number' };
-                $('#searchLabel').text(labels[currentSearchType]);
-                $('#searchValue').attr('placeholder', 'Enter ' + labels[currentSearchType].toLowerCase() + '...');
-                $('#searchValue').val('');
-                resetForm();
+            // Auto-search with debounce
+            $('#searchInput').on('input', function() {
+                clearTimeout(searchTimeout);
+                const searchTerm = $(this).val().trim();
+                if (searchTerm.length >= 3) {
+                    searchTimeout = setTimeout(function() {
+                        searchMembers();
+                    }, 500);
+                } else if (searchTerm.length === 0) {
+                    clearSearch();
+                }
             });
-            $('#searchValue').keypress(e => { if (e.key === 'Enter') performSearch(); });
+
+            // Enter key support
+            $('#searchInput').on('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    searchMembers();
+                }
+            });
+
+            // Offset amount input
             $('#offsetAmount').on('input', function() {
                 const amount = parseFloat($(this).val()) || 0;
                 $('#AmountToOffset').val(amount);
                 calculateOffset();
             });
-            $('#fullOffsetBtn').click(function() {
+
+            // Monthly Due button
+            $('#monthlyDueBtn').click(function() {
                 if (selectedLoan && selectedShare) {
-                    const maxOffset = Math.min(selectedLoan.totalOutstanding, selectedShare.availableAmount);
-                    $('#offsetAmount').val(maxOffset.toFixed(2));
-                    $('#AmountToOffset').val(maxOffset.toFixed(2));
+                    const amount = Math.min(selectedLoan.monthlyDue, selectedShare.availableAmount);
+                    $('#offsetAmount').val(amount.toFixed(2));
+                    $('#AmountToOffset').val(amount.toFixed(2));
+                    calculateOffset();
+                }
+            });
+
+            // Full Balance button
+            $('#fullBalanceBtn').click(function() {
+                if (selectedLoan && selectedShare) {
+                    const amount = Math.min(selectedLoan.fullLoanBalance, selectedShare.availableAmount);
+                    $('#offsetAmount').val(amount.toFixed(2));
+                    $('#AmountToOffset').val(amount.toFixed(2));
                     calculateOffset();
                 }
             });
         });
 
-        async function performSearch() {
-            const val = $('#searchValue').val().trim();
-            if (!val) { alert('Please enter search value'); return; }
-            if (currentSearchType === 'memberNo') await searchByMember(val);
-            else if (currentSearchType === 'loanNo') await searchByLoan(val);
-            else if (currentSearchType === 'idNo') await searchByIdNo(val);
-            else if (currentSearchType === 'fullName') await searchByFullName(val);
-            else if (currentSearchType === 'phoneNo') await searchByPhoneNo(val);
+        // ============================================================
+        // SEARCH MEMBERS
+        // ============================================================
+        async function searchMembers() {
+            const searchTerm = document.getElementById('searchInput').value.trim();
+
+            if (searchTerm.length < 3) {
+                Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
+                return;
+            }
+
+            // Show loading
+            document.getElementById('searchLoading').style.display = 'block';
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('searchResultsBody').innerHTML = '';
+
+            try {
+                const response = await fetch(`/api/Member/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+
+                if (!response.ok) {
+                    throw new Error('Search failed');
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.data && data.data.length > 0) {
+                    displaySearchResults(data.data);
+                } else {
+                    document.getElementById('searchResultsBody').innerHTML =
+                        '<tr><td colspan="6" class="text-center text-warning">No members found matching your search</td></tr>';
+                    document.getElementById('searchResults').style.display = 'block';
+                    Swal.fire('Info', 'No members found matching your search', 'info');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('searchResultsBody').innerHTML =
+                    '<tr><td colspan="6" class="text-center text-danger">Error searching members. Please try again.</td></tr>';
+                document.getElementById('searchResults').style.display = 'block';
+                Swal.fire('Error', 'Error searching members', 'error');
+            } finally {
+                document.getElementById('searchLoading').style.display = 'none';
+            }
         }
 
-        async function searchByMember(memberNo) {
+        // ============================================================
+        // DISPLAY SEARCH RESULTS
+        // ============================================================
+        function displaySearchResults(members) {
+            const tbody = document.getElementById('searchResultsBody');
+            tbody.innerHTML = '';
+
+            members.forEach(member => {
+                const statusBadge = member.status == 1 ?
+                    '<span class="badge bg-success">Active</span>' :
+                    '<span class="badge bg-danger">Inactive</span>';
+
+                const fullName = (member.surname || '') + ' ' + (member.otherNames || '');
+                const phone = member.phoneNo || member.phone || 'N/A';
+
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-success btn-select-member" onclick="selectMember('${member.memberNo}')">
+                            <i class="bi bi-check-lg"></i> Select
+                        </button>
+                    </td>
+                    <td><strong>${escapeHtml(member.memberNo)}</strong></td>
+                    <td>${escapeHtml(fullName.trim() || member.memberNo)}</td>
+                    <td>${escapeHtml(member.idno || 'N/A')}</td>
+                    <td>${escapeHtml(phone)}</td>
+                    <td>${statusBadge}</td>
+                `;
+            });
+
+            document.getElementById('searchResults').style.display = 'block';
+        }
+
+        // ============================================================
+        // SELECT MEMBER
+        // ============================================================
+        function selectMember(memberNo) {
+            currentMemberNo = memberNo;
+
+            // Update selected member card
+            document.getElementById('selectedMemberNoDisplay').innerHTML = memberNo;
+            document.getElementById('selectedMemberCard').style.display = 'block';
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('searchInput').value = '';
+
+            // Show lower section
+            document.getElementById('lowerSection').classList.remove('d-none');
+
+            // Fetch member details
+            fetch(`/api/Member/${memberNo}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.data) {
+                        selectedMemberData = data.data;
+                        const fullName = (data.data.surname || '') + ' ' + (data.data.otherNames || '');
+                        document.getElementById('selectedMemberName').innerHTML =
+                            `<strong>${escapeHtml(fullName.trim() || memberNo)}</strong>`;
+                        document.getElementById('selectedMemberIdNo').innerHTML = data.data.idno || 'N/A';
+                        document.getElementById('selectedMemberPhone').innerHTML = data.data.phoneNo || data.data.phone || 'N/A';
+                        document.getElementById('selectedMemberNoDisplay').innerHTML = memberNo;
+
+                        loadMemberLoans();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching member details:', error);
+                    Swal.fire('Error', 'Error fetching member details', 'error');
+                });
+        }
+
+        // ============================================================
+        // LOAD MEMBER LOANS
+        // ============================================================
+        async function loadMemberLoans() {
+            if (!currentMemberNo) {
+                Swal.fire('Error', 'Please select a member first', 'error');
+                return;
+            }
+
+            document.getElementById('loansTableBody').innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading loans for member...</p>
+                    </td>
+                </tr>
+            `;
+
+            document.getElementById('loansTableContainer').style.display = 'block';
+
             try {
-                const res = await fetch(`/LoanMvc/GetActiveLoans?companyCode=${companyCode}&memberNo=${memberNo}`);
+                const res = await fetch(`/LoanMvc/GetActiveLoans?companyCode=${encodeURIComponent(companyCode)}&memberNo=${encodeURIComponent(currentMemberNo)}`);
                 const data = await res.json();
-                if (data.success && data.loans?.length) {
-                    currentMemberNo = data.memberNo;
+
+                if (data.success && data.loans && data.loans.length > 0) {
                     loansData = data.loans;
-                    displayResults(data);
+                    displayLoans(data);
                     await loadShares(currentMemberNo);
-                } else { alert('No active loans found'); resetForm(); }
-            } catch (e) { console.error(e); alert('Error searching'); }
+                } else {
+                    document.getElementById('loansTableBody').innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                <i class="bi bi-info-circle me-2"></i>
+                                No active loans found for this member
+                            </td>
+                        </tr>
+                    `;
+                    Swal.fire('Info', 'No active loans found for this member', 'info');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loansTableBody').innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-danger py-4">
+                            Error loading loans. Please try again.
+                        </td>
+                    </tr>
+                `;
+                Swal.fire('Error', 'Error loading loans', 'error');
+            }
         }
 
-        async function searchByLoan(loanNo) {
-            try {
-                const res = await fetch(`/LoanMvc/GetActiveLoans?companyCode=${companyCode}&loanNo=${loanNo}`);
-                const data = await res.json();
-                if (data.success && data.loans?.length) {
-                    currentMemberNo = data.memberNo;
-                    loansData = data.loans;
-                    displayResults(data);
-                    await loadShares(currentMemberNo);
-                } else { alert('No active loans found'); resetForm(); }
-            } catch (e) { console.error(e); alert('Error searching'); }
-        }
-
-        async function searchByIdNo(idNo) {
-            const res = await fetch(`/MemberMvc/SearchMember?idNo=${idNo}`);
-            const data = await res.json();
-            if (data.success && data.member) await searchByMember(data.member.memberNo);
-            else { alert('Member not found'); resetForm(); }
-        }
-
-        async function searchByFullName(name) {
-            const res = await fetch(`/MemberMvc/SearchMember?fullName=${encodeURIComponent(name)}`);
-            const data = await res.json();
-            if (data.success && data.member) await searchByMember(data.member.memberNo);
-            else { alert('Member not found'); resetForm(); }
-        }
-
-        async function searchByPhoneNo(phone) {
-            const res = await fetch(`/MemberMvc/SearchMember?phoneNo=${phone}`);
-            const data = await res.json();
-            if (data.success && data.member) await searchByMember(data.member.memberNo);
-            else { alert('Member not found'); resetForm(); }
-        }
-
-        async function loadShares(memberNo) {
-            try {
-                const res = await fetch(`/LoanMvc/GetAvailableShares?memberNo=${memberNo}&companyCode=${companyCode}`);
-                const data = await res.json();
-                if (data.success && data.shares?.length) {
-                    sharesData = data.shares;
-                    displayShares(data.shares);
-                } else { $('#sharesSection').hide(); alert('No available shares for offset'); }
-            } catch (e) { console.error(e); }
-        }
-
-        function displayResults(data) {
-            $('#resultsSection').show();
-            $('#memberName').html(`<strong>Member:</strong> ${data.memberName || 'N/A'} (${data.memberNo})`);
-            $('#memberDetails').html(`ID: ${data.idNo || 'N/A'} | Phone: ${data.phone || 'N/A'} | Email: ${data.email || 'N/A'} | Active Loans: ${data.loans.length}`);
+        // ============================================================
+        // DISPLAY LOANS
+        // ============================================================
+        function displayLoans(data) {
+            const memberInfo = document.getElementById('memberInfo');
+            memberInfo.className = 'alert alert-success mb-3';
+            document.getElementById('memberName').innerHTML = `<strong>Member:</strong> ${data.memberName || 'N/A'}`;
+            document.getElementById('memberDetails').innerHTML = `
+                <div class="row">
+                    <div class="col-md-3">
+                        <small><strong>Member No:</strong> ${data.memberNo || 'N/A'}</small>
+                    </div>
+                    <div class="col-md-3">
+                        <small><strong>ID No:</strong> ${data.idNo || 'N/A'}</small>
+                    </div>
+                    <div class="col-md-3">
+                        <small><strong>Phone:</strong> ${data.phone || 'N/A'}</small>
+                    </div>
+                    <div class="col-md-3">
+                        <small><strong>Active Loans:</strong> ${data.loans.length}</small>
+                    </div>
+                </div>
+            `;
 
             let html = '';
-            data.loans.forEach((loan, i) => {
-                const total = (loan.outstandingPrincipal + loan.outstandingInterest + loan.outstandingPenalty).toLocaleString(undefined, {minimumFractionDigits:2});
+            data.loans.forEach((loan, index) => {
+                const total = (loan.outstandingPrincipal + loan.outstandingInterest + loan.outstandingPenalty);
                 html += `<tr id="loanRow_${loan.loanNo}">
+                            <td>
+                                <button type="button" class="btn btn-sm btn-primary w-100" onclick="selectLoan('${loan.loanNo}', ${index})">
+                                    <i class="bi bi-check-lg me-1"></i> Select
+                                </button>
+                            </td>
                             <td><strong>${loan.loanNo}</strong></td>
                             <td>${loan.loanType || 'N/A'}</td>
-                            <td class="text-end">${(loan.outstandingPrincipal||0).toLocaleString()}</td>
-                            <td class="text-end">${(loan.outstandingInterest||0).toLocaleString()}</td>
-                            <td class="text-end">${(loan.outstandingPenalty||0).toLocaleString()}</td>
-                            <td class="text-end fw-bold">${total}</td>
-                            <td><button class="btn btn-sm btn-primary" onclick="selectLoan('${loan.loanNo}',${i})">Select</button></td>
+                            <td class="text-end">${(loan.outstandingPrincipal||0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                            <td class="text-end">${(loan.outstandingInterest||0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                            <td class="text-end">${(loan.outstandingPenalty||0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                            <td class="text-end fw-bold">${total.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
                           </tr>`;
             });
-            $('#loansTableBody').html(html);
+            document.getElementById('loansTableBody').innerHTML = html;
         }
 
-                // Update selectLoan function to include fullLoanBalance
-        function selectLoan(loanNo, idx) {
-            const loan = loansData[idx];
-            selectedLoan = {
-                loanNo: loan.loanNo,
-                loanType: loan.loanType,
-                outstandingPrincipal: parseFloat(loan.outstandingPrincipal) || 0,
-                outstandingInterest: parseFloat(loan.outstandingInterest) || 0,
-                outstandingPenalty: parseFloat(loan.outstandingPenalty) || 0,
-                monthlyDue: (parseFloat(loan.outstandingPrincipal)||0) + (parseFloat(loan.outstandingInterest)||0) + (parseFloat(loan.outstandingPenalty)||0),
-                fullLoanBalance: (parseFloat(loan.totalPrincipalBalance)||0) + (parseFloat(loan.totalInterestBalance)||0) + (parseFloat(loan.outstandingPenalty)||0)
-            };
-            $('#LoanNo').val(selectedLoan.loanNo);
-            $('#MemberNo').val(currentMemberNo);
-            $('tr').removeClass('loan-row-selected');
-            $(`#loanRow_${loanNo}`).addClass('loan-row-selected');
-
-            $('#displayLoanNo').text(selectedLoan.loanNo);
-            $('#displayLoanType').text(selectedLoan.loanType);
-            $('#displayCurrentBalance').text(`KES ${(selectedLoan.outstandingPrincipal + selectedLoan.outstandingInterest).toLocaleString()}`);
-            $('#displayPrincipal').text(`KES ${selectedLoan.outstandingPrincipal.toLocaleString()}`);
-            $('#displayInterest').text(`KES ${selectedLoan.outstandingInterest.toLocaleString()}`);
-            $('#displayPenalty').text(`KES ${selectedLoan.outstandingPenalty.toLocaleString()}`);
-            $('#displayMonthlyDue').text(`KES ${selectedLoan.monthlyDue.toLocaleString(undefined, {minimumFractionDigits:2})}`);
-            $('#displayFullLoanBalance').text(`KES ${selectedLoan.fullLoanBalance.toLocaleString(undefined, {minimumFractionDigits:2})}`);
-            $('#loanSummaryCard').show();
-
-            if (sharesData?.length) $('#sharesSection').show();
+        // ============================================================
+        // LOAD SHARES
+        // ============================================================
+        async function loadShares(memberNo) {
+            try {
+                const res = await fetch(`/LoanMvc/GetAvailableShares?memberNo=${memberNo}&companyCode=${encodeURIComponent(companyCode)}`);
+                const data = await res.json();
+                if (data.success && data.shares && data.shares.length > 0) {
+                    sharesData = data.shares;
+                    displayShares(data.shares);
+                } else {
+                    $('#sharesSection').hide();
+                    Swal.fire('Info', 'No available shares for offset', 'info');
+                }
+            } catch (e) {
+                console.error(e);
+                $('#sharesSection').hide();
+            }
         }
 
-        // Update button click handlers
-        $('#monthlyDueBtn').click(function() {
-            if (selectedLoan && selectedShare) {
-                const amount = Math.min(selectedLoan.monthlyDue, selectedShare.availableAmount);
-                $('#offsetAmount').val(amount.toFixed(2));
-                $('#AmountToOffset').val(amount.toFixed(2));
-                calculateOffset();
-            }
-        });
-
-        $('#fullBalanceBtn').click(function() {
-            if (selectedLoan && selectedShare) {
-                const amount = Math.min(selectedLoan.fullLoanBalance, selectedShare.availableAmount);
-                $('#offsetAmount').val(amount.toFixed(2));
-                $('#AmountToOffset').val(amount.toFixed(2));
-                calculateOffset();
-            }
-        });
-
+        // ============================================================
+        // DISPLAY SHARES
+        // ============================================================
         function displayShares(shares) {
             let html = '';
             shares.forEach(share => {
@@ -388,101 +635,279 @@
                             </div>
                          </div>`;
             });
-            $('#sharesList').html(html);
+            document.getElementById('sharesList').innerHTML = html;
+            document.getElementById('sharesSection').style.display = 'block';
         }
 
+        // ============================================================
+        // SELECT LOAN
+        // ============================================================
+        function selectLoan(loanNo, index) {
+            const loan = loansData[index];
+
+            selectedLoan = {
+                loanNo: loan.loanNo,
+                loanType: loan.loanType,
+                outstandingPrincipal: parseFloat(loan.outstandingPrincipal) || 0,
+                outstandingInterest: parseFloat(loan.outstandingInterest) || 0,
+                outstandingPenalty: parseFloat(loan.outstandingPenalty) || 0,
+                monthlyDue: parseFloat(loan.outstandingPrincipal) + parseFloat(loan.outstandingInterest) + parseFloat(loan.outstandingPenalty),
+                fullLoanBalance: (parseFloat(loan.totalPrincipalBalance) || 0) + (parseFloat(loan.totalInterestBalance) || 0) + (parseFloat(loan.outstandingPenalty) || 0)
+            };
+
+            document.getElementById('LoanNo').value = selectedLoan.loanNo;
+            document.getElementById('MemberNo').value = currentMemberNo;
+
+            // Highlight selected row
+            document.querySelectorAll('#loansTableBody tr').forEach(row => {
+                row.classList.remove('loan-row-selected');
+            });
+            const selectedRow = document.getElementById(`loanRow_${loanNo}`);
+            if (selectedRow) {
+                selectedRow.classList.add('loan-row-selected');
+            }
+
+            // Update loan summary
+            document.getElementById('displayLoanNo').textContent = selectedLoan.loanNo;
+            document.getElementById('displayLoanType').textContent = selectedLoan.loanType;
+            document.getElementById('displayCurrentBalance').textContent = `KES ${(selectedLoan.outstandingPrincipal + selectedLoan.outstandingInterest).toLocaleString()}`;
+            document.getElementById('displayPrincipal').textContent = `KES ${selectedLoan.outstandingPrincipal.toLocaleString()}`;
+            document.getElementById('displayInterest').textContent = `KES ${selectedLoan.outstandingInterest.toLocaleString()}`;
+            document.getElementById('displayPenalty').textContent = `KES ${selectedLoan.outstandingPenalty.toLocaleString()}`;
+            document.getElementById('displayMonthlyDue').textContent = `KES ${selectedLoan.monthlyDue.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+            document.getElementById('displayFullLoanBalance').textContent = `KES ${selectedLoan.fullLoanBalance.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+            document.getElementById('displayFullBalance').textContent = `KES ${selectedLoan.fullLoanBalance.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+
+            document.getElementById('loanSummaryCard').style.display = 'block';
+
+            if (sharesData && sharesData.length > 0) {
+                document.getElementById('sharesSection').style.display = 'block';
+            }
+
+            // Reset share selection
+            selectedShare = null;
+            document.getElementById('SharesCode').value = '';
+            document.querySelectorAll('.share-card').forEach(c => c.classList.remove('selected'));
+            document.getElementById('offsetAmountSection').style.display = 'none';
+            document.getElementById('offsetPreview').style.display = 'none';
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('monthlyDueBtn').prop('disabled', true);
+            document.getElementById('fullBalanceBtn').prop('disabled', true);
+            document.getElementById('offsetAmount').value = '';
+            document.getElementById('AmountToOffset').value = '';
+        }
+
+        // ============================================================
+        // SELECT SHARE
+        // ============================================================
         function selectShare(code) {
             selectedShare = sharesData.find(s => s.sharesCode === code);
-            $('#SharesCode').val(code);
-            $('.share-card').removeClass('selected');
-            $(`.share-card[data-code="${code}"]`).addClass('selected');
+            document.getElementById('SharesCode').value = code;
+
+            document.querySelectorAll('.share-card').forEach(c => c.classList.remove('selected'));
+            document.querySelector(`.share-card[data-code="${code}"]`).classList.add('selected');
 
             // Max offset is the FULL LOAN BALANCE, not just monthly due
             const maxOffset = Math.min(selectedLoan.fullLoanBalance, selectedShare.availableAmount);
-            const minOffset = selectedShare.minAmount;
+            const minOffset = selectedShare.minAmount || 0;
 
-            $('#offsetAmount').attr({ max: maxOffset, min: minOffset });
-            $('#amountHint').html(`Min: ${minOffset.toLocaleString()} | Max: ${maxOffset.toLocaleString()} | Monthly Due: ${selectedLoan.monthlyDue.toLocaleString()}`);
+            document.getElementById('offsetAmount').setAttribute('max', maxOffset);
+            document.getElementById('offsetAmount').setAttribute('min', minOffset);
+            document.getElementById('amountHint').innerHTML = `Min: ${minOffset.toLocaleString()} | Max: ${maxOffset.toLocaleString()} | Monthly Due: ${selectedLoan.monthlyDue.toLocaleString()}`;
 
-            $('#offsetAmountSection').show();
-            $('#monthlyDueBtn').prop('disabled', false);
-            $('#fullBalanceBtn').prop('disabled', false);
-            $('#submitBtn').prop('disabled', false);
+            document.getElementById('offsetAmountSection').style.display = 'block';
+            document.getElementById('monthlyDueBtn').prop('disabled', false);
+            document.getElementById('fullBalanceBtn').prop('disabled', false);
+            document.getElementById('submitBtn').disabled = false;
 
-            // Set default value to monthly due (optional)
-            $('#offsetAmount').val(selectedLoan.monthlyDue.toFixed(2));
-            $('#AmountToOffset').val(selectedLoan.monthlyDue.toFixed(2));
+            // Set default value to monthly due
+            const defaultAmount = Math.min(selectedLoan.monthlyDue, maxOffset);
+            document.getElementById('offsetAmount').value = defaultAmount.toFixed(2);
+            document.getElementById('AmountToOffset').value = defaultAmount.toFixed(2);
             calculateOffset();
         }
 
+        // ============================================================
+        // CALCULATE OFFSET
+        // ============================================================
         async function calculateOffset() {
             if (!selectedLoan || !selectedShare) return;
-            const amount = parseFloat($('#offsetAmount').val()) || 0;
+            const amount = parseFloat(document.getElementById('offsetAmount').val()) || 0;
+
             if (amount <= 0) {
                 resetPreview();
                 return;
             }
+
             try {
-                const res = await fetch(`/LoanMvc/CalculateOffset?loanNo=${selectedLoan.loanNo}&amount=${amount}&sharesCode=${selectedShare.sharesCode}&companyCode=${companyCode}`);
+                const res = await fetch(`/LoanMvc/CalculateOffset?loanNo=${selectedLoan.loanNo}&amount=${amount}&sharesCode=${selectedShare.sharesCode}&companyCode=${encodeURIComponent(companyCode)}`);
                 const result = await res.json();
+
                 if (result.success) {
                     const d = result.data;
-                    $('#allocatedPenalty').text(d.penaltyAllocated.toFixed(2));
-                    $('#allocatedInterest').text(d.interestAllocated.toFixed(2));
-                    $('#allocatedPrincipal').text(d.principalAllocated.toFixed(2));
-                    $('#totalOffset').text((d.penaltyAllocated + d.interestAllocated + d.principalAllocated).toFixed(2));
-                    $('#overpayment').text(d.overpayment.toFixed(2));
-                    $('#balanceAfter').text(d.balanceAfter.toFixed(2));
-                    $('#offsetPreview').show();
+                    document.getElementById('allocatedPenalty').textContent = d.penaltyAllocated.toFixed(2);
+                    document.getElementById('allocatedInterest').textContent = d.interestAllocated.toFixed(2);
+                    document.getElementById('allocatedPrincipal').textContent = d.principalAllocated.toFixed(2);
+                    document.getElementById('totalOffset').textContent = (d.penaltyAllocated + d.interestAllocated + d.principalAllocated).toFixed(2);
+                    document.getElementById('overpayment').textContent = d.overpayment.toFixed(2);
+                    document.getElementById('balanceAfter').textContent = d.balanceAfter.toFixed(2);
+                    document.getElementById('offsetPreview').style.display = 'block';
                 }
-            } catch(e) { console.error(e); }
+            } catch(e) {
+                console.error(e);
+            }
         }
 
+        // ============================================================
+        // RESET PREVIEW
+        // ============================================================
         function resetPreview() {
-            $('#allocatedPenalty, #allocatedInterest, #allocatedPrincipal, #totalOffset, #overpayment').text('0.00');
-            $('#balanceAfter').text(selectedLoan ? selectedLoan.totalOutstanding.toFixed(2) : '0.00');
-            $('#offsetPreview').hide();
+            document.getElementById('allocatedPenalty').textContent = '0.00';
+            document.getElementById('allocatedInterest').textContent = '0.00';
+            document.getElementById('allocatedPrincipal').textContent = '0.00';
+            document.getElementById('totalOffset').textContent = '0.00';
+            document.getElementById('overpayment').textContent = '0.00';
+            document.getElementById('balanceAfter').textContent = selectedLoan ? selectedLoan.fullLoanBalance.toFixed(2) : '0.00';
+            document.getElementById('offsetPreview').style.display = 'none';
         }
 
-        function resetForm() {
-            $('#searchValue').val('');
-            $('#resultsSection, #sharesSection, #offsetAmountSection, #offsetPreview, #loanSummaryCard').hide();
-            $('#loansTableBody').html('<tr><td colspan="7" class="text-center text-muted">Search for a loan</td></tr>');
-            $('#submitBtn, #fullOffsetBtn').prop('disabled', true);
-            $('#offsetAmount, #AmountToOffset').val('');
-            $('#LoanNo, #MemberNo, #SharesCode').val('');
-            selectedLoan = selectedShare = loansData = sharesData = null;
+        // ============================================================
+        // CLEAR SELECTED MEMBER
+        // ============================================================
+        function clearSelectedMember() {
             currentMemberNo = null;
+            selectedMemberData = null;
+            selectedLoan = null;
+            selectedShare = null;
+            loansData = null;
+            sharesData = null;
+
+            document.getElementById('selectedMemberCard').style.display = 'none';
+            document.getElementById('lowerSection').classList.add('d-none');
+            document.getElementById('loansTableContainer').style.display = 'block';
+            document.getElementById('loansTableBody').innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        <i class="bi bi-search me-2"></i>Search for a member to see loans
+                    </td>
+                </tr>
+            `;
+            document.getElementById('loanSummaryCard').style.display = 'none';
+            document.getElementById('sharesSection').style.display = 'none';
+            document.getElementById('offsetAmountSection').style.display = 'none';
+            document.getElementById('offsetPreview').style.display = 'none';
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('monthlyDueBtn').prop('disabled', true);
+            document.getElementById('fullBalanceBtn').prop('disabled', true);
+            document.getElementById('offsetAmount').value = '';
+            document.getElementById('AmountToOffset').value = '';
+            document.getElementById('LoanNo').value = '';
+            document.getElementById('MemberNo').value = '';
+            document.getElementById('SharesCode').value = '';
+
+            document.querySelectorAll('.share-card').forEach(c => c.classList.remove('selected'));
+            document.querySelectorAll('#loansTableBody tr').forEach(row => row.classList.remove('loan-row-selected'));
+
             resetPreview();
         }
 
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            });
+        // ============================================================
+        // CLEAR SEARCH
+        // ============================================================
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('searchResultsBody').innerHTML = '';
+            clearSelectedMember();
         }
 
+        // ============================================================
+        // RESET FORM
+        // ============================================================
+        function resetForm() {
+            clearSelectedMember();
+            clearSearch();
+            document.getElementById('searchInput').focus();
+        }
+
+        // ============================================================
+        // ESCAPE HTML
+        // ============================================================
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============================================================
+        // FORM SUBMIT VALIDATION
+        // ============================================================
         $('#offsetForm').submit(function(e) {
-            const loanNo = $('#LoanNo').val();
-            const sharesCode = $('#SharesCode').val();
-            const amount = parseFloat($('#offsetAmount').val()) || 0;
+            const loanNo = document.getElementById('LoanNo').value;
+            const sharesCode = document.getElementById('SharesCode').value;
+            const amount = parseFloat(document.getElementById('offsetAmount').value) || 0;
 
-            // IMPORTANT: Set the hidden AmountToOffset field
-            $('#AmountToOffset').val(amount);
+            document.getElementById('AmountToOffset').value = amount;
 
-            if (!loanNo) { e.preventDefault(); alert('Select a loan'); return false; }
-            if (!sharesCode) { e.preventDefault(); alert('Select a share type'); return false; }
-            if (amount <= 0) { e.preventDefault(); alert('Enter valid amount'); return false; }
+            if (!loanNo) {
+                e.preventDefault();
+                Swal.fire('Error', 'Please select a loan to offset', 'error');
+                return false;
+            }
 
-            const maxAmount = Math.min(selectedLoan.totalOutstanding, selectedShare.availableAmount);
-            if (amount > maxAmount) { e.preventDefault(); alert(`Amount exceeds max of ${maxAmount.toLocaleString()}`); return false; }
-            if (selectedShare.minAmount > 0 && amount < selectedShare.minAmount) { e.preventDefault(); alert(`Minimum amount is ${selectedShare.minAmount.toLocaleString()}`); return false; }
+            if (!sharesCode) {
+                e.preventDefault();
+                Swal.fire('Error', 'Please select a share type', 'error');
+                return false;
+            }
 
-            return confirm(`Offset KES ${amount.toLocaleString()} for loan ${loanNo} using ${selectedShare.sharesType}?`);
+            if (amount <= 0) {
+                e.preventDefault();
+                Swal.fire('Error', 'Please enter a valid offset amount', 'error');
+                return false;
+            }
+
+            const maxAmount = Math.min(selectedLoan.fullLoanBalance, selectedShare.availableAmount);
+            if (amount > maxAmount) {
+                e.preventDefault();
+                Swal.fire('Error', `Amount exceeds maximum of KES ${maxAmount.toLocaleString()}`, 'error');
+                return false;
+            }
+
+            if (selectedShare.minAmount > 0 && amount < selectedShare.minAmount) {
+                e.preventDefault();
+                Swal.fire('Error', `Minimum amount is KES ${selectedShare.minAmount.toLocaleString()}`, 'error');
+                return false;
+            }
+
+            const principalAllocated = parseFloat(document.getElementById('allocatedPrincipal').textContent) || 0;
+            const interestAllocated = parseFloat(document.getElementById('allocatedInterest').textContent) || 0;
+            const penaltyAllocated = parseFloat(document.getElementById('allocatedPenalty').textContent) || 0;
+            const totalAllocated = principalAllocated + interestAllocated + penaltyAllocated;
+            const overpayment = parseFloat(document.getElementById('overpayment').textContent) || 0;
+            const balanceAfter = parseFloat(document.getElementById('balanceAfter').textContent) || 0;
+
+            let message = `Confirm offset details:\n\n`;
+            message += `Member: ${currentMemberNo}\n`;
+            message += `Loan: ${loanNo} (${selectedLoan.loanType})\n`;
+            message += `Share Type: ${selectedShare.sharesType}\n`;
+            message += `Amount: KES ${amount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}\n\n`;
+            message += `Breakdown:\n`;
+            message += `  Principal: KES ${principalAllocated.toFixed(2)}\n`;
+            message += `  Interest: KES ${interestAllocated.toFixed(2)}\n`;
+            message += `  Penalty: KES ${penaltyAllocated.toFixed(2)}\n`;
+            message += `  Total: KES ${totalAllocated.toFixed(2)}\n`;
+
+            if (overpayment > 0.01) {
+                message += `\n⚠️ Overpayment: KES ${overpayment.toFixed(2)}\n`;
+                message += `This excess amount will be applied to future payments.\n`;
+            }
+
+            message += `\nBalance After: KES ${balanceAfter.toFixed(2)}\n\n`;
+            message += `This action cannot be undone.`;
+
+            return confirm(message);
         });
     </script>
 }

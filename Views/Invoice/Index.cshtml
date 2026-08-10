@@ -5,6 +5,127 @@
     var companyName = ViewBag.CompanyName as string ?? "AMTECH SACCO";
 }
 
+<style>
+    .invoice-item-row {
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        border: 1px solid #e9ecef;
+        transition: all 0.3s ease;
+    }
+
+    .invoice-item-row:hover {
+        background-color: #e9ecef;
+        border-color: #ced4da;
+    }
+
+    .invoice-item-row .btn-remove-item {
+        color: #dc3545;
+        background: none;
+        border: none;
+        padding: 0 8px;
+        font-size: 1.2rem;
+        cursor: pointer;
+    }
+
+    .invoice-item-row .btn-remove-item:hover {
+        color: #a71d2a;
+    }
+
+    .items-header {
+        background-color: #e9ecef;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .items-empty {
+        padding: 20px;
+        text-align: center;
+        color: #6c757d;
+        border: 2px dashed #dee2e6;
+        border-radius: 4px;
+    }
+
+    .item-total {
+        font-weight: 600;
+        color: #0d6efd;
+    }
+
+    .item-number {
+        font-weight: 600;
+        color: #6c757d;
+        min-width: 30px;
+    }
+
+    .item-row-input {
+        padding: 2px 4px;
+    }
+
+        .item-row-input:focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        }
+
+    .required:after {
+        content: " *";
+        color: red;
+    }
+
+    .table-primary {
+        background-color: #cfe2ff !important;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .alert {
+        animation: slideDown 0.5s ease;
+    }
+
+    @@keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+
+    .input-validation-error {
+        border-color: #dc3545 !important;
+        background-color: #fff0f0 !important;
+    }
+
+    .text-danger {
+        font-size: 0.875rem;
+    }
+</style>
+
 <div class="container-fluid">
     <!-- Success/Error Messages -->
     @if (TempData["SuccessMessage"] != null)
@@ -60,13 +181,52 @@
                             </div>
                         </div>
 
+                        <!-- INVOICE ITEMS SECTION -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="card border-primary">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0"><i class="fas fa-list"></i> Invoice Items</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <!-- Items Container -->
+                                        <div id="invoiceItemsContainer">
+                                            <div id="itemsList">
+                                                <!-- Items will be dynamically added here -->
+                                                <div class="items-empty" id="emptyItemsMessage">
+                                                    <i class="fas fa-plus-circle fa-2x d-block mb-2"></i>
+                                                    <p>No items added yet. Click "Add Item" to add line items.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Add Item Button -->
+                                        <div class="mt-3">
+                                            <button type="button" class="btn btn-primary btn-sm" id="btnAddItem">
+                                                <i class="fas fa-plus"></i> Add Item
+                                            </button>
+                                            <button type="button" class="btn btn-danger btn-sm" id="btnClearItems">
+                                                <i class="fas fa-trash"></i> Clear All Items
+                                            </button>
+                                        </div>
+
+                                        <!-- Item Count Summary -->
+                                        <div class="mt-2 text-muted small">
+                                            <span id="itemCountDisplay">0 items</span>
+                                            <span class="ms-3">Total: KES <span id="itemsTotalDisplay">0.00</span></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Amount Row -->
                         <div class="row mb-3">
                             <div class="col-md-3">
                                 <label class="required">Invoice Amount *</label>
                                 <div class="input-group">
                                     <span class="input-group-text">KES</span>
-                                    <input type="number" id="InvoiceAmount" class="form-control" step="0.01" min="0.01" />
+                                    <input type="number" id="InvoiceAmount" class="form-control" step="0.01" min="0" readonly style="background-color: #e9ecef; font-weight: bold;" />
                                 </div>
                                 <span id="amountError" class="text-danger"></span>
                             </div>
@@ -148,14 +308,6 @@
                                 <input type="text" id="GlAccountName" class="form-control" readonly />
                             </div>
                         </div>
-
-                        <!-- Description Row -->
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <label>Description</label>
-                                <textarea id="Description" class="form-control" rows="2"></textarea>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- RIGHT SIDE - Settings -->
@@ -230,7 +382,7 @@
                 <div class="col-md-6">
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-search"></i></span>
-                        <input type="text" id="invoiceSearchInput" class="form-control" placeholder="Search by Invoice No, Supplier, Description..." autocomplete="off">
+                        <input type="text" id="invoiceSearchInput" class="form-control" placeholder="Search by Invoice No, Supplier..." autocomplete="off">
                         <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn">
                             <i class="fas fa-times"></i> Clear
                         </button>
@@ -300,7 +452,6 @@
                                 data-invoicedate="@invoice.InvoiceDate?.ToString("yyyy-MM-dd")"
                                 data-duedate="@invoice.DueDate?.ToString("yyyy-MM-dd")"
                                 data-receiveddate="@invoice.ReceivedDate?.ToString("yyyy-MM-dd")"
-                                data-description="@invoice.Description"
                                 data-purchaseorderno="@invoice.PurchaseOrderNo"
                                 data-glaccountno="@invoice.GlAccountNo"
                                 data-glaccountname="@invoice.GlAccountName"
@@ -310,15 +461,7 @@
                                 data-createdby="@invoice.CreatedBy"
                                 data-createddate="@invoice.CreatedDate">
                                 <td class="row-number">@counter</td>
-                                <td>
-                                    <strong>@invoice.InvoiceNo</strong>
-                                    @if (!string.IsNullOrEmpty(invoice.BlockchainTxId))
-                                    {
-                                        <span class="badge bg-success ms-1" title="On Blockchain">
-                                            <i class="fas fa-link fa-xs"></i>
-                                        </span>
-                                    }
-                                </td>
+                                <td><strong>@invoice.InvoiceNo</strong> </td>
                                 <td class="supplier-name">@invoice.SupplierName</td>
                                 <td class="text-end">KES @invoice.InvoiceAmount.ToString("N0")</td>
                                 <td class="text-end">@(invoice.TaxPercentage?.ToString("0.##") ?? "0")%<br /><small>KES @(invoice.TaxAmount?.ToString("N0") ?? "0")</small></td>
@@ -420,64 +563,6 @@
     <div class="text-light mt-2">Processing...</div>
 </div>
 
-<style>
-    .required:after {
-        content: " *";
-        color: red;
-    }
-
-    .table-primary {
-        background-color: #cfe2ff !important;
-    }
-
-    .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .card {
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
-    }
-
-    .table-responsive {
-        overflow-x: auto;
-    }
-
-    .alert {
-        animation: slideDown 0.5s ease;
-    }
-
-    @@keyframes slideDown {
-        from {
-            transform: translateY(-100%);
-            opacity: 0;
-        }
-
-        to {
-            transform: translateY(0);
-            opacity: 1;
-        }
-    }
-
-    .d-flex {
-        display: flex;
-    }
-
-    .gap-2 {
-        gap: 0.5rem;
-    }
-
-    .input-validation-error {
-        border-color: #dc3545 !important;
-        background-color: #fff0f0 !important;
-    }
-
-    .text-danger {
-        font-size: 0.875rem;
-    }
-</style>
-
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
@@ -485,6 +570,7 @@
         let deleteInvoiceId = null;
         let deleteInvoiceName = null;
         let isEditing = false;
+        let itemCounter = 0;
 
         $(document).ready(function() {
             setDefaultDates();
@@ -500,6 +586,14 @@
             $('#InvoiceAmount, #TaxPercentage, #DiscountAmount').on('input', function() {
                 calculateTotals();
             });
+
+            // Add Item Button
+            $('#btnAddItem').on('click', function() {
+                addItemRow('', 1, 0);
+            });
+
+            // Clear Items Button
+            $('#btnClearItems').on('click', clearAllItems);
 
             $('#invoiceSearchInput').on('keyup', performSearch);
             $('#statusFilter').on('change', performSearch);
@@ -526,7 +620,236 @@
                     loadInvoiceForEdit(id);
                 }
             });
+
+            // Add first empty item row
+            addItemRow('', 1, 0);
         });
+
+        // ============================================================
+        // INVOICE ITEMS MANAGEMENT
+        // ============================================================
+
+        function addItemRow(description, quantity, unitPrice) {
+            // Increment counter
+            itemCounter++;
+
+            const rowId = 'item_row_' + itemCounter;
+            const descriptionVal = description || '';
+            const quantityVal = quantity || 1;
+            const unitPriceVal = unitPrice || 0;
+
+            const rowHtml = `
+                <div class="invoice-item-row" id="${rowId}" data-index="${itemCounter}">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <span class="item-number">${itemCounter}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control form-control-sm item-description"
+                                   placeholder="Item description..." value="${escapeHtml(descriptionVal)}" />
+                        </div>
+                        <div class="col-md-2">
+                            <input type="number" class="form-control form-control-sm item-quantity"
+                                   placeholder="Qty" min="1" step="1" value="${quantityVal}" />
+                        </div>
+                        <div class="col-md-2">
+                            <input type="number" class="form-control form-control-sm item-unitprice"
+                                   placeholder="Unit Price" min="0" step="0.01" value="${unitPriceVal}" />
+                        </div>
+                        <div class="col-md-2">
+                            <input type="text" class="form-control form-control-sm item-total"
+                                   readonly style="background-color:#e9ecef; font-weight:bold;" value="0.00" />
+                        </div>
+                        <div class="col-auto">
+                            <button type="button" class="btn-remove-item" title="Remove item">
+                                <i class="fas fa-times-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Remove empty message if exists
+            $('#emptyItemsMessage').remove();
+
+            // Append the new row
+            $('#itemsList').append(rowHtml);
+
+            // Attach events
+            const row = $('#' + rowId);
+            row.find('.item-quantity, .item-unitprice').on('input', function() {
+                calculateItemTotal(rowId);
+                updateInvoiceAmount();
+            });
+
+            row.find('.item-description').on('change', function() {
+                updateInvoiceAmount();
+            });
+
+            row.find('.btn-remove-item').on('click', function() {
+                removeItem(rowId);
+            });
+
+            // Calculate initial total
+            calculateItemTotal(rowId);
+            updateInvoiceAmount();
+
+            // Hide empty message
+            $('#emptyItemsMessage').hide();
+
+            return rowId;
+        }
+
+        function calculateItemTotal(rowId) {
+            const row = $('#' + rowId);
+            if (!row.length) return;
+
+            const quantity = parseFloat(row.find('.item-quantity').val()) || 0;
+            const unitPrice = parseFloat(row.find('.item-unitprice').val()) || 0;
+            const total = quantity * unitPrice;
+
+            row.find('.item-total').val(total.toFixed(2));
+
+            return total;
+        }
+
+        function removeItem(rowId) {
+            if ($('#itemsList .invoice-item-row').length <= 1) {
+                // Don't remove if it's the last item, just clear values
+                const row = $('#' + rowId);
+                row.find('.item-description').val('');
+                row.find('.item-quantity').val(1);
+                row.find('.item-unitprice').val(0);
+                row.find('.item-total').val('0.00');
+                updateInvoiceAmount();
+                return;
+            }
+
+            $('#' + rowId).fadeOut(300, function() {
+                $(this).remove();
+                renumberItems();
+                updateInvoiceAmount();
+
+                // Show empty message if no items
+                if ($('#itemsList .invoice-item-row').length === 0) {
+                    $('#itemsList').append(`
+                        <div class="items-empty" id="emptyItemsMessage">
+                            <i class="fas fa-plus-circle fa-2x d-block mb-2"></i>
+                            <p>No items added yet. Click "Add Item" to add line items.</p>
+                        </div>
+                    `);
+                }
+            });
+        }
+
+        function clearAllItems() {
+            if ($('#itemsList .invoice-item-row').length === 0) return;
+
+            Swal.fire({
+                title: 'Clear All Items?',
+                text: 'This will remove all invoice items. Are you sure?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, clear all'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $('#itemsList .invoice-item-row').remove();
+                    $('#itemsList').append(`
+                        <div class="items-empty" id="emptyItemsMessage">
+                            <i class="fas fa-plus-circle fa-2x d-block mb-2"></i>
+                            <p>No items added yet. Click "Add Item" to add line items.</p>
+                        </div>
+                    `);
+                    updateInvoiceAmount();
+                }
+            });
+        }
+
+        function renumberItems() {
+            let index = 1;
+            $('#itemsList .invoice-item-row').each(function() {
+                $(this).attr('data-index', index);
+                $(this).find('.item-number').text(index);
+                index++;
+            });
+            itemCounter = index - 1;
+        }
+
+        function getInvoiceItems() {
+            const items = [];
+            $('#itemsList .invoice-item-row').each(function() {
+                const description = $(this).find('.item-description').val() || '';
+                const quantity = parseFloat($(this).find('.item-quantity').val()) || 0;
+                const unitPrice = parseFloat($(this).find('.item-unitprice').val()) || 0;
+
+                if (description.trim() && quantity > 0 && unitPrice > 0) {
+                    items.push({
+                        description: description.trim(),
+                        quantity: quantity,
+                        unitPrice: unitPrice
+                    });
+                }
+            });
+            return items;
+        }
+
+        function updateInvoiceAmount() {
+            let totalAmount = 0;
+            let itemCount = 0;
+
+            $('#itemsList .invoice-item-row').each(function() {
+                const quantity = parseFloat($(this).find('.item-quantity').val()) || 0;
+                const unitPrice = parseFloat($(this).find('.item-unitprice').val()) || 0;
+                const total = quantity * unitPrice;
+                totalAmount += total;
+                itemCount++;
+            });
+
+            // Update Invoice Amount
+            $('#InvoiceAmount').val(totalAmount.toFixed(2));
+
+            // Update item count display
+            $('#itemCountDisplay').text(itemCount + ' items');
+            $('#itemsTotalDisplay').text(totalAmount.toFixed(2));
+
+            // Recalculate totals
+            calculateTotals();
+        }
+
+        function setInvoiceItems(items) {
+            // Clear existing items
+            $('#itemsList .invoice-item-row').remove();
+            $('#emptyItemsMessage').remove();
+
+            if (!items || items.length === 0) {
+                $('#itemsList').append(`
+                    <div class="items-empty" id="emptyItemsMessage">
+                        <i class="fas fa-plus-circle fa-2x d-block mb-2"></i>
+                        <p>No items added yet. Click "Add Item" to add line items.</p>
+                    </div>
+                `);
+                return;
+            }
+
+            // RESET itemCounter to 0 before adding items
+            itemCounter = 0;
+
+            // Add each item
+            items.forEach(function(item) {
+                const desc = item.description || '';
+                const qty = item.quantity || 1;
+                const price = item.unitPrice || 0;
+                addItemRow(desc, qty, price);
+            });
+
+            updateInvoiceAmount();
+        }
+
+        // ============================================================
+        // CALCULATE TOTALS
+        // ============================================================
 
         function calculateTotals() {
             const amount = parseFloat($('#InvoiceAmount').val()) || 0;
@@ -548,6 +871,10 @@
             }
         }
 
+        // ============================================================
+        // FORM FUNCTIONS
+        // ============================================================
+
         function setDefaultDates() {
             const today = new Date().toISOString().split('T')[0];
             $('#InvoiceDate').val(today);
@@ -555,6 +882,55 @@
             dueDate.setDate(dueDate.getDate() + 30);
             $('#DueDate').val(dueDate.toISOString().split('T')[0]);
             $('#ReceivedDate').val(today);
+        }
+
+        function resetForm() {
+            currentInvoiceId = null;
+            isEditing = false;
+            $('#InvoiceId').val('');
+            $('#InvoiceNo').val('').prop('readonly', false);
+            $('#SupplierCode').val('');
+            $('#InvoiceAmount').val('');
+            $('#TaxPercentage').val('');
+            $('#TaxAmount').val('');
+            $('#DiscountAmount').val('');
+            $('#TotalAmount').val('');
+            $('#PurchaseOrderNo').val('');
+            $('#ReceiptNo').val('');
+            $('#StatusDisplay').val('');
+            $('#PaymentStatus').val('');
+            $('#AmountPaid').val('');
+            $('#Balance').val('');
+            $('#CreatedBy').val('');
+            $('#CreatedDate').val('');
+            $('#GlAccountNo').val('');
+            $('#GlAccountName').val('');
+
+            // Clear items
+            $('#itemsList .invoice-item-row').remove();
+            $('#emptyItemsMessage').remove();
+            $('#itemsList').append(`
+                <div class="items-empty" id="emptyItemsMessage">
+                    <i class="fas fa-plus-circle fa-2x d-block mb-2"></i>
+                    <p>No items added yet. Click "Add Item" to add line items.</p>
+                </div>
+            `);
+            $('#itemCountDisplay').text('0 items');
+            $('#itemsTotalDisplay').text('0.00');
+
+            setDefaultDates();
+
+            $('.text-danger').text('');
+            $('.input-validation-error').removeClass('input-validation-error');
+            $('.select-btn').closest('tr').removeClass('table-primary');
+
+            $('#btnSave').show();
+            $('#btnUpdate').hide();
+            $('#btnDelete').hide();
+
+            // Reset counter and add first empty item row
+            itemCounter = 0;
+            addItemRow('', 1, 0);
         }
 
         function loadInvoiceForEdit(id) {
@@ -582,7 +958,6 @@
                         $('#InvoiceDate').val(inv.invoiceDate);
                         $('#DueDate').val(inv.dueDate);
                         $('#ReceivedDate').val(inv.receivedDate);
-                        $('#Description').val(inv.description || '');
                         $('#PurchaseOrderNo').val(inv.purchaseOrderNo || '');
                         $('#ReceiptNo').val(inv.receiptNo || '');
                         $('#StatusDisplay').val(inv.status || 'Pending');
@@ -599,6 +974,16 @@
                         } else {
                             $('#GlAccountNo').val('');
                             $('#GlAccountName').val('');
+                        }
+
+                        // Load invoice items
+                        if (inv.invoiceItems && inv.invoiceItems.length > 0) {
+                            setInvoiceItems(inv.invoiceItems);
+                        } else {
+                            // Reset and add empty row
+                            $('#itemsList .invoice-item-row').remove();
+                            itemCounter = 0;
+                            addItemRow('', 1, 0);
                         }
 
                         $('#btnSave').hide();
@@ -622,40 +1007,6 @@
             });
         }
 
-        function resetForm() {
-            currentInvoiceId = null;
-            isEditing = false;
-            $('#InvoiceId').val('');
-            $('#InvoiceNo').val('').prop('readonly', false);
-            $('#SupplierCode').val('');
-            $('#InvoiceAmount').val('');
-            $('#TaxPercentage').val('');
-            $('#TaxAmount').val('');
-            $('#DiscountAmount').val('');
-            $('#TotalAmount').val('');
-            $('#Description').val('');
-            $('#PurchaseOrderNo').val('');
-            $('#ReceiptNo').val('');
-            $('#StatusDisplay').val('');
-            $('#PaymentStatus').val('');
-            $('#AmountPaid').val('');
-            $('#Balance').val('');
-            $('#CreatedBy').val('');
-            $('#CreatedDate').val('');
-            $('#GlAccountNo').val('');
-            $('#GlAccountName').val('');
-
-            setDefaultDates();
-
-            $('.text-danger').text('');
-            $('.input-validation-error').removeClass('input-validation-error');
-            $('.select-btn').closest('tr').removeClass('table-primary');
-
-            $('#btnSave').show();
-            $('#btnUpdate').hide();
-            $('#btnDelete').hide();
-        }
-
         function validateInvoice() {
             let isValid = true;
             $('.text-danger').text('');
@@ -673,6 +1024,13 @@
                 isValid = false;
             }
 
+            // Check if there are any valid items
+            const items = getInvoiceItems();
+            if (items.length === 0) {
+                showNotification('Please add at least one invoice item', 'error');
+                isValid = false;
+            }
+
             const amount = parseFloat($('#InvoiceAmount').val());
             if (!amount || amount <= 0) {
                 $('#amountError').text('Please enter a valid invoice amount');
@@ -685,7 +1043,9 @@
 
         function getFormData() {
             const totalAmount = parseFloat($('#TotalAmount').val()) || 0;
-            const balance = totalAmount - (parseFloat($('#AmountPaid').val()) || 0);
+            const invoiceDate = $('#InvoiceDate').val();
+            const dueDate = $('#DueDate').val();
+            const receivedDate = $('#ReceivedDate').val();
 
             return {
                 InvoiceNo: $('#InvoiceNo').val().trim(),
@@ -695,20 +1055,15 @@
                 TaxAmount: parseFloat($('#TaxAmount').val()) || 0,
                 DiscountAmount: parseFloat($('#DiscountAmount').val()) || 0,
                 TotalAmount: totalAmount,
-                InvoiceDate: $('#InvoiceDate').val(),
-                DueDate: $('#DueDate').val(),
-                ReceivedDate: $('#ReceivedDate').val(),
-                Description: $('#Description').val().trim(),
-                PurchaseOrderNo: $('#PurchaseOrderNo').val().trim(),
-                ReceiptNo: $('#ReceiptNo').val().trim(),
-                GlAccountNo: $('#GlAccountNo').val(),
-                GlAccountName: $('#GlAccountName').val().trim(),
+                InvoiceDate: invoiceDate || null,
+                DueDate: dueDate || null,
+                ReceivedDate: receivedDate || null,
+                PurchaseOrderNo: $('#PurchaseOrderNo').val().trim() || null,
+                ReceiptNo: $('#ReceiptNo').val().trim() || null,
+                GlAccountNo: $('#GlAccountNo').val() || null,
+                GlAccountName: $('#GlAccountName').val().trim() || null,
                 CompanyCode: $('#CompanyCode').val(),
-                // These will be auto-calculated by the server
-                Status: null,
-                PaymentStatus: null,
-                AmountPaid: 0,
-                Balance: 0
+                InvoiceItems: getInvoiceItems()
             };
         }
 
@@ -787,6 +1142,10 @@
             });
         }
 
+        // ============================================================
+        // DELETE FUNCTIONS
+        // ============================================================
+
         function deleteInvoice(id, name) {
             deleteInvoiceId = id;
             deleteInvoiceName = name;
@@ -827,6 +1186,10 @@
                 }
             });
         }
+
+        // ============================================================
+        // SEARCH FUNCTIONS
+        // ============================================================
 
         function performSearch() {
             const searchTerm = $('#invoiceSearchInput').val().toLowerCase().trim();
@@ -900,6 +1263,10 @@
             $('#invoiceSearchInput').focus();
         }
 
+        // ============================================================
+        // UTILITY FUNCTIONS
+        // ============================================================
+
         function showNotification(message, type) {
             const icon = type === 'error' ? 'exclamation-triangle' :
                         type === 'success' ? 'check-circle' : 'info';
@@ -930,99 +1297,11 @@
             }
         }
 
-        function savePayment() {
-            if (!validatePayment()) return;
-            showLoading(true);
-
-            const formData = getFormData();
-
-            $.ajax({
-                url: '/InvoicePayment/Create',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(formData),
-                headers: {
-                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-                },
-                success: function(response) {
-                    showLoading(false);
-                    if (response.success) {
-                        showNotification(response.message, 'success');
-
-                        // Check if receipt URL is provided and open it
-                        if (response.receiptUrl) {
-                            // Open receipt in new window/tab
-                            var receiptWindow = window.open(response.receiptUrl, '_blank');
-                            if (!receiptWindow) {
-                                // If popup blocked, show message
-                                showNotification('Please allow popups to view receipt or click OK to continue', 'info');
-                            }
-                        }
-
-                        // Reload after a delay
-                        setTimeout(() => location.reload(), 2000);
-                    } else {
-                        showNotification(response.message, 'error');
-                    }
-                },
-                error: function(xhr) {
-                    showLoading(false);
-                    let errorMsg = 'Error recording payment';
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        errorMsg = xhr.responseJSON.message;
-                    }
-                    showNotification(errorMsg, 'error');
-                }
-            });
-        }
-
-        function updatePayment() {
-            if (!validatePayment()) return;
-            if (!currentPaymentId) {
-                showNotification('Payment not selected. Please select a payment to update.', 'error');
-                return;
-            }
-
-            showLoading(true);
-
-            const formData = getFormData();
-            formData.Id = currentPaymentId;
-
-            $.ajax({
-                url: '/InvoicePayment/Update',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(formData),
-                headers: {
-                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-                },
-                success: function(response) {
-                    showLoading(false);
-                    if (response.success) {
-                        showNotification(response.message, 'success');
-
-                        // Check if receipt URL is provided and open it
-                        if (response.receiptUrl) {
-                            var receiptWindow = window.open(response.receiptUrl, '_blank');
-                            if (!receiptWindow) {
-                                showNotification('Please allow popups to view receipt', 'info');
-                            }
-                        }
-
-                        setTimeout(() => location.reload(), 2000);
-                    } else {
-                        showNotification(response.message, 'error');
-                    }
-                },
-                error: function(xhr) {
-                    showLoading(false);
-                    let errorMsg = 'Error updating payment';
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        errorMsg = xhr.responseJSON.message;
-                    }
-                    showNotification(errorMsg, 'error');
-                }
-            });
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
     </script>
 }

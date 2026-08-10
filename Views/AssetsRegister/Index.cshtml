@@ -168,7 +168,6 @@
                             <th style="width: 150px;" class="text-end">Total Value</th>
                             <th style="width: 120px;">Location</th>
                             <th style="width: 100px;">Status</th>
-                            <th style="width: 80px;">Blockchain</th>
                             <th style="width: 150px;">Actions</th>
                         </tr>
                     </thead>
@@ -206,36 +205,22 @@
                                             <span class="badge bg-secondary">Unposted</span>
                                         }
                                     </td>
-                                    <td class="text-center">
-                                        @if (!string.IsNullOrEmpty(asset.BlockchainTxId))
-                                        {
-                                            <span class="badge bg-success" title="On Blockchain">
-                                                <i class="fas fa-link"></i>
-                                            </span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bg-secondary" title="Not on Blockchain">
-                                                <i class="fas fa-unlink"></i>
-                                            </span>
-                                        }
-                                    </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <a asp-action="Details" asp-route-id="@asset.Id" class="btn btn-sm btn-info" title="View Details">
-                                                <i class="fas fa-eye"></i>
+                                                <i class="fas fa-eye"></i> Details
                                             </a>
                                             <a asp-action="Edit" asp-route-id="@asset.Id" class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="fas fa-edit"></i>
+                                                <i class="fas fa-edit"></i> Edit
                                             </a>
                                             @if (asset.Posted != true)
                                             {
                                                 <button type="button" class="btn btn-sm btn-warning" onclick="postAsset(@asset.Id)" title="Post Asset">
-                                                    <i class="fas fa-check"></i>
+                                                    <i class="fas fa-check"></i> Post
                                                 </button>
                                             }
                                             <button type="button" class="btn btn-sm btn-danger" onclick="deleteAsset(@asset.Id, '@asset.AssetName')" title="Delete">
-                                                <i class="fas fa-trash"></i>
+                                                <i class="fas fa-trash"></i> Delete
                                             </button>
                                         </div>
                                     </td>

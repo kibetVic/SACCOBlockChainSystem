@@ -300,12 +300,6 @@
                                 <td class="row-number">@counter</td>
                                 <td>
                                     <strong>@payment.ReceiptNo</strong>
-                                    @if (!string.IsNullOrEmpty(payment.BlockchainTxId))
-                                    {
-                                        <span class="badge bg-success ms-1" title="On Blockchain">
-                                            <i class="fas fa-link fa-xs"></i>
-                                        </span>
-                                    }
                                 </td>
                                 <td>@payment.InvoiceNo</td>
                                 <td class="supplier-name">@payment.SupplierName</td>
@@ -314,7 +308,6 @@
                                 <td>@(payment.ChequeNo ?? "N/A")</td>
                                 <td>@(payment.DebitAccno ?? "N/A")<br /><small class="text-muted">@(payment.DebitAccName?.Length > 20 ? payment.DebitAccName.Substring(0, 20) + "..." : payment.DebitAccName)</small></td>
                                 <td>@payment.Transtype</td>
-                                <td>
                                 <td>
                                     <div class="btn-group btn-group-sm w-100" role="group" style="gap: 2px;">
                                         <button type="button" class="btn btn-info select-btn" data-id="@payment.Id" title="Edit Payment">

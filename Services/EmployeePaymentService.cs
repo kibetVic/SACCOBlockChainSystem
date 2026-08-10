@@ -470,314 +470,6 @@ namespace SACCOBlockChainSystem.Services
         }
 
 
-        //public async Task<EmployeePaymentResponseDTO> ProcessPaymentAsync(EmployeePaymentDTO dto, string UserName, string companyCode)
-        //{
-        //    using var transaction = await _context.Database.BeginTransactionAsync();
-
-        //    try
-        //    {
-        //        _logger.LogInformation($"Processing payment for employee: {dto.EmployeeName}, Amount: {dto.Amount}");
-
-        //        // Get the payment type from database
-        //        var paymentType = await _context.PaymentTypes
-        //            .FirstOrDefaultAsync(p => p.Id == dto.PaymentTypeId && p.CompanyCode == companyCode && p.IsActive == true);
-
-        //        if (paymentType == null)
-        //        {
-        //            throw new InvalidOperationException($"Payment type with ID {dto.PaymentTypeId} not found or inactive.");
-        //        }
-
-        //        // Validate employee exists
-        //        var employee = await _context.Agents
-        //            .FirstOrDefaultAsync(a => a.Id == dto.EmployeeId && a.CompanyCode == companyCode);
-
-        //        if (employee == null)
-        //        {
-        //            throw new InvalidOperationException($"Employee with ID {dto.EmployeeId} not found.");
-        //        }
-
-        //        // Use payment type's default expense account if not specified
-        //        if (string.IsNullOrEmpty(dto.ExpenseAccountNo) && !string.IsNullOrEmpty(paymentType.DefaultExpenseAccountNo))
-        //        {
-        //            dto.ExpenseAccountNo = paymentType.DefaultExpenseAccountNo;
-        //        }
-
-        //        // Validate GL accounts
-        //        var expenseAccount = await _context.GlSetup
-        //            .FirstOrDefaultAsync(g => g.AccNo == dto.ExpenseAccountNo && g.CompanyCode == companyCode);
-
-        //        if (expenseAccount == null)
-        //        {
-        //            throw new InvalidOperationException($"Expense account {dto.ExpenseAccountNo} not found.");
-        //        }
-
-        //        var cashAccount = await _context.GlSetup
-        //            .FirstOrDefaultAsync(g => g.AccNo == dto.CashAccountNo && g.CompanyCode == companyCode);
-
-        //        if (cashAccount == null)
-        //        {
-        //            throw new InvalidOperationException($"Cash/Bank account {dto.CashAccountNo} not found.");
-        //        }
-
-        //        // Generate Voucher Number
-        //        string voucherNo = await GenerateVoucherNumberAsync(companyCode);
-        //        string transactionNo = GenerateTransactionNumber();
-
-        //        // Create Journal Entry (Header)
-        //        var journal = new Journal
-        //        {
-        //            VNO = voucherNo,
-        //            ACCNO = expenseAccount.AccNo,
-        //            NAME = employee.Names ?? employee.Names ?? "Unknown",
-        //            NARATION = $"{paymentType.Name} payment to {employee.Names ?? employee.Names}",
-        //            MEMBERNO = employee.IdNo ?? employee.Id.ToString(),
-        //            SHARETYPE = paymentType.Name,
-        //            Loanno = "0",  // Required field - set to "0" for non-loan transactions
-        //            AMOUNT = dto.Amount,
-        //            TRANSTYPE = "PYM",
-        //            AUDITID = UserName,
-        //            TRANSDATE = dto.PaymentDate,
-        //            AUDITDATE = DateTime.Now,
-        //            POSTED = false,
-        //            POSTEDDATE = DateTime.Now,
-        //            Transactionno = transactionNo,
-        //            CompanyCode = companyCode,
-        //            BlockchainTxId = null
-        //        };
-
-        //        _context.Journals.Add(journal);
-        //        await _context.SaveChangesAsync();
-
-        //        _logger.LogInformation($"Journal entry created with ID: {journal.JVID}, Voucher: {voucherNo}");
-
-        //        // Create Journal Listing entries
-        //        var debitEntry = new JournalsListing
-        //        {
-        //            VoucherNo = voucherNo,
-        //            AccountNo = expenseAccount.AccNo,
-        //            AccountName = expenseAccount.Glaccname,
-        //            Narration = $"DR - {paymentType.Name} payment to {employee.Names ?? employee.Names}",
-        //            MemberNo = employee.IdNo ?? employee.Id.ToString(),
-        //            ShareType = paymentType.Name,
-        //            LoanNo = "0",
-        //            AmountDr = dto.Amount,
-        //            AmountCr = 0,
-        //            Amount = dto.Amount,
-        //            TransType = "DR",
-        //            AuditId = UserName,
-        //            TransDate = dto.PaymentDate,
-        //            AuditDate = DateTime.Now,
-        //            Posted = false,
-        //            PostedDate = DateTime.Now,
-        //            TransactionNo = transactionNo,
-        //            CompanyCode = companyCode,
-        //            BlockchainTxId = null
-        //        };
-
-        //        var creditEntry = new JournalsListing
-        //        {
-        //            VoucherNo = voucherNo,
-        //            AccountNo = cashAccount.AccNo,
-        //            AccountName = cashAccount.Glaccname,
-        //            Narration = $"CR - {paymentType.Name} payment to {employee.Names ?? employee.Names}",
-        //            MemberNo = employee.IdNo ?? employee.Id.ToString(),
-        //            ShareType = paymentType.Name,
-        //            LoanNo = "0",
-        //            AmountDr = 0,
-        //            AmountCr = dto.Amount,
-        //            Amount = dto.Amount,
-        //            TransType = "CR",
-        //            AuditId = UserName,
-        //            TransDate = dto.PaymentDate,
-        //            AuditDate = DateTime.Now,
-        //            Posted = false,
-        //            PostedDate = DateTime.Now,
-        //            TransactionNo = transactionNo,
-        //            CompanyCode = companyCode,
-        //            BlockchainTxId = null
-        //        };
-
-        //        _context.JournalsListings.AddRange(debitEntry, creditEntry);
-        //        await _context.SaveChangesAsync();
-
-        //        _logger.LogInformation($"Journal listing entries created for voucher: {voucherNo}");
-
-        //        // Update General Ledger balances
-        //        await UpdateGLBalanceAsync(expenseAccount.AccNo, dto.Amount, "DEBIT", companyCode);
-        //        await UpdateGLBalanceAsync(cashAccount.AccNo, dto.Amount, "CREDIT", companyCode);
-
-        //        // Create GeneralLedger entries
-        //        // Get current balances for accurate AccBal
-        //        var expenseCurrentBal = expenseAccount.Bal ?? 0;
-        //        var cashCurrentBal = cashAccount.Bal ?? 0;
-
-        //        var glEntries = new List<GeneralLedger>
-        //        {
-        //            new GeneralLedger
-        //            {
-        //                Transdate = dto.PaymentDate,
-        //                Source = "PAYMENT",
-        //                Debits = dto.Amount,
-        //                Credits = 0,
-        //                AccBal = expenseCurrentBal + dto.Amount,
-        //                Description = $"DR - {paymentType.Name} payment to {employee.Names ?? employee.Names} (Voucher: {voucherNo})",
-        //                Glname = expenseAccount.Glaccname,
-        //                CompanyCode = companyCode,
-        //                AuditDateTime = DateTime.Now
-        //            },
-        //            new GeneralLedger
-        //            {
-        //                Transdate = dto.PaymentDate,
-        //                Source = "PAYMENT",
-        //                Debits = 0,
-        //                Credits = dto.Amount,
-        //                AccBal = cashCurrentBal - dto.Amount,
-        //                Description = $"CR - {paymentType.Name} payment to {employee.Names ?? employee.Names} (Voucher: {voucherNo})",
-        //                Glname = cashAccount.Glaccname,
-        //                CompanyCode = companyCode,
-        //                AuditDateTime = DateTime.Now
-        //            }
-        //        };
-
-        //        _context.GeneralLedgers.AddRange(glEntries);
-        //        await _context.SaveChangesAsync();
-
-        //        _logger.LogInformation($"General ledger entries created");
-
-        //        // Record in Transactions table
-        //        var transactionRecord = new Transaction
-        //        {
-        //            TransactionNo = transactionNo,
-        //            Amount = dto.Amount,
-        //            TransDate = dto.PaymentDate,
-        //            AuditId = UserName,
-        //            AuditTime = DateTime.Now,
-        //            TransDescription = $"{paymentType.Name} payment to {employee.Names ?? employee.Names} - Voucher: {voucherNo}",
-        //            Status = "COMPLETED",
-        //            CompanyCode = companyCode,
-        //            Channel = "EMPLOYEE_PAYMENT"
-        //        };
-
-        //        _context.Transactions.Add(transactionRecord);
-        //        await _context.SaveChangesAsync();
-
-        //        _logger.LogInformation($"Transaction record created: {transactionNo}");
-
-        //        // Record Transaction Detail
-        //        var transactionDetail = new TransactionDetail
-        //        {
-        //            CompanyCode = companyCode,
-        //            TransactionId = transactionNo,
-        //            TransactionCode = voucherNo,
-        //            ResultCode = 0,
-        //            ResultMessage = "Payment processed successfully",
-        //            Amount = dto.Amount,
-        //            Status = "SUCCESS",
-        //            MemberNo = employee.IdNo ?? employee.Id.ToString(),
-        //            CreatedAt = DateTime.Now,
-        //            AuditDateTime = DateTime.Now
-        //        };
-
-        //        _context.Transaction_Detail.Add(transactionDetail);
-        //        await _context.SaveChangesAsync();
-
-        //        _logger.LogInformation($"Transaction detail created");
-
-        //        // Blockchain recording
-        //        string blockchainTxId = null;
-        //        try
-        //        {
-        //            var blockchainData = new
-        //            {
-        //                Action = "EMPLOYEE_PAYMENT",
-        //                VoucherNo = voucherNo,
-        //                TransactionNo = transactionNo,
-        //                EmployeeId = employee.Id,
-        //                EmployeeIdNo = employee.IdNo,
-        //                EmployeeName = employee.Names ?? employee.Names,
-        //                Amount = dto.Amount,
-        //                PaymentType = new { paymentType.Id, paymentType.Code, paymentType.Name },
-        //                PaymentDate = dto.PaymentDate,
-        //                PaymentMethod = dto.PaymentMethod,
-        //                ExpenseAccount = new { AccountNo = expenseAccount.AccNo, AccountName = expenseAccount.Glaccname },
-        //                CashAccount = new { AccountNo = cashAccount.AccNo, AccountName = cashAccount.Glaccname },
-        //                CreatedBy = UserName,
-        //                CreatedAt = DateTime.Now
-        //            };
-
-        //            var blockchainTx = await _blockchainService.CreateAndAddTransactionAsync(
-        //                "EMPLOYEE_PAYMENT_PROCESS",
-        //                null,
-        //                companyCode,
-        //                dto.Amount,
-        //                employee.IdNo,
-        //                blockchainData);
-
-        //            if (blockchainTx != null)
-        //            {
-        //                blockchainTxId = blockchainTx.TransactionId;
-
-        //                journal.BlockchainTxId = blockchainTxId;
-        //                debitEntry.BlockchainTxId = blockchainTxId;
-        //                creditEntry.BlockchainTxId = blockchainTxId;
-        //                transactionRecord.BlockchainTxId = blockchainTxId;
-        //                transactionDetail.BlockchainTxId = blockchainTxId;
-
-        //                await _context.SaveChangesAsync();
-        //                _logger.LogInformation($"Blockchain transaction recorded: {blockchainTxId}");
-        //            }
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            _logger.LogError(ex, "Failed to record blockchain transaction for payment - continuing without blockchain");
-        //            // Don't throw - continue with the payment even if blockchain fails
-        //        }
-
-        //        // Mark as posted
-        //        journal.POSTED = true;
-        //        journal.POSTEDDATE = DateTime.Now;
-        //        debitEntry.Posted = true;
-        //        debitEntry.PostedDate = DateTime.Now;
-        //        creditEntry.Posted = true;
-        //        creditEntry.PostedDate = DateTime.Now;
-
-        //        await _context.SaveChangesAsync();
-        //        await transaction.CommitAsync();
-
-        //        _logger.LogInformation($"Payment completed successfully! Voucher: {voucherNo}");
-
-        //        return new EmployeePaymentResponseDTO
-        //        {
-        //            PaymentId = journal.JVID,
-        //            JournalVoucherNo = voucherNo,
-        //            EmployeeId = employee.Id,
-        //            EmployeeIdNo = employee.IdNo,
-        //            EmployeeName = employee.Names ?? employee.Names,
-        //            Amount = dto.Amount,
-        //            PaymentTypeId = paymentType.Id,
-        //            PaymentType = paymentType.Name,
-        //            PaymentTypeCode = paymentType.Code,
-        //            PaymentDate = dto.PaymentDate,
-        //            PaymentMethod = dto.PaymentMethod,
-        //            ExpenseAccountNo = expenseAccount.AccNo,
-        //            ExpenseAccountName = expenseAccount.Glaccname,
-        //            CashAccountNo = cashAccount.AccNo,
-        //            CashAccountName = cashAccount.Glaccname,
-        //            Status = "COMPLETED",
-        //            BlockchainTxId = blockchainTxId,
-        //            CreatedAt = DateTime.Now,
-        //            CreatedBy = UserName
-        //        };
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        await transaction.RollbackAsync();
-        //        _logger.LogError(ex, $"Error processing payment for employee {dto.EmployeeId}: {ex.Message}");
-        //        _logger.LogError($"Stack trace: {ex.StackTrace}");
-        //        throw;
-        //    }
-        //}
-
         public async Task<EmployeePaymentResponseDTO> GetPaymentByIdAsync(long paymentId)
         {
             var journal = await _context.Journals
@@ -821,11 +513,19 @@ namespace SACCOBlockChainSystem.Services
                 CreatedBy = journal.AUDITID
             };
         }
+
         public async Task<List<EmployeePaymentListDTO>> GetAllPaymentsAsync(string companyCode)
         {
+            // Get all valid agent/employee member numbers
+            var agentMemberNos = await _context.Agents
+                .Where(a => a.CompanyCode == companyCode)
+                .Select(a => a.IdNo)
+                .ToListAsync();
+
             var payments = await _context.Journals
                 .Where(j => j.CompanyCode == companyCode
-                            && (j.TRANSTYPE == "PYMT" || j.TRANSTYPE == "PYM" || j.TRANSTYPE == "PAY"))  // Fixed: Include all variations
+                            && (j.TRANSTYPE == "PYMT" || j.TRANSTYPE == "PYM" || j.TRANSTYPE == "PAY")
+                            && agentMemberNos.Contains(j.MEMBERNO))  // Only include journals where MEMBERNO is an actual agent
                 .OrderByDescending(j => j.AUDITDATE)
                 .Select(j => new EmployeePaymentListDTO
                 {
@@ -893,12 +593,20 @@ namespace SACCOBlockChainSystem.Services
             return payments;
         }
 
+
         public async Task<PaymentSummaryDTO> GetPaymentSummaryAsync(string companyCode, DateTime? fromDate = null, DateTime? toDate = null)
         {
+            // Get all valid agent/employee member numbers
+            var agentMemberNos = await _context.Agents
+                .Where(a => a.CompanyCode == companyCode)
+                .Select(a => a.IdNo)
+                .ToListAsync();
+
             var query = _context.Journals
                 .Where(j => j.CompanyCode == companyCode
                             && (j.TRANSTYPE == "PYMT" || j.TRANSTYPE == "PYM" || j.TRANSTYPE == "PAY")
-                            && j.POSTED == true);
+                            && j.POSTED == true
+                            && agentMemberNos.Contains(j.MEMBERNO));  // Only include journals where MEMBERNO is an actual agent
 
             if (fromDate.HasValue)
                 query = query.Where(j => j.TRANSDATE >= fromDate.Value);

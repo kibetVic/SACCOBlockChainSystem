@@ -118,19 +118,19 @@
 
                                 <div class="mb-3">
                                     <label asp-for="ActualValue" class="form-label fw-bold">Actual Value (KES) *</label>
-                                    <input asp-for="ActualValue" class="form-control" type="number" step="0.01" min="0" required />
+                                    <input asp-for="ActualValue" class="form-control" type="number" min="0" required />
                                     <span asp-validation-for="ActualValue" class="text-danger"></span>
                                 </div>
 
                                 <div class="mb-3">
                                     <label asp-for="MarketValue" class="form-label">Market Value (KES)</label>
-                                    <input asp-for="MarketValue" class="form-control" type="number" step="0.01" min="0" />
+                                    <input asp-for="MarketValue" class="form-control" type="number" min="0" />
                                     <span asp-validation-for="MarketValue" class="text-danger"></span>
                                 </div>
 
                                 <div class="mb-3">
                                     <label asp-for="TotalValue" class="form-label">Total Value (KES)</label>
-                                    <input asp-for="TotalValue" class="form-control" type="number" step="0.01" min="0" />
+                                    <input asp-for="TotalValue" class="form-control" type="number" min="0" />
                                     <span asp-validation-for="TotalValue" class="text-danger"></span>
                                     <small class="text-muted">Leave blank to auto-calculate (Quantity × Actual Value)</small>
                                 </div>

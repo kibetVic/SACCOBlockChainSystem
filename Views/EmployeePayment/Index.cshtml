@@ -136,30 +136,104 @@
                 <div class="row">
                     <!-- LEFT SIDE - Form Fields -->
                     <div class="col-md-8">
-                        <!-- EMPLOYEE and PAYMENT TYPE -->
+                        <!-- EMPLOYEE SEARCH -->
                         <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label>Select Employee *</label>
-                                <select id="EmployeeId" name="EmployeeId" class="form-control select2" required style="width: 100%;">
-                                    <option value="">-- Select Employee --</option>
-                                </select>
-                                <small class="text-muted">Select the employee to pay</small>
+                            <div class="col-md-12">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <div class="row mb-2">
+                                            <div class="col-md-12">
+                                                <h6 class="card-title mb-3">Step 1: Search & Select Employee</h6>
+                                            </div>
+                                        </div>
+
+                                        <!-- Search Input -->
+                                        <div class="row mb-3">
+                                            <div class="col-md-12">
+                                                <div class="form-group">
+                                                    <label class="fw-bold">Search Employee *</label>
+                                                    <div class="input-group">
+                                                        <input type="text" id="employeeSearchInput" class="form-control"
+                                                               placeholder="Search by Name, ID Number, or Phone Number..." />
+                                                        <button type="button" class="btn btn-primary" onclick="searchEmployees()">
+                                                            <i class="fas fa-search"></i> Search
+                                                        </button>
+                                                        <button type="button" class="btn btn-secondary" onclick="clearEmployeeSearch()">
+                                                            <i class="bi bi-x-lg"></i> Clear
+                                                        </button>
+                                                    </div>
+                                                    <small class="text-muted">Enter at least 3 characters to search (auto-search enabled)</small>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Search Results -->
+                                        <div id="employeeSearchResults" style="display: none;" class="mt-3">
+                                            <div class="table-responsive">
+                                                <table class="table table-bordered table-hover search-results-table">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>Select</th>
+                                                            <th>Employee No</th>
+                                                            <th>Full Name</th>
+                                                            <th>ID Number</th>
+                                                            <th>Phone Number</th>
+                                                            <th>Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="employeeSearchResultsBody"></tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <!-- Loading Indicator -->
+                                        <div id="employeeSearchLoading" style="display: none;" class="text-center p-3">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            <p>Searching for employees...</p>
+                                        </div>
+
+                                        <!-- Selected Employee Display -->
+                                        <div id="selectedEmployeeCard" style="display: none;" class="mt-3">
+                                            <div class="alert alert-success selected-employee-card">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <i class="bi bi-check-circle-fill"></i>
+                                                        <strong>Selected Employee:</strong>
+                                                        <span id="selectedEmployeeName"></span>
+                                                        <br />
+                                                        <small>
+                                                            ID: <span id="selectedEmployeeIdNo"></span> |
+                                                            Phone: <span id="selectedEmployeePhone"></span>
+                                                        </small>
+                                                    </div>
+                                                    <div>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearSelectedEmployee()">
+                                                            <i class="bi bi-arrow-left"></i> Change
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Hidden fields for employee data -->
+                                        <input type="hidden" id="EmployeeId" name="EmployeeId" />
+                                        <input type="hidden" id="EmployeeName" name="EmployeeName" />
+                                        <input type="hidden" id="EmployeeIdNo" name="EmployeeIdNo" />
+                                    </div>
+                                </div>
                             </div>
+                        </div>
+
+                        <!-- PAYMENT TYPE, AMOUNT, ACCOUNTS -->
+                        <div class="row mb-3">
                             <div class="col-md-6">
                                 <label>Payment Type *</label>
                                 <select id="PaymentTypeId" name="PaymentTypeId" class="form-control select2" required style="width: 100%;">
                                     <option value="">-- Select Payment Type --</option>
                                 </select>
                                 <small class="text-muted">Select type of payment</small>
-                            </div>
-                        </div>
-
-                        <!-- EMPLOYEE INFO and AMOUNT -->
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label>ID Number</label>
-                                <input type="text" id="EmployeeIdNo" name="EmployeeIdNo" class="form-control" readonly />
-                                <input type="hidden" id="EmployeeName" name="EmployeeName" />
                             </div>
                             <div class="col-md-6">
                                 <label>Amount (KES) *</label>
@@ -168,7 +242,6 @@
                             </div>
                         </div>
 
-                        <!-- EXPENSE ACCOUNT and CASH ACCOUNT -->
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label>Expense Account *</label>
@@ -190,7 +263,6 @@
                             </div>
                         </div>
 
-                        <!-- PAYMENT DATE and PAYMENT METHOD -->
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label>Payment Date</label>
@@ -374,16 +446,17 @@
 
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.js"></script>
 
     <script>
         let paymentTypesData = [];
-        let employeesData = [];
         let expenseAccountsData = [];
         let cashAccountsData = [];
+        let selectedEmployeeData = null;
+        let searchTimeout = null;
 
         // Load data on page load
         $(document).ready(function() {
-            loadEmployees();
             loadPaymentTypes();
             loadExpenseAccounts();
             loadCashAccounts();
@@ -398,21 +471,210 @@
                     info: "Showing _START_ to _END_ of _TOTAL_ entries"
                 }
             });
+
+            // Auto-search with debounce (like Apply and OffsetLoan views)
+            $('#employeeSearchInput').on('input', function() {
+                clearTimeout(searchTimeout);
+                const searchTerm = $(this).val().trim();
+                if (searchTerm.length >= 3) {
+                    searchTimeout = setTimeout(function() {
+                        searchEmployees();
+                    }, 500);
+                } else if (searchTerm.length === 0) {
+                    clearEmployeeSearch();
+                }
+            });
+
+            // Enter key support
+            $('#employeeSearchInput').on('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    searchEmployees();
+                }
+            });
+
+            // Focus on search input on load
+            $('#employeeSearchInput').focus();
         });
 
-        function loadEmployees() {
-            $.get('@Url.Action("GetAgentsForDropdown", "Agent")', function(data) {
-                employeesData = data;
-                const select = $('#EmployeeId');
-                select.empty().append('<option value="">-- Select Employee --</option>');
-                $.each(data, function(i, item) {
-                    select.append($('<option></option>').attr('value', item.id).text(item.names + ' (' + item.idNo + ')'));
-                });
-            }).fail(function() {
-                showNotification('Failed to load employees', 'error');
+        // ============================================================
+        // SEARCH EMPLOYEES (Auto + Manual)
+        // ============================================================
+        async function searchEmployees() {
+            const searchTerm = document.getElementById('employeeSearchInput').value.trim();
+
+            if (searchTerm.length < 3) {
+                Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
+                return;
+            }
+
+            // Show loading
+            document.getElementById('employeeSearchLoading').style.display = 'block';
+            document.getElementById('employeeSearchResults').style.display = 'none';
+            document.getElementById('employeeSearchResultsBody').innerHTML = '';
+
+            try {
+                const response = await fetch(`/api/Employee/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+
+                if (!response.ok) {
+                    throw new Error('Search failed');
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.data && data.data.length > 0) {
+                    displayEmployeeSearchResults(data.data);
+                } else {
+                    document.getElementById('employeeSearchResultsBody').innerHTML =
+                        '<tr><td colspan="6" class="text-center text-warning">No employees found matching your search</td></tr>';
+                    document.getElementById('employeeSearchResults').style.display = 'block';
+                    // Only show alert if manual search (not auto)
+                    // We'll let the user know via the table message
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('employeeSearchResultsBody').innerHTML =
+                    '<tr><td colspan="6" class="text-center text-danger">Error searching employees. Please try again.</td></tr>';
+                document.getElementById('employeeSearchResults').style.display = 'block';
+                Swal.fire('Error', 'Error searching employees. Please try again.', 'error');
+            } finally {
+                document.getElementById('employeeSearchLoading').style.display = 'none';
+            }
+        }
+
+        // ============================================================
+        // DISPLAY EMPLOYEE SEARCH RESULTS
+        // ============================================================
+        function displayEmployeeSearchResults(employees) {
+            const tbody = document.getElementById('employeeSearchResultsBody');
+            tbody.innerHTML = '';
+
+            employees.forEach(employee => {
+                const statusBadge = employee.status == 1 || employee.isActive != false ?
+                    '<span class="badge bg-success">Active</span>' :
+                    '<span class="badge bg-danger">Inactive</span>';
+
+                const fullName = (employee.surname || employee.names || employee.fullName || '');
+                const phone = employee.mobileNo || employee.phoneNo || employee.phone || 'N/A';
+
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-success btn-select-employee" onclick="selectEmployee('${employee.id}', '${employee.idNo || ''}', '${escapeHtml(fullName)}', '${escapeHtml(phone)}')">
+                            <i class="bi bi-check-lg"></i> Select
+                        </button>
+                    </td>
+                    <td><strong>${escapeHtml(employee.idNo || employee.employeeNo || 'N/A')}</strong></td>
+                    <td>${escapeHtml(fullName || 'N/A')}</td>
+                    <td>${escapeHtml(employee.idNo || 'N/A')}</td>
+                    <td>${escapeHtml(phone)}</td>
+                    <td>${statusBadge}</td>
+                `;
+            });
+
+            document.getElementById('employeeSearchResults').style.display = 'block';
+        }
+
+        // ============================================================
+        // SELECT EMPLOYEE
+        // ============================================================
+        function selectEmployee(id, idNo, name, phone) {
+            // Store selected employee data
+            selectedEmployeeData = {
+                id: id,
+                idNo: idNo,
+                name: name,
+                phone: phone
+            };
+
+            // Update hidden fields
+            document.getElementById('EmployeeId').value = id;
+            document.getElementById('EmployeeName').value = name;
+            document.getElementById('EmployeeIdNo').value = idNo;
+
+            // Update selected employee card
+            document.getElementById('selectedEmployeeName').innerHTML = `<strong>${escapeHtml(name)}</strong>`;
+            document.getElementById('selectedEmployeeIdNo').innerHTML = escapeHtml(idNo);
+            document.getElementById('selectedEmployeePhone').innerHTML = escapeHtml(phone);
+            document.getElementById('selectedEmployeeCard').style.display = 'block';
+
+            // Hide search results
+            document.getElementById('employeeSearchResults').style.display = 'none';
+            document.getElementById('employeeSearchInput').value = '';
+
+            // Show employee info card
+            document.getElementById('infoName').textContent = name;
+            document.getElementById('infoIdNo').textContent = idNo;
+            document.getElementById('infoPhone').textContent = phone || 'N/A';
+            document.getElementById('employeeInfoCard').style.display = 'block';
+
+            // Load employee payment history
+            loadEmployeePaymentHistory(idNo);
+        }
+
+        // ============================================================
+        // LOAD EMPLOYEE PAYMENT HISTORY
+        // ============================================================
+        function loadEmployeePaymentHistory(employeeIdNo) {
+            if (!employeeIdNo || employeeIdNo === 'N/A' || employeeIdNo === '') {
+                console.log('No valid ID No provided');
+                $('#infoTotalPaid').text('KES 0.00');
+                return;
+            }
+
+            console.log('Loading employee history for ID No:', employeeIdNo);
+
+            $.ajax({
+                url: '@Url.Action("GetEmployeeDetailsByIdNo", "EmployeePayment")',
+                type: 'GET',
+                data: { idNo: employeeIdNo },
+                dataType: 'json',
+                success: function(data) {
+                    console.log('Employee details response:', data);
+                    if (data.success && data.employee) {
+                        var totalPaid = parseFloat(data.employee.totalPaid || 0);
+                        $('#infoTotalPaid').text('KES ' + totalPaid.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        }));
+                    } else {
+                        $('#infoTotalPaid').text('KES 0.00');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading employee payment history:', { status: status, error: error, response: xhr.responseText });
+                    $('#infoTotalPaid').text('KES 0.00');
+                    // Silent fail - don't show error notification
+                }
             });
         }
 
+        // ============================================================
+        // CLEAR EMPLOYEE SEARCH
+        // ============================================================
+        function clearEmployeeSearch() {
+            document.getElementById('employeeSearchInput').value = '';
+            document.getElementById('employeeSearchResults').style.display = 'none';
+            document.getElementById('employeeSearchResultsBody').innerHTML = '';
+            clearSelectedEmployee();
+        }
+
+        // ============================================================
+        // CLEAR SELECTED EMPLOYEE
+        // ============================================================
+        function clearSelectedEmployee() {
+            selectedEmployeeData = null;
+            document.getElementById('EmployeeId').value = '';
+            document.getElementById('EmployeeName').value = '';
+            document.getElementById('EmployeeIdNo').value = '';
+            document.getElementById('selectedEmployeeCard').style.display = 'none';
+            document.getElementById('employeeInfoCard').style.display = 'none';
+            document.getElementById('employeeSearchInput').focus();
+        }
+
+        // ============================================================
+        // LOAD PAYMENT TYPES
+        // ============================================================
         function loadPaymentTypes() {
             $.get('@Url.Action("GetPaymentTypesList", "PaymentType")', function(data) {
                 paymentTypesData = data;
@@ -426,6 +688,9 @@
             });
         }
 
+        // ============================================================
+        // LOAD EXPENSE ACCOUNTS
+        // ============================================================
         function loadExpenseAccounts() {
             $.get('@Url.Action("GetExpenseAccounts", "EmployeePayment")', function(data) {
                 expenseAccountsData = data;
@@ -439,6 +704,9 @@
             });
         }
 
+        // ============================================================
+        // LOAD CASH ACCOUNTS
+        // ============================================================
         function loadCashAccounts() {
             $.get('@Url.Action("GetCashAccounts", "EmployeePayment")', function(data) {
                 cashAccountsData = data;
@@ -451,30 +719,6 @@
                 showNotification('Failed to load cash accounts', 'error');
             });
         }
-
-        // Employee selection
-        $('#EmployeeId').change(function() {
-            const id = $(this).val();
-            if (id) {
-                $.get('@Url.Action("GetEmployeeDetails", "EmployeePayment")', { id: id }, function(data) {
-                    if (data.success) {
-                        $('#EmployeeIdNo').val(data.employee.idNo);
-                        $('#EmployeeName').val(data.employee.name);
-                        $('#infoName').text(data.employee.name);
-                        $('#infoIdNo').text(data.employee.idNo);
-                        $('#infoPhone').text(data.employee.mobileNo || 'N/A');
-                        $('#infoTotalPaid').text('KES ' + parseFloat(data.employee.totalPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-                        $('#employeeInfoCard').show();
-                    }
-                }).fail(function() {
-                    showNotification('Failed to load employee details', 'error');
-                });
-            } else {
-                $('#EmployeeIdNo').val('');
-                $('#EmployeeName').val('');
-                $('#employeeInfoCard').hide();
-            }
-        });
 
         // Payment type selection - auto-set expense account if default exists
         $('#PaymentTypeId').change(function() {
@@ -491,18 +735,20 @@
             }
         });
 
-        // Process Payment - UPDATED VERSION with automatic receipt
+        // ============================================================
+        // PROCESS PAYMENT
+        // ============================================================
         $('#btnProcessPayment').click(function() {
             // Get form values
             const employeeId = $('#EmployeeId').val();
+            const employeeName = $('#EmployeeName').val();
+            const employeeIdNo = $('#EmployeeIdNo').val();
             const paymentTypeId = $('#PaymentTypeId').val();
             const amount = $('#Amount').val();
             const expenseAccount = $('#ExpenseAccountNo').val();
             const cashAccount = $('#CashAccountNo').val();
             const paymentDate = $('#PaymentDate').val();
             const paymentMethod = $('#PaymentMethod').val();
-            const employeeName = $('#EmployeeName').val();
-            const employeeIdNo = $('#EmployeeIdNo').val();
             const token = $('input[name="__RequestVerificationToken"]').val();
 
             // Validation
@@ -511,6 +757,20 @@
             if (!amount || parseFloat(amount) <= 0) { showNotification('Please enter a valid amount', 'error'); return; }
             if (!expenseAccount) { showNotification('Please select an expense account', 'error'); return; }
             if (!cashAccount) { showNotification('Please select a cash/bank account', 'error'); return; }
+
+            // Confirm with user
+            const confirmMessage = `Confirm payment details:\n\n` +
+                `Employee: ${employeeName} (${employeeIdNo})\n` +
+                `Amount: KES ${parseFloat(amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n` +
+                `Payment Type: ${$('#PaymentTypeId option:selected').text()}\n` +
+                `Payment Method: ${paymentMethod || 'Not specified'}\n` +
+                `Expense Account: ${$('#ExpenseAccountNo option:selected').text()}\n` +
+                `Cash Account: ${$('#CashAccountNo option:selected').text()}\n\n` +
+                `This action will create a journal entry and cannot be undone.`;
+
+            if (!confirm(confirmMessage)) {
+                return;
+            }
 
             // Disable button to prevent double submission
             const $btn = $('#btnProcessPayment');
@@ -579,32 +839,25 @@
             });
         });
 
-        // Clear form
+        // ============================================================
+        // CLEAR FORM
+        // ============================================================
         $('#btnClear').click(function() {
-            $('#EmployeeId').val('').trigger('change');
+            clearSelectedEmployee();
             $('#PaymentTypeId').val('');
             $('#Amount').val('');
             $('#PaymentMethod').val('');
             $('#ExpenseAccountNo').val('');
             $('#CashAccountNo').val('');
             $('#employeeInfoCard').hide();
+            $('#employeeSearchInput').val('');
+            $('#employeeSearchResults').hide();
             showNotification('Form cleared', 'info');
         });
 
-        // View details
-        $(document).on('click', '.view-details', function() {
-            const id = $(this).data('id');
-            $('#detailsModalContent').html('<div class="text-center"><div class="spinner-border text-primary"></div></div>');
-            $.get('@Url.Action("Details", "EmployeePayment")', { id: id }, function(data) {
-                $('#detailsModalContent').html(data);
-                $('#detailsModal').modal('show');
-            }).fail(function() {
-                $('#detailsModalContent').html('<div class="alert alert-danger">Error loading payment details</div>');
-                $('#detailsModal').modal('show');
-            });
-        });
-
-        // View Receipt button - open receipt in same tab
+        // ============================================================
+        // VIEW RECEIPT
+        // ============================================================
         $(document).on('click', '.view-receipt', function() {
             const id = $(this).data('id');
             if (id) {
@@ -613,16 +866,9 @@
             }
         });
 
-        // Print Receipt button - open receipt with auto-print in same tab
-        $(document).on('click', '.print-receipt', function() {
-            const id = $(this).data('id');
-            if (id) {
-                const url = '@Url.Action("PrintAndAutoPrintEmployeeReceipt", "EmployeePayment")' + '?id=' + id;
-                window.location.href = url;
-            }
-        });
-
-        // Reverse payment
+        // ============================================================
+        // REVERSE PAYMENT
+        // ============================================================
         $(document).on('click', '.reverse-payment', function() {
             const id = $(this).data('id');
             $('#reversePaymentId').val(id);
@@ -665,12 +911,18 @@
             });
         });
 
+        // ============================================================
+        // EXPORT DATA
+        // ============================================================
         function exportData() {
             const fromDate = $('input[name="fromDate"]').val();
             const toDate = $('input[name="toDate"]').val();
             window.location.href = '@Url.Action("Export", "EmployeePayment")' + '?fromDate=' + fromDate + '&toDate=' + toDate;
         }
 
+        // ============================================================
+        // SHOW NOTIFICATION
+        // ============================================================
         function showNotification(message, type) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -683,10 +935,18 @@
                     timer: 3000
                 });
             } else {
-                const color = type === 'error' ? 'red' : (type === 'success' ? 'green' : 'blue');
-                const icon = type === 'error' ? '❌' : (type === 'success' ? '✅' : 'ℹ️');
-                alert(icon + ' ' + message);
+                alert((type === 'error' ? '❌ ' : (type === 'success' ? '✅ ' : 'ℹ️ ')) + message);
             }
+        }
+
+        // ============================================================
+        // ESCAPE HTML
+        // ============================================================
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // Auto-dismiss alerts
@@ -770,4 +1030,37 @@
         .btn-group .btn i {
             font-size: 13px;
         }
+
+    .search-results-table tbody tr {
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+        .search-results-table tbody tr:hover {
+            background-color: rgba(13, 110, 253, 0.05);
+        }
+
+    .selected-employee-card {
+        border-left: 4px solid #28a745;
+    }
+
+    .btn-select-employee {
+        min-width: 80px;
+    }
+
+    .bi {
+        display: inline-block;
+        font-style: normal;
+        font-weight: normal;
+        line-height: 1;
+    }
+
+    /* Card title styling */
+    .card-title {
+        font-weight: 600;
+    }
+
+    .bg-light .card-body {
+        padding: 1.25rem;
+    }
 </style>

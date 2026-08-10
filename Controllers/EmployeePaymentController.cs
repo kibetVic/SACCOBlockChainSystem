@@ -379,7 +379,7 @@ namespace SACCOBlockChainSystem.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // GET: EmployeePayment/GetEmployeeDetails
+        // GET: EmployeePayment/GetEmployeeDetails - By ID (for backward compatibility)
         [HttpGet]
         public async Task<IActionResult> GetEmployeeDetails(long id)
         {
@@ -407,7 +407,109 @@ namespace SACCOBlockChainSystem.Controllers
             });
         }
 
+        // GET: EmployeePayment/GetEmployeeDetails - By ID No
+        [HttpGet("GetEmployeeDetailsByIdNo")]
+        public async Task<IActionResult> GetEmployeeDetailsByIdNo(string idNo)
+        {
+            try
+            {
+                var companyCode = User.FindFirst("CompanyCode")?.Value ?? "DEFAULT";
+
+                if (string.IsNullOrEmpty(idNo))
+                {
+                    return Json(new { success = false, message = "ID Number is required" });
+                }
+
+                var employee = await _context.Agents
+                    .FirstOrDefaultAsync(a => a.IdNo == idNo && a.CompanyCode == companyCode);
+
+                if (employee == null)
+                {
+                    return Json(new { success = false, message = "Employee not found" });
+                }
+
+                var totalPaid = await _paymentService.GetEmployeeBalanceAsync(employee.IdNo, companyCode);
+
+                return Json(new
+                {
+                    success = true,
+                    employee = new
+                    {
+                        id = employee.Id,
+                        idNo = employee.IdNo,
+                        name = employee.Names,
+                        mobileNo = employee.MobileNo,
+                        totalPaid = totalPaid
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting employee details by ID No: {idNo}");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        //// GET: EmployeePayment/GetEmployeeDetails
+        //[HttpGet]
+        //public async Task<IActionResult> GetEmployeeDetails(string idNo)
+        //{
+        //    var companyCode = User.FindFirst("CompanyCode")?.Value ?? "DEFAULT";
+
+        //    var employee = await _context.Agents
+        //        .FirstOrDefaultAsync(a => a.IdNo == idNo && a.CompanyCode == companyCode);
+
+        //    if (employee == null)
+        //    {
+        //        return Json(new { success = false, message = "Employee not found" });
+        //    }
+
+        //    var totalPaid = await _paymentService.GetEmployeeBalanceAsync(employee.IdNo, companyCode);
+
+        //    return Json(new
+        //    {
+        //        success = true,
+        //        employee = new
+        //        {
+        //            id = employee.Id,
+        //            idNo = employee.IdNo,
+        //            name = employee.Names,
+        //            mobileNo = employee.MobileNo,
+        //            totalPaid = totalPaid
+        //        }
+        //    });
+        //}
+
+        //// GET: EmployeePayment/GetEmployeeDetails
+        //[HttpGet]
+        //public async Task<IActionResult> GetEmployeeDetails(long id)
+        //{
+        //    var companyCode = User.FindFirst("CompanyCode")?.Value ?? "DEFAULT";
+        //    var employee = await _agentService.GetByIdAsync(id);
+
+        //    if (employee == null)
+        //    {
+        //        return Json(new { success = false, message = "Employee not found" });
+        //    }
+
+        //    var totalPaid = await _paymentService.GetEmployeeBalanceAsync(employee.IdNo, companyCode);
+
+        //    return Json(new
+        //    {
+        //        success = true,
+        //        employee = new
+        //        {
+        //            id = employee.Id,
+        //            idNo = employee.IdNo,
+        //            name = employee.Names,
+        //            mobileNo = employee.MobileNo,
+        //            totalPaid = totalPaid
+        //        }
+        //    });
+        //}
+
         // GET: EmployeePayment/GetPaymentTypeDefaultAccount
+
         [HttpGet]
         public async Task<IActionResult> GetPaymentTypeDefaultAccount(int id)
         {
