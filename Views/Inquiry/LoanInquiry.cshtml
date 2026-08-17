@@ -709,6 +709,9 @@
                                 <button type="button" class="btn btn-sm btn-info" onclick="viewLoanDetails('${loan.loanNo}')">
                                     <i class="bi bi-eye"></i> View
                                 </button>
+                                <button type="button" class="btn btn-sm btn-warning" onclick="showRepaymentHistory('${loan.loanNo}')">
+                                    <i class="bi bi-clock-history"></i> Repay History
+                                </button>
                             </td>
                         </tr>`;
                 });
@@ -1019,6 +1022,344 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+
+        function showRepaymentHistory(loanNo) {
+            const memberNo = $('#selectedMemberNo').val();
+            if (!memberNo) {
+                Swal.fire('Error', 'Please select a member first', 'error');
+                return;
+            }
+
+            // Show loading
+            Swal.fire({
+                title: 'Loading Repayment History...',
+                html: '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>',
+                showConfirmButton: false,
+                allowOutsideClick: false
+            });
+
+            // Fetch repayment history
+            fetch(`/api/Inquiry/loan/${encodeURIComponent(memberNo)}/${encodeURIComponent(loanNo)}/repayments`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    Swal.close();
+
+                    if (data.success && data.data) {
+                        // Show repayment history in a modal
+                        showRepaymentHistoryModal(data.data);
+                    } else {
+                        Swal.fire('Info', data.message || 'No repayment history found for this loan', 'info');
+                    }
+                })
+                .catch(error => {
+                    Swal.close();
+                    console.error('Error fetching repayment history:', error);
+                    Swal.fire('Error', 'Failed to load repayment history: ' + error.message, 'error');
+                });
+        }
+
+        function showRepaymentHistoryModal(data) {
+            // Check if modal already exists, if so remove it
+            const existingModal = document.getElementById('repaymentHistoryModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // Build modal HTML
+            const modalHtml = `
+                <div class="modal fade" id="repaymentHistoryModal" tabindex="-1" aria-labelledby="repaymentHistoryModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-xl modal-fullscreen-xl-down">
+                        <div class="modal-content">
+                            <div class="modal-header bg-primary text-white">
+                                <h5 class="modal-title" id="repaymentHistoryModalLabel">
+                                    <i class="bi bi-clock-history"></i> Repayment History - Loan ${data.loanNo}
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body" id="repaymentHistoryModalBody" style="max-height: 80vh; overflow-y: auto;">
+                                <!-- Content will be loaded here -->
+                                <div class="text-center p-5">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Loading repayment history...</p>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="button" class="btn btn-info" onclick="exportRepaymentHistoryPdf('${data.loanNo}', '${data.memberNo}')">
+                                    <i class="bi bi-file-pdf"></i> PDF
+                                </button>
+                                <button type="button" class="btn btn-success" onclick="exportRepaymentHistoryExcel('${data.loanNo}', '${data.memberNo}')">
+                                    <i class="bi bi-file-excel"></i> Excel
+                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="window.print()">
+                                    <i class="bi bi-printer"></i> Print
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Append modal to body
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('repaymentHistoryModal'));
+            modal.show();
+
+            // Load content into modal body
+            const modalBody = document.getElementById('repaymentHistoryModalBody');
+            modalBody.innerHTML = buildRepaymentHistoryHtml(data);
+        }
+
+        function buildRepaymentHistoryHtml(data) {
+            let html = `
+                <!-- Company Header -->
+                <div class="text-center mb-4">
+                    <h3 class="company-name">${escapeHtml(data.companyName)}</h3>
+                    <p class="company-address">${escapeHtml(data.companyAddress)}</p>
+                    <p class="company-contact">${escapeHtml(data.companyPhone)} | ${escapeHtml(data.companyEmail)}</p>
+                    <hr />
+                    <h4>LOAN REPAYMENT HISTORY</h4>
+                    <p class="text-muted">Generated on: ${new Date().toLocaleString()}</p>
+                </div>
+
+                <!-- Member and Loan Info -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0"><i class="bi bi-person"></i> Member Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm table-borderless">
+                                    <tr><td width="40%"><strong>Member Number:</strong></td><td>${escapeHtml(data.memberNo)}</td></tr>
+                                    <tr><td><strong>Full Name:</strong></td><td>${escapeHtml(data.memberName)}</td></tr>
+                                    <tr><td><strong>ID Number:</strong></td><td>${escapeHtml(data.memberIdNo)}</td></tr>
+                                    <tr><td><strong>Phone Number:</strong></td><td>${escapeHtml(data.memberPhone)}</td></tr>
+                                    <tr><td><strong>Email:</strong></td><td>${escapeHtml(data.memberEmail)}</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0"><i class="bi bi-cash"></i> Loan Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm table-borderless">
+                                    <tr><td width="40%"><strong>Loan Number:</strong></td><td>${escapeHtml(data.loanNo)}</td></tr>
+                                    <tr><td><strong>Loan Type:</strong></td><td>${escapeHtml(data.loanType)}</td></tr>
+                                    <tr><td><strong>Principal Amount:</strong></td><td class="text-end">${formatCurrency(data.principalAmount)}</td></tr>
+                                    <tr><td><strong>Interest Rate:</strong></td><td class="text-end">${data.interestRate}%</td></tr>
+                                    <tr><td><strong>Repayment Period:</strong></td><td class="text-end">${data.repaymentPeriod} months</td></tr>
+                                    <tr><td><strong>Application Date:</strong></td><td>${formatDate(data.applicationDate)}</td></tr>
+                                    <tr><td><strong>Loan Status:</strong></td><td>${getStatusBadgeText(data.loanStatus)}</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Statistics -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="small-box bg-info">
+                            <div class="inner">
+                                <h3>${formatCurrency(data.totalAmountPaid)}</h3>
+                                <p>Total Amount Paid</p>
+                            </div>
+                            <div class="icon"><i class="bi bi-cash-stack"></i></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-success">
+                            <div class="inner">
+                                <h3>${formatCurrency(data.totalPrincipalPaid)}</h3>
+                                <p>Principal Paid</p>
+                            </div>
+                            <div class="icon"><i class="bi bi-piggy-bank"></i></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-warning">
+                            <div class="inner">
+                                <h3>${formatCurrency(data.totalInterestPaid)}</h3>
+                                <p>Interest Paid</p>
+                            </div>
+                            <div class="icon"><i class="bi bi-percent"></i></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box ${data.isFullyPaid ? 'bg-success' : 'bg-danger'}">
+                            <div class="inner">
+                                <h3>${formatCurrency(data.totalOutstanding)}</h3>
+                                <p>Outstanding Balance</p>
+                            </div>
+                            <div class="icon"><i class="bi bi-credit-card"></i></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6>Repayment Progress</h6>
+                                <div class="progress" style="height: 30px;">
+                                    <div class="progress-bar ${data.percentagePaid >= 100 ? 'bg-success' : data.percentagePaid >= 75 ? 'bg-info' : data.percentagePaid >= 50 ? 'bg-warning' : 'bg-danger'}"
+                                         role="progressbar"
+                                         style="width: ${Math.min(data.percentagePaid, 100)}%;"
+                                         aria-valuenow="${data.percentagePaid}"
+                                         aria-valuemin="0"
+                                         aria-valuemax="100">
+                                        ${data.percentagePaid.toFixed(1)}% Paid
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-between mt-1">
+                                    <span>0%</span>
+                                    <span>${formatCurrency(data.originalTotalAmount)} Total</span>
+                                    <span>100%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Repayment Table -->
+                <div class="card">
+                    <div class="card-header bg-dark text-white">
+                        <h6 class="mb-0"><i class="bi bi-clock-history"></i> Repayment History (${data.repayments.length} payments)</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover mb-0" id="repaymentHistoryTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Payment Date</th>
+                                        <th>Receipt No</th>
+                                        <th>Method</th>
+                                        <th class="text-end">Amount Paid</th>
+                                        <th class="text-end">Principal</th>
+                                        <th class="text-end">Interest</th>
+                                        <th class="text-end">Penalty</th>
+                                        <th class="text-end">Balance Before</th>
+                                        <th class="text-end">Balance After</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+
+            if (data.repayments && data.repayments.length > 0) {
+                let counter = 1;
+                // Sort by payment date descending (most recent first)
+                const sortedRepayments = [...data.repayments].sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate));
+
+                sortedRepayments.forEach(repayment => {
+                    html += `
+                        <tr>
+                            <td>${counter}</td>
+                            <td>${formatDate(repayment.paymentDate)}</td>
+                            <td><strong>${escapeHtml(repayment.receiptNo)}</strong></td>
+                            <td>
+                                <span class="badge ${repayment.paymentMethod === 'MPESA' ? 'bg-success' : repayment.paymentMethod === 'CHEQUE' ? 'bg-info' : repayment.paymentMethod === 'BANK_TRANSFER' ? 'bg-primary' : 'bg-secondary'}">
+                                    ${escapeHtml(repayment.paymentMethod)}
+                                </span>
+                            </td>
+                            <td class="text-end text-primary fw-bold">${formatCurrency(repayment.amountPaid)}</td>
+                            <td class="text-end">${formatCurrency(repayment.principalPaid)}</td>
+                            <td class="text-end">${formatCurrency(repayment.interestPaid)}</td>
+                            <td class="text-end text-danger">${formatCurrency(repayment.penaltyPaid)}</td>
+                            <td class="text-end">${formatCurrency(repayment.balanceBefore)}</td>
+                            <td class="text-end fw-bold">${formatCurrency(repayment.balanceAfter)}</td>
+                            <td>
+                                <span class="badge ${repayment.status === 'Full Settlement' ? 'bg-success' : repayment.status === 'Overdue' ? 'bg-danger' : 'bg-info'}">
+                                    ${escapeHtml(repayment.status)}
+                                    ${repayment.daysOverdue ? ` (${repayment.daysOverdue} days)` : ''}
+                                </span>
+                            </td>
+                        </tr>`;
+                    counter++;
+                });
+            } else {
+                html += `
+                    <tr>
+                        <td colspan="11" class="text-center text-muted py-3">
+                            <i class="bi bi-info-circle"></i> No repayment history found for this loan
+                        </td>
+                    </tr>`;
+            }
+
+            html += `
+                                </tbody>
+                                <tfoot class="table-dark fw-bold">
+                                    <tr>
+                                        <td colspan="4" class="text-end">TOTALS:</td>
+                                        <td class="text-end">${formatCurrency(data.totalAmountPaid)}</td>
+                                        <td class="text-end">${formatCurrency(data.totalPrincipalPaid)}</td>
+                                        <td class="text-end">${formatCurrency(data.totalInterestPaid)}</td>
+                                        <td class="text-end">${formatCurrency(data.totalPenaltyPaid)}</td>
+                                        <td colspan="3"></td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="8" class="text-end">OUTSTANDING BALANCE:</td>
+                                        <td colspan="3" class="text-end text-danger">${formatCurrency(data.totalOutstanding)}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="text-center text-muted mt-3">
+                    <hr />
+                    <small>
+                        Inquiry generated by: ${escapeHtml(data.inquiredBy)} | ${new Date(data.inquiryTimestamp).toLocaleString()}
+                        ${data.blockchainTxId ? `<br />Blockchain Tx: ${escapeHtml(data.blockchainTxId)}` : ''}
+                    </small>
+                </div>
+            `;
+
+            return html;
+        }
+
+        // Helper function for status badge in repayment history
+        function getStatusBadgeText(status) {
+            const statusMap = {
+                'Draft': '<span class="badge bg-secondary">Draft</span>',
+                'Submitted': '<span class="badge bg-info">Submitted</span>',
+                'Under Appraisal': '<span class="badge bg-warning">Under Appraisal</span>',
+                'Approved': '<span class="badge bg-primary">Approved</span>',
+                'Endorsed': '<span class="badge bg-success">Endorsed</span>',
+                'Disbursed': '<span class="badge bg-success">Disbursed</span>',
+                'Closed': '<span class="badge bg-secondary">Closed</span>',
+                'Defaulted': '<span class="badge bg-danger">Defaulted</span>',
+                'Written Off': '<span class="badge bg-danger">Written Off</span>',
+                'Rejected': '<span class="badge bg-danger">Rejected</span>'
+            };
+            return statusMap[status] || `<span class="badge bg-secondary">${status}</span>`;
+        }
+
+        // Add these functions for export (they will be called from the modal)
+        function exportRepaymentHistoryPdf(loanNo, memberNo) {
+            window.open(`/Inquiry/ExportRepaymentHistoryPdf?loanNo=${loanNo}&memberNo=${memberNo}`, '_blank');
+        }
+
+        function exportRepaymentHistoryExcel(loanNo, memberNo) {
+            window.open(`/Inquiry/ExportRepaymentHistoryExcel?loanNo=${loanNo}&memberNo=${memberNo}`, '_blank');
         }
     </script>
 

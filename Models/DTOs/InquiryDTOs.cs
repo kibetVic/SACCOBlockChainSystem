@@ -346,5 +346,76 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal MemberLockedShares { get; set; }
         public decimal MemberAvailableShares { get; set; }
         public decimal ShareBalanceAfterThisGuarantee { get; set; }
-    }    
+    }
+
+
+    public class LoanRepaymentHistoryDTO
+    {
+        // Company Information
+        public string CompanyName { get; set; } = null!;
+        public string CompanyAddress { get; set; } = null!;
+        public string CompanyPhone { get; set; } = null!;
+        public string CompanyEmail { get; set; } = null!;
+
+        // Member Information
+        public string MemberNo { get; set; } = null!;
+        public string MemberName { get; set; } = null!;
+        public string MemberIdNo { get; set; } = null!;
+        public string MemberPhone { get; set; } = null!;
+        public string MemberEmail { get; set; } = null!;
+
+        // Loan Information
+        public string LoanNo { get; set; } = null!;
+        public string LoanType { get; set; } = null!;
+        public string LoanCode { get; set; } = null!;
+        public decimal PrincipalAmount { get; set; }
+        public decimal ApprovedAmount { get; set; }
+        public decimal InterestRate { get; set; }
+        public int RepaymentPeriod { get; set; }
+        public string RepaymentMethod { get; set; } = null!;
+        public DateTime ApplicationDate { get; set; }
+        public DateTime? DisbursementDate { get; set; }
+        public string LoanStatus { get; set; } = null!;
+        public bool IsOverdue { get; set; }
+        public decimal TotalPrincipalPaid { get; set; }
+        public decimal TotalInterestPaid { get; set; }
+        public decimal TotalPenaltyPaid { get; set; }
+        public decimal TotalAmountPaid { get; set; }
+        public decimal OutstandingPrincipal { get; set; }
+        public decimal OutstandingInterest { get; set; }
+        public decimal OutstandingPenalty { get; set; }
+        public decimal TotalOutstanding { get; set; }
+        public decimal OriginalTotalAmount { get; set; }
+        public decimal PercentagePaid { get; set; }
+        public bool IsFullyPaid { get; set; }
+
+        // Repayment History
+        public List<RepaymentHistoryDetailDTO> Repayments { get; set; } = new();
+
+        // Audit
+        public DateTime InquiryTimestamp { get; set; }
+        public string InquiredBy { get; set; } = null!;
+        public string? BlockchainTxId { get; set; }
+    }
+
+    public class RepaymentHistoryDetailDTO
+    {
+        public int Id { get; set; }
+        public DateTime PaymentDate { get; set; }
+        public int PaymentNumber { get; set; }
+        public string ReceiptNo { get; set; } = null!;
+        public decimal AmountPaid { get; set; }
+        public decimal PrincipalPaid { get; set; }
+        public decimal InterestPaid { get; set; }
+        public decimal PenaltyPaid { get; set; }
+        public decimal BalanceBefore { get; set; }
+        public decimal BalanceAfter { get; set; }
+        public string PaymentMethod { get; set; } = null!;
+        public string? ReferenceNo { get; set; }
+        public string? Remarks { get; set; }
+        public string? ProcessedBy { get; set; }
+        public string Status { get; set; } = null!; // On-time, Overdue, Full Settlement
+        public int? DaysOverdue { get; set; }
+        public string? BlockchainTxId { get; set; }
+    }
 }

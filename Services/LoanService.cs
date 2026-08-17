@@ -6388,22 +6388,44 @@ namespace SACCOBlockChainSystem.Services
                             _logger.LogInformation($"AMT Month {i}: Principal={principalAmountPayment:C}, Interest={interestAmount:C}, Total={monthlyPayment:C}, Balance={balancePrincipal:C}");
                         }
                     }
-
                     else if (repayMethod == "RBAL")
                     {
-                        _logger.LogInformation($"RBAL method - Generating interest-only minimum schedule");
+                        _logger.LogInformation($"RBAL method - Fixed principal with reducing interest");
 
-                        decimal remainingBalance = principalAmount;  // Principal stays the same in RBAL
+                        decimal remainingBalance = principalAmount;
                         decimal totalInterestAccumulated = 0;
+
+                        // ✅ RBAL: Fixed principal payment each period
+                        decimal principalPerPeriod = principalAmount / totalPayments;
 
                         for (int i = 1; i <= totalPayments; i++)
                         {
-                            // ✅ RBAL: Interest is calculated on current balance
+                            // ✅ Calculate interest on the current remaining balance
                             decimal interestAmount = remainingBalance * monthlyRate;
                             totalInterestAccumulated += interestAmount;
 
-                            // ✅ RBAL: NO mandatory principal - minimum payment is interest only
-                            // The member can optionally pay extra principal
+                            // ✅ Total payment = Fixed Principal + Interest
+                            decimal totalPayment = principalPerPeriod + interestAmount;
+
+                            // ✅ For the last payment, adjust to clear any rounding differences
+                            decimal principalPayment = principalPerPeriod;
+                            if (i == totalPayments)
+                            {
+                                principalPayment = remainingBalance;  // Pay off remaining principal
+                                totalPayment = principalPayment + interestAmount;
+                            }
+
+                            // Calculate balance after this payment
+                            decimal balanceAfterPrincipal = remainingBalance - principalPayment;
+                            decimal balanceAfterInterest = 0; // Interest is fully paid each period
+
+                            // ✅ Fix: Calculate correct outstanding amounts
+                            decimal outstandingPrincipal = Math.Max(0, balanceAfterPrincipal);
+                            decimal outstandingInterest = 0; // All interest is paid each period in RBAL
+                            decimal outstandingTotal = outstandingPrincipal + outstandingInterest;
+
+                            // Add penalty if overdue (handled separately)
+                            decimal penaltyAmount = 0;
 
                             scheduleEntries.Add(new LoanSchedule
                             {
@@ -6411,30 +6433,97 @@ namespace SACCOBlockChainSystem.Services
                                 CompanyCode = companyCode,
                                 InstallmentNo = i,
                                 DueDate = disbursementDate.AddMonths(i),
-                                PrincipalAmount = 0,  // ← ZERO - no mandatory principal
+
+                                // ✅ FIXED: Principal amount being paid in this installment
+                                PrincipalAmount = principalPayment,
+
+                                // ✅ Interest amount for this period
                                 InterestAmount = interestAmount,
-                                TotalInstallment = interestAmount,  // ← Minimum payment is interest only
-                                BalancePrincipal = remainingBalance,  // ← Principal stays the same
+
+                                // ✅ Total installment = Principal + Interest
+                                TotalInstallment = totalPayment,
+
+                                // ✅ Balance after this payment (Principal remaining)
+                                BalancePrincipal = Math.Max(0, balanceAfterPrincipal),
+
+                                // ✅ Interest balance (should be 0 as interest is paid each period)
                                 BalanceInterest = 0,
-                                BalanceTotal = remainingBalance,  // ← Outstanding is the principal
+
+                                // ✅ Total outstanding balance = Principal remaining
+                                BalanceTotal = Math.Max(0, balanceAfterPrincipal),
+
+                                // Paid amounts (initially 0, updated when payments are made)
                                 PaidPrincipal = 0,
                                 PaidInterest = 0,
                                 PaidTotal = 0,
-                                OutstandingPrincipal = 0,
+
+                                // Outstanding amounts before payment
+                                OutstandingPrincipal = remainingBalance,
                                 OutstandingInterest = interestAmount,
-                                OutstandingTotal = interestAmount,
+                                OutstandingTotal = remainingBalance + interestAmount,
+
                                 PenaltyAmount = 0,
                                 Status = "Pending",
-                                IsFlexible = true,  // ← Flexible - can pay extra principal
-                                MinimumPayment = interestAmount,  // ← Minimum is interest only
+                                IsFlexible = false,  // RBAL has fixed principal payments
+                                MinimumPayment = totalPayment,  // Minimum is the full installment
                                 DaysOverdue = 0
                             });
 
-                            _logger.LogInformation($"RBAL Month {i}: Interest={interestAmount:C}, Balance={remainingBalance:C}");
+                            // ✅ Update remaining balance for next period
+                            remainingBalance = Math.Max(0, balanceAfterPrincipal);
+
+                            _logger.LogInformation($"RBAL Month {i}: Principal={principalPayment:C}, Interest={interestAmount:C}, Total={totalPayment:C}, Remaining={remainingBalance:C}");
                         }
 
-                        _logger.LogInformation($"RBAL schedule generated: Total Interest={totalInterestAccumulated:C}, Principal remains={principalAmount:C}");
+                        _logger.LogInformation($"RBAL schedule generated: Total Principal={principalAmount:C}, Total Interest={totalInterestAccumulated:C}, Total Repayable={principalAmount + totalInterestAccumulated:C}");
                     }
+
+                    //else if (repayMethod == "RBAL")
+                    //{
+                    //    _logger.LogInformation($"RBAL method - Generating interest-only minimum schedule");
+
+                    //    decimal remainingBalance = principalAmount;  // Principal stays the same in RBAL
+                    //    decimal totalInterestAccumulated = 0;
+
+                    //    for (int i = 1; i <= totalPayments; i++)
+                    //    {
+                    //        // ✅ RBAL: Interest is calculated on current balance
+                    //        decimal interestAmount = remainingBalance * monthlyRate;
+                    //        totalInterestAccumulated += interestAmount;
+
+                    //        // ✅ RBAL: NO mandatory principal - minimum payment is interest only
+                    //        // The member can optionally pay extra principal
+
+                    //        scheduleEntries.Add(new LoanSchedule
+                    //        {
+                    //            LoanNo = loanNo,
+                    //            CompanyCode = companyCode,
+                    //            InstallmentNo = i,
+                    //            DueDate = disbursementDate.AddMonths(i),
+                    //            PrincipalAmount = 0,  // ← ZERO - no mandatory principal
+                    //            InterestAmount = interestAmount,
+                    //            TotalInstallment = interestAmount,  // ← Minimum payment is interest only
+                    //            BalancePrincipal = remainingBalance,  // ← Principal stays the same
+                    //            BalanceInterest = 0,
+                    //            BalanceTotal = remainingBalance,  // ← Outstanding is the principal
+                    //            PaidPrincipal = 0,
+                    //            PaidInterest = 0,
+                    //            PaidTotal = 0,
+                    //            OutstandingPrincipal = 0,
+                    //            OutstandingInterest = interestAmount,
+                    //            OutstandingTotal = interestAmount,
+                    //            PenaltyAmount = 0,
+                    //            Status = "Pending",
+                    //            IsFlexible = true,  // ← Flexible - can pay extra principal
+                    //            MinimumPayment = interestAmount,  // ← Minimum is interest only
+                    //            DaysOverdue = 0
+                    //        });
+
+                    //        _logger.LogInformation($"RBAL Month {i}: Interest={interestAmount:C}, Balance={remainingBalance:C}");
+                    //    }
+
+                    //    _logger.LogInformation($"RBAL schedule generated: Total Interest={totalInterestAccumulated:C}, Principal remains={principalAmount:C}");
+                    //}
                 }
 
                 await _context.LoanSchedules.AddRangeAsync(scheduleEntries);

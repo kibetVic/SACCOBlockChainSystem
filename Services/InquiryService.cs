@@ -17,7 +17,7 @@ namespace SACCOBlockChainSystem.Services
         Task<LoanInquiryResponseDTO> GetLoanInquiryAsync(string memberNo, string companyCode, string userId);
         Task<TransactionInquiryResponseDTO> GetTransactionInquiryAsync(string memberNo, string companyCode, string userId);
         Task<MemberSearchResponseDTO> SearchMembersAsync(MemberSearchDTO searchDto, string companyCode, string userId);
-        //Task<GuarantorLoanListResponseDTO> GetGuarantorLoansAsync(string memberNo, string companyCode, string userId);
+        Task<LoanRepaymentHistoryDTO> GetLoanRepaymentHistoryAsync(string memberNo, string loanNo, string companyCode, string userId);
     }
 
     public class InquiryService : IInquiryService
@@ -574,168 +574,248 @@ namespace SACCOBlockChainSystem.Services
             return response;
         }
 
-        //public async Task<GuarantorLoanListResponseDTO> GetGuarantorLoansAsync(string memberNo, string companyCode, string userId)
-        //{
-        //    // 1. Get the member (guarantor) details
-        //    var member = await _context.Members
-        //        .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
+        /// <summary>
+        /// Gets the complete repayment history for a specific loan with accurate balance tracking
+        /// </summary>
+        /// <param name="memberNo">The member number</param>
+        /// <param name="loanNo">The loan number</param>
+        /// <param name="companyCode">The company code</param>
+        /// <param name="userId">The user ID performing the inquiry</param>
+        /// <returns>LoanRepaymentHistoryDTO with full repayment details</returns>
+        public async Task<LoanRepaymentHistoryDTO> GetLoanRepaymentHistoryAsync(string memberNo, string loanNo, string companyCode, string userId)
+        {
+            // 1. Get the member details
+            var member = await _context.Members
+                .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
 
-        //    if (member == null)
-        //    {
-        //        throw new Exception($"Member {memberNo} not found");
-        //    }
+            if (member == null)
+            {
+                throw new Exception($"Member {memberNo} not found");
+            }
 
-        //    // 2. Get ALL guarantor records for this member (where they are a guarantor)
-        //    var guarantorRecords = await _context.Loanguar
-        //        .Where(g => g.MemberNo == memberNo
-        //            && g.CompanyCode == companyCode
-        //            && g.Transfered == false) // Only active guarantees
-        //        .ToListAsync();
+            // 2. Get the loan details
+            var loan = await _context.Loans
+                .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.CompanyCode == companyCode);
 
-        //    var guaranteedLoans = new List<GuarantorLoanDetailDTO>();
-        //    decimal totalLockedAmount = 0;
+            if (loan == null)
+            {
+                throw new Exception($"Loan {loanNo} not found");
+            }
 
-        //    // 3. For each guarantor record, get the loan details
-        //    foreach (var guarantor in guarantorRecords)
-        //    {
-        //        // Get the loan that was guaranteed
-        //        var loan = await _context.Loans
-        //            .FirstOrDefaultAsync(l => l.LoanNo == guarantor.LoanNo && l.CompanyCode == companyCode);
+            // 3. Get the loan type details
+            var loanType = await _context.Loantypes
+                .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
 
-        //        if (loan == null) continue;
+            // 4. Get all repayments for this loan ordered by date (oldest first for accurate running balance)
+            var repayments = await _context.Repay
+                .Where(r => r.LoanNo == loanNo && r.CompanyCode == companyCode)
+                .OrderBy(r => r.DateReceived)
+                .ToListAsync();
 
-        //        // Get the loanee (borrower) details
-        //        var loanee = await _context.Members
-        //            .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
+            // 5. Get the current loan balance
+            var loanbal = await _context.Loanbal
+                .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo && lb.Companycode == companyCode);
 
-        //        // Get loan type
-        //        var loanType = await _context.Loantypes
-        //            .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
+            // 6. Get company details
+            var company = await _context.Companies
+                .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
 
-        //        // Get loan balance
-        //        var loanbal = await _context.Loanbal
-        //            .FirstOrDefaultAsync(lb => lb.LoanNo == loan.LoanNo && lb.Companycode == companyCode);
+            // 7. Calculate totals from repayment data
+            decimal totalPrincipalPaid = repayments.Sum(r => r.Principal ?? 0);
+            decimal totalInterestPaid = repayments.Sum(r => r.Interest ?? 0);
+            decimal totalPenaltyPaid = repayments.Sum(r => r.Penalty ?? 0);
+            decimal totalAmountPaid = repayments.Sum(r => r.Amount ?? 0);
 
-        //        // Calculate outstanding balances
-        //        decimal outstandingBalance = loanbal?.Balance ?? 0;
-        //        decimal outstandingInterest = loanbal?.IntrOwed ?? 0;
-        //        decimal outstandingPenalty = loanbal?.Penalty ?? 0;
-        //        decimal totalOutstanding = outstandingBalance + outstandingInterest + outstandingPenalty;
+            // 8. Get outstanding balances from Loanbal
+            decimal outstandingPrincipal = loanbal?.Balance ?? 0;
+            decimal outstandingInterest = loanbal?.IntrOwed ?? 0;
+            decimal outstandingPenalty = loanbal?.Penalty ?? 0;
+            decimal totalOutstanding = outstandingPrincipal + outstandingInterest + outstandingPenalty;
 
-        //        // Calculate expected completion date
-        //        DateTime? expectedCompletionDate = null;
-        //        if (loanbal?.FirstDate != null && loan.RepayPeriod.HasValue)
-        //        {
-        //            expectedCompletionDate = loanbal.FirstDate.AddMonths(loan.RepayPeriod.Value);
-        //        }
-        //        else if (loan.ApplicDate != null && loan.RepayPeriod.HasValue)
-        //        {
-        //            expectedCompletionDate = loan.ApplicDate.AddMonths(loan.RepayPeriod.Value);
-        //        }
+            // 9. Calculate original total amount (principal + total interest)
+            decimal originalTotalAmount = (loan.LoanAmt ?? 0) + ((loan.Interest ?? 0) / 100) * (loan.LoanAmt ?? 0);
 
-        //        // Check if loan is active
-        //        bool isActive = loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed;
+            // 10. Determine if fully paid (total outstanding is 0 or very close to 0)
+            bool isFullyPaid = totalOutstanding <= 0.01m;
 
-        //        // Check if loan is overdue
-        //        bool isOverdue = false;
-        //        int daysOverdue = 0;
-        //        if (loanbal?.Nextduedate != null && loanbal.Nextduedate < DateTime.Now && outstandingBalance > 0)
-        //        {
-        //            isOverdue = true;
-        //            daysOverdue = (DateTime.Now - loanbal.Nextduedate.Value).Days;
-        //        }
+            // 11. Calculate percentage paid
+            decimal percentagePaid = originalTotalAmount > 0 ? (totalAmountPaid / originalTotalAmount) * 100 : 0;
 
-        //        // Get the loan status string
-        //        string loanStatus = GetLoanStatusString(loan.Status);
+            // 12. Build repayment history with CORRECT balance tracking
+            var repaymentDetails = new List<RepaymentHistoryDetailDTO>();
 
-        //        // Calculate remaining guarantee
-        //        decimal remainingGuarantee = (guarantor.Balance ?? 0);
-        //        totalLockedAmount += remainingGuarantee;
+            // Start with the original principal amount
+            decimal runningPrincipalBalance = loan.LoanAmt ?? 0;
+            decimal runningInterestBalance = 0;
+            decimal runningPenaltyBalance = 0;
 
-        //        // Get member's total shares (the guarantor's shares)
-        //        var memberShares = await _context.ContribShares
-        //            .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
-        //            .SumAsync(cs => (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0));
+            // Determine if the loan has upfront interest
+            bool isUpfrontInterest = loan.InterestUpront ?? false;
 
-        //        // Get all locked shares for this member (from ALL loans they guarantee)
-        //        var totalLockedForMember = await _context.Loanguar
-        //            .Where(g => g.MemberNo == memberNo
-        //                && g.CompanyCode == companyCode
-        //                && g.Transfered == false)
-        //            .SumAsync(g => g.Balance ?? 0);
+            // If upfront interest, add it to the initial balance
+            if (isUpfrontInterest && loan.Interest.HasValue && loan.RepayPeriod.HasValue)
+            {
+                decimal upfrontInterest = (loan.LoanAmt ?? 0) * (loan.Interest.Value / 100) * (loan.RepayPeriod.Value / 12m);
+                runningInterestBalance = upfrontInterest;
+            }
 
-        //        // Calculate available shares after this guarantee
-        //        decimal availableShares = memberShares - totalLockedForMember;
-        //        decimal shareBalanceAfterThisGuarantee = memberShares - totalLockedForMember;
+            // 13. Calculate running balances for each repayment
+            foreach (var repayment in repayments)
+            {
+                // Get balances before this payment
+                decimal principalBefore = runningPrincipalBalance;
+                decimal interestBefore = runningInterestBalance;
+                decimal penaltyBefore = runningPenaltyBalance;
+                decimal totalBefore = principalBefore + interestBefore + penaltyBefore;
 
-        //        // Build the detail DTO
-        //        var detail = new GuarantorLoanDetailDTO
-        //        {
-        //            // Loanee (Borrower) Information
-        //            LoaneeMemberNo = loan.MemberNo,
-        //            LoaneeName = loanee != null ? $"{loanee.Surname ?? ""} {loanee.OtherNames ?? ""}".Trim() : loan.MemberNo,
-        //            LoaneePhone = loanee?.PhoneNo ?? loanee?.MobileNo ?? "N/A",
-        //            LoaneeIdNo = loanee?.Idno ?? "N/A",
+                // Apply the payment amounts (subtract what was paid)
+                runningPrincipalBalance -= (repayment.Principal ?? 0);
+                runningInterestBalance -= (repayment.Interest ?? 0);
+                runningPenaltyBalance -= (repayment.Penalty ?? 0);
 
-        //            // Loan Information
-        //            LoanNo = loan.LoanNo,
-        //            LoanCode = loan.LoanCode ?? "N/A",
-        //            LoanType = loanType?.LoanType1 ?? loan.LoanCode ?? "Unknown",
-        //            PrincipalAmount = loan.LoanAmt ?? 0,
-        //            OutstandingBalance = totalOutstanding,
-        //            InterestRate = loan.Interest ?? 0,
-        //            RepaymentPeriod = loan.RepayPeriod ?? 0,
-        //            ApplicationDate = loan.ApplicDate,
-        //            DisbursementDate = loan.AuditDateTime,
-        //            ExpectedCompletionDate = expectedCompletionDate,
-        //            LoanStatus = loanStatus,
-        //            IsActive = isActive,
-        //            IsOverdue = isOverdue,
-        //            DaysOverdue = daysOverdue,
+                // Ensure balances don't go negative (safety check)
+                if (runningPrincipalBalance < 0) runningPrincipalBalance = 0;
+                if (runningInterestBalance < 0) runningInterestBalance = 0;
+                if (runningPenaltyBalance < 0) runningPenaltyBalance = 0;
 
-        //            // Guarantor Information
-        //            GuarantorId = guarantor.Id,
-        //            GuarantorMemberNo = guarantor.MemberNo,
-        //            GuaranteeAmount = guarantor.Amount ?? 0,
-        //            GuaranteeBalance = guarantor.Balance ?? 0,
-        //            RemainingGuarantee = remainingGuarantee,
-        //            GuaranteeDate = guarantor.AuditTime ?? DateTime.Now,
-        //            GuaranteeStatus = guarantor.Transfered ? "Released" : "Active",
-        //            GuaranteeDescription = guarantor.Description,
-        //            CollateralType = guarantor.Collateral,
+                // Get balances after this payment
+                decimal principalAfter = runningPrincipalBalance;
+                decimal interestAfter = runningInterestBalance;
+                decimal penaltyAfter = runningPenaltyBalance;
+                decimal totalAfter = principalAfter + interestAfter + penaltyAfter;
 
-        //            // Member's Share Information (the guarantor)
-        //            MemberTotalShares = memberShares,
-        //            MemberLockedShares = totalLockedForMember,
-        //            MemberAvailableShares = availableShares,
-        //            ShareBalanceAfterThisGuarantee = shareBalanceAfterThisGuarantee
-        //        };
+                // 14. Determine status for this payment
+                string status = "On-time";
+                int? daysOverdue = null;
 
-        //        guaranteedLoans.Add(detail);
-        //    }
+                // Check if payment was overdue
+                if (repayment.DateReceived.HasValue && loanbal?.Nextduedate.HasValue == true)
+                {
+                    var dueDate = loanbal.Nextduedate.Value;
+                    if (repayment.DateReceived.Value.Date > dueDate.Date)
+                    {
+                        daysOverdue = (repayment.DateReceived.Value.Date - dueDate.Date).Days;
+                        status = "Overdue";
+                    }
+                }
 
-        //    // 4. Build the response
-        //    var response = new GuarantorLoanListResponseDTO
-        //    {
-        //        MemberNo = member.MemberNo,
-        //        MemberName = $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim(),
-        //        MemberPhone = member.PhoneNo ?? member.MobileNo ?? "N/A",
-        //        MemberIdNo = member.Idno ?? "N/A",
-        //        TotalShares = await _context.ContribShares
-        //            .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
-        //            .SumAsync(cs => (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0)),
-        //        LockedForGuarantees = totalLockedAmount,
-        //        AvailableShares = await _context.ContribShares
-        //            .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
-        //            .SumAsync(cs => (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0)) - totalLockedAmount,
-        //        TotalGuaranteedLoans = guaranteedLoans.Count,
-        //        GuaranteedLoans = guaranteedLoans,
-        //        InquiryTimestamp = DateTime.Now,
-        //        InquiredBy = userId
-        //    };
+                // Check if this payment resulted in full settlement
+                // A payment is a "Full Settlement" if after this payment, the total outstanding is 0
+                if (totalAfter <= 0.01m)
+                {
+                    status = "Full Settlement";
+                }
+                // Check if this is the final payment and total is very low
+                else if (repayment == repayments.LastOrDefault() && totalAfter <= 0.01m)
+                {
+                    status = "Full Settlement";
+                }
 
-        //    return response;
-        //}
+                // 15. Determine payment method
+                string paymentMethod = "CASH";
+                string? referenceNo = repayment.ApiKey;
+
+                if (!string.IsNullOrEmpty(referenceNo))
+                {
+                    if (referenceNo.StartsWith("CHQ"))
+                        paymentMethod = "CHEQUE";
+                    else if (referenceNo.StartsWith("MPESA") || referenceNo.Length == 10)
+                        paymentMethod = "MPESA";
+                    else if (referenceNo.StartsWith("TRF"))
+                        paymentMethod = "BANK_TRANSFER";
+                    else if (referenceNo.StartsWith("BANK") || referenceNo.StartsWith("BNK"))
+                        paymentMethod = "BANK_TRANSFER";
+                }
+                else if (!string.IsNullOrEmpty(repayment.Chequeno))
+                {
+                    paymentMethod = "CHEQUE";
+                    referenceNo = repayment.Chequeno;
+                }
+                else if (!string.IsNullOrEmpty(repayment.TransactionNo))
+                {
+                    paymentMethod = "MPESA";
+                    referenceNo = repayment.TransactionNo;
+                }
+
+                // 16. Add the repayment detail
+                repaymentDetails.Add(new RepaymentHistoryDetailDTO
+                {
+                    Id = repayment.Id,
+                    PaymentDate = repayment.DateReceived ?? DateTime.Now,
+                    PaymentNumber = repayment.PaymentNo ?? 0,
+                    ReceiptNo = repayment.ReceiptNo ?? "N/A",
+                    AmountPaid = repayment.Amount ?? 0,
+                    PrincipalPaid = repayment.Principal ?? 0,
+                    InterestPaid = repayment.Interest ?? 0,
+                    PenaltyPaid = repayment.Penalty ?? 0,
+                    // ✅ Balance Before is the TOTAL before payment (principal + interest + penalty)
+                    BalanceBefore = totalBefore,
+                    // ✅ Balance After is the TOTAL after payment (principal + interest + penalty)
+                    BalanceAfter = totalAfter,
+                    PaymentMethod = paymentMethod,
+                    ReferenceNo = referenceNo,
+                    Remarks = repayment.Remarks,
+                    ProcessedBy = repayment.Transby,
+                    Status = status,
+                    DaysOverdue = daysOverdue,
+                    BlockchainTxId = repayment.BlockchainTxId
+                });
+            }
+
+            // 17. Build the response
+            var response = new LoanRepaymentHistoryDTO
+            {
+                // Company Information
+                CompanyName = company?.CompanyName ?? "SACCO BlockChain System",
+                CompanyAddress = company?.Address ?? "P.O. Box 12345 - 00100, Nairobi, Kenya",
+                CompanyPhone = company?.Telephone ?? "+254 700 000 000",
+                CompanyEmail = company?.Email ?? "info@sacco.co.ke",
+
+                // Member Information
+                MemberNo = member.MemberNo,
+                MemberName = $"{member.Surname} {member.OtherNames}".Trim(),
+                MemberIdNo = member.Idno ?? "N/A",
+                MemberPhone = member.PhoneNo ?? "N/A",
+                MemberEmail = member.Email ?? "N/A",
+
+                // Loan Information
+                LoanNo = loan.LoanNo,
+                LoanType = loanType?.LoanType1 ?? loan.LoanCode ?? "Unknown",
+                LoanCode = loan.LoanCode ?? "N/A",
+                PrincipalAmount = loan.LoanAmt ?? 0,
+                ApprovedAmount = loan.Aamount ?? 0,
+                InterestRate = loan.Interest ?? 0,
+                RepaymentPeriod = loan.RepayPeriod ?? 0,
+                RepaymentMethod = loan.RepayMethod ?? "AMT",
+                ApplicationDate = loan.ApplicDate,
+                DisbursementDate = loan.AuditDateTime,
+                LoanStatus = GetLoanStatusString(loan.Status),
+                IsOverdue = loanbal?.Nextduedate < DateTime.Now && (loanbal?.Balance ?? 0) > 0,
+                BlockchainTxId = loan.BlockchainTxId,
+
+                // Financial Summary
+                TotalPrincipalPaid = totalPrincipalPaid,
+                TotalInterestPaid = totalInterestPaid,
+                TotalPenaltyPaid = totalPenaltyPaid,
+                TotalAmountPaid = totalAmountPaid,
+                OutstandingPrincipal = outstandingPrincipal,
+                OutstandingInterest = outstandingInterest,
+                OutstandingPenalty = outstandingPenalty,
+                TotalOutstanding = totalOutstanding,
+                OriginalTotalAmount = originalTotalAmount,
+                PercentagePaid = percentagePaid,
+                IsFullyPaid = isFullyPaid,
+
+                // Repayment History
+                Repayments = repaymentDetails,
+
+                // Audit
+                InquiryTimestamp = DateTime.Now,
+                InquiredBy = userId
+            };
+
+            return response;
+        }
 
         private string GetLoanStatusString(int? status)
         {

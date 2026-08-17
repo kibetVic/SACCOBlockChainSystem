@@ -1,4 +1,5 @@
 ﻿// Controllers/InquiryController.cs
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -452,6 +453,7 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+
         // GET: Inquiry/LoanInquiry
         public IActionResult LoanInquiry()
         {
@@ -481,6 +483,579 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 TempData["Error"] = ex.Message;
                 return RedirectToAction(nameof(LoanInquiry));
+            }
+        }
+
+
+        // GET: api/Inquiry/loan/{memberNo}/{loanNo}/repayments
+        [HttpGet("api/Inquiry/loan/{memberNo}/{loanNo}/repayments")]
+        public async Task<IActionResult> GetLoanRepaymentHistoryApi(string memberNo, string loanNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+                var userId = GetCurrentUserId();
+
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    return BadRequest(new { Success = false, Message = "Unable to determine company code" });
+                }
+
+                var result = await _inquiryService.GetLoanRepaymentHistoryAsync(memberNo, loanNo, companyCode, userId);
+
+                if (result == null || result.Repayments == null || !result.Repayments.Any())
+                {
+                    return Ok(new
+                    {
+                        Success = true,
+                        Data = result,
+                        Message = "No repayment history found for this loan"
+                    });
+                }
+
+                return Ok(new { Success = true, Data = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting repayment history for member {MemberNo}, loan {LoanNo}", memberNo, loanNo);
+                return StatusCode(500, new { Success = false, Message = ex.Message });
+            }
+        }
+
+
+        // GET: Inquiry/ExportRepaymentHistoryPdf
+        [HttpGet]
+        public async Task<IActionResult> ExportRepaymentHistoryPdf(string loanNo, string memberNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+                var userId = GetCurrentUserId();
+
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    TempData["Error"] = "Unable to determine company code";
+                    return RedirectToAction("LoanInquiry");
+                }
+
+                var data = await _inquiryService.GetLoanRepaymentHistoryAsync(memberNo, loanNo, companyCode, userId);
+
+                if (data == null || data.Repayments == null || !data.Repayments.Any())
+                {
+                    TempData["Error"] = "No repayment history found for this loan";
+                    return RedirectToAction("LoanInquiry");
+                }
+
+                using var stream = new MemoryStream();
+
+                QuestPDF.Fluent.Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(PageSizes.A4.Landscape());
+                        page.MarginTop(1.5f, Unit.Centimetre);
+                        page.MarginBottom(1.5f, Unit.Centimetre);
+                        page.MarginLeft(1.2f, Unit.Centimetre);
+                        page.MarginRight(1.2f, Unit.Centimetre);
+                        page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
+
+                        // Header
+                        page.Header().Column(header =>
+                        {
+                            header.Item().AlignCenter().Text(data.CompanyName.ToUpper()).FontSize(16).Bold();
+                            header.Item().AlignCenter().Text("LOAN REPAYMENT HISTORY REPORT").FontSize(12).Bold();
+                            header.Item().AlignCenter().Text($"Loan No: {data.LoanNo} | Member: {data.MemberName} ({data.MemberNo})").FontSize(10);
+                            header.Item().AlignCenter().Text($"Generated: {DateTime.Now:dd-MMM-yyyy HH:mm}").FontSize(9).Italic();
+                            header.Item().PaddingTop(0.3f, Unit.Centimetre).LineHorizontal(0.5f);
+                            header.Item().PaddingBottom(0.5f, Unit.Centimetre);
+                        });
+
+                        // Content
+                        page.Content().Column(contentCol =>
+                        {
+                            // Summary Statistics
+                            contentCol.Item().Table(summaryTable =>
+                            {
+                                summaryTable.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                });
+
+                                // Row 1
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Paid:").Bold().FontSize(8);
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{data.TotalAmountPaid:N2}").FontSize(8);
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Principal Paid:").Bold().FontSize(8);
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{data.TotalPrincipalPaid:N2}").FontSize(8);
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Interest Paid:").Bold().FontSize(8);
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{data.TotalInterestPaid:N2}").FontSize(8);
+
+                                // Row 2
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Penalty Paid:").Bold().FontSize(8);
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{data.TotalPenaltyPaid:N2}").FontSize(8);
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Outstanding Balance:").Bold().FontSize(8);
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{data.TotalOutstanding:N2}").FontSize(8);
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Percentage Paid:").Bold().FontSize(8);
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{data.PercentagePaid:F1}%").FontSize(8);
+                            });
+
+                            // Loan Details Section
+                            contentCol.Item().PaddingTop(0.5f, Unit.Centimetre);
+                            contentCol.Item().Table(loanDetailTable =>
+                            {
+                                loanDetailTable.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1.5f);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1.5f);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1.5f);
+                                });
+
+                                loanDetailTable.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).Text("Loan Amount Applied:").Bold().FontSize(8);
+                                loanDetailTable.Cell().Border(0.2f).Padding(4).Text($"{data.PrincipalAmount:N2}").FontSize(8);
+                                loanDetailTable.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).Text("Date of Allocation:").Bold().FontSize(8);
+                                loanDetailTable.Cell().Border(0.2f).Padding(4).Text($"{data.ApplicationDate:dd/MM/yyyy}").FontSize(8);
+                                loanDetailTable.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).Text("Disbursement Date:").Bold().FontSize(8);
+                                loanDetailTable.Cell().Border(0.2f).Padding(4).Text($"{data.DisbursementDate?.ToString("dd/MM/yyyy") ?? "N/A"}").FontSize(8);
+
+                                loanDetailTable.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).Text("Loan Type:").Bold().FontSize(8);
+                                loanDetailTable.Cell().Border(0.2f).Padding(4).Text($"{data.LoanType}").FontSize(8);
+                                loanDetailTable.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).Text("Interest Rate:").Bold().FontSize(8);
+                                loanDetailTable.Cell().Border(0.2f).Padding(4).Text($"{data.InterestRate}%").FontSize(8);
+                                loanDetailTable.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).Text("Repayment Period:").Bold().FontSize(8);
+                                loanDetailTable.Cell().Border(0.2f).Padding(4).Text($"{data.RepaymentPeriod} months").FontSize(8);
+                            });
+
+                            // Repayment Table
+                            contentCol.Item().PaddingTop(1, Unit.Centimetre);
+                            contentCol.Item().Text("REPAYMENT HISTORY").FontSize(11).Bold();
+
+                            contentCol.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(0.3f);  // #
+                                    cols.RelativeColumn(0.9f);  // Date
+                                    cols.RelativeColumn(0.9f);  // Receipt No
+                                    cols.RelativeColumn(0.8f);  // Method
+                                    cols.RelativeColumn(0.9f);  // Amount Paid
+                                    cols.RelativeColumn(0.9f);  // Principal
+                                    cols.RelativeColumn(0.9f);  // Interest
+                                    cols.RelativeColumn(0.9f);  // Penalty
+                                    cols.RelativeColumn(1.0f);  // Balance Before
+                                    cols.RelativeColumn(1.0f);  // Balance After
+                                    cols.RelativeColumn(0.8f);  // Status
+                                    cols.RelativeColumn(0.9f);  // Processed By
+                                });
+
+                                // Header
+                                table.Header(header =>
+                                {
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("#").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Date").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Receipt No").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Method").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Amount").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Principal").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Interest").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Penalty").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Balance Before").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Balance After").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Status").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Processed By").Bold().FontSize(7);
+                                });
+
+                                int serialNo = 1;
+                                foreach (var repayment in data.Repayments.OrderByDescending(r => r.PaymentDate))
+                                {
+                                    string status = repayment.Status;
+                                    string statusColor = status == "Full Settlement" ? "#d4edda" :
+                                                        status == "Overdue" ? "#f8d7da" :
+                                                        "#e8f4f8";
+
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(serialNo.ToString()).FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(repayment.PaymentDate.ToString("dd/MM/yyyy HH:mm")).FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).Text(repayment.ReceiptNo ?? "").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(repayment.PaymentMethod).FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{repayment.AmountPaid:N2}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{repayment.PrincipalPaid:N2}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{repayment.InterestPaid:N2}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{repayment.PenaltyPaid:N2}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{repayment.BalanceBefore:N2}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{repayment.BalanceAfter:N2}").FontSize(7);
+                                    table.Cell().Border(0.2f).Background(statusColor).Padding(4).AlignCenter().Text(status).FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).Text(repayment.ProcessedBy ?? "N/A").FontSize(7);
+
+                                    serialNo++;
+                                }
+
+                                // Totals row
+                                table.Cell().ColumnSpan(4).Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text("TOTALS:").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{data.TotalAmountPaid:N2}").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{data.TotalPrincipalPaid:N2}").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{data.TotalInterestPaid:N2}").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{data.TotalPenaltyPaid:N2}").Bold().FontSize(8);
+                                table.Cell().ColumnSpan(3).Border(0.2f).Background("#f9f9f9").Padding(4);
+                            });
+
+                            // Outstanding Balance Summary
+                            contentCol.Item().PaddingTop(1, Unit.Centimetre);
+                            contentCol.Item().Table(summaryTotalTable =>
+                            {
+                                summaryTotalTable.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                });
+
+                                summaryTotalTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Outstanding Principal:").Bold().FontSize(8);
+                                summaryTotalTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{data.OutstandingPrincipal:N2}").FontSize(8);
+                                summaryTotalTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Outstanding Interest:").Bold().FontSize(8);
+                                summaryTotalTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{data.OutstandingInterest:N2}").FontSize(8);
+                                summaryTotalTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Outstanding Penalty:").Bold().FontSize(8);
+                                summaryTotalTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{data.OutstandingPenalty:N2}").FontSize(8);
+
+                                summaryTotalTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Outstanding:").Bold().FontSize(8);
+                                summaryTotalTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{data.TotalOutstanding:N2}").FontSize(8);
+                                summaryTotalTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Fully Paid:").Bold().FontSize(8);
+                                summaryTotalTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(data.IsFullyPaid ? "YES" : "NO").FontSize(8);
+                                summaryTotalTable.Cell().ColumnSpan(1).Border(0.2f).Padding(4);
+                            });
+                        });
+
+                        // Footer
+                        page.Footer()
+                            .AlignCenter()
+                            .Text(x =>
+                            {
+                                x.DefaultTextStyle(t => t.FontSize(8));
+                                x.Span("Page ");
+                                x.CurrentPageNumber();
+                                x.Span(" of ");
+                                x.TotalPages();
+                                x.Span($" | Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+                                if (!string.IsNullOrEmpty(data.BlockchainTxId))
+                                {
+                                    x.Span($" | Blockchain Tx: {data.BlockchainTxId}");
+                                }
+                            });
+                    });
+                }).GeneratePdf(stream);
+
+                var content = stream.ToArray();
+                return File(content, "application/pdf", $"RepaymentHistory_{data.MemberName}_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting repayment history to PDF for loan {LoanNo}", loanNo);
+                TempData["Error"] = "Error generating PDF: " + ex.Message;
+                return RedirectToAction("LoanInquiry");
+            }
+        }
+
+        // GET: Inquiry/ExportRepaymentHistoryExcel
+        [HttpGet]
+        public async Task<IActionResult> ExportRepaymentHistoryExcel(string loanNo, string memberNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+                var userId = GetCurrentUserId();
+
+                var data = await _inquiryService.GetLoanRepaymentHistoryAsync(memberNo, loanNo, companyCode, userId);
+
+                if (data == null || data.Repayments == null || !data.Repayments.Any())
+                {
+                    TempData["Error"] = "No repayment history found for this loan";
+                    return RedirectToAction("LoanInquiry");
+                }
+
+                using var workbook = new XLWorkbook();
+
+                // ============================================================
+                // SUMMARY SHEET
+                // ============================================================
+                var summarySheet = workbook.Worksheets.Add("Summary");
+                int currentRow = 1;
+
+                // Company Header
+                summarySheet.Cell(currentRow, 1).Value = data.CompanyName.ToUpper();
+                summarySheet.Range(currentRow, 1, currentRow, 10).Merge();
+                summarySheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(18);
+                summarySheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                // Report Title
+                summarySheet.Cell(currentRow, 1).Value = "LOAN REPAYMENT HISTORY REPORT";
+                summarySheet.Range(currentRow, 1, currentRow, 10).Merge();
+                summarySheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                summarySheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                // Report Info
+                summarySheet.Cell(currentRow, 1).Value = $"Loan No: {data.LoanNo}";
+                summarySheet.Cell(currentRow, 4).Value = $"Member: {data.MemberName} ({data.MemberNo})";
+                summarySheet.Cell(currentRow, 8).Value = $"Generated: {DateTime.Now:dd/MM/yyyy HH:mm}";
+                currentRow += 2;
+
+                // Member Information
+                summarySheet.Cell(currentRow, 1).Value = "MEMBER INFORMATION";
+                summarySheet.Range(currentRow, 1, currentRow, 10).Merge();
+                summarySheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(12);
+                summarySheet.Cell(currentRow, 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                currentRow++;
+
+                summarySheet.Cell(currentRow, 1).Value = "Member Number:";
+                summarySheet.Cell(currentRow, 2).Value = data.MemberNo;
+                summarySheet.Cell(currentRow, 4).Value = "Full Name:";
+                summarySheet.Cell(currentRow, 5).Value = data.MemberName;
+                summarySheet.Cell(currentRow, 7).Value = "ID Number:";
+                summarySheet.Cell(currentRow, 8).Value = data.MemberIdNo;
+                summarySheet.Cell(currentRow, 9).Value = "Phone:";
+                summarySheet.Cell(currentRow, 10).Value = data.MemberPhone;
+                currentRow++;
+
+                summarySheet.Cell(currentRow, 1).Value = "Email:";
+                summarySheet.Cell(currentRow, 2).Value = data.MemberEmail;
+                currentRow += 2;
+
+                // Loan Information
+                summarySheet.Cell(currentRow, 1).Value = "LOAN INFORMATION";
+                summarySheet.Range(currentRow, 1, currentRow, 10).Merge();
+                summarySheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(12);
+                summarySheet.Cell(currentRow, 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                currentRow++;
+
+                // ✅ NEW: Loan Amount Applied and Date of Allocation
+                summarySheet.Cell(currentRow, 1).Value = "Loan Amount Applied:";
+                summarySheet.Cell(currentRow, 2).Value = data.PrincipalAmount;
+                summarySheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                summarySheet.Cell(currentRow, 4).Value = "Date of Allocation:";
+                summarySheet.Cell(currentRow, 5).Value = data.ApplicationDate.ToString("dd/MM/yyyy");
+                summarySheet.Cell(currentRow, 7).Value = "Disbursement Date:";
+                summarySheet.Cell(currentRow, 8).Value = data.DisbursementDate?.ToString("dd/MM/yyyy") ?? "N/A";
+                currentRow++;
+
+                summarySheet.Cell(currentRow, 1).Value = "Loan Type:";
+                summarySheet.Cell(currentRow, 2).Value = data.LoanType;
+                summarySheet.Cell(currentRow, 4).Value = "Interest Rate:";
+                summarySheet.Cell(currentRow, 5).Value = $"{data.InterestRate}%";
+                summarySheet.Cell(currentRow, 7).Value = "Repayment Period:";
+                summarySheet.Cell(currentRow, 8).Value = $"{data.RepaymentPeriod} months";
+                summarySheet.Cell(currentRow, 9).Value = "Repayment Method:";
+                summarySheet.Cell(currentRow, 10).Value = data.RepaymentMethod;
+                currentRow++;
+
+                summarySheet.Cell(currentRow, 1).Value = "Loan Status:";
+                summarySheet.Cell(currentRow, 2).Value = data.LoanStatus;
+                summarySheet.Cell(currentRow, 4).Value = "Is Overdue:";
+                summarySheet.Cell(currentRow, 5).Value = data.IsOverdue ? "Yes" : "No";
+                summarySheet.Cell(currentRow, 7).Value = "Is Fully Paid:";
+                summarySheet.Cell(currentRow, 8).Value = data.IsFullyPaid ? "Yes" : "No";
+                currentRow += 2;
+
+                // Summary Statistics
+                summarySheet.Cell(currentRow, 1).Value = "SUMMARY STATISTICS";
+                summarySheet.Range(currentRow, 1, currentRow, 10).Merge();
+                summarySheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(12);
+                summarySheet.Cell(currentRow, 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                currentRow++;
+
+                summarySheet.Cell(currentRow, 1).Value = "Total Amount Paid:";
+                summarySheet.Cell(currentRow, 2).Value = data.TotalAmountPaid;
+                summarySheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                summarySheet.Cell(currentRow, 4).Value = "Total Principal Paid:";
+                summarySheet.Cell(currentRow, 5).Value = data.TotalPrincipalPaid;
+                summarySheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                summarySheet.Cell(currentRow, 7).Value = "Total Interest Paid:";
+                summarySheet.Cell(currentRow, 8).Value = data.TotalInterestPaid;
+                summarySheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                currentRow++;
+
+                summarySheet.Cell(currentRow, 1).Value = "Total Penalty Paid:";
+                summarySheet.Cell(currentRow, 2).Value = data.TotalPenaltyPaid;
+                summarySheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                summarySheet.Cell(currentRow, 4).Value = "Outstanding Balance:";
+                summarySheet.Cell(currentRow, 5).Value = data.TotalOutstanding;
+                summarySheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                summarySheet.Cell(currentRow, 7).Value = "Percentage Paid:";
+                summarySheet.Cell(currentRow, 8).Value = $"{data.PercentagePaid:F1}%";
+                currentRow++;
+
+                summarySheet.Cell(currentRow, 1).Value = "Original Total Amount:";
+                summarySheet.Cell(currentRow, 2).Value = data.OriginalTotalAmount;
+                summarySheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                summarySheet.Cell(currentRow, 4).Value = "Blockchain Tx:";
+                summarySheet.Cell(currentRow, 5).Value = data.BlockchainTxId ?? "N/A";
+
+                summarySheet.Columns().AdjustToContents();
+
+                // ============================================================
+                // REPAYMENT DETAILS SHEET
+                // ============================================================
+                var detailSheet = workbook.Worksheets.Add("Repayment History");
+                currentRow = 1;
+
+                // Header
+                detailSheet.Cell(currentRow, 1).Value = data.CompanyName.ToUpper();
+                detailSheet.Range(currentRow, 1, currentRow, 13).Merge();
+                detailSheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(16);
+                detailSheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                detailSheet.Cell(currentRow, 1).Value = $"LOAN REPAYMENT HISTORY - {data.LoanNo}";
+                detailSheet.Range(currentRow, 1, currentRow, 13).Merge();
+                detailSheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                detailSheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                // ✅ NEW: Loan Amount Applied and Date of Allocation in the details sheet too
+                detailSheet.Cell(currentRow, 1).Value = "Loan Amount Applied:";
+                detailSheet.Cell(currentRow, 2).Value = data.PrincipalAmount;
+                detailSheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                detailSheet.Cell(currentRow, 4).Value = "Date of Allocation:";
+                detailSheet.Cell(currentRow, 5).Value = data.ApplicationDate.ToString("dd/MM/yyyy");
+                detailSheet.Cell(currentRow, 7).Value = "Member:";
+                detailSheet.Cell(currentRow, 8).Value = $"{data.MemberName} ({data.MemberNo})";
+                detailSheet.Cell(currentRow, 10).Value = "Status:";
+                detailSheet.Cell(currentRow, 11).Value = data.LoanStatus;
+                currentRow += 2;
+
+                // Column Headers
+                string[] headers = { "No.", "Payment Date", "Receipt No", "Payment Method", "Amount Paid", "Principal", "Interest", "Penalty", "Balance Before", "Balance After", "Status", "Processed By", "Blockchain Tx" };
+
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    detailSheet.Cell(currentRow, i + 1).Value = headers[i];
+                    detailSheet.Cell(currentRow, i + 1).Style.Font.SetBold();
+                    detailSheet.Cell(currentRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                    detailSheet.Cell(currentRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                }
+                currentRow++;
+
+                // Data Rows
+                int serialNo = 1;
+                foreach (var repayment in data.Repayments.OrderByDescending(r => r.PaymentDate))
+                {
+                    detailSheet.Cell(currentRow, 1).Value = serialNo;
+                    detailSheet.Cell(currentRow, 2).Value = repayment.PaymentDate.ToString("dd/MM/yyyy HH:mm");
+                    detailSheet.Cell(currentRow, 3).Value = repayment.ReceiptNo;
+                    detailSheet.Cell(currentRow, 4).Value = repayment.PaymentMethod;
+                    detailSheet.Cell(currentRow, 5).Value = repayment.AmountPaid;
+                    detailSheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                    detailSheet.Cell(currentRow, 6).Value = repayment.PrincipalPaid;
+                    detailSheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
+                    detailSheet.Cell(currentRow, 7).Value = repayment.InterestPaid;
+                    detailSheet.Cell(currentRow, 7).Style.NumberFormat.Format = "#,##0.00";
+                    detailSheet.Cell(currentRow, 8).Value = repayment.PenaltyPaid;
+                    detailSheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                    detailSheet.Cell(currentRow, 9).Value = repayment.BalanceBefore;
+                    detailSheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
+                    detailSheet.Cell(currentRow, 10).Value = repayment.BalanceAfter;
+                    detailSheet.Cell(currentRow, 10).Style.NumberFormat.Format = "#,##0.00";
+                    detailSheet.Cell(currentRow, 11).Value = repayment.Status;
+                    detailSheet.Cell(currentRow, 12).Value = repayment.ProcessedBy ?? "N/A";
+                    detailSheet.Cell(currentRow, 13).Value = repayment.BlockchainTxId ?? "N/A";
+                    currentRow++;
+                    serialNo++;
+                }
+
+                // Totals Row
+                currentRow++;
+                detailSheet.Cell(currentRow, 4).Value = "TOTALS:";
+                detailSheet.Cell(currentRow, 4).Style.Font.SetBold();
+                detailSheet.Cell(currentRow, 5).Value = data.TotalAmountPaid;
+                detailSheet.Cell(currentRow, 5).Style.Font.SetBold();
+                detailSheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                detailSheet.Cell(currentRow, 6).Value = data.TotalPrincipalPaid;
+                detailSheet.Cell(currentRow, 6).Style.Font.SetBold();
+                detailSheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
+                detailSheet.Cell(currentRow, 7).Value = data.TotalInterestPaid;
+                detailSheet.Cell(currentRow, 7).Style.Font.SetBold();
+                detailSheet.Cell(currentRow, 7).Style.NumberFormat.Format = "#,##0.00";
+                detailSheet.Cell(currentRow, 8).Value = data.TotalPenaltyPaid;
+                detailSheet.Cell(currentRow, 8).Style.Font.SetBold();
+                detailSheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+
+                // Outstanding Balance Row
+                currentRow++;
+                detailSheet.Cell(currentRow, 4).Value = "OUTSTANDING BALANCE:";
+                detailSheet.Cell(currentRow, 4).Style.Font.SetBold();
+                detailSheet.Cell(currentRow, 5).Value = data.TotalOutstanding;
+                detailSheet.Cell(currentRow, 5).Style.Font.SetBold();
+                detailSheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                detailSheet.Cell(currentRow, 5).Style.Fill.SetBackgroundColor(XLColor.Yellow);
+
+                detailSheet.Columns().AdjustToContents();
+
+                // ============================================================
+                // OUTSTANDING BALANCE BREAKDOWN SHEET
+                // ============================================================
+                var balanceSheet = workbook.Worksheets.Add("Balance Breakdown");
+                currentRow = 1;
+
+                balanceSheet.Cell(currentRow, 1).Value = "OUTSTANDING BALANCE BREAKDOWN";
+                balanceSheet.Range(currentRow, 1, currentRow, 4).Merge();
+                balanceSheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                balanceSheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                balanceSheet.Cell(currentRow, 1).Value = "Item";
+                balanceSheet.Cell(currentRow, 2).Value = "Amount";
+                balanceSheet.Cell(currentRow, 1).Style.Font.SetBold();
+                balanceSheet.Cell(currentRow, 2).Style.Font.SetBold();
+                balanceSheet.Cell(currentRow, 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                balanceSheet.Cell(currentRow, 2).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                currentRow++;
+
+                balanceSheet.Cell(currentRow, 1).Value = "Outstanding Principal:";
+                balanceSheet.Cell(currentRow, 2).Value = data.OutstandingPrincipal;
+                balanceSheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                currentRow++;
+
+                balanceSheet.Cell(currentRow, 1).Value = "Outstanding Interest:";
+                balanceSheet.Cell(currentRow, 2).Value = data.OutstandingInterest;
+                balanceSheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                currentRow++;
+
+                balanceSheet.Cell(currentRow, 1).Value = "Outstanding Penalty:";
+                balanceSheet.Cell(currentRow, 2).Value = data.OutstandingPenalty;
+                balanceSheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                currentRow++;
+
+                balanceSheet.Cell(currentRow, 1).Value = "TOTAL OUTSTANDING:";
+                balanceSheet.Cell(currentRow, 2).Value = data.TotalOutstanding;
+                balanceSheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0.00";
+                balanceSheet.Cell(currentRow, 1).Style.Font.SetBold();
+                balanceSheet.Cell(currentRow, 2).Style.Font.SetBold();
+                balanceSheet.Cell(currentRow, 1).Style.Fill.SetBackgroundColor(XLColor.Yellow);
+                balanceSheet.Cell(currentRow, 2).Style.Fill.SetBackgroundColor(XLColor.Yellow);
+
+                balanceSheet.Columns().AdjustToContents();
+
+                using var stream = new MemoryStream();
+                workbook.SaveAs(stream);
+                var content = stream.ToArray();
+
+                return File(content,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"RepaymentHistory_{data.MemberName}_{DateTime.Now:yyyyMMddHHmmss}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting repayment history to Excel for loan {LoanNo}", loanNo);
+                TempData["Error"] = "Error exporting: " + ex.Message;
+                return RedirectToAction("LoanInquiry");
             }
         }
 
@@ -1099,11 +1674,11 @@ namespace SACCOBlockChainSystem.Controllers
                 }).GeneratePdf(stream);
 
                 var content = stream.ToArray();
-                return File(content, "application/pdf", $"GuarantorLoans_{data.MemberNo}_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+                return File(content, "application/pdf", $"GuarantorLoans_{data.MemberName}_{DateTime.Now:yyyyMMddHHmmss}.pdf");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error exporting guarantor loans to PDF for member {MemberNo}", memberNo);
+                _logger.LogError(ex, "Error exporting guarantor loans to PDF for member {MemberName}", memberNo);
                 TempData["Error"] = "Error generating PDF: " + ex.Message;
                 return RedirectToAction("GuarantorLoans", new { memberNo });
             }
