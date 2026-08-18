@@ -284,7 +284,7 @@
     <!-- EXISTING MEMBERS TABLE -->
     <div class="card">
         <div class="card-header bg-info text-white">
-            <h5><i class="fas fa-list"></i> Existing Members</h5>
+            <h5><i class="fas fa-list"></i> Existing Members <span id="totalMembersLabel">(@Model.TotalMembers total)</span></h5>
         </div>
         <div class="card-body">
             <!-- Search Bar -->
@@ -314,6 +314,12 @@
                 </div>
             </div>
 
+            <!-- Search Results Info -->
+            <div id="searchResultInfo" style="display: none;" class="mb-2">
+                <span class="badge bg-info">Search Results: <span id="resultCount">0</span> member(s) found</span>
+                <button class="btn btn-sm btn-secondary" id="resetTableBtn"><i class="fas fa-undo"></i> Show All</button>
+            </div>
+
             <div class="table-responsive">
                 <table class="table table-bordered table-hover" id="membersTable">
                     <thead class="table-light">
@@ -333,7 +339,7 @@
                         @{
                             var counter = 1;
                         }
-                        @foreach (var member in Model.AllMembers.OrderBy(m => m.Surname))
+                        @foreach (var member in Model.AllMembers.OrderByDescending(m => m.ApplicDate))
                         {
                             var fullName = $"{member.Surname} {member.OtherNames}";
                             var statusText = member.Status == 1 ? "Active" : "Inactive";
@@ -393,6 +399,14 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- Show more indicator -->
+            @if (ViewBag.TotalMembersCount != null && (int)ViewBag.TotalMembersCount > 20)
+            {
+                <div class="text-center text-muted mt-2">
+                    <small><i class="fas fa-info-circle"></i> Showing the most recent 20 members. Use search to find all members.</small>
+                </div>
+            }
 
             <!-- Statistics Summary -->
             <div class="row mt-4">
@@ -560,6 +574,7 @@
         let currentMemberNo = null;
         let deleteMemberNo = null;
         let deleteMemberName = null;
+        let allMembersData = []; // Store all members data for search
 
         // Store image data
         let photoData = null;
@@ -666,22 +681,30 @@
             // Initialize corporate toggle
             toggleCorporateFields();
 
-            // Search functionality
+            // Search functionality - MODIFIED for server-side search
             $('#memberSearchInput').on('keyup', function() {
-                performSearch();
+                const searchTerm = $(this).val().trim();
+                if (searchTerm.length >= 2 || searchTerm.length === 0) {
+                    performServerSearch();
+                }
             });
 
             $('#statusFilter').on('change', function() {
-                performSearch();
+                performServerSearch();
             });
 
             $('#sortBy').on('change', function() {
-                sortMembers();
-                performSearch();
+                // Sort the current displayed rows
+                sortDisplayedMembers();
             });
 
             $('#clearSearchBtn').on('click', function() {
                 clearAllFilters();
+            });
+
+            // Reset table button (shows original 20 members)
+            $('#resetTableBtn').on('click', function() {
+                resetTableToDefault();
             });
 
             // Save button click
@@ -755,6 +778,14 @@
 
         // Generate preview member number for new registration
         function generatePreviewMemberNumber() {
+            // Only generate if the field is empty or this is a new registration
+            const currentValue = $('#DisplayMemberNo').val();
+
+            // If there's already a value (editing existing member), don't override it
+            if (currentValue && currentValue.trim() !== '') {
+                return;
+            }
+
             const now = new Date();
             const months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
             const monthInitial = months[now.getMonth()];
@@ -768,6 +799,168 @@
             const preview = `${monthInitial}${year}${month}${day}${hour}${minute}${second}`;
             $('#DisplayMemberNo').val(preview);
             $('#MemberNo').val(preview);
+        }
+
+        // ============================================================
+        // SERVER-SIDE SEARCH - Searches ALL members in the database
+        // ============================================================
+        function performServerSearch() {
+            const searchTerm = $('#memberSearchInput').val().trim();
+            const statusFilter = $('#statusFilter').val();
+
+            // If search term is empty and status filter is 'all', show default 20 members
+            if (searchTerm === '' && statusFilter === 'all') {
+                resetTableToDefault();
+                return;
+            }
+
+            // If search term is 1 character, don't search yet (wait for at least 2 chars)
+            if (searchTerm.length === 1) {
+                return;
+            }
+
+            showLoading(true);
+
+            $.ajax({
+                url: '/MemberMvc/SearchMembers',
+                type: 'GET',
+                data: {
+                    searchTerm: searchTerm,
+                    statusFilter: statusFilter
+                },
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success) {
+                        if (response.data && response.data.length > 0) {
+                            displaySearchResults(response.data);
+                            $('#searchResultInfo').show();
+                            $('#resultCount').text(response.data.length);
+                        } else {
+                            // No results - show empty message
+                            $('#membersTableBody').html(`
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted py-4">
+                                        <i class="fas fa-search"></i> No members found matching "<strong>${searchTerm}</strong>"
+                                    </td>
+                                </tr>
+                            `);
+                            $('#searchResultInfo').show();
+                            $('#resultCount').text('0');
+                        }
+                    } else {
+                        showNotification(response.message || 'Error searching members', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    showNotification('Error searching members. Please try again.', 'error');
+                }
+            });
+        }
+
+        // Display search results in the table
+        function displaySearchResults(members) {
+            let html = '';
+            let counter = 1;
+
+            members.forEach(function(m) {
+                const fullName = m.fullName || (m.surname + ' ' + m.otherNames).trim();
+                const statusText = m.statusText || (m.status == 1 ? 'Active' : 'Inactive');
+                const statusClass = m.status == 1 ? 'bg-success' : 'bg-secondary';
+                const regDate = m.registrationDate ? new Date(m.registrationDate).toLocaleDateString('en-GB') : 'N/A';
+
+                html += `
+                    <tr data-memberno="${m.memberNo}"
+                        data-surname="${m.surname || ''}"
+                        data-othernames="${m.otherNames || ''}"
+                        data-idno="${m.idNo || ''}"
+                        data-phone="${m.phoneNo || ''}"
+                        data-email="${m.email || ''}"
+                        data-landline="${m.landLine || ''}"
+                        data-gender="${m.gender || ''}"
+                        data-dob="${m.dateOfBirth || ''}"
+                        data-age="${m.age || ''}"
+                        data-marital="${m.maritalStatus || ''}"
+                        data-station="${m.station || ''}"
+                        data-dept="${m.department || ''}"
+                        data-address="${m.presentAddress || ''}"
+                        data-cigcode="${m.cigcode || ''}"
+                        data-membershiptype="${m.membershipType || ''}"
+                        data-registrationtype="${m.registrationType || ''}"
+                        data-status="${m.status || ''}"
+                        data-status-text="${statusText}"
+                        data-regdate="${m.registrationDate || ''}"
+                        data-initialshares="${m.initialShares || 0}"
+                        data-photo="${m.photo || ''}"
+                        data-idfront="${m.idFrontImage || ''}"
+                        data-idback="${m.idBackImage || ''}">
+                        <td class="row-number">${counter}</td>
+                        <td><strong>${m.memberNo}</strong></td>
+                        <td class="member-name">${fullName}</td>
+                        <td class="member-idno">${m.idNo || ''}</td>
+                        <td class="member-phone">${m.phoneNo || ''}</td>
+                        <td class="member-email">${m.email || 'N/A'}</td>
+                        <td class="member-status">
+                            <span class="badge ${statusClass} status-badge">${statusText}</span>
+                        </td>
+                        <td class="member-date">${regDate}</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-info select-btn w-100" data-memberno="${m.memberNo}">
+                                <i class="fas fa-edit"></i> Select
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                counter++;
+            });
+
+            $('#membersTableBody').html(html);
+        }
+
+        // Reset table to default (show top 20 most recent)
+        function resetTableToDefault() {
+            $('#memberSearchInput').val('');
+            $('#statusFilter').val('all');
+            $('#searchResultInfo').hide();
+
+            // Reload the page to get the default 20 members
+            location.reload();
+        }
+
+        // Sort displayed members (client-side sorting)
+        function sortDisplayedMembers() {
+            const sortBy = $('#sortBy').val();
+            const tbody = $('#membersTableBody');
+            const rows = tbody.find('tr:not(#noMembersRow)').get();
+
+            if (rows.length === 0) return;
+
+            rows.sort(function(a, b) {
+                let aVal, bVal;
+                switch(sortBy) {
+                    case 'name':
+                        aVal = $(a).find('td.member-name').text().toLowerCase();
+                        bVal = $(b).find('td.member-name').text().toLowerCase();
+                        break;
+                    case 'memberNo':
+                        aVal = $(a).find('td:eq(1)').text().toLowerCase();
+                        bVal = $(b).find('td:eq(1)').text().toLowerCase();
+                        break;
+                    case 'date':
+                        aVal = $(a).data('regdate') || '9999-12-31';
+                        bVal = $(b).data('regdate') || '9999-12-31';
+                        break;
+                    default:
+                        aVal = $(a).find('td.member-name').text().toLowerCase();
+                        bVal = $(b).find('td.member-name').text().toLowerCase();
+                }
+                return aVal.localeCompare(bVal);
+            });
+
+            $.each(rows, function(index, row) {
+                tbody.append(row);
+                $(row).find('.row-number').text(index + 1);
+            });
         }
 
         // Load member for editing
@@ -992,6 +1185,11 @@
 
             // Generate a preview member number for new registration
             generatePreviewMemberNumber();
+
+            // Reset search
+            $('#memberSearchInput').val('');
+            $('#statusFilter').val('all');
+            $('#searchResultInfo').hide();
         }
 
         // Calculate age from date of birth
@@ -1129,8 +1327,14 @@
 
             showLoading(true);
 
+            // ============================================================
+            // CRITICAL: Get the member number from DisplayMemberNo
+            // ============================================================
+            const memberNo = $('#DisplayMemberNo').val().trim();
+            $('#MemberNo').val(memberNo); // Set the hidden field
+
             const formData = {
-                MemberNo: $('#MemberNo').val() || null,
+                MemberNo: memberNo || null,  // Use the value from the view
                 IdNo: $('#IdNo').val(),
                 Surname: $('#Surname').val(),
                 OtherNames: $('#OtherNames').val(),
@@ -1155,6 +1359,8 @@
                 IdFrontImage: idFrontData || null,
                 IdBackImage: idBackData || null
             };
+
+            console.log('Saving member with MemberNo:', formData.MemberNo);
 
             $.ajax({
                 url: '/MemberMvc/Create',
@@ -1232,11 +1438,6 @@
                 formData.append('IdBackImage', idBackData);
             }
 
-            console.log('UPDATE FormData fields:');
-            for (var pair of formData.entries()) {
-                console.log(pair[0] + ': ' + (pair[1] ? (pair[1].length > 100 ? pair[1].substring(0, 100) + '...' : pair[1]) : 'null'));
-            }
-
             $.ajax({
                 url: '/MemberMvc/Update',
                 type: 'POST',
@@ -1248,7 +1449,6 @@
                 },
                 success: function(response) {
                     showLoading(false);
-                    console.log('Update response:', response);
                     if (response.success) {
                         showNotification(response.message, 'success');
                         setTimeout(() => location.reload(), 1500);
@@ -1258,17 +1458,9 @@
                 },
                 error: function(xhr) {
                     showLoading(false);
-                    console.error('Update error:', xhr);
                     let errorMsg = 'Error updating member';
                     if (xhr.responseJSON && xhr.responseJSON.message) {
                         errorMsg = xhr.responseJSON.message;
-                    } else if (xhr.responseText) {
-                        try {
-                            const json = JSON.parse(xhr.responseText);
-                            if (json.message) errorMsg = json.message;
-                        } catch (e) {
-                            errorMsg = xhr.responseText.substring(0, 100);
-                        }
                     }
                     showNotification(errorMsg, 'error');
                 }
@@ -1315,89 +1507,11 @@
             });
         }
 
-        // Search functionality
-        function performSearch() {
-            const searchTerm = $('#memberSearchInput').val().toLowerCase().trim();
-            const statusFilter = $('#statusFilter').val();
-            let visibleCount = 0;
-
-            $('#membersTableBody tr').each(function() {
-                const row = $(this);
-                if (row.attr('id') === 'noMembersRow') return;
-
-                const memberNo = row.find('td:eq(1)').text().toLowerCase();
-                const name = row.find('td.member-name').text().toLowerCase();
-                const idNo = row.find('td.member-idno').text().toLowerCase();
-                const phone = row.find('td.member-phone').text().toLowerCase();
-                const email = row.find('td.member-email').text().toLowerCase();
-                const statusValue = row.data('status') || '';
-                const statusText = row.find('td.member-status .status-badge').text().toLowerCase();
-
-                let matchesSearch = true;
-                if (searchTerm) {
-                    matchesSearch = memberNo.includes(searchTerm) ||
-                                   name.includes(searchTerm) ||
-                                   idNo.includes(searchTerm) ||
-                                   phone.includes(searchTerm) ||
-                                   email.includes(searchTerm);
-                }
-
-                let matchesStatus = true;
-                if (statusFilter === 'active') {
-                    matchesStatus = statusValue === '1' || statusText === 'active';
-                } else if (statusFilter === 'inactive') {
-                    matchesStatus = statusValue !== '1' && statusText !== 'active';
-                }
-
-                if (matchesSearch && matchesStatus) {
-                    row.show();
-                    visibleCount++;
-                } else {
-                    row.hide();
-                }
-            });
-        }
-
-        // Sort members
-        function sortMembers() {
-            const sortBy = $('#sortBy').val();
-            const tbody = $('#membersTableBody');
-            const rows = tbody.find('tr:visible:not(#noMembersRow)').get();
-
-            rows.sort(function(a, b) {
-                let aVal, bVal;
-                switch(sortBy) {
-                    case 'name':
-                        aVal = $(a).find('td.member-name').text();
-                        bVal = $(b).find('td.member-name').text();
-                        break;
-                    case 'memberNo':
-                        aVal = $(a).find('td:eq(1)').text();
-                        bVal = $(b).find('td:eq(1)').text();
-                        break;
-                    case 'date':
-                        aVal = $(a).data('regdate') || '9999-12-31';
-                        bVal = $(b).data('regdate') || '9999-12-31';
-                        break;
-                    default:
-                        aVal = $(a).find('td.member-name').text();
-                        bVal = $(b).find('td.member-name').text();
-                }
-                return aVal.localeCompare(bVal);
-            });
-
-            $.each(rows, function(index, row) {
-                tbody.append(row);
-                $(row).find('.row-number').text(index + 1);
-            });
-        }
-
         // Clear all filters
         function clearAllFilters() {
             $('#memberSearchInput').val('');
             $('#statusFilter').val('all');
-            $('#sortBy').val('name');
-            performSearch();
+            resetTableToDefault();
             $('#memberSearchInput').focus();
         }
 

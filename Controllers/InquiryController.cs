@@ -235,7 +235,40 @@ namespace SACCOBlockChainSystem.Controllers
                     });
                 }
 
-                return Ok(new { Success = true, Data = result });
+                // ============================================================
+                // ORDER BY ApplicDate DESCENDING (LIFO) for API response
+                // ============================================================
+                var sortedLoans = result.Loans
+                    .OrderByDescending(l => l.ApplicationDate)
+                    .Select(l => new
+                    {
+                        l.LoanNo,
+                        l.LoanType,
+                        l.PrincipalAmount,
+                        l.OutstandingBalance,
+                        l.Status,
+                        ApplicDate = l.ApplicationDate,
+                        ApplicationDateFormatted = l.ApplicationDate.ToString("dd/MM/yyyy") ?? "N/A",
+                        l.InterestRate,
+                        l.RepaymentPeriod,
+                        l.IsOverdue
+                    })
+                    .ToList();
+
+                var responseData = new
+                {
+                    result.MemberNo,
+                    result.MemberName,
+                    result.TotalLoans,
+                    result.TotalBorrowed,
+                    result.TotalOutstanding,
+                    result.ActiveLoansCount,
+                    result.ClosedLoansCount,
+                    Loans = sortedLoans,
+                    result.InquiryTimestamp
+                };
+
+                return Ok(new { Success = true, Data = responseData });
             }
             catch (Exception ex)
             {
@@ -243,6 +276,7 @@ namespace SACCOBlockChainSystem.Controllers
                 return StatusCode(500, new { Success = false, Message = ex.Message });
             }
         }
+
 
 
         // GET: api/Inquiry/loan/{memberNo}/{loanNo}
@@ -1056,6 +1090,81 @@ namespace SACCOBlockChainSystem.Controllers
                 _logger.LogError(ex, "Error exporting repayment history to Excel for loan {LoanNo}", loanNo);
                 TempData["Error"] = "Error exporting: " + ex.Message;
                 return RedirectToAction("LoanInquiry");
+            }
+        }
+
+
+        // GET: api/Inquiry/transaction/{memberNo}
+        [HttpGet("api/Inquiry/transaction/{memberNo}")]
+        public async Task<IActionResult> GetTransactionInquiryApi(string memberNo)
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+                var userId = GetCurrentUserId();
+
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    return BadRequest(new { Success = false, Message = "Unable to determine company code" });
+                }
+
+                var result = await _inquiryService.GetTransactionInquiryAsync(memberNo, companyCode, userId);
+
+                if (result == null || result.Transactions == null || !result.Transactions.Any())
+                {
+                    return Ok(new
+                    {
+                        Success = true,
+                        Data = new
+                        {
+                            memberNo = memberNo,
+                            memberName = "No data found",
+                            totalTransactions = 0,
+                            totalDeposits = 0,
+                            totalWithdrawals = 0,
+                            netPosition = 0,
+                            transactions = new List<object>()
+                        },
+                        Message = "No transaction data found for this member"
+                    });
+                }
+
+                // Sort by date descending (LIFO - most recent first)
+                var sortedTransactions = result.Transactions
+                    .OrderByDescending(t => t.TransactionDate)
+                    .Select(t => new
+                    {
+                        t.TransactionDate,
+                        t.TransactionType,
+                        t.Description,
+                        t.Debit,
+                        t.Credit,
+                        t.Balance,
+                        t.Reference,
+                        t.BlockchainTxId,
+                        t.ProcessedBy
+                    })
+                    .ToList();
+
+                var responseData = new
+                {
+                    result.MemberNo,
+                    result.MemberName,
+                    result.TotalTransactions,
+                    result.TotalDeposits,
+                    result.TotalWithdrawals,
+                    result.NetPosition,
+                    Transactions = sortedTransactions,
+                    result.InquiryTimestamp,
+                    result.InquiredBy
+                };
+
+                return Ok(new { Success = true, Data = responseData });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting transaction inquiry for {MemberNo}", memberNo);
+                return StatusCode(500, new { Success = false, Message = ex.Message });
             }
         }
 

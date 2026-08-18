@@ -564,7 +564,7 @@
                 data.loans.forEach(loan => {
                     totalLoanAmount += parseFloat(loan.loanAmt || loan.principalAmount || 0);
                     totalOutstandingBalance += parseFloat(loan.aamount || loan.outstandingBalance || 0);
-                    
+
                     // Check if status is active (Disbursed or Endorsed)
                     if (isActiveStatus(loan.status)) {
                         activeLoanCount++;
@@ -662,13 +662,14 @@
                     </div>
                 </div>`;
 
-            // Loan Summary Table
+            // Loan Summary Table - WITH APPLICATION DATE COLUMN
             if (data.loans && data.loans.length > 0) {
                 html += `
                     <div class="card mt-3">
                         <div class="card-header bg-info text-white">
                             <h5 class="card-title mb-0">
                                 <i class="bi bi-table"></i> Loan Summary (${data.loans.length} loans)
+                                <span class="badge bg-light text-dark ms-2">LIFO - Most Recent First</span>
                             </h5>
                             <div class="card-tools">
                                 <button type="button" class="btn btn-tool text-white" data-card-widget="collapse">
@@ -681,55 +682,70 @@
                                 <table class="table table-bordered table-hover" id="loanTable">
                                     <thead class="table-light">
                                         <tr>
+                                            <th>#</th>
                                             <th>Loan No</th>
                                             <th>Loan Type</th>
                                             <th class="text-end">Principal</th>
                                             <th class="text-end">Balance</th>
+                                            <th>Application Date</th>
                                             <th>Status</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>`;
 
-                data.loans.forEach(loan => {
-                    const statusBadge = getStatusBadge(loan.status);
-                    const principal = loan.loanAmt || loan.principalAmount || 0;
-                    const balance = loan.aamount || loan.outstandingBalance || 0;
-                    // Format the application date
-                    const applicDate = formatDate(loan.applicDate);
-
-                    html += `
-                        <tr>
-                            <td><strong>${escapeHtml(loan.loanNo || 'N/A')}</strong></td>
-                            <td>${escapeHtml(loan.loanType || loan.loanCode || 'N/A')}</td>
-                            <td class="text-end">${formatCurrency(principal)}</td>
-                            <td class="text-end">${formatCurrency(balance)}</td>
-                            <td>${statusBadge}</td>
-                            <td>
-                                <button type="button" class="btn btn-sm btn-info" onclick="viewLoanDetails('${loan.loanNo}')">
-                                    <i class="bi bi-eye"></i> View
-                                </button>
-                                <button type="button" class="btn btn-sm btn-warning" onclick="showRepaymentHistory('${loan.loanNo}')">
-                                    <i class="bi bi-clock-history"></i> Repay History
-                                </button>
-                            </td>
-                        </tr>`;
-                });
-
-                html += `
+                                         // Data is already sorted by LIFO from the backend
+                                         let counter = 1;
+                                         data.loans.forEach(loan => {
+                                             const statusBadge = getStatusBadge(loan.status);
+                                             const principal = loan.loanAmt || loan.principalAmount || 0;
+                                             const balance = loan.aamount || loan.outstandingBalance || 0;
+                                             // Format the application date
+                                             const applicDate = formatDate(loan.applicDate || loan.applicationDate);
+                                        
+                                             html += `
+                                                 <tr>
+                                                     <td>${counter}</td>
+                                                     <td><strong>${escapeHtml(loan.loanNo || 'N/A')}</strong></td>
+                                                     <td>${escapeHtml(loan.loanType || loan.loanCode || 'N/A')}</td>
+                                                     <td class="text-end">${formatCurrency(principal)}</td>
+                                                     <td class="text-end">${formatCurrency(balance)}</td>
+                                                     <td>${applicDate}</td>
+                                                     <td>${statusBadge}</td>
+                                                     <td>
+                                                         <button type="button" class="btn btn-sm btn-info" onclick="viewLoanDetails('${loan.loanNo}')">
+                                                             <i class="bi bi-eye"></i> View
+                                                         </button>
+                                                         <button type="button" class="btn btn-sm btn-warning" onclick="showRepaymentHistory('${loan.loanNo}')">
+                                                             <i class="bi bi-clock-history"></i> Repay History
+                                                         </button>
+                                                     </td>
+                                                 </tr>`;
+                                             counter++;
+                                         });
+                                        
+                                         html += `
                                     </tbody>
+                                    <tfoot class="table-dark fw-bold">
+                                        <tr>
+                                            <th colspan="3" class="text-end">TOTALS:</th>
+                                            <th class="text-end">${formatCurrency(totalLoanAmount)}</th>
+                                            <th class="text-end">${formatCurrency(totalOutstandingBalance)}</th>
+                                            <th colspan="3"></th>
+                                        </tr>
+                                    </tfoot>
                                 </table>
                             </div>
                         </div>
                     </div>`;
-            } else {
-                html += `
-                    <div class="alert alert-info mt-3">
-                        <i class="bi bi-info-circle"></i> No loans found for this member.
-                    </div>`;
-            }
+                   } else {
+                       html += `
+                           <div class="alert alert-info mt-3">
+                               <i class="bi bi-info-circle"></i> No loans found for this member.
+                           </div>`;
+                   }
 
-            html += `</div>`;
+                 html += `</div>`;
             return html;
         }
 
@@ -1099,9 +1115,6 @@
                                 </button>
                                 <button type="button" class="btn btn-success" onclick="exportRepaymentHistoryExcel('${data.loanNo}', '${data.memberNo}')">
                                     <i class="bi bi-file-excel"></i> Excel
-                                </button>
-                                <button type="button" class="btn btn-secondary" onclick="window.print()">
-                                    <i class="bi bi-printer"></i> Print
                                 </button>
                             </div>
                         </div>

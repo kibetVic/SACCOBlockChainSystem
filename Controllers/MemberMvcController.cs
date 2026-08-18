@@ -44,6 +44,7 @@ namespace SACCOBlockChainSystem.Controllers
             _logger = logger;
         }
 
+
         // GET: MemberMvc (Index with all CRUD operations)
         public async Task<IActionResult> Index()
         {
@@ -51,34 +52,50 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();
 
-                // Get all members for current company
-                var allMembers = await _context.Members
-                    .Where(m => m.CompanyCode == currentCompanyCode && (m.Archived == false || m.Archived == null))
-                    .OrderByDescending(m => m.ApplicDate)
+                // ============================================================
+                // ONLY LOAD MEMBERS DATA - NOTHING ELSE
+                // ============================================================
+                var allMembersQuery = _context.Members
+                    .Where(m => m.CompanyCode == currentCompanyCode && (m.Archived == false || m.Archived == null));
+
+                // Get total counts for statistics (these are just COUNT queries - fast)
+                var totalMembers = await allMembersQuery.CountAsync();
+                var activeMembers = await allMembersQuery.CountAsync(m => m.Status == 1);
+                var blockchainVerifiedCount = await allMembersQuery.CountAsync(m => !string.IsNullOrEmpty(m.BlockchainTxId));
+                var totalShareCapital = await allMembersQuery.SumAsync(m => m.ShareCap ?? 0);
+
+                // Get only the TOP 20 most recent members for display
+                var recentMembers = await allMembersQuery
+                    .OrderByDescending(m => m.AuditDateTime)
+                    .Take(20)
+                    .AsNoTracking() // Add this for read-only queries
                     .ToListAsync();
 
-                // Get CIGs for dropdown
+                // Get CIGs for dropdown (small table - OK)
                 var cigs = await _context.CIGs
                     .Where(c => c.CompanyCode == currentCompanyCode && c.Status == "Active")
                     .OrderBy(c => c.GigName)
+                    .AsNoTracking()
                     .ToListAsync();
 
-                // Get Counties for dropdown
+                // Get Counties for dropdown (small table - OK)
                 var counties = await _context.Counties
                     .Where(c => c.Status == "Active")
                     .OrderBy(c => c.CountyName)
+                    .AsNoTracking()
                     .ToListAsync();
 
                 ViewBag.CIGs = cigs;
                 ViewBag.Counties = counties;
+                ViewBag.TotalMembersCount = totalMembers;
 
                 var viewModel = new MembersIndexViewModel
                 {
-                    AllMembers = allMembers,
-                    TotalMembers = allMembers.Count,
-                    ActiveMembers = allMembers.Count(m => m.Status == 1),
-                    TotalShareCapital = allMembers.Sum(m => m.ShareCap ?? 0),
-                    BlockchainVerifiedCount = allMembers.Count(m => !string.IsNullOrEmpty(m.BlockchainTxId)),
+                    AllMembers = recentMembers,
+                    TotalMembers = totalMembers,
+                    ActiveMembers = activeMembers,
+                    TotalShareCapital = totalShareCapital,
+                    BlockchainVerifiedCount = blockchainVerifiedCount,
                     UserCompanyCode = currentCompanyCode
                 };
 
@@ -100,6 +117,86 @@ namespace SACCOBlockChainSystem.Controllers
                 };
 
                 return View(emptyViewModel);
+            }
+        }
+
+        // GET: MemberMvc/SearchMembers
+        [HttpGet]
+        public async Task<IActionResult> SearchMembers(string searchTerm, string statusFilter = "all")
+        {
+            try
+            {
+                var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();
+
+                // Start with all members
+                var query = _context.Members
+                    .Where(m => m.CompanyCode == currentCompanyCode && (m.Archived == false || m.Archived == null))
+                    .AsNoTracking();
+
+                // Apply search filter if provided
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    searchTerm = searchTerm.Trim().ToLower();
+                    query = query.Where(m =>
+                        m.MemberNo.ToLower().Contains(searchTerm) ||
+                        m.Surname.ToLower().Contains(searchTerm) ||
+                        m.OtherNames.ToLower().Contains(searchTerm) ||
+                        (m.Surname + " " + m.OtherNames).ToLower().Contains(searchTerm) ||
+                        m.Idno.ToLower().Contains(searchTerm) ||
+                        m.PhoneNo.ToLower().Contains(searchTerm) ||
+                        (m.Email != null && m.Email.ToLower().Contains(searchTerm))
+                    );
+                }
+
+                // Apply status filter
+                if (statusFilter == "active")
+                {
+                    query = query.Where(m => m.Status == 1);
+                }
+                else if (statusFilter == "inactive")
+                {
+                    query = query.Where(m => m.Status != 1);
+                }
+
+                // Order by registration date descending (most recent first)
+                var members = await query
+                    .OrderByDescending(m => m.ApplicDate)
+                    .Select(m => new
+                    {
+                        memberNo = m.MemberNo,
+                        fullName = (m.Surname + " " + m.OtherNames).Trim(),
+                        surname = m.Surname,
+                        otherNames = m.OtherNames,
+                        idNo = m.Idno,
+                        phoneNo = m.PhoneNo,
+                        email = m.Email,
+                        landLine = m.HomeTelNo,
+                        gender = m.Sex,
+                        dateOfBirth = m.Dob.HasValue ? m.Dob.Value.ToString("yyyy-MM-dd") : "",
+                        age = m.Age,
+                        maritalStatus = m.Mstatus == true ? "Married" : m.Mstatus == false ? "Single" : "",
+                        station = m.Station,
+                        department = m.Dept,
+                        presentAddress = m.PresentAddr,
+                        cigcode = m.Cigcode,
+                        membershipType = m.MembershipType,
+                        registrationType = m.MemberDescription,
+                        status = m.Status,
+                        statusText = m.Status == 1 ? "Active" : "Inactive",
+                        registrationDate = m.ApplicDate.HasValue ? m.ApplicDate.Value.ToString("yyyy-MM-dd") : "",
+                        initialShares = m.InitShares,
+                        photo = m.Photo,
+                        idFrontImage = m.IdFrontImage,
+                        idBackImage = m.IdBackImage
+                    })
+                    .ToListAsync();
+
+                return Json(new { success = true, data = members, count = members.Count });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching members");
+                return Json(new { success = false, message = ex.Message });
             }
         }
 
@@ -158,20 +255,33 @@ namespace SACCOBlockChainSystem.Controllers
                     }
                 }
 
-                // Generate member number if not provided
+               
+                // MEMBER NUMBER 
                 if (string.IsNullOrEmpty(model.MemberNo))
                 {
+                    // Generate new unique member number
                     model.MemberNo = await GenerateUniqueMemberNumberAsync(model.CompanyCode);
+                    _logger.LogInformation($"Generated new member number: {model.MemberNo}");
                 }
                 else
                 {
+                    // Validate the user-provided number is unique
                     var existingMemberNo = await _context.Members
                         .AnyAsync(m => m.MemberNo == model.MemberNo && m.CompanyCode == model.CompanyCode);
+
                     if (existingMemberNo)
                     {
-                        return Json(new { success = false, message = $"Member Number '{model.MemberNo}' already exists." });
+                        return Json(new
+                        {
+                            success = false,
+                            message = $"Member Number '{model.MemberNo}' already exists. Please enter a different number."
+                        });
                     }
+
+                    // It's unique - use it as-is (THIS IS WHAT YOU WANT)
+                    _logger.LogInformation($"Using user-provided member number: {model.MemberNo}");
                 }
+
 
                 // Register member
                 var memberResponse = await _memberService.RegisterMemberAsync(model);
@@ -505,17 +615,12 @@ namespace SACCOBlockChainSystem.Controllers
             return View(model);
         }
 
-
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register(MemberRegistrationDTO model)
         {
             try
             {
-                // DO NOT regenerate member number - keep the one from the view
-                // Remove this line: model.MemberNo = await GeneratePreviewMemberNumberAsync(model.CompanyCode);
-
                 model.CompanyCode = _companyContextService.GetCurrentCompanyCode();
                 model.CreatedBy = User.Identity?.Name ?? "SYSTEM";
                 model.RegistrationDate = DateTime.Now;
@@ -578,9 +683,18 @@ namespace SACCOBlockChainSystem.Controllers
                     }
                 }
 
-                // Check for duplicate Member Number - IMPORTANT: Validate the one from the view
-                if (!string.IsNullOrEmpty(model.MemberNo))
+                // ============================================================
+                // MEMBER NUMBER - CONTROLLER HANDLES ALL GENERATION
+                // ============================================================
+                if (string.IsNullOrEmpty(model.MemberNo))
                 {
+                    // Generate new unique member number
+                    model.MemberNo = await GenerateUniqueMemberNumberAsync(model.CompanyCode);
+                    _logger.LogInformation($"Generated new member number: {model.MemberNo}");
+                }
+                else
+                {
+                    // Check for duplicate Member Number
                     var existingMemberNo = await _context.Members
                         .AnyAsync(m => m.MemberNo == model.MemberNo && m.CompanyCode == model.CompanyCode);
 
@@ -588,10 +702,11 @@ namespace SACCOBlockChainSystem.Controllers
                     {
                         ModelState.AddModelError("MemberNo", $"Member Number '{model.MemberNo}' already exists. Please use a different number or let the system generate one.");
                     }
-                }
-                else
-                {
-                    ModelState.AddModelError("MemberNo", "Member Number is required");
+                    else
+                    {
+                        // It's unique - use it as-is
+                        _logger.LogInformation($"Using user-provided member number: {model.MemberNo}");
+                    }
                 }
 
                 // If any validation errors, return to form with errors
@@ -623,7 +738,7 @@ namespace SACCOBlockChainSystem.Controllers
                     model.Age = age;
                 }
 
-                // Register member - the service will use the MemberNo from the model
+                // Register member - service will use the MemberNo from the model
                 var memberResponse = await _memberService.RegisterMemberAsync(model);
 
                 if (memberResponse == null || string.IsNullOrEmpty(memberResponse.MemberNo))

@@ -182,6 +182,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? InquiredBy { get; set; }
         public string? MemberIdNo { get; set; }
         public int? MemberPhone { get; set; }
+        public object ClosedLoansCount { get; internal set; }
     }
 
     public class LoanDetailDTO
