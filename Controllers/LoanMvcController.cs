@@ -3799,23 +3799,6 @@ namespace SACCOBlockChainSystem.Controllers
 
                 _logger.LogInformation($"Repay page loading - CompanyCode: {companyCode}");
 
-                //// Load active GL accounts from GLSETUP
-                //var glAccounts = await _context.GlSetup
-                //    .Where(g => g.CompanyCode == companyCode && g.Status == true)
-                //    .OrderBy(g => g.AccNo)
-                //    .Select(g => new
-                //    {
-                //        AccNo = g.AccNo,
-                //        Glaccname = g.Glaccname,
-                //        Glacctype = g.Glacctype ?? "General",
-                //        GlAccMainGroup = g.GlAccMainGroup,
-                //        DisplayText = $"{g.Glaccname}"
-                //    })
-                //    .ToListAsync();
-
-                //_logger.LogInformation($"GL Accounts found: {glAccounts.Count}");
-                //ViewBag.GlAccounts = glAccounts;
-
                 var repaymentDto = new LoanRepaymentDTO
                 {
                     CompanyCode = companyCode,
@@ -3951,7 +3934,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-
         [HttpGet]
         public async Task<IActionResult> GetActiveLoans(string memberNo = null, string loanNo = null, string companyCode = null)
         {
@@ -3974,7 +3956,6 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     var loan = await _loanService.GetLoanByNoAsync(loanNo, companyCode);
 
-                    // Loans that can be repaid: Disbursed, Endorsed, Approved
                     bool canRepay = loan != null && (
                         loan.Status == (int)Status.Disbursed ||
                         loan.Status == (int)Status.Endorsed ||
@@ -3993,58 +3974,29 @@ namespace SACCOBlockChainSystem.Controllers
                             memberIdNo = member.Idno;
                         }
 
-                        var loanTypeName = "Unknown";
-                        var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
-                        if (loanType != null)
-                        {
-                            loanTypeName = loanType.LoanType ?? loanType.LoanCode ?? "Unknown";
-                        }
+                        // Get LOANBALANCE - THIS IS THE SOURCE OF TRUTH
+                        var loanbal = await _loanService.GetLoanBalanceAsync(loanNo);
 
-                        // GET CURRENT SCHEDULE
+                        // GET TOTAL FROM LOANBAL
+                        decimal totalPrincipalBalance = loanbal?.Balance ?? 0;
+                        decimal totalInterestBalance = loanbal?.IntrOwed ?? 0;
+                        decimal totalPenaltyBalance = loanbal?.Penalty ?? 0;
+                        decimal totalOutstanding = totalPrincipalBalance + totalInterestBalance + totalPenaltyBalance;
+
+                        // Get current schedule for display
                         var currentSchedule = await _context.LoanSchedules
                             .Where(s => s.LoanNo == loanNo && s.Status != "Paid")
                             .OrderBy(s => s.InstallmentNo)
                             .FirstOrDefaultAsync();
 
-                        var loanbal = await _loanService.GetLoanBalanceAsync(loanNo);
+                        decimal currentInstallmentPrincipal = currentSchedule?.OutstandingPrincipal ?? 0;
+                        decimal currentInstallmentInterest = currentSchedule?.OutstandingInterest ?? 0;
+                        decimal currentInstallmentTotal = currentSchedule?.OutstandingTotal ?? 0;
+                        decimal nextInstallmentAmount = currentSchedule?.TotalInstallment ?? 0;
+                        DateTime? dueDate = currentSchedule?.DueDate;
+                        int daysOverdue = currentSchedule?.DaysOverdue ?? 0;
 
-                        decimal outstandingPrincipal = 0;
-                        decimal outstandingInterest = 0;
-                        decimal existingPenalty = 0;
-                        decimal totalOutstanding = 0;
-                        decimal nextInstallmentAmount = 0;
-                        DateTime? dueDate = null;
-                        int daysOverdue = 0;
-
-                        if (currentSchedule != null)
-                        {
-                            outstandingPrincipal = currentSchedule.OutstandingPrincipal;
-                            outstandingInterest = currentSchedule.OutstandingInterest;
-                            existingPenalty = currentSchedule.PenaltyAmount;
-                            totalOutstanding = currentSchedule.OutstandingTotal + currentSchedule.PenaltyAmount;
-                            nextInstallmentAmount = currentSchedule.TotalInstallment;
-                            dueDate = currentSchedule.DueDate;
-                            daysOverdue = currentSchedule.DaysOverdue;
-                        }
-                        else if (loanbal != null)
-                        {
-                            outstandingPrincipal = loanbal.Balance;
-                            outstandingInterest = loanbal.IntrOwed;
-                            existingPenalty = loanbal.Penalty;
-                            totalOutstanding = loanbal.Balance + loanbal.IntrOwed + loanbal.Penalty;
-                            nextInstallmentAmount = loanbal.RepayRate;
-                            dueDate = loanbal.Duedate;
-                        }
-                        else
-                        {
-                            outstandingPrincipal = loan.LoanAmt ?? 0;
-                            outstandingInterest = 0;
-                            totalOutstanding = outstandingPrincipal;
-                        }
-
-                        // ============================================================
-                        // RECALCULATE DAYS OVERDUE BASED ON ACTUAL DATE
-                        // ============================================================
+                        // RECALCULATE DAYS OVERDUE
                         int calculatedDaysOverdue = 0;
                         if (dueDate.HasValue)
                         {
@@ -4052,122 +4004,30 @@ namespace SACCOBlockChainSystem.Controllers
                             if (calculatedDaysOverdue < 0) calculatedDaysOverdue = 0;
                         }
 
-                        // ============================================================
-                        // CALCULATE PENALTY FOR OVERDUE LOAN
-                        // ============================================================
-                        decimal calculatedPenalty = existingPenalty;
-                        string penaltyCalculationDetails = "";
-                        string penaltyMode = "";
-                        decimal penaltyValue = 0;
-                        int gracePeriodDays = loanType?.GracePeriod ?? 0;
-
-                        if (dueDate.HasValue && calculatedDaysOverdue > gracePeriodDays && loanType != null && loanType.Penalty == 1)
-                        {
-                            // Get penalty configuration
-                            var penaltyConfig = await _context.Penalties
-                                .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == companyCode && p.Penalty == 1);
-
-                            if (penaltyConfig != null)
-                            {
-                                penaltyMode = penaltyConfig.Mode ?? "Percentage";
-                                string penaltyRateType = penaltyConfig.Rate ?? "Monthly";
-                                penaltyValue = penaltyConfig.Value;
-                                short penaltyChargeItem = penaltyConfig.ChargeItem;
-
-                                int overdueAfterGrace = calculatedDaysOverdue - gracePeriodDays;
-
-                                // Calculate number of penalty periods based on Rate type
-                                int numberOfPeriods = 1;
-                                switch (penaltyRateType?.ToLower())
-                                {
-                                    case "daily":
-                                        numberOfPeriods = overdueAfterGrace;
-                                        break;
-                                    case "weekly":
-                                        numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 7.0);
-                                        break;
-                                    case "monthly":
-                                        numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 30.0);
-                                        break;
-                                    case "yearly":
-                                        numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 365.0);
-                                        break;
-                                    default:
-                                        numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 30.0);
-                                        break;
-                                }
-
-                                if (numberOfPeriods < 1) numberOfPeriods = 1;
-
-                                // Determine base amount for penalty based on ChargeItem
-                                decimal penaltyBaseAmount = 0;
-                                switch (penaltyChargeItem)
-                                {
-                                    case 0: // Principal Only
-                                        penaltyBaseAmount = outstandingPrincipal;
-                                        break;
-                                    case 1: // Interest Only
-                                        penaltyBaseAmount = outstandingInterest;
-                                        break;
-                                    case 2: // Both Principal & Interest
-                                    default:
-                                        penaltyBaseAmount = outstandingPrincipal + outstandingInterest;
-                                        break;
-                                }
-
-                                if (penaltyMode.ToLower() == "percentage")
-                                {
-                                    // PERCENTAGE MODE: Value is percentage rate
-                                    calculatedPenalty = penaltyBaseAmount * (penaltyValue / 100) * numberOfPeriods;
-                                    penaltyCalculationDetails = $"{penaltyValue}% × {numberOfPeriods} period(s) on KES {penaltyBaseAmount:N0}";
-                                }
-                                else if (penaltyMode.ToLower() == "fixed")
-                                {
-                                    // FIXED AMOUNT MODE: Value is fixed amount per period
-                                    calculatedPenalty = penaltyValue * numberOfPeriods;
-                                    penaltyCalculationDetails = $"KES {penaltyValue:N0} × {numberOfPeriods} period(s)";
-
-                                    // Cap penalty at 50% of base amount
-                                    decimal maxPenalty = penaltyBaseAmount * 0.5m;
-                                    if (calculatedPenalty > maxPenalty)
-                                    {
-                                        calculatedPenalty = maxPenalty;
-                                        penaltyCalculationDetails += " (capped at 50%)";
-                                    }
-                                }
-
-                                _logger.LogInformation($"Penalty calculated for loan {loanNo}: {calculatedPenalty:C} - {penaltyCalculationDetails}");
-                            }
-                        }
-
-                        // Calculate totals with penalty
-                        decimal totalWithPenalty = outstandingPrincipal + outstandingInterest + calculatedPenalty;
-                        decimal currentInstallmentDue = (currentSchedule?.OutstandingTotal ?? 0) + calculatedPenalty;
-
                         activeLoans.Add(new
                         {
                             loanNo = loan.LoanNo,
-                            loanType = loanTypeName,
-                            repayMethod = loan.RepayMethod ?? loanType?.RepayMethod ?? "AMT",
+                            loanType = "NORMAL LOAN",
+                            repayMethod = loan.RepayMethod ?? "AMT",
                             interestRate = loan.Interest ?? 0,
-                            outstandingPrincipal = outstandingPrincipal,
-                            outstandingInterest = outstandingInterest,
-                            outstandingPenalty = calculatedPenalty,
-                            totalOutstanding = totalWithPenalty,
+                            outstandingPrincipal = currentInstallmentPrincipal,
+                            outstandingInterest = currentInstallmentInterest,
+                            outstandingPenalty = totalPenaltyBalance, // <-- USE TOTAL PENALTY FROM LOANBAL
+                            totalOutstanding = totalOutstanding, // <-- USE TOTAL FROM LOANBAL
                             nextDueDate = dueDate,
                             nextInstallmentAmount = nextInstallmentAmount,
                             dueDate = dueDate,
                             daysSinceLastPayment = calculatedDaysOverdue,
                             disbursementDate = loan.AuditDateTime ?? loan.ApplicDate,
                             installmentNo = currentSchedule?.InstallmentNo ?? 1,
-                            totalPrincipalBalance = loanbal?.Balance ?? loan.LoanAmt ?? 0,
-                            totalInterestBalance = loanbal?.IntrOwed ?? 0,
-                            currentInstallmentDue = currentInstallmentDue,
+                            totalPrincipalBalance = totalPrincipalBalance,
+                            totalInterestBalance = totalInterestBalance,
+                            currentInstallmentDue = currentInstallmentTotal + totalPenaltyBalance,
                             isOverdue = calculatedDaysOverdue > 0,
-                            gracePeriodDays = gracePeriodDays,
-                            penaltyCalculationDetails = penaltyCalculationDetails,
-                            penaltyMode = penaltyMode,
-                            penaltyValue = penaltyValue
+                            gracePeriodDays = 0,
+                            penaltyCalculationDetails = "",
+                            penaltyMode = "",
+                            penaltyValue = 0
                         });
                     }
 
@@ -4195,12 +4055,10 @@ namespace SACCOBlockChainSystem.Controllers
                         memberIdNo = member.Idno;
                     }
 
-                    // Get ALL loans for the member
                     var allLoans = await _context.Loans
                         .Where(l => l.MemberNo == memberNo && l.CompanyCode == companyCode)
                         .ToListAsync();
 
-                    // Filter loans that can be repaid
                     var activeLoansList = allLoans
                         .Where(l => l.Status == (int)Status.Disbursed ||
                                    l.Status == (int)Status.Endorsed ||
@@ -4210,58 +4068,25 @@ namespace SACCOBlockChainSystem.Controllers
 
                     foreach (var loan in activeLoansList)
                     {
-                        var loanTypeName = "Unknown";
-                        var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
-                        if (loanType != null)
-                        {
-                            loanTypeName = loanType.LoanType ?? loanType.LoanCode ?? "Unknown";
-                        }
+                        // GET LOANBALANCE - SOURCE OF TRUTH
+                        var loanbal = await _loanService.GetLoanBalanceAsync(loan.LoanNo);
 
-                        // GET CURRENT SCHEDULE
+                        decimal totalPrincipalBalance = loanbal?.Balance ?? 0;
+                        decimal totalInterestBalance = loanbal?.IntrOwed ?? 0;
+                        decimal totalPenaltyBalance = loanbal?.Penalty ?? 0;
+                        decimal totalOutstanding = totalPrincipalBalance + totalInterestBalance + totalPenaltyBalance;
+
                         var currentSchedule = await _context.LoanSchedules
                             .Where(s => s.LoanNo == loan.LoanNo && s.Status != "Paid")
                             .OrderBy(s => s.InstallmentNo)
                             .FirstOrDefaultAsync();
 
-                        var loanbal = await _loanService.GetLoanBalanceAsync(loan.LoanNo);
+                        decimal currentInstallmentPrincipal = currentSchedule?.OutstandingPrincipal ?? 0;
+                        decimal currentInstallmentInterest = currentSchedule?.OutstandingInterest ?? 0;
+                        decimal currentInstallmentTotal = currentSchedule?.OutstandingTotal ?? 0;
+                        decimal nextInstallmentAmount = currentSchedule?.TotalInstallment ?? 0;
+                        DateTime? dueDate = currentSchedule?.DueDate;
 
-                        decimal outstandingPrincipal = 0;
-                        decimal outstandingInterest = 0;
-                        decimal existingPenalty = 0;
-                        decimal totalOutstanding = 0;
-                        decimal nextInstallmentAmount = 0;
-                        DateTime? dueDate = null;
-                        int daysOverdue = 0;
-
-                        if (currentSchedule != null)
-                        {
-                            outstandingPrincipal = currentSchedule.OutstandingPrincipal;
-                            outstandingInterest = currentSchedule.OutstandingInterest;
-                            existingPenalty = currentSchedule.PenaltyAmount;
-                            totalOutstanding = currentSchedule.OutstandingTotal + currentSchedule.PenaltyAmount;
-                            nextInstallmentAmount = currentSchedule.TotalInstallment;
-                            dueDate = currentSchedule.DueDate;
-                            daysOverdue = currentSchedule.DaysOverdue;
-                        }
-                        else if (loanbal != null)
-                        {
-                            outstandingPrincipal = loanbal.Balance;
-                            outstandingInterest = loanbal.IntrOwed;
-                            existingPenalty = loanbal.Penalty;
-                            totalOutstanding = loanbal.Balance + loanbal.IntrOwed + loanbal.Penalty;
-                            nextInstallmentAmount = loanbal.RepayRate;
-                            dueDate = loanbal.Duedate;
-                        }
-                        else
-                        {
-                            outstandingPrincipal = loan.LoanAmt ?? 0;
-                            outstandingInterest = 0;
-                            totalOutstanding = outstandingPrincipal;
-                        }
-
-                        // ============================================================
-                        // RECALCULATE DAYS OVERDUE BASED ON ACTUAL DATE
-                        // ============================================================
                         int calculatedDaysOverdue = 0;
                         if (dueDate.HasValue)
                         {
@@ -4269,113 +4094,30 @@ namespace SACCOBlockChainSystem.Controllers
                             if (calculatedDaysOverdue < 0) calculatedDaysOverdue = 0;
                         }
 
-                        // ============================================================
-                        // CALCULATE PENALTY FOR OVERDUE LOAN
-                        // ============================================================
-                        decimal calculatedPenalty = existingPenalty;
-                        string penaltyCalculationDetails = "";
-                        string penaltyMode = "";
-                        decimal penaltyValue = 0;
-                        int gracePeriodDays = loanType?.GracePeriod ?? 0;
-
-                        //if (dueDate.HasValue && calculatedDaysOverdue > gracePeriodDays && loanType != null && loanType.Penalty)
-                        if (dueDate.HasValue && calculatedDaysOverdue > gracePeriodDays && loanType != null && loanType.Penalty == 1)
-                        {
-                            var penaltyConfig = await _context.Penalties
-                                .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == companyCode && p.Penalty == 1);
-
-                            if (penaltyConfig != null)
-                            {
-                                penaltyMode = penaltyConfig.Mode ?? "Percentage";
-                                string penaltyRateType = penaltyConfig.Rate ?? "Monthly";
-                                penaltyValue = penaltyConfig.Value;
-                                short penaltyChargeItem = penaltyConfig.ChargeItem;
-
-                                int overdueAfterGrace = calculatedDaysOverdue - gracePeriodDays;
-
-                                int numberOfPeriods = 1;
-                                switch (penaltyRateType?.ToLower())
-                                {
-                                    case "daily":
-                                        numberOfPeriods = overdueAfterGrace;
-                                        break;
-                                    case "weekly":
-                                        numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 7.0);
-                                        break;
-                                    case "monthly":
-                                        numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 30.0);
-                                        break;
-                                    case "yearly":
-                                        numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 365.0);
-                                        break;
-                                    default:
-                                        numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 30.0);
-                                        break;
-                                }
-
-                                if (numberOfPeriods < 1) numberOfPeriods = 1;
-
-                                decimal penaltyBaseAmount = 0;
-                                switch (penaltyChargeItem)
-                                {
-                                    case 0:
-                                        penaltyBaseAmount = outstandingPrincipal;
-                                        break;
-                                    case 1:
-                                        penaltyBaseAmount = outstandingInterest;
-                                        break;
-                                    default:
-                                        penaltyBaseAmount = outstandingPrincipal + outstandingInterest;
-                                        break;
-                                }
-
-                                if (penaltyMode.ToLower() == "percentage")
-                                {
-                                    calculatedPenalty = penaltyBaseAmount * (penaltyValue / 100) * numberOfPeriods;
-                                    penaltyCalculationDetails = $"{penaltyValue}% × {numberOfPeriods} period(s) on KES {penaltyBaseAmount:N0}";
-                                }
-                                else if (penaltyMode.ToLower() == "fixed")
-                                {
-                                    calculatedPenalty = penaltyValue * numberOfPeriods;
-                                    penaltyCalculationDetails = $"KES {penaltyValue:N0} × {numberOfPeriods} period(s)";
-
-                                    decimal maxPenalty = penaltyBaseAmount * 0.5m;
-                                    if (calculatedPenalty > maxPenalty)
-                                    {
-                                        calculatedPenalty = maxPenalty;
-                                        penaltyCalculationDetails += " (capped at 50%)";
-                                    }
-                                }
-                            }
-                        }
-
-                        decimal totalWithPenalty = outstandingPrincipal + outstandingInterest + calculatedPenalty;
-                        decimal currentInstallmentDue = (currentSchedule?.OutstandingTotal ?? 0) + calculatedPenalty;
-
                         activeLoans.Add(new
                         {
                             loanNo = loan.LoanNo,
-                            loanType = loanTypeName,
-                            repayMethod = loan.RepayMethod ?? loanType?.RepayMethod ?? "AMT",
+                            loanType = "NORMAL LOAN",
+                            repayMethod = loan.RepayMethod ?? "AMT",
                             interestRate = loan.Interest ?? 0,
-                            outstandingPrincipal = outstandingPrincipal,
-                            outstandingInterest = outstandingInterest,
-                            outstandingPenalty = calculatedPenalty,
-                            totalOutstanding = totalWithPenalty,
+                            outstandingPrincipal = currentInstallmentPrincipal,
+                            outstandingInterest = currentInstallmentInterest,
+                            outstandingPenalty = totalPenaltyBalance,
+                            totalOutstanding = totalOutstanding,
                             nextDueDate = dueDate,
                             nextInstallmentAmount = nextInstallmentAmount,
                             dueDate = dueDate,
                             daysSinceLastPayment = calculatedDaysOverdue,
                             disbursementDate = loan.AuditDateTime ?? loan.ApplicDate,
                             installmentNo = currentSchedule?.InstallmentNo ?? 1,
-                            totalPrincipalBalance = loanbal?.Balance ?? loan.LoanAmt ?? 0,
-                            totalInterestBalance = loanbal?.IntrOwed ?? 0,
-                            currentInstallmentDue = currentInstallmentDue,
+                            totalPrincipalBalance = totalPrincipalBalance,
+                            totalInterestBalance = totalInterestBalance,
+                            currentInstallmentDue = currentInstallmentTotal + totalPenaltyBalance,
                             isOverdue = calculatedDaysOverdue > 0,
-                            gracePeriodDays = gracePeriodDays,
-                            penaltyCalculationDetails = penaltyCalculationDetails,
-                            penaltyMode = penaltyMode,
-                            penaltyValue = penaltyValue
+                            gracePeriodDays = 0,
+                            penaltyCalculationDetails = "",
+                            penaltyMode = "",
+                            penaltyValue = 0
                         });
                     }
 
@@ -4407,7 +4149,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-
         [HttpGet]
         public async Task<IActionResult> CalculateRepayment(string loanNo, decimal amount, DateTime paymentDate)
         {
@@ -4421,216 +4162,152 @@ namespace SACCOBlockChainSystem.Controllers
                     return Json(new { success = false, message = "Loan not found" });
                 }
 
+                // GET LOANBALANCE - SOURCE OF TRUTH
+                var loanbal = await _loanService.GetLoanBalanceAsync(loanNo);
+
+                // TOTAL OUTSTANDING FROM LOANBAL
+                decimal totalPrincipalBalance = loanbal?.Balance ?? 0;
+                decimal totalInterestBalance = loanbal?.IntrOwed ?? 0;
+                decimal totalPenaltyBalance = loanbal?.Penalty ?? 0;
+                decimal totalFullBalance = totalPrincipalBalance + totalInterestBalance + totalPenaltyBalance;
+
                 // GET CURRENT SCHEDULE - first unpaid installment
                 var currentSchedule = await _context.LoanSchedules
                     .Where(s => s.LoanNo == loanNo && s.Status != "Paid")
                     .OrderBy(s => s.InstallmentNo)
                     .FirstOrDefaultAsync();
 
-                if (currentSchedule == null)
+                if (currentSchedule == null && totalFullBalance > 0)
                 {
                     return Json(new { success = false, message = "No active installment found for this loan" });
                 }
 
-                // Get overall loan balance
-                var loanbal = await _loanService.GetLoanBalanceAsync(loanNo);
-                var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
-
-                // ============================================================
-                // GET PENALTY CONFIGURATION FROM PENALTY TABLE
-                // ============================================================
-                bool attractsPenalty = false;
-                string penaltyMode = "Percentage";
-                string penaltyRateType = "Monthly";
-                decimal penaltyValue = 0;
-                short penaltyChargeItem = 0;
-
-                if (loanType != null && loanType.Penalty == 1)
+                if (currentSchedule == null)
                 {
-                    var penaltyConfig = await _context.Penalties
-                        .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == companyCode && p.Penalty == 1);
-
-                    if (penaltyConfig != null)
+                    currentSchedule = new LoanSchedule
                     {
-                        attractsPenalty = true;
-                        penaltyMode = !string.IsNullOrEmpty(penaltyConfig.Mode) ? penaltyConfig.Mode : "Percentage";
-                        penaltyRateType = !string.IsNullOrEmpty(penaltyConfig.Rate) ? penaltyConfig.Rate : "Monthly";
-                        penaltyValue = penaltyConfig.Value;
-                        penaltyChargeItem = penaltyConfig.ChargeItem;
-                    }
+                        LoanNo = loanNo,
+                        CompanyCode = companyCode,
+                        InstallmentNo = 1,
+                        DueDate = DateTime.Now.AddMonths(1),
+                        OutstandingPrincipal = totalPrincipalBalance,
+                        OutstandingInterest = totalInterestBalance,
+                        OutstandingTotal = totalPrincipalBalance + totalInterestBalance,
+                        PenaltyAmount = totalPenaltyBalance,
+                        TotalInstallment = totalPrincipalBalance + totalInterestBalance,
+                        PrincipalAmount = totalPrincipalBalance,
+                        InterestAmount = totalInterestBalance,
+                        Status = "Pending"
+                    };
                 }
 
-                int gracePeriodDays = loanType?.GracePeriod ?? 0;
+                // Current month's dues
+                decimal currentMonthPrincipal = currentSchedule.OutstandingPrincipal;
+                decimal currentMonthInterest = currentSchedule.OutstandingInterest;
+                decimal currentMonthTotal = currentSchedule.OutstandingTotal;
 
                 // ============================================================
-                // CALCULATE PENALTY BASED ON PENALTY TABLE CONFIGURATION
+                // DETERMINE PAYMENT TYPE
                 // ============================================================
-                decimal penaltyAmount = 0;
-                int daysOverdue = 0;
-                int numberOfPeriods = 1;
-                string penaltyCalculationDetails = "";
-
-                if (attractsPenalty && paymentDate > currentSchedule.DueDate)
-                {
-                    daysOverdue = (paymentDate - currentSchedule.DueDate).Days;
-
-                    if (daysOverdue > gracePeriodDays)
-                    {
-                        int overdueDaysAfterGrace = daysOverdue - gracePeriodDays;
-
-                        // Calculate number of penalty periods based on Rate type
-                        switch (penaltyRateType?.ToLower())
-                        {
-                            case "daily":
-                                numberOfPeriods = overdueDaysAfterGrace;
-                                break;
-                            case "weekly":
-                                numberOfPeriods = (int)Math.Ceiling(overdueDaysAfterGrace / 7.0);
-                                break;
-                            case "monthly":
-                                numberOfPeriods = (int)Math.Ceiling(overdueDaysAfterGrace / 30.0);
-                                break;
-                            case "yearly":
-                                numberOfPeriods = (int)Math.Ceiling(overdueDaysAfterGrace / 365.0);
-                                break;
-                            default:
-                                numberOfPeriods = (int)Math.Ceiling(overdueDaysAfterGrace / 30.0);
-                                break;
-                        }
-
-                        // Determine what amount to charge penalty on (ChargeItem)
-                        decimal penaltyBaseAmount = 0;
-                        switch (penaltyChargeItem)
-                        {
-                            case 0: // Principal Only
-                                penaltyBaseAmount = currentSchedule.OutstandingPrincipal;
-                                break;
-                            case 1: // Interest Only
-                                penaltyBaseAmount = currentSchedule.OutstandingInterest;
-                                break;
-                            case 2: // Both Principal & Interest
-                            default:
-                                penaltyBaseAmount = currentSchedule.OutstandingTotal;
-                                break;
-                        }
-
-                        if (penaltyMode?.ToLower() == "percentage")
-                        {
-                            // PERCENTAGE MODE
-                            penaltyAmount = penaltyBaseAmount * (penaltyValue / 100) * numberOfPeriods;
-                            penaltyCalculationDetails = $"{penaltyValue}% of KES {penaltyBaseAmount:N0} × {numberOfPeriods} period(s)";
-                        }
-                        else if (penaltyMode?.ToLower() == "fixed")
-                        {
-                            // FIXED AMOUNT MODE
-                            penaltyAmount = penaltyValue * numberOfPeriods;
-                            penaltyCalculationDetails = $"KES {penaltyValue:N0} × {numberOfPeriods} period(s)";
-
-                            // Cap penalty at 50% of the base amount
-                            decimal maxPenalty = penaltyBaseAmount * 0.5m;
-                            if (penaltyAmount > maxPenalty)
-                            {
-                                penaltyAmount = maxPenalty;
-                                penaltyCalculationDetails += $" (capped at 50%)";
-                            }
-                        }
-
-                        _logger.LogInformation($"Penalty calculated: {penaltyAmount:C} - {penaltyCalculationDetails}");
-                    }
-                }
-
-                // Calculate TOTAL remaining balance (principal + interest + penalty)
-                decimal totalRemainingPrincipal = loanbal?.Balance ?? 0;
-                decimal totalRemainingInterest = loanbal?.IntrOwed ?? 0;
-                decimal totalRemainingPenalty = (loanbal?.Penalty ?? 0) + penaltyAmount;
-                decimal totalFullBalance = totalRemainingPrincipal + totalRemainingInterest + totalRemainingPenalty;
-
-                // Current installment due (including penalty)
-                decimal currentInstallmentDue = currentSchedule.OutstandingTotal + penaltyAmount;
-
-                // Determine if payment is for current installment or full balance
                 bool isFullBalancePayment = amount >= totalFullBalance - 0.01m;
-                bool isExactlyCurrentDue = Math.Abs(amount - currentInstallmentDue) < 0.01m;
 
                 decimal penaltyAllocated = 0;
                 decimal interestAllocated = 0;
                 decimal principalAllocated = 0;
-                decimal overpayment = 0;
-                decimal balanceAfter = 0;
+                decimal excessAmount = 0;
 
                 if (isFullBalancePayment)
                 {
-                    // Full balance payment - pay off everything
-                    penaltyAllocated = totalRemainingPenalty;
-                    interestAllocated = totalRemainingInterest;
-                    principalAllocated = totalRemainingPrincipal;
-                    overpayment = amount - totalFullBalance;
-                    balanceAfter = 0;
+                    // ============================================================
+                    // FULL BALANCE PAYMENT - Pay off everything
+                    // ============================================================
+                    penaltyAllocated = totalPenaltyBalance;
+                    interestAllocated = totalInterestBalance;
+                    principalAllocated = totalPrincipalBalance;
+                    excessAmount = Math.Max(0, amount - totalFullBalance);
 
                     _logger.LogInformation($"Full balance payment: Amount={amount:C}, Total Due={totalFullBalance:C}");
                 }
                 else
                 {
-                    // Regular payment - apply to current installment first
+                    // ============================================================
+                    // REGULAR PAYMENT - Apply to current installment with priority
+                    // ============================================================
                     decimal remainingAmount = amount;
 
-                    // Apply to penalty first
-                    if (remainingAmount > 0 && penaltyAmount > 0)
+                    // 1. FIRST: Pay penalties (accumulated)
+                    if (remainingAmount > 0 && totalPenaltyBalance > 0)
                     {
-                        penaltyAllocated = Math.Min(remainingAmount, penaltyAmount);
+                        penaltyAllocated = Math.Min(remainingAmount, totalPenaltyBalance);
                         remainingAmount -= penaltyAllocated;
                     }
 
-                    // Apply to interest (current installment)
-                    if (remainingAmount > 0 && currentSchedule.OutstandingInterest > 0)
+                    // 2. SECOND: Pay current month's interest
+                    if (remainingAmount > 0 && currentMonthInterest > 0)
                     {
-                        interestAllocated = Math.Min(remainingAmount, currentSchedule.OutstandingInterest);
+                        interestAllocated = Math.Min(remainingAmount, currentMonthInterest);
                         remainingAmount -= interestAllocated;
                     }
 
-                    // Apply to principal (current installment)
-                    if (remainingAmount > 0 && currentSchedule.OutstandingPrincipal > 0)
+                    // 3. THIRD: Pay current month's principal
+                    if (remainingAmount > 0 && currentMonthPrincipal > 0)
                     {
-                        principalAllocated = Math.Min(remainingAmount, currentSchedule.OutstandingPrincipal);
+                        principalAllocated = Math.Min(remainingAmount, currentMonthPrincipal);
                         remainingAmount -= principalAllocated;
                     }
 
-                    overpayment = remainingAmount;
-
-                    // Calculate remaining balance after payment
-                    decimal remainingPrincipalAfter = totalRemainingPrincipal - principalAllocated;
-                    decimal remainingInterestAfter = totalRemainingInterest - interestAllocated;
-                    decimal remainingPenaltyAfter = totalRemainingPenalty - penaltyAllocated;
-                    balanceAfter = remainingPrincipalAfter + remainingInterestAfter + remainingPenaltyAfter;
+                    // 4. EXCESS: This will be applied to future installments
+                    excessAmount = remainingAmount;
                 }
 
-                _logger.LogInformation($"Repayment Calculation: Installment {currentSchedule.InstallmentNo}, " +
-                    $"Amount={amount:C}, CurrentDue={currentInstallmentDue:C}, FullBalance={totalFullBalance:C}, " +
-                    $"Penalty={penaltyAmount:C}, IsFullPayment={isFullBalancePayment}");
+                // ============================================================
+                // CALCULATE BALANCE AFTER PAYMENT - SIMPLE: Total - Amount Paid
+                // ============================================================
+                decimal balanceAfter = Math.Max(0, totalFullBalance - amount);
+
+                // Calculate days overdue
+                int daysOverdue = 0;
+                if (currentSchedule.DueDate < paymentDate)
+                {
+                    daysOverdue = (paymentDate - currentSchedule.DueDate).Days;
+                }
 
                 return Json(new
                 {
                     success = true,
                     data = new
                     {
+                        // Allocated amounts
                         penaltyAllocated = Math.Round(penaltyAllocated, 2),
                         interestAllocated = Math.Round(interestAllocated, 2),
                         principalAllocated = Math.Round(principalAllocated, 2),
-                        overpayment = Math.Round(overpayment, 2),
+                        excessAmount = Math.Round(excessAmount, 2),
+
+                        // BALANCE AFTER - Simple: Total - Amount Paid
                         balanceAfter = Math.Round(balanceAfter, 2),
-                        penaltyAmount = Math.Round(penaltyAmount, 2),
-                        daysOverdue,
+
+                        // Totals
+                        totalPenaltyBalance = Math.Round(totalPenaltyBalance, 2),
+                        totalInterestBalance = Math.Round(totalInterestBalance, 2),
+                        totalPrincipalBalance = Math.Round(totalPrincipalBalance, 2),
+                        totalFullBalance = Math.Round(totalFullBalance, 2),
+
+                        // Current installment
+                        currentInstallmentDue = Math.Round(currentMonthTotal, 2),
+                        currentMonthPrincipal = Math.Round(currentMonthPrincipal, 2),
+                        currentMonthInterest = Math.Round(currentMonthInterest, 2),
+
+                        // Payment info
+                        isFullBalancePayment = isFullBalancePayment,
+                        daysOverdue = daysOverdue,
+
+                        // Schedule info
                         installmentNo = currentSchedule.InstallmentNo,
                         dueDate = currentSchedule.DueDate.ToString("yyyy-MM-dd"),
-                        currentInstallmentDue = Math.Round(currentInstallmentDue, 2),
-                        totalFullBalance = Math.Round(totalFullBalance, 2),
-                        isFullBalancePayment,
-                        isExactlyCurrentDue,
-                        penaltyCalculationDetails,
-                        penaltyMode,
-                        penaltyRateType,
-                        penaltyValue,
-                        gracePeriodDays
+
+                        // Show if there's excess going to next installment
+                        hasExcessToNextInstallment = excessAmount > 0.01m,
+                        amountToNextInstallment = Math.Round(excessAmount, 2)
                     }
                 });
             }
@@ -4640,6 +4317,697 @@ namespace SACCOBlockChainSystem.Controllers
                 return Json(new { success = false, message = ex.Message });
             }
         }
+
+
+
+        //[HttpGet]
+        //public async Task<IActionResult> GetActiveLoans(string memberNo = null, string loanNo = null, string companyCode = null)
+        //{
+        //    try
+        //    {
+        //        if (string.IsNullOrEmpty(companyCode))
+        //        {
+        //            companyCode = GetUserCompanyCode();
+        //        }
+
+        //        List<object> activeLoans = new List<object>();
+        //        string memberName = null;
+        //        string memberPhone = null;
+        //        string memberEmail = null;
+        //        string actualMemberNo = null;
+        //        string memberIdNo = null;
+
+        //        // CASE 1: Search by Loan Number
+        //        if (!string.IsNullOrEmpty(loanNo))
+        //        {
+        //            var loan = await _loanService.GetLoanByNoAsync(loanNo, companyCode);
+
+        //            // Loans that can be repaid: Disbursed, Endorsed, Approved
+        //            bool canRepay = loan != null && (
+        //                loan.Status == (int)Status.Disbursed ||
+        //                loan.Status == (int)Status.Endorsed ||
+        //                loan.Status == (int)Status.Approved ||
+        //                (loan.Status == (int)Status.Submitted && loan.Guaranteed != "0"));
+
+        //            if (loan != null && canRepay)
+        //            {
+        //                actualMemberNo = loan.MemberNo;
+        //                var member = await _contributionService.GetMemberByMemberNoAsync(loan.MemberNo);
+        //                if (member != null)
+        //                {
+        //                    memberName = $"{member.Surname} {member.OtherNames}".Trim();
+        //                    memberPhone = member.PhoneNo;
+        //                    memberEmail = member.Email;
+        //                    memberIdNo = member.Idno;
+        //                }
+
+        //                var loanTypeName = "Unknown";
+        //                var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
+        //                if (loanType != null)
+        //                {
+        //                    loanTypeName = loanType.LoanType ?? loanType.LoanCode ?? "Unknown";
+        //                }
+
+        //                // GET CURRENT SCHEDULE
+        //                var currentSchedule = await _context.LoanSchedules
+        //                    .Where(s => s.LoanNo == loanNo && s.Status != "Paid")
+        //                    .OrderBy(s => s.InstallmentNo)
+        //                    .FirstOrDefaultAsync();
+
+        //                var loanbal = await _loanService.GetLoanBalanceAsync(loanNo);
+
+        //                decimal outstandingPrincipal = 0;
+        //                decimal outstandingInterest = 0;
+        //                decimal existingPenalty = 0;
+        //                decimal totalOutstanding = 0;
+        //                decimal nextInstallmentAmount = 0;
+        //                DateTime? dueDate = null;
+        //                int daysOverdue = 0;
+
+        //                if (currentSchedule != null)
+        //                {
+        //                    outstandingPrincipal = currentSchedule.OutstandingPrincipal;
+        //                    outstandingInterest = currentSchedule.OutstandingInterest;
+        //                    existingPenalty = currentSchedule.PenaltyAmount;
+        //                    totalOutstanding = currentSchedule.OutstandingTotal + currentSchedule.PenaltyAmount;
+        //                    nextInstallmentAmount = currentSchedule.TotalInstallment;
+        //                    dueDate = currentSchedule.DueDate;
+        //                    daysOverdue = currentSchedule.DaysOverdue;
+        //                }
+        //                else if (loanbal != null)
+        //                {
+        //                    outstandingPrincipal = loanbal.Balance;
+        //                    outstandingInterest = loanbal.IntrOwed;
+        //                    existingPenalty = loanbal.Penalty;
+        //                    totalOutstanding = loanbal.Balance + loanbal.IntrOwed + loanbal.Penalty;
+        //                    nextInstallmentAmount = loanbal.RepayRate;
+        //                    dueDate = loanbal.Duedate;
+        //                }
+        //                else
+        //                {
+        //                    outstandingPrincipal = loan.LoanAmt ?? 0;
+        //                    outstandingInterest = 0;
+        //                    totalOutstanding = outstandingPrincipal;
+        //                }
+
+        //                // ============================================================
+        //                // RECALCULATE DAYS OVERDUE BASED ON ACTUAL DATE
+        //                // ============================================================
+        //                int calculatedDaysOverdue = 0;
+        //                if (dueDate.HasValue)
+        //                {
+        //                    calculatedDaysOverdue = (DateTime.Now.Date - dueDate.Value.Date).Days;
+        //                    if (calculatedDaysOverdue < 0) calculatedDaysOverdue = 0;
+        //                }
+
+        //                // ============================================================
+        //                // CALCULATE PENALTY FOR OVERDUE LOAN
+        //                // ============================================================
+        //                decimal calculatedPenalty = existingPenalty;
+        //                string penaltyCalculationDetails = "";
+        //                string penaltyMode = "";
+        //                decimal penaltyValue = 0;
+        //                int gracePeriodDays = loanType?.GracePeriod ?? 0;
+
+        //                if (dueDate.HasValue && calculatedDaysOverdue > gracePeriodDays && loanType != null && loanType.Penalty == 1)
+        //                {
+        //                    // Get penalty configuration
+        //                    var penaltyConfig = await _context.Penalties
+        //                        .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == companyCode && p.Penalty == 1);
+
+        //                    if (penaltyConfig != null)
+        //                    {
+        //                        penaltyMode = penaltyConfig.Mode ?? "Percentage";
+        //                        string penaltyRateType = penaltyConfig.Rate ?? "Monthly";
+        //                        penaltyValue = penaltyConfig.Value;
+        //                        short penaltyChargeItem = penaltyConfig.ChargeItem;
+
+        //                        int overdueAfterGrace = calculatedDaysOverdue - gracePeriodDays;
+
+        //                        // Calculate number of penalty periods based on Rate type
+        //                        int numberOfPeriods = 1;
+        //                        switch (penaltyRateType?.ToLower())
+        //                        {
+        //                            case "daily":
+        //                                numberOfPeriods = overdueAfterGrace;
+        //                                break;
+        //                            case "weekly":
+        //                                numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 7.0);
+        //                                break;
+        //                            case "monthly":
+        //                                numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 30.0);
+        //                                break;
+        //                            case "yearly":
+        //                                numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 365.0);
+        //                                break;
+        //                            default:
+        //                                numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 30.0);
+        //                                break;
+        //                        }
+
+        //                        if (numberOfPeriods < 1) numberOfPeriods = 1;
+
+        //                        // Determine base amount for penalty based on ChargeItem
+        //                        decimal penaltyBaseAmount = 0;
+        //                        switch (penaltyChargeItem)
+        //                        {
+        //                            case 0: // Principal Only
+        //                                penaltyBaseAmount = outstandingPrincipal;
+        //                                break;
+        //                            case 1: // Interest Only
+        //                                penaltyBaseAmount = outstandingInterest;
+        //                                break;
+        //                            case 2: // Both Principal & Interest
+        //                            default:
+        //                                penaltyBaseAmount = outstandingPrincipal + outstandingInterest;
+        //                                break;
+        //                        }
+
+        //                        if (penaltyMode.ToLower() == "percentage")
+        //                        {
+        //                            // PERCENTAGE MODE: Value is percentage rate
+        //                            calculatedPenalty = penaltyBaseAmount * (penaltyValue / 100) * numberOfPeriods;
+        //                            penaltyCalculationDetails = $"{penaltyValue}% × {numberOfPeriods} period(s) on KES {penaltyBaseAmount:N0}";
+        //                        }
+        //                        else if (penaltyMode.ToLower() == "fixed")
+        //                        {
+        //                            // FIXED AMOUNT MODE: Value is fixed amount per period
+        //                            calculatedPenalty = penaltyValue * numberOfPeriods;
+        //                            penaltyCalculationDetails = $"KES {penaltyValue:N0} × {numberOfPeriods} period(s)";
+
+        //                            // Cap penalty at 50% of base amount
+        //                            decimal maxPenalty = penaltyBaseAmount * 0.5m;
+        //                            if (calculatedPenalty > maxPenalty)
+        //                            {
+        //                                calculatedPenalty = maxPenalty;
+        //                                penaltyCalculationDetails += " (capped at 50%)";
+        //                            }
+        //                        }
+
+        //                        _logger.LogInformation($"Penalty calculated for loan {loanNo}: {calculatedPenalty:C} - {penaltyCalculationDetails}");
+        //                    }
+        //                }
+
+        //                // Calculate totals with penalty
+        //                decimal totalWithPenalty = outstandingPrincipal + outstandingInterest + calculatedPenalty;
+        //                decimal currentInstallmentDue = (currentSchedule?.OutstandingTotal ?? 0) + calculatedPenalty;
+
+        //                activeLoans.Add(new
+        //                {
+        //                    loanNo = loan.LoanNo,
+        //                    loanType = loanTypeName,
+        //                    repayMethod = loan.RepayMethod ?? loanType?.RepayMethod ?? "AMT",
+        //                    interestRate = loan.Interest ?? 0,
+        //                    outstandingPrincipal = outstandingPrincipal,
+        //                    outstandingInterest = outstandingInterest,
+        //                    outstandingPenalty = calculatedPenalty,
+        //                    totalOutstanding = totalWithPenalty,
+        //                    nextDueDate = dueDate,
+        //                    nextInstallmentAmount = nextInstallmentAmount,
+        //                    dueDate = dueDate,
+        //                    daysSinceLastPayment = calculatedDaysOverdue,
+        //                    disbursementDate = loan.AuditDateTime ?? loan.ApplicDate,
+        //                    installmentNo = currentSchedule?.InstallmentNo ?? 1,
+        //                    totalPrincipalBalance = loanbal?.Balance ?? loan.LoanAmt ?? 0,
+        //                    totalInterestBalance = loanbal?.IntrOwed ?? 0,
+        //                    currentInstallmentDue = currentInstallmentDue,
+        //                    isOverdue = calculatedDaysOverdue > 0,
+        //                    gracePeriodDays = gracePeriodDays,
+        //                    penaltyCalculationDetails = penaltyCalculationDetails,
+        //                    penaltyMode = penaltyMode,
+        //                    penaltyValue = penaltyValue
+        //                });
+        //            }
+
+        //            return Json(new
+        //            {
+        //                success = true,
+        //                memberNo = actualMemberNo,
+        //                memberName = memberName ?? "N/A",
+        //                idNo = memberIdNo ?? "N/A",
+        //                phone = memberPhone ?? "N/A",
+        //                email = memberEmail ?? "N/A",
+        //                loans = activeLoans
+        //            });
+        //        }
+        //        // CASE 2: Search by Member Number
+        //        else if (!string.IsNullOrEmpty(memberNo))
+        //        {
+        //            actualMemberNo = memberNo;
+        //            var member = await _contributionService.GetMemberByMemberNoAsync(memberNo);
+        //            if (member != null)
+        //            {
+        //                memberName = $"{member.Surname} {member.OtherNames}".Trim();
+        //                memberPhone = member.PhoneNo;
+        //                memberEmail = member.Email;
+        //                memberIdNo = member.Idno;
+        //            }
+
+        //            // Get ALL loans for the member
+        //            var allLoans = await _context.Loans
+        //                .Where(l => l.MemberNo == memberNo && l.CompanyCode == companyCode)
+        //                .ToListAsync();
+
+        //            // Filter loans that can be repaid
+        //            var activeLoansList = allLoans
+        //                .Where(l => l.Status == (int)Status.Disbursed ||
+        //                           l.Status == (int)Status.Endorsed ||
+        //                           l.Status == (int)Status.Approved ||
+        //                           (l.Status == (int)Status.Submitted && l.Guaranteed != "0"))
+        //                .ToList();
+
+        //            foreach (var loan in activeLoansList)
+        //            {
+        //                var loanTypeName = "Unknown";
+        //                var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
+        //                if (loanType != null)
+        //                {
+        //                    loanTypeName = loanType.LoanType ?? loanType.LoanCode ?? "Unknown";
+        //                }
+
+        //                // GET CURRENT SCHEDULE
+        //                var currentSchedule = await _context.LoanSchedules
+        //                    .Where(s => s.LoanNo == loan.LoanNo && s.Status != "Paid")
+        //                    .OrderBy(s => s.InstallmentNo)
+        //                    .FirstOrDefaultAsync();
+
+        //                var loanbal = await _loanService.GetLoanBalanceAsync(loan.LoanNo);
+
+        //                decimal outstandingPrincipal = 0;
+        //                decimal outstandingInterest = 0;
+        //                decimal existingPenalty = 0;
+        //                decimal totalOutstanding = 0;
+        //                decimal nextInstallmentAmount = 0;
+        //                DateTime? dueDate = null;
+        //                int daysOverdue = 0;
+
+        //                if (currentSchedule != null)
+        //                {
+        //                    outstandingPrincipal = currentSchedule.OutstandingPrincipal;
+        //                    outstandingInterest = currentSchedule.OutstandingInterest;
+        //                    existingPenalty = currentSchedule.PenaltyAmount;
+        //                    totalOutstanding = currentSchedule.OutstandingTotal + currentSchedule.PenaltyAmount;
+        //                    nextInstallmentAmount = currentSchedule.TotalInstallment;
+        //                    dueDate = currentSchedule.DueDate;
+        //                    daysOverdue = currentSchedule.DaysOverdue;
+        //                }
+        //                else if (loanbal != null)
+        //                {
+        //                    outstandingPrincipal = loanbal.Balance;
+        //                    outstandingInterest = loanbal.IntrOwed;
+        //                    existingPenalty = loanbal.Penalty;
+        //                    totalOutstanding = loanbal.Balance + loanbal.IntrOwed + loanbal.Penalty;
+        //                    nextInstallmentAmount = loanbal.RepayRate;
+        //                    dueDate = loanbal.Duedate;
+        //                }
+        //                else
+        //                {
+        //                    outstandingPrincipal = loan.LoanAmt ?? 0;
+        //                    outstandingInterest = 0;
+        //                    totalOutstanding = outstandingPrincipal;
+        //                }
+
+        //                // ============================================================
+        //                // RECALCULATE DAYS OVERDUE BASED ON ACTUAL DATE
+        //                // ============================================================
+        //                int calculatedDaysOverdue = 0;
+        //                if (dueDate.HasValue)
+        //                {
+        //                    calculatedDaysOverdue = (DateTime.Now.Date - dueDate.Value.Date).Days;
+        //                    if (calculatedDaysOverdue < 0) calculatedDaysOverdue = 0;
+        //                }
+
+        //                // ============================================================
+        //                // CALCULATE PENALTY FOR OVERDUE LOAN
+        //                // ============================================================
+        //                decimal calculatedPenalty = existingPenalty;
+        //                string penaltyCalculationDetails = "";
+        //                string penaltyMode = "";
+        //                decimal penaltyValue = 0;
+        //                int gracePeriodDays = loanType?.GracePeriod ?? 0;
+
+        //                //if (dueDate.HasValue && calculatedDaysOverdue > gracePeriodDays && loanType != null && loanType.Penalty)
+        //                if (dueDate.HasValue && calculatedDaysOverdue > gracePeriodDays && loanType != null && loanType.Penalty == 1)
+        //                {
+        //                    var penaltyConfig = await _context.Penalties
+        //                        .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == companyCode && p.Penalty == 1);
+
+        //                    if (penaltyConfig != null)
+        //                    {
+        //                        penaltyMode = penaltyConfig.Mode ?? "Percentage";
+        //                        string penaltyRateType = penaltyConfig.Rate ?? "Monthly";
+        //                        penaltyValue = penaltyConfig.Value;
+        //                        short penaltyChargeItem = penaltyConfig.ChargeItem;
+
+        //                        int overdueAfterGrace = calculatedDaysOverdue - gracePeriodDays;
+
+        //                        int numberOfPeriods = 1;
+        //                        switch (penaltyRateType?.ToLower())
+        //                        {
+        //                            case "daily":
+        //                                numberOfPeriods = overdueAfterGrace;
+        //                                break;
+        //                            case "weekly":
+        //                                numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 7.0);
+        //                                break;
+        //                            case "monthly":
+        //                                numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 30.0);
+        //                                break;
+        //                            case "yearly":
+        //                                numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 365.0);
+        //                                break;
+        //                            default:
+        //                                numberOfPeriods = (int)Math.Ceiling(overdueAfterGrace / 30.0);
+        //                                break;
+        //                        }
+
+        //                        if (numberOfPeriods < 1) numberOfPeriods = 1;
+
+        //                        decimal penaltyBaseAmount = 0;
+        //                        switch (penaltyChargeItem)
+        //                        {
+        //                            case 0:
+        //                                penaltyBaseAmount = outstandingPrincipal;
+        //                                break;
+        //                            case 1:
+        //                                penaltyBaseAmount = outstandingInterest;
+        //                                break;
+        //                            default:
+        //                                penaltyBaseAmount = outstandingPrincipal + outstandingInterest;
+        //                                break;
+        //                        }
+
+        //                        if (penaltyMode.ToLower() == "percentage")
+        //                        {
+        //                            calculatedPenalty = penaltyBaseAmount * (penaltyValue / 100) * numberOfPeriods;
+        //                            penaltyCalculationDetails = $"{penaltyValue}% × {numberOfPeriods} period(s) on KES {penaltyBaseAmount:N0}";
+        //                        }
+        //                        else if (penaltyMode.ToLower() == "fixed")
+        //                        {
+        //                            calculatedPenalty = penaltyValue * numberOfPeriods;
+        //                            penaltyCalculationDetails = $"KES {penaltyValue:N0} × {numberOfPeriods} period(s)";
+
+        //                            decimal maxPenalty = penaltyBaseAmount * 0.5m;
+        //                            if (calculatedPenalty > maxPenalty)
+        //                            {
+        //                                calculatedPenalty = maxPenalty;
+        //                                penaltyCalculationDetails += " (capped at 50%)";
+        //                            }
+        //                        }
+        //                    }
+        //                }
+
+        //                decimal totalWithPenalty = outstandingPrincipal + outstandingInterest + calculatedPenalty;
+        //                decimal currentInstallmentDue = (currentSchedule?.OutstandingTotal ?? 0) + calculatedPenalty;
+
+        //                activeLoans.Add(new
+        //                {
+        //                    loanNo = loan.LoanNo,
+        //                    loanType = loanTypeName,
+        //                    repayMethod = loan.RepayMethod ?? loanType?.RepayMethod ?? "AMT",
+        //                    interestRate = loan.Interest ?? 0,
+        //                    outstandingPrincipal = outstandingPrincipal,
+        //                    outstandingInterest = outstandingInterest,
+        //                    outstandingPenalty = calculatedPenalty,
+        //                    totalOutstanding = totalWithPenalty,
+        //                    nextDueDate = dueDate,
+        //                    nextInstallmentAmount = nextInstallmentAmount,
+        //                    dueDate = dueDate,
+        //                    daysSinceLastPayment = calculatedDaysOverdue,
+        //                    disbursementDate = loan.AuditDateTime ?? loan.ApplicDate,
+        //                    installmentNo = currentSchedule?.InstallmentNo ?? 1,
+        //                    totalPrincipalBalance = loanbal?.Balance ?? loan.LoanAmt ?? 0,
+        //                    totalInterestBalance = loanbal?.IntrOwed ?? 0,
+        //                    currentInstallmentDue = currentInstallmentDue,
+        //                    isOverdue = calculatedDaysOverdue > 0,
+        //                    gracePeriodDays = gracePeriodDays,
+        //                    penaltyCalculationDetails = penaltyCalculationDetails,
+        //                    penaltyMode = penaltyMode,
+        //                    penaltyValue = penaltyValue
+        //                });
+        //            }
+
+        //            return Json(new
+        //            {
+        //                success = true,
+        //                memberNo = actualMemberNo,
+        //                memberName = memberName ?? "N/A",
+        //                idNo = memberIdNo ?? "N/A",
+        //                phone = memberPhone ?? "N/A",
+        //                email = memberEmail ?? "N/A",
+        //                loans = activeLoans
+        //            });
+        //        }
+        //        else
+        //        {
+        //            return Json(new
+        //            {
+        //                success = false,
+        //                message = "Please provide either a loan number or member number to search",
+        //                loans = new List<object>()
+        //            });
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error getting active loans");
+        //        return Json(new { success = false, message = ex.Message, loans = new List<object>() });
+        //    }
+        //}
+
+
+        //[HttpGet]
+        //public async Task<IActionResult> CalculateRepayment(string loanNo, decimal amount, DateTime paymentDate)
+        //{
+        //    try
+        //    {
+        //        var companyCode = GetUserCompanyCode();
+        //        var loan = await _loanService.GetLoanByNoAsync(loanNo, companyCode);
+
+        //        if (loan == null)
+        //        {
+        //            return Json(new { success = false, message = "Loan not found" });
+        //        }
+
+        //        // GET CURRENT SCHEDULE - first unpaid installment
+        //        var currentSchedule = await _context.LoanSchedules
+        //            .Where(s => s.LoanNo == loanNo && s.Status != "Paid")
+        //            .OrderBy(s => s.InstallmentNo)
+        //            .FirstOrDefaultAsync();
+
+        //        if (currentSchedule == null)
+        //        {
+        //            return Json(new { success = false, message = "No active installment found for this loan" });
+        //        }
+
+        //        // Get overall loan balance
+        //        var loanbal = await _loanService.GetLoanBalanceAsync(loanNo);
+        //        var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
+
+        //        // ============================================================
+        //        // GET PENALTY CONFIGURATION FROM PENALTY TABLE
+        //        // ============================================================
+        //        bool attractsPenalty = false;
+        //        string penaltyMode = "Percentage";
+        //        string penaltyRateType = "Monthly";
+        //        decimal penaltyValue = 0;
+        //        short penaltyChargeItem = 0;
+
+        //        if (loanType != null && loanType.Penalty == 1)
+        //        {
+        //            var penaltyConfig = await _context.Penalties
+        //                .FirstOrDefaultAsync(p => p.LoanCode == loan.LoanCode && p.CompanyCode == companyCode && p.Penalty == 1);
+
+        //            if (penaltyConfig != null)
+        //            {
+        //                attractsPenalty = true;
+        //                penaltyMode = !string.IsNullOrEmpty(penaltyConfig.Mode) ? penaltyConfig.Mode : "Percentage";
+        //                penaltyRateType = !string.IsNullOrEmpty(penaltyConfig.Rate) ? penaltyConfig.Rate : "Monthly";
+        //                penaltyValue = penaltyConfig.Value;
+        //                penaltyChargeItem = penaltyConfig.ChargeItem;
+        //            }
+        //        }
+
+        //        int gracePeriodDays = loanType?.GracePeriod ?? 0;
+
+        //        // ============================================================
+        //        // CALCULATE PENALTY BASED ON PENALTY TABLE CONFIGURATION
+        //        // ============================================================
+        //        decimal penaltyAmount = 0;
+        //        int daysOverdue = 0;
+        //        int numberOfPeriods = 1;
+        //        string penaltyCalculationDetails = "";
+
+        //        if (attractsPenalty && paymentDate > currentSchedule.DueDate)
+        //        {
+        //            daysOverdue = (paymentDate - currentSchedule.DueDate).Days;
+
+        //            if (daysOverdue > gracePeriodDays)
+        //            {
+        //                int overdueDaysAfterGrace = daysOverdue - gracePeriodDays;
+
+        //                // Calculate number of penalty periods based on Rate type
+        //                switch (penaltyRateType?.ToLower())
+        //                {
+        //                    case "daily":
+        //                        numberOfPeriods = overdueDaysAfterGrace;
+        //                        break;
+        //                    case "weekly":
+        //                        numberOfPeriods = (int)Math.Ceiling(overdueDaysAfterGrace / 7.0);
+        //                        break;
+        //                    case "monthly":
+        //                        numberOfPeriods = (int)Math.Ceiling(overdueDaysAfterGrace / 30.0);
+        //                        break;
+        //                    case "yearly":
+        //                        numberOfPeriods = (int)Math.Ceiling(overdueDaysAfterGrace / 365.0);
+        //                        break;
+        //                    default:
+        //                        numberOfPeriods = (int)Math.Ceiling(overdueDaysAfterGrace / 30.0);
+        //                        break;
+        //                }
+
+        //                // Determine what amount to charge penalty on (ChargeItem)
+        //                decimal penaltyBaseAmount = 0;
+        //                switch (penaltyChargeItem)
+        //                {
+        //                    case 0: // Principal Only
+        //                        penaltyBaseAmount = currentSchedule.OutstandingPrincipal;
+        //                        break;
+        //                    case 1: // Interest Only
+        //                        penaltyBaseAmount = currentSchedule.OutstandingInterest;
+        //                        break;
+        //                    case 2: // Both Principal & Interest
+        //                    default:
+        //                        penaltyBaseAmount = currentSchedule.OutstandingTotal;
+        //                        break;
+        //                }
+
+        //                if (penaltyMode?.ToLower() == "percentage")
+        //                {
+        //                    // PERCENTAGE MODE
+        //                    penaltyAmount = penaltyBaseAmount * (penaltyValue / 100) * numberOfPeriods;
+        //                    penaltyCalculationDetails = $"{penaltyValue}% of KES {penaltyBaseAmount:N0} × {numberOfPeriods} period(s)";
+        //                }
+        //                else if (penaltyMode?.ToLower() == "fixed")
+        //                {
+        //                    // FIXED AMOUNT MODE
+        //                    penaltyAmount = penaltyValue * numberOfPeriods;
+        //                    penaltyCalculationDetails = $"KES {penaltyValue:N0} × {numberOfPeriods} period(s)";
+
+        //                    // Cap penalty at 50% of the base amount
+        //                    decimal maxPenalty = penaltyBaseAmount * 0.5m;
+        //                    if (penaltyAmount > maxPenalty)
+        //                    {
+        //                        penaltyAmount = maxPenalty;
+        //                        penaltyCalculationDetails += $" (capped at 50%)";
+        //                    }
+        //                }
+
+        //                _logger.LogInformation($"Penalty calculated: {penaltyAmount:C} - {penaltyCalculationDetails}");
+        //            }
+        //        }
+
+        //        // Calculate TOTAL remaining balance (principal + interest + penalty)
+        //        decimal totalRemainingPrincipal = loanbal?.Balance ?? 0;
+        //        decimal totalRemainingInterest = loanbal?.IntrOwed ?? 0;
+        //        decimal totalRemainingPenalty = (loanbal?.Penalty ?? 0) + penaltyAmount;
+        //        decimal totalFullBalance = totalRemainingPrincipal + totalRemainingInterest + totalRemainingPenalty;
+
+        //        // Current installment due (including penalty)
+        //        decimal currentInstallmentDue = currentSchedule.OutstandingTotal + penaltyAmount;
+
+        //        // Determine if payment is for current installment or full balance
+        //        bool isFullBalancePayment = amount >= totalFullBalance - 0.01m;
+        //        bool isExactlyCurrentDue = Math.Abs(amount - currentInstallmentDue) < 0.01m;
+
+        //        decimal penaltyAllocated = 0;
+        //        decimal interestAllocated = 0;
+        //        decimal principalAllocated = 0;
+        //        decimal overpayment = 0;
+        //        decimal balanceAfter = 0;
+
+        //        if (isFullBalancePayment)
+        //        {
+        //            // Full balance payment - pay off everything
+        //            penaltyAllocated = totalRemainingPenalty;
+        //            interestAllocated = totalRemainingInterest;
+        //            principalAllocated = totalRemainingPrincipal;
+        //            overpayment = amount - totalFullBalance;
+        //            balanceAfter = 0;
+
+        //            _logger.LogInformation($"Full balance payment: Amount={amount:C}, Total Due={totalFullBalance:C}");
+        //        }
+        //        else
+        //        {
+        //            // Regular payment - apply to current installment first
+        //            decimal remainingAmount = amount;
+
+        //            // Apply to penalty first
+        //            if (remainingAmount > 0 && penaltyAmount > 0)
+        //            {
+        //                penaltyAllocated = Math.Min(remainingAmount, penaltyAmount);
+        //                remainingAmount -= penaltyAllocated;
+        //            }
+
+        //            // Apply to interest (current installment)
+        //            if (remainingAmount > 0 && currentSchedule.OutstandingInterest > 0)
+        //            {
+        //                interestAllocated = Math.Min(remainingAmount, currentSchedule.OutstandingInterest);
+        //                remainingAmount -= interestAllocated;
+        //            }
+
+        //            // Apply to principal (current installment)
+        //            if (remainingAmount > 0 && currentSchedule.OutstandingPrincipal > 0)
+        //            {
+        //                principalAllocated = Math.Min(remainingAmount, currentSchedule.OutstandingPrincipal);
+        //                remainingAmount -= principalAllocated;
+        //            }
+
+        //            overpayment = remainingAmount;
+
+        //            // Calculate remaining balance after payment
+        //            decimal remainingPrincipalAfter = totalRemainingPrincipal - principalAllocated;
+        //            decimal remainingInterestAfter = totalRemainingInterest - interestAllocated;
+        //            decimal remainingPenaltyAfter = totalRemainingPenalty - penaltyAllocated;
+        //            balanceAfter = remainingPrincipalAfter + remainingInterestAfter + remainingPenaltyAfter;
+        //        }
+
+        //        _logger.LogInformation($"Repayment Calculation: Installment {currentSchedule.InstallmentNo}, " +
+        //            $"Amount={amount:C}, CurrentDue={currentInstallmentDue:C}, FullBalance={totalFullBalance:C}, " +
+        //            $"Penalty={penaltyAmount:C}, IsFullPayment={isFullBalancePayment}");
+
+        //        return Json(new
+        //        {
+        //            success = true,
+        //            data = new
+        //            {
+        //                penaltyAllocated = Math.Round(penaltyAllocated, 2),
+        //                interestAllocated = Math.Round(interestAllocated, 2),
+        //                principalAllocated = Math.Round(principalAllocated, 2),
+        //                overpayment = Math.Round(overpayment, 2),
+        //                balanceAfter = Math.Round(balanceAfter, 2),
+        //                penaltyAmount = Math.Round(penaltyAmount, 2),
+        //                daysOverdue,
+        //                installmentNo = currentSchedule.InstallmentNo,
+        //                dueDate = currentSchedule.DueDate.ToString("yyyy-MM-dd"),
+        //                currentInstallmentDue = Math.Round(currentInstallmentDue, 2),
+        //                totalFullBalance = Math.Round(totalFullBalance, 2),
+        //                isFullBalancePayment,
+        //                isExactlyCurrentDue,
+        //                penaltyCalculationDetails,
+        //                penaltyMode,
+        //                penaltyRateType,
+        //                penaltyValue,
+        //                gracePeriodDays
+        //            }
+        //        });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error calculating repayment");
+        //        return Json(new { success = false, message = ex.Message });
+        //    }
+        //}
                 
 
         [HttpPost]
@@ -4787,6 +5155,93 @@ namespace SACCOBlockChainSystem.Controllers
                 _logger.LogError(ex, $"Error printing repayment receipt for receipt {receiptNo}");
                 TempData["ErrorMessage"] = "Error printing receipt: " + ex.Message;
                 return RedirectToAction("AllLoans");
+            }
+        }
+
+
+
+        // ============================================================
+        // RUN PENALTY - Runs penalty for all loans in the company
+        // ============================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RunPenalty(string companyCode = null)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    companyCode = GetUserCompanyCode();
+                }
+
+                // Check permission
+                if (!User.IsInRole("Book Keeper") && !User.IsInRole("Super Admin") && !User.IsInRole("Finance Officer"))
+                {
+                    return Json(new { success = false, message = "You don't have permission to run penalties." });
+                }
+
+                _logger.LogInformation($"Running penalty for company: {companyCode}");
+
+                var result = await _loanService.RunPenaltyAsync(companyCode);
+
+                // Always return JSON - this keeps the page from refreshing
+                return Json(new
+                {
+                    success = result.Success,
+                    message = result.Message,
+                    totalLoansProcessed = result.TotalLoansProcessed,
+                    totalPenaltiesApplied = result.TotalPenaltiesApplied,
+                    totalPenaltyAmount = result.TotalPenaltyAmount,
+                    details = result.Details // Optional: include details if needed
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error running penalty");
+                return Json(new { success = false, message = $"Error running penalty: {ex.Message}" });
+            }
+        }
+
+        /// <summary>
+        /// Gets penalty run status - shows if there are overdue loans
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetPenaltyStatus()
+        {
+            try
+            {
+                var companyCode = GetUserCompanyCode();
+
+                // Count overdue installments
+                var overdueCount = await _context.LoanSchedules
+                    .Where(s => s.CompanyCode == companyCode
+                                && s.Status != "Paid"
+                                && s.DueDate < DateTime.Now
+                                && s.OutstandingTotal > 0.01m)
+                    .CountAsync();
+
+                // Count loans with overdue installments
+                var overdueLoansCount = await _context.LoanSchedules
+                    .Where(s => s.CompanyCode == companyCode
+                                && s.Status != "Paid"
+                                && s.DueDate < DateTime.Now
+                                && s.OutstandingTotal > 0.01m)
+                    .Select(s => s.LoanNo)
+                    .Distinct()
+                    .CountAsync();
+
+                return Json(new
+                {
+                    success = true,
+                    overdueInstallments = overdueCount,
+                    overdueLoans = overdueLoansCount,
+                    hasOverdue = overdueCount > 0
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting penalty status");
+                return Json(new { success = false, message = ex.Message });
             }
         }
 

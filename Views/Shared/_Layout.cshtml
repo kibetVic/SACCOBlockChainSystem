@@ -1,10 +1,6 @@
 ﻿@using System.Security.Claims
-@* @using Radzen.Blazor *@
 
 @{
-    // ============================================================
-    // USER ROLE VARIABLES - MUST BE DEFINED AT THE TOP
-    // ============================================================
     var userRole = User.FindFirstValue(ClaimTypes.Role);
     var isSuperAdmin = userRole == "Super Admin" || userRole == "SuperAdmin";
     var isCountyAdmin = userRole == "County Admin" || userRole == "CountyAdmin";
@@ -24,10 +20,6 @@
     <link href="~/Syncfusion/styles/material.css" rel="stylesheet" />
     <script src="~/Syncfusion/scripts/ej2.min.js"></script>
     <link rel="stylesheet" href="~/AdminLte/dist/css/adminlte.css" />
-    <!-- Radzen CSS - Make sure these come after Bootstrap -->
-    @* <link rel="stylesheet" href="/blazorcss/material-base.css" />
-    <link rel="stylesheet" href="/blazorcss/standard-base.css" />
-    <link rel="stylesheet" href="/blazorcss/standard.css" /> *@
     <link href="~/css/member.css" rel="stylesheet" />
 
     <!-- Chart.js -->
@@ -88,8 +80,6 @@ input:invalid:focus {
             border-radius: 5px;
         }
     </style>
-    @* <base href="~/" />
-    <component type="typeof(RadzenTheme)" render-mode="ServerPrerendered" param-Theme="@("material")" /> *@
 
     @RenderSection("Styles", required: false)
 
@@ -111,7 +101,6 @@ input:invalid:focus {
 
                     <li class="nav-item">
                         @using System.Security.Claims
-                        @* @using Radzen.Blazor *@
 
                         @if (User.Identity.IsAuthenticated)
                         {

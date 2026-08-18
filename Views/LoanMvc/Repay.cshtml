@@ -561,55 +561,61 @@
                                                             <span class="breakdown-label"><strong>Total Allocated</strong></span>
                                                             <span class="breakdown-value total" id="totalAllocated">KES 0.00</span>
                                                         </div>
-                                                        <div class="breakdown-item">
+                                                        <!-- EXCESS ROW - Amount going to next installment -->
+                                                        <div class="breakdown-item" id="excessRow" style="display: none;">
                                                             <span class="breakdown-label">
-                                                                Overpayment
-                                                                <span class="overpayment-badge">Excess Payment</span>
+                                                                Amount to Next Installment
+                                                                <span class="badge bg-info text-dark ms-1" style="font-size: 0.65rem;">Prepayment</span>
                                                             </span>
-                                                            <span class="breakdown-value" id="overpaymentDisplay" style="color: #ffc107;">KES 0.00</span>
+                                                            <span class="breakdown-value" id="excessDisplay" style="color: #0dcaf0;">KES 0.00</span>
                                                         </div>
-                                                        <div class="breakdown-item">
-                                                            <span class="breakdown-label">Balance After Payment</span>
-                                                            <span class="breakdown-value" id="balanceAfterDisplay" style="color: #6f42c1;">KES 0.00</span>
+                                                        <div class="breakdown-item" style="border-top: 2px solid #6f42c1; padding-top: 10px; margin-top: 5px;">
+                                                            <span class="breakdown-label"><strong>Balance After Payment</strong></span>
+                                                            <span class="breakdown-value" id="balanceAfterDisplay" style="color: #6f42c1; font-size: 1.3rem;">KES 0.00</span>
                                                         </div>
                                                     </div>
                                                     <div class="col-md-12 mt-3">
                                                         <div>
                                                             <small class="text-muted">Allocation Distribution</small>
-                                                            <div class="allocation-progress">
-                                                                <div class="progress-bar principal-bar" id="principalProgress" style="width: 0%;">0%</div>
-                                                                <div class="progress-bar interest-bar" id="interestProgress" style="width: 0%;">0%</div>
-                                                                <div class="progress-bar penalty-bar" id="penaltyProgress" style="width: 0%;">0%</div>
+                                                            <div class="allocation-progress" style="height: 20px; border-radius: 10px; overflow: hidden; background-color: #e9ecef;">
+                                                                <div class="progress-bar" id="principalProgress" style="width: 0%; background-color: #0d6efd; height: 100%; float: left; transition: width 0.3s ease; color: white; font-size: 12px; display: flex; align-items: center; justify-content: center;">
+                                                                    0%
+                                                                </div>
+                                                                <div class="progress-bar" id="interestProgress" style="width: 0%; background-color: #198754; height: 100%; float: left; transition: width 0.3s ease; color: white; font-size: 12px; display: flex; align-items: center; justify-content: center;">
+                                                                    0%
+                                                                </div>
+                                                                <div class="progress-bar" id="penaltyProgress" style="width: 0%; background-color: #dc3545; height: 100%; float: left; transition: width 0.3s ease; color: white; font-size: 12px; display: flex; align-items: center; justify-content: center;">
+                                                                    0%
+                                                                </div>
                                                             </div>
-                                                            <div class="d-flex justify-content-between mt-1">
-                                                                <small><span class="text-primary">■</span> Principal</small>
-                                                                <small><span class="text-success">■</span> Interest</small>
-                                                                <small><span class="text-danger">■</span> Penalty</small>
+                                                            <div class="d-flex justify-content-between mt-2">
+                                                                <small><span style="color: #0d6efd; font-weight: bold;">■</span> Principal (<span id="principalPercentLabel">0</span>%)</small>
+                                                                <small><span style="color: #198754; font-weight: bold;">■</span> Interest (<span id="interestPercentLabel">0</span>%)</small>
+                                                                <small><span style="color: #dc3545; font-weight: bold;">■</span> Penalty (<span id="penaltyPercentLabel">0</span>%)</small>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <!-- ============================================================ -->
-                                                <!-- OVERPAYMENT MESSAGE - UPDATED -->
-                                                <!-- ============================================================ -->
-                                                <div id="overpaymentMessage" class="overpayment-success mt-2" style="display: none;">
+                                                <!-- EXCESS MESSAGE - Informative -->
+                                                <div id="excessMessage" class="alert alert-info mt-2" style="display: none;">
                                                     <i class="bi bi-info-circle-fill me-2"></i>
                                                     <span>
-                                                        <strong>Overpayment of <span id="overpaymentAmountDisplay">KES 0.00</span> detected.</strong><br />
-                                                        This excess amount will be <strong>automatically applied to your future installments</strong>.
+                                                        <strong>KES <span id="excessAmountDisplay">0.00</span> will be applied to your next installment.</strong>
                                                         Your next payment will be reduced by this amount.
                                                     </span>
                                                 </div>
 
-                                                <div id="exceedsBalanceMessage" class="exceeds-balance-error mt-2" style="display: none;">
-                                                    <i class="bi bi-x-circle-fill me-2"></i>
-                                                    <span>The payment amount exceeds the total outstanding balance. Please enter a lower amount.</span>
-                                                </div>
-
+                                                <!-- FULL PAYMENT MESSAGE -->
                                                 <div id="fullPaymentMessage" class="alert alert-success mt-2" style="display: none;">
                                                     <i class="bi bi-check-circle-fill me-2"></i>
                                                     <span>This payment will fully settle the loan!</span>
+                                                </div>
+
+                                                <!-- EXCEEDS BALANCE ERROR -->
+                                                <div id="exceedsBalanceMessage" class="exceeds-balance-error mt-2" style="display: none;">
+                                                    <i class="bi bi-x-circle-fill me-2"></i>
+                                                    <span>The payment amount exceeds the total outstanding balance. Please enter a lower amount.</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -1094,6 +1100,7 @@
                     const data = result.data;
                     const totalAllocated = data.penaltyAllocated + data.interestAllocated + data.principalAllocated;
 
+                    // Update breakdown display
                     document.getElementById('allocatedPenalty').textContent =
                         `KES ${data.penaltyAllocated.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                     document.getElementById('allocatedInterest').textContent =
@@ -1102,35 +1109,63 @@
                         `KES ${data.principalAllocated.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                     document.getElementById('totalAllocated').textContent =
                         `KES ${totalAllocated.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                    document.getElementById('overpaymentDisplay').textContent =
-                        `KES ${data.overpayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+                    // Show excess amount going to next installment
+                    const excessAmount = data.excessAmount || 0;
+                    if (excessAmount > 0.01) {
+                        document.getElementById('excessDisplay').textContent =
+                            `KES ${excessAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                        document.getElementById('excessRow').style.display = 'flex';
+                        document.getElementById('excessMessage').style.display = 'block';
+                        document.getElementById('excessAmountDisplay').textContent =
+                            `${excessAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    } else {
+                        document.getElementById('excessRow').style.display = 'none';
+                        document.getElementById('excessMessage').style.display = 'none';
+                    }
+
+                    // ============================================================
+                    // BALANCE AFTER PAYMENT - Simple: Total - Amount Paid
+                    // ============================================================
                     document.getElementById('balanceAfterDisplay').textContent =
                         `KES ${data.balanceAfter.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
-                    // ============================================================
-                    // UPDATE OVERPAYMENT MESSAGE
-                    // ============================================================
-                    const overpaymentMsg = document.getElementById('overpaymentMessage');
-                    const overpaymentAmountDisplay = document.getElementById('overpaymentAmountDisplay');
+                    // Update Total Due Display
+                    document.getElementById('totalDueDisplay').innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center w-100">
+                            <span>Current Installment Due:</span>
+                            <strong class="fs-5">KES ${data.currentInstallmentDue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center w-100 mt-1">
+                            <span class="text-light-emphasis">Total Outstanding Balance:</span>
+                            <strong class="fs-4">KES ${data.totalFullBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+                        </div>
+                    `;
 
-                    if (data.overpayment > 0.01) {
-                        overpaymentMsg.style.display = 'block';
-                        if (overpaymentAmountDisplay) {
-                            overpaymentAmountDisplay.textContent = `KES ${data.overpayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                        }
-                    } else {
-                        overpaymentMsg.style.display = 'none';
-                    }
+                    // Update balance info
+                    document.getElementById('principalBalanceDisplay').textContent =
+                        `KES ${data.totalPrincipalBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    document.getElementById('interestBalanceDisplay').textContent =
+                        `KES ${data.totalInterestBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    document.getElementById('penaltyBalanceDisplay').textContent =
+                        `KES ${data.totalPenaltyBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
-                    if (amount > 0) {
-                        const penaltyPct = (data.penaltyAllocated / amount) * 100;
-                        const interestPct = (data.interestAllocated / amount) * 100;
-                        const principalPct = (data.principalAllocated / amount) * 100;
+                    // Update totalOutstandingBalance for validation
+                    totalOutstandingBalance = data.totalFullBalance;
 
+                    // Update progress bars with colors
+                    if (totalAllocated > 0) {
+                        const penaltyPct = (data.penaltyAllocated / totalAllocated) * 100;
+                        const interestPct = (data.interestAllocated / totalAllocated) * 100;
+                        const principalPct = (data.principalAllocated / totalAllocated) * 100;
+
+                        // Penalty - Red
                         document.getElementById('penaltyProgress').style.width = `${penaltyPct}%`;
                         document.getElementById('penaltyProgress').textContent = `${penaltyPct.toFixed(0)}%`;
+                        // Interest - Green
                         document.getElementById('interestProgress').style.width = `${interestPct}%`;
                         document.getElementById('interestProgress').textContent = `${interestPct.toFixed(0)}%`;
+                        // Principal - Blue
                         document.getElementById('principalProgress').style.width = `${principalPct}%`;
                         document.getElementById('principalProgress').textContent = `${principalPct.toFixed(0)}%`;
                     }
@@ -1138,6 +1173,7 @@
                     document.getElementById('breakdownSection').style.display = 'block';
                     document.getElementById('exceedsBalanceMessage').style.display = 'none';
 
+                    // Show full payment message if balance after is zero
                     const fullPaymentMsg = document.getElementById('fullPaymentMessage');
                     if (data.balanceAfter <= 0.01) {
                         fullPaymentMsg.style.display = 'block';
@@ -1160,7 +1196,7 @@
             document.getElementById('allocatedInterest').textContent = 'KES 0.00';
             document.getElementById('allocatedPrincipal').textContent = 'KES 0.00';
             document.getElementById('totalAllocated').textContent = 'KES 0.00';
-            document.getElementById('overpaymentDisplay').textContent = 'KES 0.00';
+            document.getElementById('excessDisplay').textContent = 'KES 0.00';
             document.getElementById('balanceAfterDisplay').textContent = 'KES 0.00';
 
             document.getElementById('penaltyProgress').style.width = '0%';
@@ -1170,9 +1206,14 @@
             document.getElementById('principalProgress').style.width = '0%';
             document.getElementById('principalProgress').textContent = '0%';
 
+            document.getElementById('principalPercentLabel').textContent = '0';
+            document.getElementById('interestPercentLabel').textContent = '0';
+            document.getElementById('penaltyPercentLabel').textContent = '0';
+
             document.getElementById('fullPaymentMessage').style.display = 'none';
-            document.getElementById('overpaymentMessage').style.display = 'none';
+            document.getElementById('excessMessage').style.display = 'none';
             document.getElementById('exceedsBalanceMessage').style.display = 'none';
+            document.getElementById('excessRow').style.display = 'none';
             document.getElementById('amountValidationMessage').innerHTML = '';
         }
 

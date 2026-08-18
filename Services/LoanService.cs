@@ -91,12 +91,15 @@ namespace SACCOBlockChainSystem.Services
         Task UpdateOverdueStatusesAsync(string companyCode);
         Task<LoanSchedule> GetCurrentInstallmentAsync(string loanNo);
         Task RecalculateRbalScheduleAsync(string loanNo, decimal newOutstandingBalance);
+
         #endregion
 
         #region Repayments
         Task<Repay> ProcessRepaymentAsync(LoanRepaymentDTO repaymentDto);
         Task<List<Repay>> GetLoanRepaymentsAsync(string loanNo);
         Task<Repay> ReverseRepaymentAsync(int repaymentId, string reason, string reversedBy);
+        //RUN PENALTY METHOD
+        Task<PenaltyRunResultDTO> RunPenaltyAsync(string companyCode, DateTime? asAtDate = null);
         #endregion
 
         #region Loan Offset with Shares
@@ -7898,310 +7901,6 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-        /// Updates loan schedules after a repayment - Works for AMT and STL loans
-         
-        private async Task UpdateLoanSchedulesAfterRepaymentAsync(string loanNo, decimal amountPaid, DateTime paymentDate, string repaymentMethod = "AMT")
-        {
-            var schedules = await _context.LoanSchedules
-                .Where(s => s.LoanNo == loanNo && s.Status != "Paid" && s.OutstandingTotal > 0.01m)
-                .OrderBy(s => s.InstallmentNo)
-                .ToListAsync();
-
-            if (!schedules.Any())
-            {
-                _logger.LogWarning($"No unpaid schedules found for loan {loanNo}");
-                return;
-            }
-
-            decimal remainingAmount = amountPaid;
-            bool isSTL = repaymentMethod == "STL";
-
-            _logger.LogInformation($"Updating schedules for loan {loanNo}: Amount={amountPaid:C}, Method={repaymentMethod}, Schedules found={schedules.Count}");
-
-            foreach (var schedule in schedules)
-            {
-                if (remainingAmount <= 0.01m) break;
-
-                decimal scheduleOutstanding = schedule.OutstandingPrincipal + schedule.OutstandingInterest;
-
-                if (scheduleOutstanding <= 0.01m)
-                {
-                    // Already paid, skip
-                    continue;
-                }
-
-                if (remainingAmount >= scheduleOutstanding - 0.01m)
-                {
-                    // Fully pay this schedule
-                    schedule.PaidPrincipal = schedule.PrincipalAmount;
-                    schedule.PaidInterest = schedule.InterestAmount;
-                    schedule.PaidTotal = schedule.TotalInstallment;
-                    schedule.OutstandingPrincipal = 0;
-                    schedule.OutstandingInterest = 0;
-                    schedule.OutstandingTotal = 0;
-                    schedule.Status = "Paid";
-                    schedule.PaidDate = paymentDate;
-                    remainingAmount -= scheduleOutstanding;
-
-                    _logger.LogInformation($"Schedule {schedule.InstallmentNo} for loan {loanNo} fully paid");
-                }
-                else
-                {
-                    // Partial payment - allocate based on method
-                    if (isSTL)
-                    {
-                        // STL: Pay interest first, then principal
-                        if (remainingAmount <= schedule.OutstandingInterest)
-                        {
-                            // Only paying interest
-                            schedule.PaidInterest += remainingAmount;
-                            schedule.OutstandingInterest = schedule.InterestAmount - schedule.PaidInterest;
-                            schedule.PaidTotal = schedule.PaidPrincipal + schedule.PaidInterest;
-                            schedule.OutstandingTotal = schedule.OutstandingPrincipal + schedule.OutstandingInterest;
-                            remainingAmount = 0;
-                        }
-                        else
-                        {
-                            // Pay all interest + some principal
-                            decimal interestToPay = schedule.OutstandingInterest;
-                            schedule.PaidInterest = schedule.InterestAmount;
-                            schedule.OutstandingInterest = 0;
-                            remainingAmount -= interestToPay;
-
-                            decimal principalToPay = Math.Min(remainingAmount, schedule.OutstandingPrincipal);
-                            schedule.PaidPrincipal += principalToPay;
-                            schedule.OutstandingPrincipal = schedule.PrincipalAmount - schedule.PaidPrincipal;
-
-                            schedule.PaidTotal = schedule.PaidPrincipal + schedule.PaidInterest;
-                            schedule.OutstandingTotal = schedule.OutstandingPrincipal + schedule.OutstandingInterest;
-                            remainingAmount -= principalToPay;
-                        }
-                    }
-                    else
-                    {
-                        // AMT: Proportional allocation
-                        decimal ratio = remainingAmount / scheduleOutstanding;
-                        decimal principalToAllocate = schedule.OutstandingPrincipal * ratio;
-                        decimal interestToAllocate = schedule.OutstandingInterest * ratio;
-
-                        schedule.PaidPrincipal += principalToAllocate;
-                        schedule.PaidInterest += interestToAllocate;
-                        schedule.OutstandingPrincipal = schedule.PrincipalAmount - schedule.PaidPrincipal;
-                        schedule.OutstandingInterest = schedule.InterestAmount - schedule.PaidInterest;
-                        schedule.PaidTotal = schedule.PaidPrincipal + schedule.PaidInterest;
-                        schedule.OutstandingTotal = schedule.OutstandingPrincipal + schedule.OutstandingInterest;
-                        remainingAmount = 0;
-                    }
-
-                    schedule.Status = "Partial";
-                    _logger.LogInformation($"Schedule {schedule.InstallmentNo} for loan {loanNo} partially paid: Principal Paid={schedule.PaidPrincipal:C}, Interest Paid={schedule.PaidInterest:C}");
-                }
-            }
-
-            // Update the loan balance record
-            var loanbal = await _context.Loanbal
-                .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo);
-
-            if (loanbal != null)
-            {
-                // Find next unpaid schedule to update due date
-                var nextUnpaid = schedules.FirstOrDefault(s => s.Status != "Paid" && s.OutstandingTotal > 0.01m);
-                if (nextUnpaid != null)
-                {
-                    loanbal.Nextduedate = nextUnpaid.DueDate;
-                    loanbal.Duedate = nextUnpaid.DueDate;
-                    loanbal.RepayRate = nextUnpaid.TotalInstallment;
-                }
-                else
-                {
-                    // All schedules are paid
-                    loanbal.Nextduedate = null;
-                    loanbal.Cleared = loanbal.Balance <= 0.01m;
-                }
-                loanbal.Processdate = DateTime.Now;
-            }
-
-            await _context.SaveChangesAsync();
-            _logger.LogInformation($"Schedule update completed for loan {loanNo}. Remaining amount: {remainingAmount:C}");
-        }
-
-        /// <summary>
-        /// Gets the current unpaid schedule for a loan
-        /// </summary>
-        private async Task<LoanSchedule?> GetCurrentScheduleAsync(string loanNo)
-        {
-            try
-            {
-                var schedule = await _context.LoanSchedules
-                    .Where(s => s.LoanNo == loanNo && s.Status != "Paid" && s.OutstandingTotal > 0.01m)
-                    .OrderBy(s => s.InstallmentNo)
-                    .FirstOrDefaultAsync();
-
-                if (schedule == null)
-                {
-                    _logger.LogWarning($"No current schedule found for loan {loanNo}");
-                }
-
-                return schedule;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error getting current schedule for loan {loanNo}");
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Updates RBAL schedule after extra principal payment - Recalculates future interest
-        /// </summary>
-        private async Task UpdateRbalScheduleAsync(string loanNo, decimal principalPaid, DateTime paymentDate)
-        {
-            var schedules = await _context.LoanSchedules
-                .Where(s => s.LoanNo == loanNo && s.Status != "Paid")
-                .OrderBy(s => s.InstallmentNo)
-                .ToListAsync();
-
-            if (!schedules.Any())
-            {
-                _logger.LogWarning($"No schedules found for RBAL loan {loanNo}");
-                return;
-            }
-
-            var loan = await _context.Loans
-                .FirstOrDefaultAsync(l => l.LoanNo == loanNo);
-
-            var loanType = await _context.Loantypes
-                .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == loan.CompanyCode);
-
-            if (loan == null || loanType == null)
-            {
-                _logger.LogError($"Loan or LoanType not found for RBAL update on loan {loanNo}");
-                return;
-            }
-
-            decimal remainingPrincipal = principalPaid;
-            decimal monthlyInterestRate = (loan.Interest ?? 0) / 100 / 12;
-
-            _logger.LogInformation($"Updating RBAL schedule for loan {loanNo}: Principal paid extra={principalPaid:C}, Interest Rate={monthlyInterestRate:P}");
-
-            foreach (var schedule in schedules)
-            {
-                if (remainingPrincipal <= 0.01m) break;
-
-                decimal principalToAllocate = Math.Min(remainingPrincipal, schedule.OutstandingPrincipal);
-
-                // Apply principal payment
-                schedule.PaidPrincipal += principalToAllocate;
-                schedule.OutstandingPrincipal = schedule.PrincipalAmount - schedule.PaidPrincipal;
-
-                // Recalculate interest based on new outstanding principal (RBAL feature)
-                if (schedule.OutstandingPrincipal > 0)
-                {
-                    // Recalculate remaining interest for this schedule based on outstanding principal
-                    decimal newInterestForSchedule = schedule.OutstandingPrincipal * monthlyInterestRate;
-                    schedule.InterestAmount = newInterestForSchedule;
-                    schedule.TotalInstallment = schedule.OutstandingPrincipal + newInterestForSchedule;
-                    schedule.MinimumPayment = newInterestForSchedule; // RBAL minimum is interest only
-                }
-
-                schedule.OutstandingInterest = schedule.InterestAmount - schedule.PaidInterest;
-                schedule.PaidTotal = schedule.PaidPrincipal + schedule.PaidInterest;
-                schedule.OutstandingTotal = schedule.OutstandingPrincipal + Math.Max(0, schedule.OutstandingInterest);
-
-                remainingPrincipal -= principalToAllocate;
-
-                // Update status
-                if (schedule.OutstandingPrincipal <= 0.01m && schedule.OutstandingInterest <= 0.01m)
-                {
-                    schedule.Status = "Paid";
-                    schedule.PaidDate = paymentDate;
-                    _logger.LogInformation($"RBAL schedule {schedule.InstallmentNo} fully paid after extra principal payment");
-                }
-                else if (schedule.PaidTotal > 0)
-                {
-                    schedule.Status = "Partial";
-                    _logger.LogInformation($"RBAL schedule {schedule.InstallmentNo} updated: New Interest={schedule.InterestAmount:C}, Outstanding={schedule.OutstandingTotal:C}");
-                }
-            }
-
-            // Update loan balance record
-            var loanbal = await _context.Loanbal
-                .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo);
-
-            if (loanbal != null)
-            {
-                var nextSchedule = schedules.FirstOrDefault(s => s.Status != "Paid");
-                if (nextSchedule != null)
-                {
-                    loanbal.Nextduedate = nextSchedule.DueDate;
-                    loanbal.Duedate = nextSchedule.DueDate;
-                    loanbal.RepayRate = nextSchedule.MinimumPayment ?? nextSchedule.TotalInstallment;
-                }
-                loanbal.Processdate = DateTime.Now;
-            }
-
-            await _context.SaveChangesAsync();
-            _logger.LogInformation($"RBAL schedule update completed for loan {loanNo}. Remaining principal to allocate: {remainingPrincipal:C}");
-        }
-
-        /// <summary>
-        /// Updates next due date for a loan based on current schedule status
-        /// </summary>
-        private async Task UpdateNextDueDateAsync(string loanNo)
-        {
-            try
-            {
-                var loanbal = await _context.Loanbal
-                    .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo);
-
-                if (loanbal == null) return;
-
-                // Find the next unpaid schedule
-                var nextSchedule = await _context.LoanSchedules
-                    .Where(s => s.LoanNo == loanNo && s.Status != "Paid" && s.OutstandingTotal > 0.01m)
-                    .OrderBy(s => s.InstallmentNo)
-                    .FirstOrDefaultAsync();
-
-                if (nextSchedule != null)
-                {
-                    loanbal.Nextduedate = nextSchedule.DueDate;
-                    loanbal.Duedate = nextSchedule.DueDate;
-                    loanbal.RepayRate = nextSchedule.TotalInstallment;
-                    _logger.LogInformation($"Next due date for loan {loanNo} updated to {nextSchedule.DueDate:yyyy-MM-dd}");
-                }
-                else
-                {
-                    // Check if there's still balance without schedule
-                    if (loanbal.Balance > 0.01m || loanbal.IntrOwed > 0.01m)
-                    {
-                        // Calculate next due date from last payment
-                        var lastRepayment = await _context.Repay
-                            .Where(r => r.LoanNo == loanNo && r.Posted == true)
-                            .OrderByDescending(r => r.DateReceived)
-                            .FirstOrDefaultAsync();
-
-                        if (lastRepayment?.DateReceived != null)
-                        {
-                            loanbal.Nextduedate = lastRepayment.DateReceived.Value.AddMonths(1);
-                            loanbal.Duedate = lastRepayment.DateReceived.Value.AddMonths(1);
-                            _logger.LogWarning($"No schedule found but balance exists. Set next due date to {loanbal.Nextduedate:yyyy-MM-dd}");
-                        }
-                    }
-                    else
-                    {
-                        loanbal.Nextduedate = null;
-                        loanbal.Cleared = true;
-                        _logger.LogInformation($"Loan {loanNo} has no remaining balance. Due dates cleared.");
-                    }
-                }
-
-                await _context.SaveChangesAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error updating next due date for loan {loanNo}");
-            }
-        }
         private async Task ReleaseCollateralGuaranteesForLoanAsync(string loanNo, string releasedBy)
         {
             try
@@ -8373,7 +8072,6 @@ namespace SACCOBlockChainSystem.Services
                 throw;
             }
         }
-
 
         private async Task ReleaseGuarantorsProportionallyAsync(string loanNo, decimal principalBefore, decimal principalAfter, string releasedBy)
         {
@@ -8710,6 +8408,410 @@ namespace SACCOBlockChainSystem.Services
         }
 
 
+
+        // ============================================================
+        // RUN PENALTY METHOD 
+        // ============================================================
+        public async Task<PenaltyRunResultDTO> RunPenaltyAsync(string companyCode, DateTime? asAtDate = null)
+        {
+            var result = new PenaltyRunResultDTO
+            {
+                Success = true,
+                RunDate = DateTime.Now,
+                CompanyCode = companyCode,
+                Details = new List<PenaltyDetailDTO>()
+            };
+
+            DateTime processDate = asAtDate ?? DateTime.Now.Date;
+
+            _logger.LogInformation($"Starting penalty run for company: {companyCode} as at {processDate:yyyy-MM-dd}");
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                // ============================================================
+                // STEP 1: GET ALL ACTIVE LOANS FOR THIS COMPANY
+                // ============================================================
+                var activeLoans = await _context.Loans
+                    .Where(l => l.CompanyCode == companyCode
+                                && l.Status != (int)Status.Closed
+                                && l.Status != (int)Status.Rejected
+                                && l.Status != (int)Status.WrittenOff)
+                    .ToListAsync();
+
+                result.TotalLoansChecked = activeLoans.Count;
+                _logger.LogInformation($"Found {activeLoans.Count} active loans to check for penalties");
+
+                if (activeLoans.Count == 0)
+                {
+                    result.Message = "No active loans found for penalty processing.";
+                    return result;
+                }
+
+                // ============================================================
+                // STEP 2: GET ALL LOAN BALANCES
+                // ============================================================
+                var loanNos = activeLoans.Select(l => l.LoanNo).ToList();
+                var loanBalances = await _context.Loanbal
+                    .Where(lb => loanNos.Contains(lb.LoanNo) && lb.Companycode == companyCode)
+                    .ToDictionaryAsync(lb => lb.LoanNo, lb => lb);
+
+                // ============================================================
+                // STEP 3: GET ALL UNPAID SCHEDULES - FIXED: Include "Pending" status
+                // ============================================================
+                var unpaidSchedules = await _context.LoanSchedules
+                    .Where(s => loanNos.Contains(s.LoanNo)
+                                && s.Status != "Paid"  // Only exclude Paid
+                                && s.OutstandingTotal > 0.01m)
+                    .OrderBy(s => s.LoanNo)
+                    .ThenBy(s => s.InstallmentNo)
+                    .ToListAsync();
+
+                _logger.LogInformation($"Found {unpaidSchedules.Count} unpaid installments to check");
+
+                // Group schedules by LoanNo
+                var schedulesByLoan = unpaidSchedules
+                    .GroupBy(s => s.LoanNo)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                // ============================================================
+                // STEP 4: GET MEMBER NAMES FOR DETAILS
+                // ============================================================
+                var memberNos = activeLoans.Select(l => l.MemberNo).Distinct().ToList();
+                var membersDict = await _context.Members
+                    .Where(m => memberNos.Contains(m.MemberNo) && m.CompanyCode == companyCode)
+                    .ToDictionaryAsync(m => m.MemberNo, m => $"{m.Surname ?? ""} {m.OtherNames ?? ""}".Trim());
+
+                bool hasChanges = false;
+
+                // ============================================================
+                // STEP 5: PROCESS EACH LOAN
+                // ============================================================
+                foreach (var loan in activeLoans)
+                {
+                    try
+                    {
+                        // ============================================================
+                        // CHECK PENALTY FROM LOANS TABLE
+                        // ============================================================
+                        bool attractsPenalty = loan.AttractsPenalty ?? false;
+                        if (!attractsPenalty)
+                        {
+                            _logger.LogInformation($"Loan {loan.LoanNo} does not attract penalty (AttractsPenalty = false)");
+                            continue;
+                        }
+
+                        // ============================================================
+                        // GET PENALTY CONFIGURATION
+                        // ============================================================
+                        string penaltyMode = loan.PenaltyMode ?? "Percentage";
+                        string penaltyRateType = loan.PenaltyRate ?? "Monthly";
+                        decimal penaltyValue = loan.PenaltyValue ?? 0;
+                        int gracePeriodDays = loan.Gperiod ?? 0;
+
+                        _logger.LogInformation($"Loan {loan.LoanNo} - Penalty Config: " +
+                            $"Mode={penaltyMode}, Rate={penaltyRateType}, Value={penaltyValue}, " +
+                            $"GracePeriod={gracePeriodDays} days");
+
+                        // ============================================================
+                        // VALIDATE PENALTY CONFIGURATION
+                        // ============================================================
+                        if (penaltyValue <= 0)
+                        {
+                            _logger.LogWarning($"Loan {loan.LoanNo} has AttractsPenalty=true but PenaltyValue is {penaltyValue}. Skipping.");
+                            continue;
+                        }
+
+                        // Get loan balance
+                        if (!loanBalances.TryGetValue(loan.LoanNo, out var loanbal))
+                        {
+                            _logger.LogWarning($"No loan balance found for loan {loan.LoanNo}");
+                            continue;
+                        }
+
+                        // Get schedules for this loan
+                        if (!schedulesByLoan.TryGetValue(loan.LoanNo, out var schedules))
+                        {
+                            _logger.LogInformation($"No unpaid schedules for loan {loan.LoanNo}");
+                            continue;
+                        }
+
+                        bool loanHasChanges = false;
+
+                        // ============================================================
+                        // STEP 6: PROCESS EACH INSTALLMENT
+                        // ============================================================
+                        foreach (var schedule in schedules)
+                        {
+                            try
+                            {
+                                // Log current schedule state
+                                _logger.LogInformation($"Processing schedule {schedule.InstallmentNo} for loan {loan.LoanNo}: " +
+                                    $"DueDate={schedule.DueDate:yyyy-MM-dd}, Status={schedule.Status}, " +
+                                    $"OutstandingTotal={schedule.OutstandingTotal:C}, PenaltyAmount={schedule.PenaltyAmount:C}");
+
+                                // Check if installment is overdue
+                                if (schedule.DueDate >= processDate)
+                                {
+                                    _logger.LogInformation($"Installment {schedule.InstallmentNo} is not yet due (DueDate: {schedule.DueDate:yyyy-MM-dd})");
+                                    continue;
+                                }
+
+                                // Check if installment is already fully paid
+                                if (schedule.Status == "Paid" || schedule.OutstandingTotal <= 0.01m)
+                                {
+                                    _logger.LogInformation($"Installment {schedule.InstallmentNo} is already paid");
+                                    continue;
+                                }
+
+                                // Calculate days overdue
+                                int daysOverdue = (processDate - schedule.DueDate).Days;
+                                _logger.LogInformation($"Installment {schedule.InstallmentNo} is overdue by {daysOverdue} days");
+
+                                // Check if within grace period
+                                if (daysOverdue <= gracePeriodDays)
+                                {
+                                    _logger.LogInformation($"Installment {schedule.InstallmentNo} is overdue by {daysOverdue} days, within grace period of {gracePeriodDays} days");
+                                    continue;
+                                }
+
+                                // Calculate number of penalty periods
+                                int overdueDaysAfterGrace = daysOverdue - gracePeriodDays;
+                                int numberOfPeriods = CalculatePenaltyPeriods(penaltyRateType, overdueDaysAfterGrace);
+
+                                // Calculate installment amount (principal + interest)
+                                decimal installmentAmount = schedule.TotalInstallment;
+
+                                // ============================================================
+                                // CALCULATE PENALTY AMOUNT
+                                // ============================================================
+                                decimal penaltyAmount = 0;
+
+                                if (penaltyMode.Equals("Percentage", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    // Percentage Mode: installment × (rate / 100) × periods
+                                    penaltyAmount = installmentAmount * (penaltyValue / 100) * numberOfPeriods;
+                                    _logger.LogInformation($"Percentage penalty: {installmentAmount:C} × {penaltyValue}% × {numberOfPeriods} = {penaltyAmount:C}");
+                                }
+                                else // Fixed Amount Mode
+                                {
+                                    // Fixed Mode: rate × periods
+                                    penaltyAmount = penaltyValue * numberOfPeriods;
+
+                                    // Cap penalty at 50% of installment amount (safety)
+                                    decimal maxPenalty = installmentAmount * 0.5m;
+                                    if (penaltyAmount > maxPenalty)
+                                    {
+                                        penaltyAmount = maxPenalty;
+                                        _logger.LogInformation($"Penalty capped at 50% of installment: {maxPenalty:C}");
+                                    }
+                                    _logger.LogInformation($"Fixed penalty: {penaltyValue:C} × {numberOfPeriods} = {penaltyAmount:C}");
+                                }
+
+                                // Round to 2 decimal places
+                                penaltyAmount = Math.Round(penaltyAmount, 2);
+
+                                // Skip if penalty amount is too small
+                                if (penaltyAmount < 0.01m)
+                                {
+                                    _logger.LogInformation($"Penalty amount {penaltyAmount:C} is too small, skipping");
+                                    continue;
+                                }
+
+                                // Store old penalty amount
+                                decimal oldSchedulePenalty = schedule.PenaltyAmount;
+                                decimal oldLoanbalPenalty = loanbal.Penalty;
+
+                                // ============================================================
+                                // STEP 7: UPDATE SCHEDULE WITH NEW PENALTY
+                                // ============================================================
+                                // Add penalty to the schedule
+                                schedule.PenaltyAmount = oldSchedulePenalty + penaltyAmount;
+
+                                // Update outstanding total to include penalty
+                                schedule.OutstandingTotal = schedule.OutstandingPrincipal + schedule.OutstandingInterest + schedule.PenaltyAmount;
+
+                                // Update status to Overdue if not already
+                                if (schedule.Status != "Overdue" && schedule.Status != "Partial")
+                                {
+                                    schedule.Status = "Overdue";
+                                }
+
+                                schedule.DaysOverdue = daysOverdue;
+
+                                // MARK THE SCHEDULE AS MODIFIED
+                                _context.Entry(schedule).State = EntityState.Modified;
+
+                                // ============================================================
+                                // STEP 8: UPDATE LOANBAL PENALTY
+                                // ============================================================
+                                loanbal.Penalty = oldLoanbalPenalty + penaltyAmount;
+
+                                // MARK THE LOANBAL AS MODIFIED
+                                _context.Entry(loanbal).State = EntityState.Modified;
+
+                                // Get member name for details
+                                string memberName = "N/A";
+                                if (!string.IsNullOrEmpty(loan.MemberNo) && membersDict.TryGetValue(loan.MemberNo, out var name))
+                                {
+                                    memberName = name;
+                                }
+
+                                // ============================================================
+                                // STEP 9: RECORD DETAIL FOR RESULT
+                                // ============================================================
+                                result.Details.Add(new PenaltyDetailDTO
+                                {
+                                    LoanNo = loan.LoanNo,
+                                    MemberNo = loan.MemberNo,
+                                    MemberName = memberName,
+                                    InstallmentNo = schedule.InstallmentNo,
+                                    DueDate = schedule.DueDate,
+                                    InstallmentAmount = installmentAmount,
+                                    DaysOverdue = daysOverdue,
+                                    GracePeriodDays = gracePeriodDays,
+                                    PenaltyRate = penaltyValue,
+                                    PenaltyMode = penaltyMode,
+                                    PenaltyRateType = penaltyRateType,
+                                    NumberOfPeriods = numberOfPeriods,
+                                    PenaltyAmountCalculated = penaltyAmount,
+                                    OldPenaltyAmount = oldSchedulePenalty,
+                                    NewPenaltyAmount = schedule.PenaltyAmount,
+                                    IsApplied = true
+                                });
+
+                                result.TotalPenaltiesApplied++;
+                                result.TotalPenaltyAmount += penaltyAmount;
+                                loanHasChanges = true;
+                                hasChanges = true;
+
+                                _logger.LogInformation($"✅ Penalty applied to loan {loan.LoanNo}, installment {schedule.InstallmentNo}: {penaltyAmount:C} (Old: {oldSchedulePenalty:C}, New: {schedule.PenaltyAmount:C})");
+                            }
+                            catch (Exception scheduleEx)
+                            {
+                                _logger.LogError(scheduleEx, $"Error processing schedule {schedule.InstallmentNo} for loan {loan.LoanNo}");
+                                result.Details.Add(new PenaltyDetailDTO
+                                {
+                                    LoanNo = loan.LoanNo,
+                                    InstallmentNo = schedule.InstallmentNo,
+                                    ErrorMessage = scheduleEx.Message,
+                                    IsApplied = false
+                                });
+                                result.Success = false;
+                            }
+                        }
+
+                        if (loanHasChanges)
+                        {
+                            result.TotalLoansProcessed++;
+                        }
+                    }
+                    catch (Exception loanEx)
+                    {
+                        _logger.LogError(loanEx, $"Error processing loan {loan.LoanNo}");
+                        result.Success = false;
+                    }
+                }
+
+                // ============================================================
+                // STEP 10: SAVE ALL CHANGES
+                // ============================================================
+                if (hasChanges)
+                {
+                    _logger.LogInformation($"Saving {result.TotalPenaltiesApplied} penalty changes to database...");
+
+                    // Show what's being saved
+                    var modifiedEntries = _context.ChangeTracker.Entries()
+                        .Where(e => e.State == EntityState.Modified)
+                        .ToList();
+
+                    _logger.LogInformation($"Modified entities count: {modifiedEntries.Count}");
+
+                    foreach (var entry in modifiedEntries)
+                    {
+                        _logger.LogInformation($"Entity: {entry.Entity.GetType().Name}, State: {entry.State}");
+                        foreach (var prop in entry.Properties)
+                        {
+                            if (prop.IsModified)
+                            {
+                                _logger.LogInformation($"  Property: {prop.Metadata.Name}, Original: {prop.OriginalValue}, Current: {prop.CurrentValue}");
+                            }
+                        }
+                    }
+
+                    int savedCount = await _context.SaveChangesAsync();
+                    _logger.LogInformation($"✅ Saved {savedCount} entities to database");
+
+                    await transaction.CommitAsync();
+                    _logger.LogInformation("✅ Transaction committed successfully");
+
+                    // Build summary message
+                    result.Message = $"Penalty run completed. " +
+                        $"Checked {result.TotalLoansChecked} loans, " +
+                        $"Processed {result.TotalLoansProcessed} loans with penalties, " +
+                        $"Applied {result.TotalPenaltiesApplied} penalties " +
+                        $"totaling KES {result.TotalPenaltyAmount:N2}.";
+                }
+                else
+                {
+                    result.Message = "No penalties were applied. All loans are up to date.";
+                    _logger.LogInformation("No changes to save");
+                }
+
+                _logger.LogInformation(result.Message);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error running penalty");
+
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError($"Inner exception: {ex.InnerException.Message}");
+                }
+
+                result.Success = false;
+                result.Message = $"Error running penalty: {ex.Message}";
+
+                return result;
+            }
+        }
+
+        /// <summary>
+        /// Calculates the number of penalty periods based on the rate type
+        /// </summary>
+        private int CalculatePenaltyPeriods(string rateType, int overdueDays)
+        {
+            if (overdueDays <= 0) return 0;
+
+            int periods = 1;
+
+            switch (rateType?.ToLower())
+            {
+                case "daily":
+                    periods = overdueDays;
+                    break;
+                case "weekly":
+                    periods = (int)Math.Ceiling(overdueDays / 7.0);
+                    break;
+                case "monthly":
+                    periods = (int)Math.Ceiling(overdueDays / 30.0);
+                    break;
+                case "yearly":
+                    periods = (int)Math.Ceiling(overdueDays / 365.0);
+                    break;
+                default: // Default to monthly
+                    periods = (int)Math.Ceiling(overdueDays / 30.0);
+                    break;
+            }
+
+            // Ensure at least 1 period
+            if (periods < 1) periods = 1;
+
+            return periods;
+        }
         #endregion
 
 
@@ -11077,8 +11179,6 @@ namespace SACCOBlockChainSystem.Services
 
         #endregion
 
-
-
         #region Guarantor Reports
 
         public async Task<List<GuarantorsPerLoanReportDTO>> GetGuarantorsPerLoanReportAsync(string companyCode, DateTime? startDate = null, DateTime? endDate = null)
@@ -11522,5 +11622,6 @@ namespace SACCOBlockChainSystem.Services
         }
 
         #endregion
+
     }
 }

@@ -776,6 +776,7 @@ namespace SACCOBlockChainSystem.Services
             {
                 var asAtDate = DateTime.Now.Date;
 
+                // Get all loans for the company
                 var loansQuery = _context.Loans.AsQueryable();
                 if (!string.IsNullOrEmpty(companyCode))
                 {
@@ -783,7 +784,7 @@ namespace SACCOBlockChainSystem.Services
                 }
 
                 var loans = await loansQuery
-                    .Select(l => new { l.LoanNo, l.Status, l.MemberNo, l.AuditTime })
+                    .Select(l => new { l.LoanNo, l.Status, l.MemberNo, l.AuditTime, l.LoanAmt, l.Aamount })
                     .ToListAsync();
 
                 int completed = 0;
@@ -793,7 +794,7 @@ namespace SACCOBlockChainSystem.Services
 
                 var loanNos = loans.Select(l => l.LoanNo).ToList();
 
-                // ✅ FIX: Get ALL loan balances in ONE query
+                // Get ALL loan balances in ONE query
                 var loanBalances = new Dictionary<string, decimal>();
                 if (loanNos.Any())
                 {
@@ -802,16 +803,15 @@ namespace SACCOBlockChainSystem.Services
                         .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
                 }
 
-                // ✅ FIX: Get ALL last repayment dates in ONE query
-                var lastRepayments = new Dictionary<string, DateTime?>();
-                if (loanNos.Any())
-                {
-                    lastRepayments = await _context.Repay
-                        .Where(r => loanNos.Contains(r.LoanNo) && r.DateReceived.HasValue)
-                        .GroupBy(r => r.LoanNo)
-                        .Select(g => new { LoanNo = g.Key, LastDate = g.Max(r => r.DateReceived) })
-                        .ToDictionaryAsync(x => x.LoanNo, x => (DateTime?)x.LastDate);
-                }
+                // Get loan schedules to check overdue installments - THIS IS THE PRIMARY SOURCE
+                var loanSchedules = await _context.LoanSchedules
+                    .Where(s => loanNos.Contains(s.LoanNo) && s.Status != "Paid" && s.OutstandingTotal > 0.01m)
+                    .ToListAsync();
+
+                // Group schedules by LoanNo
+                var schedulesByLoan = loanSchedules
+                    .GroupBy(s => s.LoanNo)
+                    .ToDictionary(g => g.Key, g => g.ToList());
 
                 foreach (var loan in loans)
                 {
@@ -822,7 +822,7 @@ namespace SACCOBlockChainSystem.Services
                         continue;
                     }
 
-                    // Uncompleted: Status != Closed, != Rejected, != WrittenOff
+                    // Skip rejected and written off loans for uncompleted count
                     if (loan.Status != (int)Status.Rejected && loan.Status != (int)Status.WrittenOff)
                     {
                         uncompleted++;
@@ -833,30 +833,30 @@ namespace SACCOBlockChainSystem.Services
                     {
                         active++;
 
-                        // Check if overdue (>30 days)
-                        decimal balance = loanBalances.ContainsKey(loan.LoanNo) ? loanBalances[loan.LoanNo] : 0;
-                        if (balance > 0)
+                        // ============================================================
+                        // CHECK FOR OVERDUE LOANS - USING SAME LOGIC AS SQL
+                        // ============================================================
+                        bool isOverdue = false;
+
+                        // ONLY Method 1: Check if any schedule is overdue
+                        // This matches the SQL query exactly
+                        if (schedulesByLoan.TryGetValue(loan.LoanNo, out var schedules))
                         {
-                            // ✅ FIX: Use the dictionary lookup (in-memory, not a DB query)
-                            DateTime? lastPaymentDate = lastRepayments.ContainsKey(loan.LoanNo)
-                                ? lastRepayments[loan.LoanNo]
-                                : null;
-
-                            int daysOverdue = 0;
-
-                            if (lastPaymentDate.HasValue)
+                            foreach (var schedule in schedules)
                             {
-                                var nextDueDate = lastPaymentDate.Value.AddMonths(1);
-                                if (asAtDate > nextDueDate)
+                                // Check if installment is overdue (due date passed and not paid)
+                                // Same conditions as SQL: Status != 'Paid', OutstandingTotal > 0.01, DueDate < GETDATE()
+                                if (schedule.DueDate < asAtDate && schedule.OutstandingTotal > 0.01m)
                                 {
-                                    daysOverdue = (asAtDate - nextDueDate).Days;
+                                    isOverdue = true;
+                                    break;
                                 }
                             }
+                        }
 
-                            if (daysOverdue > 30)
-                            {
-                                overdue++;
-                            }
+                        if (isOverdue)
+                        {
+                            overdue++;
                         }
                     }
                 }
@@ -872,8 +872,9 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
+
         // ============================================================
-        // CALCULATE LOAN STATUS BREAKDOWN BY GENDER
+        // CALCULATE LOAN STATUS BREAKDOWN BY GENDER 
         // ============================================================
         private async Task<(int WomenCompleted, int MenCompleted, int OthersCompleted,
                             int WomenActive, int MenActive, int OthersActive,
@@ -886,7 +887,7 @@ namespace SACCOBlockChainSystem.Services
 
                 var loansQuery = from l in _context.Loans
                                  join m in _context.Members on l.MemberNo equals m.MemberNo
-                                 select new { l.LoanNo, l.Status, l.MemberNo, l.AuditTime, m.Sex, l.CompanyCode };
+                                 select new { l.LoanNo, l.Status, l.MemberNo, l.AuditTime, m.Sex, l.CompanyCode, l.LoanAmt, l.Aamount };
 
                 if (!string.IsNullOrEmpty(companyCode))
                 {
@@ -901,25 +902,15 @@ namespace SACCOBlockChainSystem.Services
 
                 var loanNos = loans.Select(l => l.LoanNo).ToList();
 
-                // ✅ FIX: Get ALL loan balances in ONE query
-                var loanBalances = new Dictionary<string, decimal>();
-                if (loanNos.Any())
-                {
-                    loanBalances = await _context.Loanbal
-                        .Where(lb => loanNos.Contains(lb.LoanNo))
-                        .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
-                }
+                // Get loan schedules to check overdue installments - THIS IS THE PRIMARY SOURCE
+                var loanSchedules = await _context.LoanSchedules
+                    .Where(s => loanNos.Contains(s.LoanNo) && s.Status != "Paid" && s.OutstandingTotal > 0.01m)
+                    .ToListAsync();
 
-                // ✅ FIX: Get ALL last repayment dates in ONE query
-                var lastRepayments = new Dictionary<string, DateTime?>();
-                if (loanNos.Any())
-                {
-                    lastRepayments = await _context.Repay
-                        .Where(r => loanNos.Contains(r.LoanNo) && r.DateReceived.HasValue)
-                        .GroupBy(r => r.LoanNo)
-                        .Select(g => new { LoanNo = g.Key, LastDate = g.Max(r => r.DateReceived) })
-                        .ToDictionaryAsync(x => x.LoanNo, x => (DateTime?)x.LastDate);
-                }
+                // Group schedules by LoanNo
+                var schedulesByLoan = loanSchedules
+                    .GroupBy(s => s.LoanNo)
+                    .ToDictionary(g => g.Key, g => g.ToList());
 
                 foreach (var loan in loans)
                 {
@@ -942,32 +933,31 @@ namespace SACCOBlockChainSystem.Services
                         else if (gender == "MALE") menActive++;
                         else othersActive++;
 
-                        // Check if OVERDUE (>30 days)
-                        decimal balance = loanBalances.ContainsKey(loan.LoanNo) ? loanBalances[loan.LoanNo] : 0;
-                        if (balance > 0)
+                        // ============================================================
+                        // CHECK FOR OVERDUE LOANS - USING SAME LOGIC AS SQL
+                        // ============================================================
+                        bool isOverdue = false;
+
+                        // ONLY Method 1: Check if any schedule is overdue
+                        // This matches the SQL query exactly
+                        if (schedulesByLoan.TryGetValue(loan.LoanNo, out var schedules))
                         {
-                            // ✅ FIX: Use dictionary lookup
-                            DateTime? lastPaymentDate = lastRepayments.ContainsKey(loan.LoanNo)
-                                ? lastRepayments[loan.LoanNo]
-                                : null;
-
-                            int daysOverdue = 0;
-
-                            if (lastPaymentDate.HasValue)
+                            foreach (var schedule in schedules)
                             {
-                                var nextDueDate = lastPaymentDate.Value.AddMonths(1);
-                                if (asAtDate > nextDueDate)
+                                // Same conditions as SQL
+                                if (schedule.DueDate < asAtDate && schedule.OutstandingTotal > 0.01m)
                                 {
-                                    daysOverdue = (asAtDate - nextDueDate).Days;
+                                    isOverdue = true;
+                                    break;
                                 }
                             }
+                        }
 
-                            if (daysOverdue > 30)
-                            {
-                                if (gender == "FEMALE") womenOverdue++;
-                                else if (gender == "MALE") menOverdue++;
-                                else othersOverdue++;
-                            }
+                        if (isOverdue)
+                        {
+                            if (gender == "FEMALE") womenOverdue++;
+                            else if (gender == "MALE") menOverdue++;
+                            else othersOverdue++;
                         }
                     }
                 }
