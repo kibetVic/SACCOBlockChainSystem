@@ -274,7 +274,7 @@ input:invalid:focus {
                         <!-- ============================================================ -->
                         <!-- COUNTY REPORTS - ONLY SHOW FOR COUNTY ADMIN AND SUPER ADMIN -->
                         <!-- ============================================================ -->
-                        @if (isCountyAdmin || isSuperAdmin)
+                        @if (isCountyAdmin)
                         {
                             <!-- REPORTS -->
                             <li class="nav-item">
@@ -287,7 +287,7 @@ input:invalid:focus {
                                 </a>
                                 <ul class="nav nav-treeview ms-2 border-start border-primary border-opacity-25 ps-2">
                                     
-                                    @if (isCountyAdmin || isSuperAdmin)
+                                    @if (isCountyAdmin)
                                     {
                                         <li class="nav-item">
                                             <a class="nav-link" asp-controller="CountyReport" asp-action="CountyContribReport">

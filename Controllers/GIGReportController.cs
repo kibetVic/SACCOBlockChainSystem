@@ -321,38 +321,73 @@ namespace SACCOBlockChainSystem.Controllers
                 var printedBy = User.Identity?.Name ?? "System";
                 var endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
 
-                // Get all active GIGs for this company
+                // ============================================================
+                // STEP 1: Get all active ShareTypes for this company
+                // ============================================================
+                var shareTypes = await _context.Sharetypes
+                    .Where(s => s.CompanyCode == companyCode)
+                    .OrderBy(s => s.Priority)
+                    .ThenBy(s => s.SharesType)
+                    .ToListAsync();
+
+                _logger.LogInformation($"Found {shareTypes.Count} ShareTypes");
+
+                // ============================================================
+                // STEP 2: Get all active GIGs
+                // ============================================================
                 var gigs = await _context.CIGs
                     .Where(g => g.CompanyCode == companyCode && g.Status == "Active")
                     .OrderBy(g => g.GigName)
                     .ToListAsync();
 
+                // Get all months between start and end date
+                var months = new List<DateTime>();
+                var currentMonth = new DateTime(startDate.Year, startDate.Month, 1);
+                var endMonth = new DateTime(endDate.Year, endDate.Month, 1);
+                while (currentMonth <= endMonth)
+                {
+                    months.Add(currentMonth);
+                    currentMonth = currentMonth.AddMonths(1);
+                }
+
                 using var workbook = new XLWorkbook();
 
-                // Summary Sheet
-                var summarySheet = workbook.Worksheets.Add("Summary");
+                // ============================================================
+                // SHEET 1: GIG SUMMARY
+                // ============================================================
+                var summarySheet = workbook.Worksheets.Add("GIG Summary");
                 int summaryRow = 1;
 
+                // Company Header
                 summarySheet.Cell(summaryRow, 1).Value = companyName.ToUpper();
-                summarySheet.Range(summaryRow, 1, summaryRow, 10).Merge();
+                summarySheet.Range(summaryRow, 1, summaryRow, 15).Merge();
                 summarySheet.Cell(summaryRow, 1).Style.Font.SetBold().Font.SetFontSize(18);
                 summarySheet.Cell(summaryRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
                 summaryRow += 2;
 
+                // Printed By
                 summarySheet.Cell(summaryRow, 1).Value = $"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}";
-                summarySheet.Range(summaryRow, 1, summaryRow, 10).Merge();
+                summarySheet.Range(summaryRow, 1, summaryRow, 15).Merge();
                 summarySheet.Cell(summaryRow, 1).Style.Font.SetItalic();
                 summarySheet.Cell(summaryRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
                 summaryRow += 2;
 
-                summarySheet.Cell(summaryRow, 1).Value = $"GIGs REPORT - {startDate:dd/MM/yyyy} to {endDate:dd/MM/yyyy}";
-                summarySheet.Range(summaryRow, 1, summaryRow, 10).Merge();
+                // Report Title
+                summarySheet.Cell(summaryRow, 1).Value = $"GIGs SUMMARY REPORT - {startDate:dd/MM/yyyy} to {endDate:dd/MM/yyyy}";
+                summarySheet.Range(summaryRow, 1, summaryRow, 15).Merge();
                 summarySheet.Cell(summaryRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
                 summarySheet.Cell(summaryRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
                 summaryRow += 2;
 
-                string[] summaryHeaders = { "GIG Code", "GIG Name", "Total Members", "Male", "Female", "Youth", "Share Capital", "Savings/Deposits", "Reg Fee", "Loans" };
-                for (int i = 0; i < summaryHeaders.Length; i++)
+                // Build Summary Headers with ShareTypes
+                var summaryHeaders = new List<string> { "GIG Code", "GIG Name", "Total Members", "Male", "Female", "Other", "Youth" };
+                foreach (var st in shareTypes)
+                {
+                    summaryHeaders.Add(st.SharesType ?? st.SharesCode);
+                }
+                summaryHeaders.Add("GRAND TOTAL");
+
+                for (int i = 0; i < summaryHeaders.Count; i++)
                 {
                     summarySheet.Cell(summaryRow, i + 1).Value = summaryHeaders[i];
                     summarySheet.Cell(summaryRow, i + 1).Style.Font.SetBold();
@@ -362,15 +397,23 @@ namespace SACCOBlockChainSystem.Controllers
                 }
                 summaryRow++;
 
-                decimal grandTotalShareCapital = 0;
-                decimal grandTotalSavings = 0;
-                decimal grandTotalRegFee = 0;
-                decimal grandTotalLoans = 0;
+                // Process each GIG for Summary
+                decimal grandTotalAllGIGs = 0;
                 int grandTotalMembers = 0;
+                int grandTotalMale = 0;
+                int grandTotalFemale = 0;
+                int grandTotalOther = 0;
+                int grandTotalYouth = 0;
+                var grandTotalsPerShareType = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var shareType in shareTypes)
+                {
+                    grandTotalsPerShareType[shareType.SharesCode] = 0;
+                }
 
                 foreach (var gig in gigs)
                 {
-                    // Get members belonging to this GIG
+                    // Get members in this GIG
                     var members = await _context.Members
                         .Where(m => m.CompanyCode == companyCode
                             && m.Cigcode == gig.GigCode
@@ -382,130 +425,162 @@ namespace SACCOBlockChainSystem.Controllers
 
                     var memberNos = members.Select(m => m.MemberNo.Trim()).ToList();
 
-                    // STEP 1: Get raw contributions WITHOUT Trim in SQL (same as GenerateReport)
-                    var contributionsRaw = await _context.ContribShares
+                    // Get contributions for this GIG's members
+                    var contributionsRaw = await _context.Contribs
                         .Where(c => c.CompanyCode == companyCode
                             && c.MemberNo != null
                             && c.ContrDate >= startDate
-                            && c.ContrDate <= endDateAdjusted)
+                            && c.ContrDate <= endDateAdjusted
+                            && c.Sharescode != null
+                            && c.Amount > 0)
                         .Select(c => new
                         {
                             MemberNo = c.MemberNo,
-                            c.ShareCapitalAmount,
-                            c.DepositsAmount,
-                            c.RegFeeAmount
+                            SharesCode = c.Sharescode,
+                            Amount = c.Amount ?? 0
                         })
                         .ToListAsync();
 
-                    // STEP 2: Normalize in memory (same as GenerateReport)
-                    var contributions = contributionsRaw
-                        .Where(c => memberNos.Contains(c.MemberNo?.Trim() ?? "", StringComparer.OrdinalIgnoreCase))
-                        .GroupBy(c => c.MemberNo.Trim(), StringComparer.OrdinalIgnoreCase)
-                        .ToDictionary(g => g.Key, g => new
-                        {
-                            TotalShareCapital = g.Sum(x => x.ShareCapitalAmount ?? 0),
-                            TotalDeposits = g.Sum(x => x.DepositsAmount ?? 0),
-                            TotalRegFee = g.Sum(x => x.RegFeeAmount ?? 0)
-                        }, StringComparer.OrdinalIgnoreCase);
-
-                    // Get recommended loans from Appraisal table (same as GenerateReport)
-                    var recommendedLoans = await _context.Appraisal
-                        .Where(a => memberNos.Contains(a.MemberNo.Trim())
-                            && a.CompanyCode == companyCode
-                            && a.AmtRecommended.HasValue
-                            && a.AmtRecommended > 0)
-                        .GroupBy(a => a.MemberNo.Trim())
+                    // Group contributions by Member and ShareType
+                    var memberTotals = contributionsRaw
+                        .Where(c => memberNos.Contains(c.MemberNo.Trim(), StringComparer.OrdinalIgnoreCase))
+                        .GroupBy(c => new { MemberNo = c.MemberNo.Trim(), SharesCode = c.SharesCode?.Trim() ?? "" })
                         .Select(g => new
                         {
-                            MemberNo = g.Key,
-                            TotalAmtRecommended = g.Sum(a => a.AmtRecommended ?? 0)
+                            g.Key.MemberNo,
+                            g.Key.SharesCode,
+                            TotalAmount = g.Sum(x => x.Amount)
                         })
-                        .ToDictionaryAsync(a => a.MemberNo, a => a.TotalAmtRecommended, StringComparer.OrdinalIgnoreCase);
+                        .GroupBy(x => x.MemberNo)
+                        .ToDictionary(
+                            g => g.Key,
+                            g => g.ToDictionary(x => x.SharesCode, x => x.TotalAmount),
+                            StringComparer.OrdinalIgnoreCase
+                        );
 
-                    int maleCount = 0, femaleCount = 0, youthCount = 0;
-                    decimal totalShareCapital = 0, totalSavings = 0, totalRegFee = 0, totalLoans = 0;
+                    // Calculate GIG totals
+                    var gigTotalsPerShareType = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var st in shareTypes)
+                    {
+                        gigTotalsPerShareType[st.SharesCode] = 0;
+                    }
 
                     foreach (var member in members)
                     {
                         string trimmedMemberNo = member.MemberNo?.Trim() ?? "";
-
-                        // Get values from ContribShare
-                        decimal shareCapital = contributions.ContainsKey(trimmedMemberNo)
-                            ? contributions[trimmedMemberNo].TotalShareCapital : 0;
-                        decimal savings = contributions.ContainsKey(trimmedMemberNo)
-                            ? contributions[trimmedMemberNo].TotalDeposits : 0;
-                        decimal regFee = contributions.ContainsKey(trimmedMemberNo)
-                            ? contributions[trimmedMemberNo].TotalRegFee : 0;
-
-                        // Get recommended loan amount from Appraisal
-                        decimal recommendedLoanAmt = recommendedLoans.ContainsKey(trimmedMemberNo)
-                            ? recommendedLoans[trimmedMemberNo] : 0;
-
-                        // Gender count
-                        if (member.Sex?.ToUpper() == "MALE" || member.Sex?.ToUpper() == "M")
-                            maleCount++;
-                        else if (member.Sex?.ToUpper() == "FEMALE" || member.Sex?.ToUpper() == "F")
-                            femaleCount++;
-
-                        // Youth count
-                        if (member.Dob.HasValue)
+                        if (memberTotals.ContainsKey(trimmedMemberNo))
                         {
-                            int age = CalculateAge(member.Dob.Value);
-                            if (age >= 18 && age <= 35) youthCount++;
+                            foreach (var st in shareTypes)
+                            {
+                                if (memberTotals[trimmedMemberNo].ContainsKey(st.SharesCode))
+                                {
+                                    gigTotalsPerShareType[st.SharesCode] += memberTotals[trimmedMemberNo][st.SharesCode];
+                                }
+                            }
                         }
-
-                        totalShareCapital += shareCapital;
-                        totalSavings += savings;
-                        totalRegFee += regFee;
-                        totalLoans += recommendedLoanAmt;
                     }
 
-                    grandTotalShareCapital += totalShareCapital;
-                    grandTotalSavings += totalSavings;
-                    grandTotalRegFee += totalRegFee;
-                    grandTotalLoans += totalLoans;
-                    grandTotalMembers += members.Count;
+                    // Calculate demographic counts - INCLUDING OTHER
+                    int maleCount = members.Count(m => m.Sex?.ToUpper() == "MALE" || m.Sex?.ToUpper() == "M");
+                    int femaleCount = members.Count(m => m.Sex?.ToUpper() == "FEMALE" || m.Sex?.ToUpper() == "F");
+                    int otherCount = members.Count - maleCount - femaleCount; // Any gender not Male or Female
+                    int youthCount = members.Count(m => m.Dob.HasValue && CalculateAge(m.Dob.Value) >= 18 && CalculateAge(m.Dob.Value) <= 35);
 
-                    summarySheet.Cell(summaryRow, 1).Value = gig.GigCode;
-                    summarySheet.Cell(summaryRow, 2).Value = gig.GigName;
-                    summarySheet.Cell(summaryRow, 3).Value = members.Count;
-                    summarySheet.Cell(summaryRow, 4).Value = maleCount;
-                    summarySheet.Cell(summaryRow, 5).Value = femaleCount;
-                    summarySheet.Cell(summaryRow, 6).Value = youthCount;
-                    summarySheet.Cell(summaryRow, 7).Value = totalShareCapital;
-                    summarySheet.Cell(summaryRow, 7).Style.NumberFormat.Format = "#,##0.00";
-                    summarySheet.Cell(summaryRow, 8).Value = totalSavings;
-                    summarySheet.Cell(summaryRow, 8).Style.NumberFormat.Format = "#,##0.00";
-                    summarySheet.Cell(summaryRow, 9).Value = totalRegFee;
-                    summarySheet.Cell(summaryRow, 9).Style.NumberFormat.Format = "#,##0.00";
-                    summarySheet.Cell(summaryRow, 10).Value = totalLoans;
-                    summarySheet.Cell(summaryRow, 10).Style.NumberFormat.Format = "#,##0.00";
+                    decimal gigGrandTotal = gigTotalsPerShareType.Values.Sum();
+
+                    // Write GIG summary row
+                    int col = 1;
+                    summarySheet.Cell(summaryRow, col++).Value = gig.GigCode;
+                    summarySheet.Cell(summaryRow, col++).Value = gig.GigName;
+                    summarySheet.Cell(summaryRow, col++).Value = members.Count;
+                    summarySheet.Cell(summaryRow, col++).Value = maleCount;
+                    summarySheet.Cell(summaryRow, col++).Value = femaleCount;
+                    summarySheet.Cell(summaryRow, col++).Value = otherCount;
+                    summarySheet.Cell(summaryRow, col++).Value = youthCount;
+
+                    foreach (var st in shareTypes)
+                    {
+                        decimal amount = gigTotalsPerShareType.ContainsKey(st.SharesCode) ? gigTotalsPerShareType[st.SharesCode] : 0;
+                        summarySheet.Cell(summaryRow, col).Value = amount;
+                        summarySheet.Cell(summaryRow, col).Style.NumberFormat.Format = "#,##0.00";
+                        col++;
+                        // Add to grand totals
+                        grandTotalsPerShareType[st.SharesCode] += amount;
+                    }
+
+                    summarySheet.Cell(summaryRow, col).Value = gigGrandTotal;
+                    summarySheet.Cell(summaryRow, col).Style.NumberFormat.Format = "#,##0.00";
+                    summarySheet.Cell(summaryRow, col).Style.Font.SetBold();
+
+                    grandTotalAllGIGs += gigGrandTotal;
+                    grandTotalMembers += members.Count;
+                    grandTotalMale += maleCount;
+                    grandTotalFemale += femaleCount;
+                    grandTotalOther += otherCount;
+                    grandTotalYouth += youthCount;
+
                     summaryRow++;
                 }
 
+                // Grand Total Row
                 summaryRow++;
-                summarySheet.Cell(summaryRow, 2).Value = "GRAND TOTAL:";
+                summarySheet.Cell(summaryRow, 2).Value = "GRAND TOTAL";
                 summarySheet.Cell(summaryRow, 2).Style.Font.SetBold();
                 summarySheet.Cell(summaryRow, 3).Value = grandTotalMembers;
                 summarySheet.Cell(summaryRow, 3).Style.Font.SetBold();
-                summarySheet.Cell(summaryRow, 7).Value = grandTotalShareCapital;
+                summarySheet.Cell(summaryRow, 4).Value = grandTotalMale;
+                summarySheet.Cell(summaryRow, 4).Style.Font.SetBold();
+                summarySheet.Cell(summaryRow, 5).Value = grandTotalFemale;
+                summarySheet.Cell(summaryRow, 5).Style.Font.SetBold();
+                summarySheet.Cell(summaryRow, 6).Value = grandTotalOther;
+                summarySheet.Cell(summaryRow, 6).Style.Font.SetBold();
+                summarySheet.Cell(summaryRow, 7).Value = grandTotalYouth;
                 summarySheet.Cell(summaryRow, 7).Style.Font.SetBold();
-                summarySheet.Cell(summaryRow, 7).Style.NumberFormat.Format = "#,##0.00";
-                summarySheet.Cell(summaryRow, 8).Value = grandTotalSavings;
-                summarySheet.Cell(summaryRow, 8).Style.Font.SetBold();
-                summarySheet.Cell(summaryRow, 8).Style.NumberFormat.Format = "#,##0.00";
-                summarySheet.Cell(summaryRow, 9).Value = grandTotalRegFee;
-                summarySheet.Cell(summaryRow, 9).Style.Font.SetBold();
-                summarySheet.Cell(summaryRow, 9).Style.NumberFormat.Format = "#,##0.00";
-                summarySheet.Cell(summaryRow, 10).Value = grandTotalLoans;
-                summarySheet.Cell(summaryRow, 10).Style.Font.SetBold();
-                summarySheet.Cell(summaryRow, 10).Style.NumberFormat.Format = "#,##0.00";
+
+                int grandCol = 8;
+                foreach (var st in shareTypes)
+                {
+                    summarySheet.Cell(summaryRow, grandCol).Value = grandTotalsPerShareType[st.SharesCode];
+                    summarySheet.Cell(summaryRow, grandCol).Style.NumberFormat.Format = "#,##0.00";
+                    summarySheet.Cell(summaryRow, grandCol).Style.Font.SetBold();
+                    grandCol++;
+                }
+
+                summarySheet.Cell(summaryRow, grandCol).Value = grandTotalAllGIGs;
+                summarySheet.Cell(summaryRow, grandCol).Style.NumberFormat.Format = "#,##0.00";
+                summarySheet.Cell(summaryRow, grandCol).Style.Font.SetBold();
 
                 summarySheet.Columns().AdjustToContents();
 
-                // Individual GIG Sheets (with detailed member data)
+                // ============================================================
+                // SHEET 2: MONTHLY CONTRIBUTIONS (One page, totals at bottom)
+                // ============================================================
+                var detailSheet = workbook.Worksheets.Add("Monthly Contributions");
+                int detailRow = 1;
+
+                // Global Header
+                detailSheet.Cell(detailRow, 1).Value = companyName.ToUpper();
+                int totalColumns = 7 + (months.Count * shareTypes.Count) + shareTypes.Count + 1;
+                detailSheet.Range(detailRow, 1, detailRow, totalColumns).Merge();
+                detailSheet.Cell(detailRow, 1).Style.Font.SetBold().Font.SetFontSize(16);
+                detailSheet.Cell(detailRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                detailRow += 2;
+
+                detailSheet.Cell(detailRow, 1).Value = $"MONTHLY CONTRIBUTIONS REPORT - {startDate:dd/MM/yyyy} to {endDate:dd/MM/yyyy}";
+                detailSheet.Range(detailRow, 1, detailRow, totalColumns).Merge();
+                detailSheet.Cell(detailRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                detailSheet.Cell(detailRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                detailRow += 2;
+
+                detailSheet.Cell(detailRow, 1).Value = $"Generated: {DateTime.Now:dd/MM/yyyy HH:mm} | Printed By: {printedBy}";
+                detailSheet.Range(detailRow, 1, detailRow, totalColumns).Merge();
+                detailSheet.Cell(detailRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                detailRow += 2;
+
+                // Process each GIG
                 foreach (var gig in gigs)
                 {
+                    // Get members in this GIG
                     var members = await _context.Members
                         .Where(m => m.CompanyCode == companyCode
                             && m.Cigcode == gig.GigCode
@@ -515,153 +590,376 @@ namespace SACCOBlockChainSystem.Controllers
 
                     if (!members.Any()) continue;
 
-                    string sheetName = gig.GigName.Length > 31 ? gig.GigName.Substring(0, 31) : gig.GigName;
-                    sheetName = new string(sheetName.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray());
-                    if (string.IsNullOrWhiteSpace(sheetName)) sheetName = gig.GigCode;
-
-                    var worksheet = workbook.Worksheets.Add(sheetName);
-                    int currentRow = 1;
-
-                    worksheet.Cell(currentRow, 1).Value = companyName.ToUpper();
-                    worksheet.Range(currentRow, 1, currentRow, 11).Merge();
-                    worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
-                    worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-                    currentRow += 2;
-
-                    worksheet.Cell(currentRow, 1).Value = $"GIG: {gig.GigName} ({gig.GigCode})";
-                    worksheet.Range(currentRow, 1, currentRow, 11).Merge();
-                    worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(12);
-                    worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-                    currentRow += 2;
-
-                    worksheet.Cell(currentRow, 1).Value = $"Period: {startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy}";
-                    worksheet.Range(currentRow, 1, currentRow, 11).Merge();
-                    worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-                    currentRow += 2;
-
-                    string[] memberHeaders = { "No.", "MemberNo", "Names", "Sex", "Phone", "ID No", "Age", "Share Capital", "Savings/Deposits", "Reg Fee", "Loans (Recommended)" };
-                    for (int i = 0; i < memberHeaders.Length; i++)
-                    {
-                        worksheet.Cell(currentRow, i + 1).Value = memberHeaders[i];
-                        worksheet.Cell(currentRow, i + 1).Style.Font.SetBold();
-                        worksheet.Cell(currentRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
-                        worksheet.Cell(currentRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-                        worksheet.Cell(currentRow, i + 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-                    }
-                    currentRow++;
+                    _logger.LogInformation($"Processing GIG: {gig.GigName} with {members.Count} members");
 
                     var memberNos = members.Select(m => m.MemberNo.Trim()).ToList();
 
-                    // Get contributions (same logic as GenerateReport)
-                    var contributionsRaw = await _context.ContribShares
+                    // ============================================================
+                    // GET CONTRIBUTIONS
+                    // ============================================================
+                    var contributionsRaw = await _context.Contribs
                         .Where(c => c.CompanyCode == companyCode
                             && c.MemberNo != null
                             && c.ContrDate >= startDate
-                            && c.ContrDate <= endDateAdjusted)
+                            && c.ContrDate <= endDateAdjusted
+                            && c.Sharescode != null
+                            && c.Amount > 0)
                         .Select(c => new
                         {
                             MemberNo = c.MemberNo,
-                            c.ShareCapitalAmount,
-                            c.DepositsAmount,
-                            c.RegFeeAmount
+                            SharesCode = c.Sharescode,
+                            Amount = c.Amount ?? 0,
+                            ContrDate = c.ContrDate ?? DateTime.Now
                         })
                         .ToListAsync();
 
-                    var contributions = contributionsRaw
-                        .Where(c => memberNos.Contains(c.MemberNo?.Trim() ?? "", StringComparer.OrdinalIgnoreCase))
-                        .GroupBy(c => c.MemberNo.Trim(), StringComparer.OrdinalIgnoreCase)
-                        .ToDictionary(g => g.Key, g => new
+                    // Group contributions by Member, ShareType, Month
+                    var memberMonthlyData = contributionsRaw
+                        .Where(c => memberNos.Contains(c.MemberNo.Trim(), StringComparer.OrdinalIgnoreCase))
+                        .GroupBy(c => new
                         {
-                            TotalShareCapital = g.Sum(x => x.ShareCapitalAmount ?? 0),
-                            TotalDeposits = g.Sum(x => x.DepositsAmount ?? 0),
-                            TotalRegFee = g.Sum(x => x.RegFeeAmount ?? 0)
-                        }, StringComparer.OrdinalIgnoreCase);
-
-                    // Get recommended loans (same as GenerateReport)
-                    var recommendedLoans = await _context.Appraisal
-                        .Where(a => memberNos.Contains(a.MemberNo.Trim())
-                            && a.CompanyCode == companyCode
-                            && a.AmtRecommended.HasValue
-                            && a.AmtRecommended > 0)
-                        .GroupBy(a => a.MemberNo.Trim())
+                            MemberNo = c.MemberNo.Trim(),
+                            SharesCode = c.SharesCode?.Trim() ?? "",
+                            YearMonth = new DateTime(c.ContrDate.Year, c.ContrDate.Month, 1)
+                        })
                         .Select(g => new
                         {
-                            MemberNo = g.Key,
-                            TotalAmtRecommended = g.Sum(a => a.AmtRecommended ?? 0)
+                            g.Key.MemberNo,
+                            g.Key.SharesCode,
+                            g.Key.YearMonth,
+                            TotalAmount = g.Sum(x => x.Amount)
                         })
-                        .ToDictionaryAsync(a => a.MemberNo, a => a.TotalAmtRecommended, StringComparer.OrdinalIgnoreCase);
+                        .ToList();
 
+                    // Create lookup for monthly data
+                    var contributionLookup = memberMonthlyData
+                        .GroupBy(x => x.MemberNo)
+                        .ToDictionary(
+                            g => g.Key,
+                            g => g.ToDictionary(
+                                x => $"{x.YearMonth:MMM yyyy}_{x.SharesCode}",
+                                x => x.TotalAmount
+                            ),
+                            StringComparer.OrdinalIgnoreCase
+                        );
+
+                    // ============================================================
+                    // CIG HEADER
+                    // ============================================================
+                    detailSheet.Cell(detailRow, 1).Value = $"CIG: {gig.GigCode} - {gig.GigName}";
+                    detailSheet.Range(detailRow, 1, detailRow, totalColumns).Merge();
+                    detailSheet.Cell(detailRow, 1).Style.Font.SetBold().Font.SetFontSize(12);
+                    detailSheet.Cell(detailRow, 1).Style.Fill.SetBackgroundColor(XLColor.FromArgb(0, 52, 73, 94));
+                    detailSheet.Cell(detailRow, 1).Style.Font.FontColor = XLColor.White;
+                    detailSheet.Cell(detailRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    detailRow++;
+
+                    // CIG Contact Details
+                    detailSheet.Cell(detailRow, 1).Value = "Contact:";
+                    detailSheet.Cell(detailRow, 2).Value = gig.ContactPhone ?? "N/A";
+                    detailSheet.Cell(detailRow, 3).Value = "Email:";
+                    detailSheet.Cell(detailRow, 4).Value = gig.ContactEmail ?? "N/A";
+                    detailSheet.Cell(detailRow, 5).Value = "Chairperson:";
+                    detailSheet.Cell(detailRow, 6).Value = gig.Chairperson ?? "N/A";
+                    detailSheet.Cell(detailRow, 7).Value = $"Total Members: {members.Count}";
+                    detailSheet.Range(detailRow, 1, detailRow, totalColumns).Style.Font.SetFontSize(9);
+                    detailRow += 2;
+
+                    // ============================================================
+                    // TABLE HEADERS - Month Headers Row (merged across share types)
+                    // ============================================================
+                    int headerRow = detailRow;
+                    int headerCol = 1;
+
+                    // Fixed headers
+                    string[] fixedHeaders = { "#", "MemberNo", "Names", "Sex", "Phone", "IDNo", "Age" };
+                    foreach (var header in fixedHeaders)
+                    {
+                        detailSheet.Cell(headerRow, headerCol).Value = header;
+                        detailSheet.Cell(headerRow, headerCol).Style.Font.SetBold();
+                        detailSheet.Cell(headerRow, headerCol).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                        detailSheet.Cell(headerRow, headerCol).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        detailSheet.Cell(headerRow, headerCol).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        headerCol++;
+                    }
+
+                    // Month headers (merged across share types)
+                    foreach (var month in months)
+                    {
+                        string monthLabel = month.ToString("MMM yyyy");
+                        int shareTypeCount = shareTypes.Count;
+                        if (shareTypeCount > 0)
+                        {
+                            detailSheet.Cell(headerRow, headerCol).Value = monthLabel;
+                            detailSheet.Range(headerRow, headerCol, headerRow, headerCol + shareTypeCount - 1).Merge();
+                            detailSheet.Cell(headerRow, headerCol).Style.Font.SetBold();
+                            detailSheet.Cell(headerRow, headerCol).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                            detailSheet.Cell(headerRow, headerCol).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                            detailSheet.Cell(headerRow, headerCol).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                            headerCol += shareTypeCount;
+                        }
+                    }
+
+                    // Total headers
+                    foreach (var st in shareTypes)
+                    {
+                        detailSheet.Cell(headerRow, headerCol).Value = "TOTAL";
+                        detailSheet.Cell(headerRow, headerCol).Style.Font.SetBold();
+                        detailSheet.Cell(headerRow, headerCol).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                        detailSheet.Cell(headerRow, headerCol).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        detailSheet.Cell(headerRow, headerCol).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        headerCol++;
+                    }
+
+                    // Grand Total header
+                    detailSheet.Cell(headerRow, headerCol).Value = "GRAND TOTAL";
+                    detailSheet.Cell(headerRow, headerCol).Style.Font.SetBold();
+                    detailSheet.Cell(headerRow, headerCol).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                    detailSheet.Cell(headerRow, headerCol).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    detailSheet.Cell(headerRow, headerCol).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+                    detailRow++;
+
+                    // ============================================================
+                    // SHARETYPE HEADERS ROW
+                    // ============================================================
+                    int shareTypeRow = detailRow;
+                    int shareTypeCol = 1;
+
+                    // Fixed headers (empty for alignment)
+                    foreach (var header in fixedHeaders)
+                    {
+                        detailSheet.Cell(shareTypeRow, shareTypeCol).Value = "";
+                        shareTypeCol++;
+                    }
+
+                    // ShareType headers below each month
+                    foreach (var month in months)
+                    {
+                        foreach (var st in shareTypes)
+                        {
+                            string displayName = st.SharesType ?? st.SharesCode;
+                            detailSheet.Cell(shareTypeRow, shareTypeCol).Value = displayName;
+                            detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Font.SetBold().Font.SetFontSize(7);
+                            detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                            detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                            detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                            shareTypeCol++;
+                        }
+                    }
+
+                    // Total ShareType headers
+                    foreach (var st in shareTypes)
+                    {
+                        string displayName = st.SharesType ?? st.SharesCode;
+                        detailSheet.Cell(shareTypeRow, shareTypeCol).Value = displayName;
+                        detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Font.SetBold().Font.SetFontSize(7);
+                        detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                        detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        shareTypeCol++;
+                    }
+
+                    // Grand Total header
+                    detailSheet.Cell(shareTypeRow, shareTypeCol).Value = "TOTAL";
+                    detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Font.SetBold().Font.SetFontSize(7);
+                    detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                    detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    detailSheet.Cell(shareTypeRow, shareTypeCol).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+                    detailRow++;
+
+                    // ============================================================
+                    // MEMBER DATA
+                    // ============================================================
                     int serialNo = 1;
-                    decimal totalShareCapital = 0;
-                    decimal totalSavings = 0;
-                    decimal totalRegFee = 0;
-                    decimal totalLoans = 0;
+                    var cigTotalsPerMonthShareType = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 
+                    // Initialize totals dictionary
+                    foreach (var month in months)
+                    {
+                        string monthKey = month.ToString("MMM yyyy");
+                        foreach (var st in shareTypes)
+                        {
+                            cigTotalsPerMonthShareType[$"{monthKey}_{st.SharesCode}"] = 0;
+                        }
+                    }
+
+                    var cigTotalsPerShareType = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var st in shareTypes)
+                    {
+                        cigTotalsPerShareType[st.SharesCode] = 0;
+                    }
+
+                    // Process each member
                     foreach (var member in members)
                     {
                         string trimmedMemberNo = member.MemberNo?.Trim() ?? "";
                         string fullName = $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim();
                         if (string.IsNullOrWhiteSpace(fullName)) fullName = "N/A";
 
-                        decimal shareCapital = contributions.ContainsKey(trimmedMemberNo)
-                            ? contributions[trimmedMemberNo].TotalShareCapital : 0;
-                        decimal savings = contributions.ContainsKey(trimmedMemberNo)
-                            ? contributions[trimmedMemberNo].TotalDeposits : 0;
-                        decimal regFee = contributions.ContainsKey(trimmedMemberNo)
-                            ? contributions[trimmedMemberNo].TotalRegFee : 0;
-                        decimal loanAmt = recommendedLoans.ContainsKey(trimmedMemberNo)
-                            ? recommendedLoans[trimmedMemberNo] : 0;
-
-                        totalShareCapital += shareCapital;
-                        totalSavings += savings;
-                        totalRegFee += regFee;
-                        totalLoans += loanAmt;
-
                         int? age = member.Dob.HasValue ? CalculateAge(member.Dob.Value) : (int?)null;
 
-                        worksheet.Cell(currentRow, 1).Value = serialNo++;
-                        worksheet.Cell(currentRow, 2).Value = member.MemberNo;
-                        worksheet.Cell(currentRow, 3).Value = fullName;
-                        worksheet.Cell(currentRow, 4).Value = member.Sex ?? "-";
-                        worksheet.Cell(currentRow, 5).Value = member.PhoneNo ?? member.MobileNo ?? "-";
-                        worksheet.Cell(currentRow, 6).Value = member.Idno ?? "-";
-                        worksheet.Cell(currentRow, 7).Value = age;
-                        worksheet.Cell(currentRow, 8).Value = shareCapital;
-                        worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
-                        worksheet.Cell(currentRow, 9).Value = savings;
-                        worksheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
-                        worksheet.Cell(currentRow, 10).Value = regFee;
-                        worksheet.Cell(currentRow, 10).Style.NumberFormat.Format = "#,##0.00";
-                        worksheet.Cell(currentRow, 11).Value = loanAmt;
-                        worksheet.Cell(currentRow, 11).Style.NumberFormat.Format = "#,##0.00";
-                        currentRow++;
+                        int dataCol = 1;
+
+                        // Fixed columns
+                        detailSheet.Cell(detailRow, dataCol++).Value = serialNo++;
+                        detailSheet.Cell(detailRow, dataCol++).Value = member.MemberNo;
+                        detailSheet.Cell(detailRow, dataCol++).Value = fullName;
+                        detailSheet.Cell(detailRow, dataCol++).Value = member.Sex ?? "-";
+                        detailSheet.Cell(detailRow, dataCol++).Value = member.PhoneNo ?? member.MobileNo ?? "-";
+                        detailSheet.Cell(detailRow, dataCol++).Value = member.Idno ?? "-";
+                        detailSheet.Cell(detailRow, dataCol++).Value = age ?? 0;
+
+                        // Monthly data
+                        var memberData = contributionLookup.ContainsKey(trimmedMemberNo)
+                            ? contributionLookup[trimmedMemberNo]
+                            : new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+                        var totalsPerShareType = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var st in shareTypes)
+                        {
+                            totalsPerShareType[st.SharesCode] = 0;
+                        }
+
+                        foreach (var month in months)
+                        {
+                            string monthKey = month.ToString("MMM yyyy");
+                            foreach (var st in shareTypes)
+                            {
+                                string lookupKey = $"{monthKey}_{st.SharesCode}";
+                                decimal amount = memberData.ContainsKey(lookupKey) ? memberData[lookupKey] : 0;
+
+                                detailSheet.Cell(detailRow, dataCol++).Value = amount;
+                                detailSheet.Cell(detailRow, dataCol - 1).Style.NumberFormat.Format = "#,##0.00";
+
+                                // Add to member total
+                                totalsPerShareType[st.SharesCode] += amount;
+
+                                // Add to CIG totals per month-sharetype
+                                cigTotalsPerMonthShareType[lookupKey] += amount;
+                            }
+                        }
+
+                        // Totals per ShareType for this member
+                        foreach (var st in shareTypes)
+                        {
+                            decimal total = totalsPerShareType.ContainsKey(st.SharesCode) ? totalsPerShareType[st.SharesCode] : 0;
+                            detailSheet.Cell(detailRow, dataCol++).Value = total;
+                            detailSheet.Cell(detailRow, dataCol - 1).Style.NumberFormat.Format = "#,##0.00";
+
+                            // Add to CIG totals per sharetype
+                            cigTotalsPerShareType[st.SharesCode] += total;
+                        }
+
+                        // Grand Total for this member
+                        decimal grandTotal = totalsPerShareType.Values.Sum();
+                        detailSheet.Cell(detailRow, dataCol++).Value = grandTotal;
+                        detailSheet.Cell(detailRow, dataCol - 1).Style.NumberFormat.Format = "#,##0.00";
+
+                        detailRow++;
                     }
 
-                    currentRow++;
-                    worksheet.Cell(currentRow, 7).Value = "TOTALS:";
-                    worksheet.Cell(currentRow, 7).Style.Font.SetBold();
-                    worksheet.Cell(currentRow, 7).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-                    worksheet.Cell(currentRow, 8).Value = totalShareCapital;
-                    worksheet.Cell(currentRow, 8).Style.Font.SetBold();
-                    worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
-                    worksheet.Cell(currentRow, 9).Value = totalSavings;
-                    worksheet.Cell(currentRow, 9).Style.Font.SetBold();
-                    worksheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
-                    worksheet.Cell(currentRow, 10).Value = totalRegFee;
-                    worksheet.Cell(currentRow, 10).Style.Font.SetBold();
-                    worksheet.Cell(currentRow, 10).Style.NumberFormat.Format = "#,##0.00";
-                    worksheet.Cell(currentRow, 11).Value = totalLoans;
-                    worksheet.Cell(currentRow, 11).Style.Font.SetBold();
-                    worksheet.Cell(currentRow, 11).Style.NumberFormat.Format = "#,##0.00";
+                    // ============================================================
+                    // TOTALS ROW AT THE BOTTOM
+                    // ============================================================
+                    int totalRow = detailRow;
 
-                    worksheet.Columns().AdjustToContents();
+                    // Fixed columns (empty for alignment)
+                    int totalCol = 1;
+                    detailSheet.Cell(totalRow, totalCol++).Value = "";
+                    detailSheet.Cell(totalRow, totalCol++).Value = "";
+                    detailSheet.Cell(totalRow, totalCol++).Value = "CIG TOTALS:";
+                    detailSheet.Cell(totalRow, totalCol - 1).Style.Font.SetBold();
+                    detailSheet.Cell(totalRow, totalCol - 1).Style.Fill.SetBackgroundColor(XLColor.LightYellow);
+                    detailSheet.Cell(totalRow, totalCol++).Value = "";
+                    detailSheet.Cell(totalRow, totalCol++).Value = "";
+                    detailSheet.Cell(totalRow, totalCol++).Value = "";
+                    detailSheet.Cell(totalRow, totalCol++).Value = "";
+
+                    // Monthly totals
+                    foreach (var month in months)
+                    {
+                        string monthKey = month.ToString("MMM yyyy");
+                        foreach (var st in shareTypes)
+                        {
+                            string lookupKey = $"{monthKey}_{st.SharesCode}";
+                            decimal amount = cigTotalsPerMonthShareType.ContainsKey(lookupKey) ? cigTotalsPerMonthShareType[lookupKey] : 0;
+                            detailSheet.Cell(totalRow, totalCol++).Value = amount;
+                            detailSheet.Cell(totalRow, totalCol - 1).Style.NumberFormat.Format = "#,##0.00";
+                            detailSheet.Cell(totalRow, totalCol - 1).Style.Font.SetBold();
+                            detailSheet.Cell(totalRow, totalCol - 1).Style.Fill.SetBackgroundColor(XLColor.LightYellow);
+                        }
+                    }
+
+                    // Totals per ShareType
+                    foreach (var st in shareTypes)
+                    {
+                        decimal amount = cigTotalsPerShareType.ContainsKey(st.SharesCode) ? cigTotalsPerShareType[st.SharesCode] : 0;
+                        detailSheet.Cell(totalRow, totalCol++).Value = amount;
+                        detailSheet.Cell(totalRow, totalCol - 1).Style.NumberFormat.Format = "#,##0.00";
+                        detailSheet.Cell(totalRow, totalCol - 1).Style.Font.SetBold();
+                        detailSheet.Cell(totalRow, totalCol - 1).Style.Fill.SetBackgroundColor(XLColor.LightYellow);
+                    }
+
+                    // Grand Total for CIG
+                    decimal cigGrandTotal = cigTotalsPerShareType.Values.Sum();
+                    detailSheet.Cell(totalRow, totalCol++).Value = cigGrandTotal;
+                    detailSheet.Cell(totalRow, totalCol - 1).Style.NumberFormat.Format = "#,##0.00";
+                    detailSheet.Cell(totalRow, totalCol - 1).Style.Font.SetBold();
+                    detailSheet.Cell(totalRow, totalCol - 1).Style.Fill.SetBackgroundColor(XLColor.LightYellow);
+
+                    detailRow += 2; // Add blank row after totals
                 }
 
+                // ============================================================
+                // FORMAT THE DETAIL SHEET - No frozen panes
+                // ============================================================
+                detailSheet.Columns().AdjustToContents();
+                detailSheet.Rows().AdjustToContents();
+
+                // ============================================================
+                // SHEET 3: SHARE TYPE SUMMARY (Keep as is)
+                // ============================================================
+                var summary2Sheet = workbook.Worksheets.Add("ShareType Summary");
+                int summary2Row = 1;
+
+                summary2Sheet.Cell(summary2Row, 1).Value = "SHARETYPE SUMMARY";
+                summary2Sheet.Range(summary2Row, 1, summary2Row, 6).Merge();
+                summary2Sheet.Cell(summary2Row, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                summary2Sheet.Cell(summary2Row, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                summary2Row += 2;
+
+                string[] stHeaders = { "ShareType Code", "ShareType Name", "Is Main Shares", "Used To Guarantee", "Used To Offset", "Withdrawable" };
+                for (int i = 0; i < stHeaders.Length; i++)
+                {
+                    summary2Sheet.Cell(summary2Row, i + 1).Value = stHeaders[i];
+                    summary2Sheet.Cell(summary2Row, i + 1).Style.Font.SetBold();
+                    summary2Sheet.Cell(summary2Row, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                }
+                summary2Row++;
+
+                foreach (var st in shareTypes)
+                {
+                    summary2Sheet.Cell(summary2Row, 1).Value = st.SharesCode;
+                    summary2Sheet.Cell(summary2Row, 2).Value = st.SharesType;
+                    summary2Sheet.Cell(summary2Row, 3).Value = st.IsMainShares ? "Yes" : "No";
+                    summary2Sheet.Cell(summary2Row, 4).Value = st.UsedToGuarantee ? "Yes" : "No";
+                    summary2Sheet.Cell(summary2Row, 5).Value = st.UsedToOffset ? "Yes" : "No";
+                    summary2Sheet.Cell(summary2Row, 6).Value = st.Withdrawable ? "Yes" : "No";
+                    summary2Row++;
+                }
+
+                summary2Sheet.Columns().AdjustToContents();
+
+                // ============================================================
+                // SAVE AND RETURN
+                // ============================================================
                 using var stream = new MemoryStream();
                 workbook.SaveAs(stream);
                 return File(stream.ToArray(),
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    $"GIG_Report_{startDate:yyyyMMdd}_{endDate:yyyyMMdd}.xlsx");
+                    $"GIG_Report_Monthly_{startDate:yyyyMMdd}_{endDate:yyyyMMdd}.xlsx");
             }
             catch (Exception ex)
             {
@@ -670,6 +968,7 @@ namespace SACCOBlockChainSystem.Controllers
                 return RedirectToAction("Index");
             }
         }
+
 
         [HttpPost]
         public async Task<IActionResult> ExportToPdf(DateTime startDate, DateTime endDate)

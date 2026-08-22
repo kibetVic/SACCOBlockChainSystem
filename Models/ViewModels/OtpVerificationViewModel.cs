@@ -22,5 +22,6 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public bool IsOtpValid { get; set; }
 
         public int RemainingSeconds { get; set; }
+        public string? Email { get;  set; }
     }
 }

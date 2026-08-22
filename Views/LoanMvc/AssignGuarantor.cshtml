@@ -60,14 +60,36 @@
         </div>
     }
 
-    <!-- Guarantee Progress Card -->
-    <div class="card shadow-sm mb-4">
+    <!-- Combined Borrower Details & Guarantee Progress Card -->
+    <div class="card shadow-sm mb-4 border-primary">
         <div class="card-header bg-primary text-white">
             <h5 class="card-title mb-0">
-                <i class="bi bi-calculator me-2"></i>Guarantee Progress
+                <i class="bi bi-person-circle me-2"></i>Borrower / Applicant Details & Guarantee Progress
             </h5>
         </div>
         <div class="card-body">
+            <!-- Borrower Details Section -->
+            <div class="row">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Member No</small>
+                    <strong>@((ViewBag.Borrower as dynamic)?.MemberNo ?? "N/A")</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Full Name</small>
+                    <strong>@((ViewBag.Borrower as dynamic)?.Name ?? "N/A")</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">ID Number</small>
+                    <strong>@((ViewBag.Borrower as dynamic)?.IdNo ?? "N/A")</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Phone</small>
+                    <strong>@((ViewBag.Borrower as dynamic)?.Phone ?? "N/A")</strong>
+                </div>
+            </div>
+            <hr class="my-3" />
+
+            <!-- Guarantee Progress Section -->
             <div class="row text-center">
                 <div class="col-md-3">
                     <div class="bg-light p-3 rounded">
@@ -95,6 +117,7 @@
                 </div>
             </div>
 
+            <!-- Progress Bar -->
             <div class="mt-3">
                 <div class="progress" style="height: 30px;">
                     @{
@@ -122,7 +145,24 @@
                     <div class="alert alert-warning mt-3 mb-0">
                         <i class="bi bi-info-circle-fill me-2"></i>
                         <strong>Remaining to Guarantee:</strong> KES @remainingAmount.ToString("N0")
+                        @if (ViewBag.IsSelfGuarantee != null && ViewBag.IsSelfGuarantee == true)
+                        {
+                            <span class="ms-2 text-info">| Self guarantee enabled (max 90%)</span>
+                        }
+                        else
+                        {
+                            <span class="ms-2 text-muted">| Guarantors max 50% each</span>
+                        }
                     </div>
+                }
+            </div>
+
+            <!-- Status Badges -->
+            <div class="mt-3">
+                <span class="badge bg-warning ms-2">Remaining: KES @((ViewBag.RemainingAmount as decimal? ?? 0).ToString("N0"))</span>
+                @if (ViewBag.IsSelfGuarantee != null && ViewBag.IsSelfGuarantee == true)
+                {
+                    <span class="badge bg-success ms-2"><i class="bi bi-check-circle"></i> Self Guarantee Enabled</span>
                 }
             </div>
         </div>
@@ -152,13 +192,7 @@
                             <h5 class="card-title mb-0">
                                 <i class="bi bi-person-plus me-2"></i>Add Member Guarantor
                             </h5>
-                            <small class="text-muted">Maximum @maxGuarantors guarantor(s) allowed per loan</small>
-                            @if (isSelfGuarantee && !isApplicantGuarantor)
-                            {
-                                <small class="text-success mt-1 d-block">
-                                    <i class="bi bi-info-circle"></i> Self guarantee is enabled. You can add yourself as a guarantor.
-                                </small>
-                            }
+                            <small class="text-muted"> Maximum @maxGuarantors guarantor(s) allowed per loan</small>
                         </div>
                         <div class="card-body">
                             <!-- Enhanced Search Section -->
@@ -700,15 +734,11 @@
                 // Check if already in pending list
                 const existingInPending = pendingGuarantors.find(g => g.memberNo === memberNo);
                 if (existingInPending) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire('Warning', 'This member is already in the pending list', 'warning');
-                    } else {
-                        alert('This member is already in the pending list');
-                    }
+                    Swal.fire('Warning', 'This member is already in the pending list', 'warning');
                     return;
                 }
 
-                // Check if already saved - with safe check
+                // Check if already saved
                 let alreadySaved = false;
                 try {
                     if (existingGuarantorsList && Array.isArray(existingGuarantorsList)) {
@@ -719,45 +749,29 @@
                 }
 
                 if (alreadySaved) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire('Warning', 'This member is already a saved guarantor', 'warning');
-                    } else {
-                        alert('This member is already a saved guarantor');
-                    }
+                    Swal.fire('Warning', 'This member is already a saved guarantor', 'warning');
                     return;
                 }
 
                 // Check self guarantee
-                if (memberNo === applicantMemberNo) {
+                const isSelf = memberNo === applicantMemberNo;
+                if (isSelf) {
                     if (!isSelfGuarantee) {
-                        if (typeof Swal !== 'undefined') {
-                            Swal.fire('Error', 'Self guarantee is not allowed for this loan type', 'error');
-                        } else {
-                            alert('Self guarantee is not allowed for this loan type');
-                        }
+                        Swal.fire('Error', 'Self guarantee is not allowed for this loan type', 'error');
                         return;
                     }
                     if (isApplicantGuarantor) {
-                        if (typeof Swal !== 'undefined') {
-                            Swal.fire('Warning', 'You are already a guarantor for this loan', 'warning');
-                        } else {
-                            alert('You are already a guarantor for this loan');
-                        }
+                        Swal.fire('Warning', 'You are already a guarantor for this loan', 'warning');
                         return;
                     }
                 }
 
-                // Validate guarantor eligibility
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        title: 'Validating...',
-                        text: 'Please wait while we check eligibility',
-                        allowOutsideClick: false,
-                        didOpen: () => { Swal.showLoading(); }
-                    });
-                } else {
-                    console.log("Validating guarantor eligibility...");
-                }
+                Swal.fire({
+                    title: 'Validating...',
+                    text: 'Please wait while we check eligibility',
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
 
                 const apiUrl = `/api/LoanApi/validate-guarantor?memberNo=${encodeURIComponent(memberNo)}&loanNo=${encodeURIComponent(loanNo)}&companyCode=${encodeURIComponent(companyCode)}`;
                 console.log("Calling API:", apiUrl);
@@ -768,17 +782,12 @@
                 const data = await response.json();
                 console.log("Response data:", data);
 
-                if (typeof Swal !== 'undefined') {
-                    Swal.close();
-                }
+                Swal.close();
 
                 if (data.success) {
                     selectedGuarantorData = data.data;
                     selectedGuarantorData.memberNo = memberNo;
                     isGuarantorSelected = true;
-
-                    console.log("Selected guarantor data:", selectedGuarantorData);
-                    console.log("Setting UI elements...");
 
                     // Update selected member card
                     const selectedNameSpan = document.getElementById('selectedGuarantorName');
@@ -797,24 +806,53 @@
                     // Show guarantee amount section
                     if (guaranteeAmountSection) guaranteeAmountSection.style.display = 'block';
 
-                    // Set up amount validation
+                    // ============================================================
+                    // CALCULATE MAX GUARANTEE AMOUNT BASED ON GUARANTOR TYPE
+                    // ============================================================
                     const currentTotalGuarantee = currentGuarantee + getPendingTotal();
+                    const maxGuaranteeByLoan = (loanAmount || 0) - currentTotalGuarantee;
+
+                    // Determine max based on guarantor type
+                    let maxGuaranteeByType;
+                    if (isSelf) {
+                        // Self guarantee: max 90% of loan amount
+                        maxGuaranteeByType = (loanAmount || 0) * 0.9;
+                    } else {
+                        // Other guarantors: max 50% of loan amount
+                        maxGuaranteeByType = (loanAmount || 0) * 0.5;
+                    }
+
+                    // Final max is the smaller of: available deposits, loan remaining, and type limit
                     const maxGuarantee = Math.min(
                         selectedGuarantorData.availableAmount || 0,
-                        (loanAmount || 0) - currentTotalGuarantee
+                        maxGuaranteeByLoan,
+                        maxGuaranteeByType
                     );
 
-                    console.log("Max guarantee:", maxGuarantee);
-                    console.log("Loan amount:", loanAmount);
-                    console.log("Current guarantee:", currentGuarantee);
-                    console.log("Pending total:", getPendingTotal());
+                    console.log("Max guarantee calculation:");
+                    console.log("  - Available deposits:", selectedGuarantorData.availableAmount);
+                    console.log("  - Loan remaining:", maxGuaranteeByLoan);
+                    console.log("  - Type limit (Self=" + isSelf + "):", maxGuaranteeByType);
+                    console.log("  - Final max:", maxGuarantee);
 
                     if (guaranteeInput) {
                         guaranteeInput.value = '';
                         guaranteeInput.setAttribute('max', maxGuarantee);
                         guaranteeInput.setAttribute('min', 1000);
                     }
-                    if (amountHint) amountHint.innerHTML = `Maximum guarantee: KES ${maxGuarantee.toLocaleString()}`;
+
+                    // Show hint with type-specific information
+                    let typeInfo = isSelf
+                        ? '<span class="text-info">🔵 Self Guarantee</span> - Maximum 90% of loan amount'
+                        : '<span class="text-success">🟢 Member Guarantee</span> - Maximum 50% of loan amount';
+
+                    if (amountHint) {
+                        amountHint.innerHTML = `
+                            ${typeInfo}<br />
+                            <strong>Maximum guarantee:</strong> KES ${maxGuarantee.toLocaleString()}
+                            ${maxGuarantee <= 0 ? ' <span class="text-danger">⚠️ No capacity available</span>' : ''}
+                        `;
+                    }
 
                     // Hide search results
                     const searchResults = document.getElementById('memberSearchResults');
@@ -822,27 +860,15 @@
                     if (searchResults) searchResults.style.display = 'none';
                     if (searchInput) searchInput.value = '';
 
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire('Success', `${selectedGuarantorData.name || memberNo} is eligible to be a guarantor!`, 'success');
-                    } else {
-                        alert(`${selectedGuarantorData.name || memberNo} is eligible to be a guarantor!`);
-                    }
+                    Swal.fire('Success', `${selectedGuarantorData.name || memberNo} is eligible to be a guarantor! Max guarantee: KES ${maxGuarantee.toLocaleString()}`, 'success');
                 } else {
                     console.error("Validation failed:", data.message);
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire('Error', data.message || 'Member is not eligible to be a guarantor', 'error');
-                    } else {
-                        alert('Error: ' + (data.message || 'Member is not eligible to be a guarantor'));
-                    }
+                    Swal.fire('Error', data.message || 'Member is not eligible to be a guarantor', 'error');
                 }
             } catch (error) {
                 console.error('Error in selectGuarantor:', error);
-                if (typeof Swal !== 'undefined') {
-                    Swal.close();
-                    Swal.fire('Error', 'Error validating guarantor: ' + error.message, 'error');
-                } else {
-                    alert('Error: ' + error.message);
-                }
+                Swal.close();
+                Swal.fire('Error', 'Error validating guarantor: ' + error.message, 'error');
             }
         }
 

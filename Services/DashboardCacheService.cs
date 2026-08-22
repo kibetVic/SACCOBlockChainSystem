@@ -721,7 +721,7 @@ namespace SACCOBlockChainSystem.Services
         }
 
         // ============================================================
-        // CALCULATE LOAN COUNT STATISTICS
+        // CALCULATE LOAN COUNT STATISTICS - FIXED FOR ALL ROLES
         // ============================================================
         private async Task<(int Total, int Women, int Men, int Others)> CalculateLoanCountDataAsync(string? companyCode)
         {
@@ -731,6 +731,7 @@ namespace SACCOBlockChainSystem.Services
                                  join m in _context.Members on l.MemberNo equals m.MemberNo
                                  select new { l.LoanNo, l.Status, l.CompanyCode, m.Sex };
 
+                // Apply company filter only if specified
                 if (!string.IsNullOrEmpty(companyCode))
                 {
                     loansQuery = loansQuery.Where(x => x.CompanyCode == companyCode);
@@ -766,9 +767,8 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-
         // ============================================================
-        // CALCULATE LOAN STATUS BREAKDOWN
+        // CALCULATE LOAN STATUS BREAKDOWN - FIXED FOR ALL ROLES
         // ============================================================
         private async Task<(int Completed, int Uncompleted, int Overdue, int Active)> CalculateLoanStatusBreakdownAsync(string? companyCode)
         {
@@ -776,15 +776,17 @@ namespace SACCOBlockChainSystem.Services
             {
                 var asAtDate = DateTime.Now.Date;
 
-                // Get all loans for the company
+                // Get all loans for the company (or all if companyCode is null)
                 var loansQuery = _context.Loans.AsQueryable();
+
+                // Apply company filter only if specified
                 if (!string.IsNullOrEmpty(companyCode))
                 {
                     loansQuery = loansQuery.Where(l => l.CompanyCode == companyCode);
                 }
 
                 var loans = await loansQuery
-                    .Select(l => new { l.LoanNo, l.Status, l.MemberNo, l.AuditTime, l.LoanAmt, l.Aamount })
+                    .Select(l => new { l.LoanNo, l.Status, l.MemberNo, l.AuditTime, l.LoanAmt, l.Aamount, l.CompanyCode })
                     .ToListAsync();
 
                 int completed = 0;
@@ -794,19 +796,28 @@ namespace SACCOBlockChainSystem.Services
 
                 var loanNos = loans.Select(l => l.LoanNo).ToList();
 
-                // Get ALL loan balances in ONE query
-                var loanBalances = new Dictionary<string, decimal>();
-                if (loanNos.Any())
+                // Get ALL loan balances in ONE query with optional company filter
+                var loanBalancesQuery = _context.Loanbal
+                    .Where(lb => loanNos.Contains(lb.LoanNo));
+
+                if (!string.IsNullOrEmpty(companyCode))
                 {
-                    loanBalances = await _context.Loanbal
-                        .Where(lb => loanNos.Contains(lb.LoanNo))
-                        .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
+                    loanBalancesQuery = loanBalancesQuery.Where(lb => lb.Companycode == companyCode);
                 }
 
-                // Get loan schedules to check overdue installments - THIS IS THE PRIMARY SOURCE
-                var loanSchedules = await _context.LoanSchedules
-                    .Where(s => loanNos.Contains(s.LoanNo) && s.Status != "Paid" && s.OutstandingTotal > 0.01m)
-                    .ToListAsync();
+                var loanBalances = await loanBalancesQuery
+                    .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
+
+                // Get loan schedules to check overdue installments
+                var loanSchedulesQuery = _context.LoanSchedules
+                    .Where(s => loanNos.Contains(s.LoanNo) && s.Status != "Paid" && s.OutstandingTotal > 0.01m);
+
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loanSchedulesQuery = loanSchedulesQuery.Where(s => s.CompanyCode == companyCode);
+                }
+
+                var loanSchedules = await loanSchedulesQuery.ToListAsync();
 
                 // Group schedules by LoanNo
                 var schedulesByLoan = loanSchedules
@@ -833,19 +844,13 @@ namespace SACCOBlockChainSystem.Services
                     {
                         active++;
 
-                        // ============================================================
-                        // CHECK FOR OVERDUE LOANS - USING SAME LOGIC AS SQL
-                        // ============================================================
+                        // Check for overdue loans
                         bool isOverdue = false;
 
-                        // ONLY Method 1: Check if any schedule is overdue
-                        // This matches the SQL query exactly
                         if (schedulesByLoan.TryGetValue(loan.LoanNo, out var schedules))
                         {
                             foreach (var schedule in schedules)
                             {
-                                // Check if installment is overdue (due date passed and not paid)
-                                // Same conditions as SQL: Status != 'Paid', OutstandingTotal > 0.01, DueDate < GETDATE()
                                 if (schedule.DueDate < asAtDate && schedule.OutstandingTotal > 0.01m)
                                 {
                                     isOverdue = true;
@@ -872,9 +877,8 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-
         // ============================================================
-        // CALCULATE LOAN STATUS BREAKDOWN BY GENDER 
+        // CALCULATE LOAN STATUS BREAKDOWN BY GENDER - FIXED FOR ALL ROLES
         // ============================================================
         private async Task<(int WomenCompleted, int MenCompleted, int OthersCompleted,
                             int WomenActive, int MenActive, int OthersActive,
@@ -889,6 +893,7 @@ namespace SACCOBlockChainSystem.Services
                                  join m in _context.Members on l.MemberNo equals m.MemberNo
                                  select new { l.LoanNo, l.Status, l.MemberNo, l.AuditTime, m.Sex, l.CompanyCode, l.LoanAmt, l.Aamount };
 
+                // Apply company filter only if specified
                 if (!string.IsNullOrEmpty(companyCode))
                 {
                     loansQuery = loansQuery.Where(x => x.CompanyCode == companyCode);
@@ -902,10 +907,16 @@ namespace SACCOBlockChainSystem.Services
 
                 var loanNos = loans.Select(l => l.LoanNo).ToList();
 
-                // Get loan schedules to check overdue installments - THIS IS THE PRIMARY SOURCE
-                var loanSchedules = await _context.LoanSchedules
-                    .Where(s => loanNos.Contains(s.LoanNo) && s.Status != "Paid" && s.OutstandingTotal > 0.01m)
-                    .ToListAsync();
+                // Get loan schedules to check overdue installments
+                var loanSchedulesQuery = _context.LoanSchedules
+                    .Where(s => loanNos.Contains(s.LoanNo) && s.Status != "Paid" && s.OutstandingTotal > 0.01m);
+
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loanSchedulesQuery = loanSchedulesQuery.Where(s => s.CompanyCode == companyCode);
+                }
+
+                var loanSchedules = await loanSchedulesQuery.ToListAsync();
 
                 // Group schedules by LoanNo
                 var schedulesByLoan = loanSchedules
@@ -933,18 +944,13 @@ namespace SACCOBlockChainSystem.Services
                         else if (gender == "MALE") menActive++;
                         else othersActive++;
 
-                        // ============================================================
-                        // CHECK FOR OVERDUE LOANS - USING SAME LOGIC AS SQL
-                        // ============================================================
+                        // Check for overdue loans
                         bool isOverdue = false;
 
-                        // ONLY Method 1: Check if any schedule is overdue
-                        // This matches the SQL query exactly
                         if (schedulesByLoan.TryGetValue(loan.LoanNo, out var schedules))
                         {
                             foreach (var schedule in schedules)
                             {
-                                // Same conditions as SQL
                                 if (schedule.DueDate < asAtDate && schedule.OutstandingTotal > 0.01m)
                                 {
                                     isOverdue = true;
@@ -977,9 +983,8 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-
         // ============================================================
-        // CALCULATE LOANEE STATISTICS (Distinct Members with Loans)
+        // CALCULATE LOANEE STATISTICS (Distinct Members with Loans) - FIXED FOR ALL ROLES
         // ============================================================
         private async Task<(int Total, int Women, int Men, int Others)> CalculateLoaneesDataAsync(string? companyCode)
         {
@@ -987,6 +992,7 @@ namespace SACCOBlockChainSystem.Services
             {
                 var loansQuery = _context.Loans.AsQueryable();
 
+                // Apply company filter only if specified
                 if (!string.IsNullOrEmpty(companyCode))
                 {
                     loansQuery = loansQuery.Where(l => l.CompanyCode == companyCode);
@@ -995,7 +1001,7 @@ namespace SACCOBlockChainSystem.Services
                 // Get distinct members who have taken loans (INNER JOIN with Members)
                 var loaneesQuery = from l in loansQuery
                                    join m in _context.Members on l.MemberNo equals m.MemberNo
-                                   select new { m.MemberNo, m.Sex };
+                                   select new { m.MemberNo, m.Sex, m.CompanyCode };
 
                 var loanees = await loaneesQuery
                     .GroupBy(x => new { x.MemberNo, x.Sex })
@@ -1029,7 +1035,8 @@ namespace SACCOBlockChainSystem.Services
                 return (0, 0, 0, 0);
             }
         }
-       
+
+               
 
         /// <summary>
         /// Determines if a member is active based on having 3 consecutive months of deposits
@@ -1082,11 +1089,12 @@ namespace SACCOBlockChainSystem.Services
             return false;
         }
 
+
         private async Task<DashboardVM> CalculateFullDashboardDataAsync(string? companyCode, bool isSuperAdmin)
         {
             var dashboard = new DashboardVM();
 
-            // Build the member filter - get members for this company
+            // Build the member filter - get members for this company or all if companyCode is null
             var memberQuery = _context.Members.AsQueryable();
             if (!string.IsNullOrEmpty(companyCode))
                 memberQuery = memberQuery.Where(m => m.CompanyCode == companyCode);
@@ -1103,18 +1111,22 @@ namespace SACCOBlockChainSystem.Services
             var memberNos = memberStats.Select(m => m.MemberNo).Distinct().ToList();
 
             // ============================================================
-            // NEW: Determine Active Status based on 3 consecutive months of deposits
+            // Determine Active Status based on 3 consecutive months of deposits
             // ============================================================
-            // Get all deposit dates for all members in one query
-            var allDeposits = await _context.ContribShares
+            var allDepositsQuery = _context.ContribShares
                 .Where(cs => memberNos.Contains(cs.MemberNo)
-                             && cs.CompanyCode == companyCode
                              && cs.DepositsAmount.HasValue
-                             && cs.DepositsAmount.Value > 0)
-                .Select(cs => new { cs.MemberNo, Date = cs.ContrDate/* ?? cs.DepositedDate ?? cs.ReceiptDate ?? cs.AuditTime*/ })
+                             && cs.DepositsAmount.Value > 0);
+
+            if (!string.IsNullOrEmpty(companyCode))
+            {
+                allDepositsQuery = allDepositsQuery.Where(cs => cs.CompanyCode == companyCode);
+            }
+
+            var allDeposits = await allDepositsQuery
+                .Select(cs => new { cs.MemberNo, Date = cs.ContrDate })
                 .ToListAsync();
 
-            // Group deposit dates by member
             var memberDeposits = allDeposits
                 .Where(d => d.Date != null && d.Date != DateTime.MinValue)
                 .GroupBy(d => d.MemberNo)
@@ -1123,7 +1135,6 @@ namespace SACCOBlockChainSystem.Services
                     g => g.Select(d => d.Date.Value).ToList()
                 );
 
-            // Determine active members
             var activeMemberNos = new HashSet<string>();
             var dormantMemberNos = new HashSet<string>();
 
@@ -1148,18 +1159,15 @@ namespace SACCOBlockChainSystem.Services
             dashboard.TotalMen = memberStats.Count(m => m.Sex?.ToUpper() == "MALE");
             dashboard.TotalOthers = memberStats.Count(m => m.Sex?.ToUpper() != "FEMALE" && m.Sex?.ToUpper() != "MALE");
 
-            // Active members by gender
             dashboard.ActiveMembers = activeMemberNos.Count;
             dashboard.ActiveMembersByStatus = activeMemberNos.Count;
             dashboard.ActiveWomen = memberStats.Count(m => m.Sex?.ToUpper() == "FEMALE" && activeMemberNos.Contains(m.MemberNo));
             dashboard.ActiveMen = memberStats.Count(m => m.Sex?.ToUpper() == "MALE" && activeMemberNos.Contains(m.MemberNo));
 
-            // Dormant members by gender
             dashboard.DormantMembers = dashboard.TotalMembers - dashboard.ActiveMembers;
             dashboard.DormantWomen = dashboard.TotalWomen - dashboard.ActiveWomen;
             dashboard.DormantMen = dashboard.TotalMen - dashboard.ActiveMen;
 
-            // Youth statistics
             var today = DateTime.Today;
             var membersWithAge = memberStats.Where(m => m.Dob.HasValue).ToList();
             dashboard.YouthTotal = membersWithAge.Count(m => CalculateAge(m.Dob.Value) <= 35);
@@ -1167,11 +1175,20 @@ namespace SACCOBlockChainSystem.Services
             dashboard.YouthFemale = membersWithAge.Count(m => CalculateAge(m.Dob.Value) <= 35 && m.Sex?.ToUpper() == "FEMALE");
 
             // ============================================================
-            // QUERY #2: Financial aggregates from ContribShares
-            // FIXED: Use BOTH MemberNo AND CompanyCode
+            // Build financial queries with proper null handling for ALL roles
             // ============================================================
-            var financialStats = await _context.ContribShares
-                .Where(cs => memberNos.Contains(cs.MemberNo) && cs.CompanyCode == companyCode)
+            var contribSharesQuery = _context.ContribShares
+                .Where(cs => memberNos.Contains(cs.MemberNo));
+
+            if (!string.IsNullOrEmpty(companyCode))
+            {
+                contribSharesQuery = contribSharesQuery.Where(cs => cs.CompanyCode == companyCode);
+            }
+
+            // ============================================================
+            // QUERY #2: Financial aggregates from ContribShares
+            // ============================================================
+            var financialStats = await contribSharesQuery
                 .GroupBy(cs => 1)
                 .Select(g => new
                 {
@@ -1192,20 +1209,28 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #3: Gender breakdown for financials
-            // FIXED: Use BOTH MemberNo AND CompanyCode
             // ============================================================
-            var genderFinancials = await (from cs in _context.ContribShares
-                                          join m in _context.Members on new { cs.MemberNo, cs.CompanyCode } equals new { m.MemberNo, m.CompanyCode }
-                                          where m.CompanyCode == companyCode
-                                          group cs by m.Sex into g
-                                          select new
-                                          {
-                                              Gender = g.Key ?? "OTHERS",
-                                              ShareCapital = g.Sum(cs => cs.ShareCapitalAmount ?? 0),
-                                              Deposits = g.Sum(cs => cs.DepositsAmount ?? 0),
-                                              RegFees = g.Sum(cs => cs.RegFeeAmount ?? 0),
-                                              Contributions = g.Sum(cs => (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0))
-                                          }).ToListAsync();
+            var genderFinancialsQuery = from cs in _context.ContribShares
+                                        join m in _context.Members on cs.MemberNo equals m.MemberNo
+                                        where memberNos.Contains(m.MemberNo)
+                                        select new { cs, m.Sex, m.CompanyCode };
+
+            if (!string.IsNullOrEmpty(companyCode))
+            {
+                genderFinancialsQuery = genderFinancialsQuery.Where(x => x.CompanyCode == companyCode);
+            }
+
+            var genderFinancials = await genderFinancialsQuery
+                .GroupBy(x => x.Sex ?? "OTHERS")
+                .Select(g => new
+                {
+                    Gender = g.Key,
+                    ShareCapital = g.Sum(x => x.cs.ShareCapitalAmount ?? 0),
+                    Deposits = g.Sum(x => x.cs.DepositsAmount ?? 0),
+                    RegFees = g.Sum(x => x.cs.RegFeeAmount ?? 0),
+                    Contributions = g.Sum(x => (x.cs.ShareCapitalAmount ?? 0) + (x.cs.DepositsAmount ?? 0))
+                })
+                .ToListAsync();
 
             foreach (var item in genderFinancials)
             {
@@ -1235,14 +1260,18 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #4: Loan stats from Cheques table (Loans Taken)
-            // FIXED: Use CompanyCode in joins
             // ============================================================
             var loanStatsQuery = from c in _context.Cheques
                                  join l in _context.Loans on new { c.LoanNo, c.CompanyCode } equals new { l.LoanNo, l.CompanyCode }
                                  join m in _context.Members on new { l.MemberNo, l.CompanyCode } equals new { m.MemberNo, m.CompanyCode }
                                  where c.Amount > 0 && c.Amount != null
-                                       && m.CompanyCode == companyCode
-                                 select new { Amount = c.Amount.Value, Sex = m.Sex };
+                                       && memberNos.Contains(m.MemberNo)
+                                 select new { Amount = c.Amount.Value, Sex = m.Sex, CompanyCode = m.CompanyCode };
+
+            if (!string.IsNullOrEmpty(companyCode))
+            {
+                loanStatsQuery = loanStatsQuery.Where(x => x.CompanyCode == companyCode);
+            }
 
             var loanStats = await loanStatsQuery.ToListAsync();
 
@@ -1253,12 +1282,16 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #5: Loan balances from Loanbal table
-            // FIXED: Use CompanyCode in joins
             // ============================================================
             var loanBalancesQuery = from lb in _context.Loanbal
                                     join m in _context.Members on new { MemberNo = lb.MemberNo, CompanyCode = lb.Companycode } equals new { m.MemberNo, m.CompanyCode }
-                                    where m.CompanyCode == companyCode
-                                    select new { lb.Balance, m.Sex };
+                                    where memberNos.Contains(m.MemberNo)
+                                    select new { lb.Balance, m.Sex, m.CompanyCode };
+
+            if (!string.IsNullOrEmpty(companyCode))
+            {
+                loanBalancesQuery = loanBalancesQuery.Where(x => x.CompanyCode == companyCode);
+            }
 
             var loanBalances = await loanBalancesQuery.ToListAsync();
 
@@ -1269,13 +1302,17 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #6: Loans paid from Repay table
-            // FIXED: Use CompanyCode in joins
             // ============================================================
             var loansPaidQuery = from r in _context.Repay
                                  join m in _context.Members on new { r.MemberNo, r.CompanyCode } equals new { m.MemberNo, m.CompanyCode }
                                  where r.Principal > 0 && r.Principal != null
-                                       && m.CompanyCode == companyCode
-                                 select new { Principal = r.Principal.Value, Sex = m.Sex };
+                                       && memberNos.Contains(m.MemberNo)
+                                 select new { Principal = r.Principal.Value, Sex = m.Sex, CompanyCode = m.CompanyCode };
+
+            if (!string.IsNullOrEmpty(companyCode))
+            {
+                loansPaidQuery = loansPaidQuery.Where(x => x.CompanyCode == companyCode);
+            }
 
             var loansPaid = await loansPaidQuery.ToListAsync();
 
@@ -1286,12 +1323,16 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #7: Total loanees (distinct members with loans)
-            // FIXED: Use CompanyCode
             // ============================================================
             var loaneesQuery = from l in _context.Loans
                                join m in _context.Members on new { l.MemberNo, l.CompanyCode } equals new { m.MemberNo, m.CompanyCode }
-                               where m.CompanyCode == companyCode
-                               select new { m.MemberNo, m.Sex };
+                               where memberNos.Contains(m.MemberNo)
+                               select new { m.MemberNo, m.Sex, m.CompanyCode };
+
+            if (!string.IsNullOrEmpty(companyCode))
+            {
+                loaneesQuery = loaneesQuery.Where(x => x.CompanyCode == companyCode);
+            }
 
             var loanees = await loaneesQuery
                 .GroupBy(x => new { x.MemberNo, x.Sex })
@@ -1305,14 +1346,18 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #8: Blockchain stats
-            // FIXED: Use MemberNo AND CompanyCode
             // ============================================================
-            dashboard.TotalBlockchainTransactions = await _context.BlockchainTransactions
-                .Where(t => memberNos.Contains(t.MemberNo) && t.CompanyCode == companyCode)
-                .CountAsync();
+            var blockchainQuery = _context.BlockchainTransactions
+                .Where(t => memberNos.Contains(t.MemberNo));
 
-            dashboard.PendingBlockchainTransactions = await _context.BlockchainTransactions
-                .Where(t => t.Status.ToUpper() == "PENDING" && memberNos.Contains(t.MemberNo) && t.CompanyCode == companyCode)
+            if (!string.IsNullOrEmpty(companyCode))
+            {
+                blockchainQuery = blockchainQuery.Where(t => t.CompanyCode == companyCode);
+            }
+
+            dashboard.TotalBlockchainTransactions = await blockchainQuery.CountAsync();
+            dashboard.PendingBlockchainTransactions = await blockchainQuery
+                .Where(t => t.Status.ToUpper() == "PENDING")
                 .CountAsync();
 
             dashboard.BlocksCreatedToday = await _context.Blocks
@@ -1325,7 +1370,9 @@ namespace SACCOBlockChainSystem.Services
             var grantsQuery = _context.Gltransactions.AsQueryable();
 
             if (!string.IsNullOrEmpty(companyCode))
+            {
                 grantsQuery = grantsQuery.Where(g => g.CompanyCode == companyCode);
+            }
 
             dashboard.InclusionGrantTotal = await grantsQuery
                 .Where(g => g.TransDescript != null && g.TransDescript.ToLower().Contains("inclusion grant"))
@@ -1337,12 +1384,18 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #10: Loan Metrics (PAR, Arrears, Repayment Rate, etc.)
-            // FIXED: Use CompanyCode in all joins
             // ============================================================
 
             // Get all loans for members of this company
-            var loans = await _context.Loans
-                .Where(l => memberNos.Contains(l.MemberNo) && l.CompanyCode == companyCode)
+            var loansQuery = _context.Loans
+                .Where(l => memberNos.Contains(l.MemberNo));
+
+            if (!string.IsNullOrEmpty(companyCode))
+            {
+                loansQuery = loansQuery.Where(l => l.CompanyCode == companyCode);
+            }
+
+            var loans = await loansQuery
                 .Select(l => new { l.LoanNo, l.MemberNo, l.LoanAmt, l.Aamount, l.AuditTime, l.ApplicDate, l.CompanyCode, l.LoanCode })
                 .ToListAsync();
 
@@ -1350,21 +1403,42 @@ namespace SACCOBlockChainSystem.Services
 
             if (loanNos.Any())
             {
-                // Get loan balances - using CompanyCode
-                var loanBalancesDict = await _context.Loanbal
-                    .Where(lb => loanNos.Contains(lb.LoanNo) && lb.Companycode == companyCode)
+                // Get loan balances
+                var loanBalancesDictQuery = _context.Loanbal
+                    .Where(lb => loanNos.Contains(lb.LoanNo));
+
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loanBalancesDictQuery = loanBalancesDictQuery.Where(lb => lb.Companycode == companyCode);
+                }
+
+                var loanBalancesDict = await loanBalancesDictQuery
                     .Select(lb => new { lb.LoanNo, lb.Balance, lb.LastDate })
                     .ToDictionaryAsync(lb => lb.LoanNo, lb => new { lb.Balance, lb.LastDate });
 
-                // Get loan disbursement dates - using CompanyCode
-                var loanDisbursements = await _context.Cheques
-                    .Where(c => loanNos.Contains(c.LoanNo) && c.CompanyCode == companyCode && c.Amount > 0)
+                // Get loan disbursement dates
+                var loanDisbursementsQuery = _context.Cheques
+                    .Where(c => loanNos.Contains(c.LoanNo) && c.Amount > 0);
+
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loanDisbursementsQuery = loanDisbursementsQuery.Where(c => c.CompanyCode == companyCode);
+                }
+
+                var loanDisbursements = await loanDisbursementsQuery
                     .Select(c => new { c.LoanNo, c.DateIssued })
                     .ToDictionaryAsync(c => c.LoanNo, c => c.DateIssued);
 
-                // Get latest repayments - using CompanyCode
-                var latestRepayments = await _context.Repay
-                    .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode)
+                // Get latest repayments
+                var latestRepaymentsQuery = _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo));
+
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    latestRepaymentsQuery = latestRepaymentsQuery.Where(r => r.CompanyCode == companyCode);
+                }
+
+                var latestRepayments = await latestRepaymentsQuery
                     .GroupBy(r => r.LoanNo)
                     .Select(g => new
                     {
@@ -1375,17 +1449,23 @@ namespace SACCOBlockChainSystem.Services
                     })
                     .ToDictionaryAsync(r => r.LoanNo, r => new { r.LastDateReceived, r.TotalPrincipal, r.TotalAmount });
 
-                // Get current month repayments - using CompanyCode
+                // Get current month repayments
                 var currentDate = DateTime.Now;
                 var startOfCurrentMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
                 var endOfCurrentMonth = startOfCurrentMonth.AddMonths(1).AddDays(-1);
 
-                var currentMonthRepayments = await _context.Repay
+                var currentMonthRepaymentsQuery = _context.Repay
                     .Where(r => loanNos.Contains(r.LoanNo)
-                        && r.CompanyCode == companyCode
                         && r.DateReceived.HasValue
                         && r.DateReceived >= startOfCurrentMonth
-                        && r.DateReceived <= endOfCurrentMonth)
+                        && r.DateReceived <= endOfCurrentMonth);
+
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    currentMonthRepaymentsQuery = currentMonthRepaymentsQuery.Where(r => r.CompanyCode == companyCode);
+                }
+
+                var currentMonthRepayments = await currentMonthRepaymentsQuery
                     .GroupBy(r => r.CompanyCode)
                     .Select(g => new
                     {
@@ -1463,6 +1543,10 @@ namespace SACCOBlockChainSystem.Services
                     }
                 }
 
+                // ============================================================
+                // FIX: Get ALL loan statistics - Pass the companyCode correctly
+                // These methods now handle null companyCode properly
+                // ============================================================
 
                 // Get Loanees Statistics (Distinct Members with Loans)
                 var loaneesData = await CalculateLoaneesDataAsync(companyCode);
@@ -1522,28 +1606,7 @@ namespace SACCOBlockChainSystem.Services
             }
 
             // ============================================================
-            // QUERY #11: Recent transactions
-            // FIXED: Use CompanyCode in joins
-            // ============================================================
-            //var recentTxQuery = from t in _context.Transactions2
-            //                    join m in _context.Members on new { t.MemberNo, CompanyCode = t.Companycode } equals new { m.MemberNo, m.CompanyCode }
-            //                    where t.Status.ToUpper() == "COMPLETED" && m.CompanyCode == companyCode
-            //                    orderby t.ContributionDate descending
-            //                    select new RecentTransaction
-            //                    {
-            //                        TransactionId = t.TransactionNo,
-            //                        MemberName = m.Surname + " " + m.OtherNames,
-            //                        Type = t.TransactionType,
-            //                        Amount = t.Amount,
-            //                        Date = t.ContributionDate,
-            //                        Status = t.Status,
-            //                        BlockchainTxId = t.BlockchainTxId ?? "Pending"
-            //                    };
-
-            //dashboard.RecentTransactions = await recentTxQuery.Take(10).ToListAsync();
-
-            // ============================================================
-            // QUERY #12: Profit/Loss from Gltransaction
+            // QUERY #11: Profit/Loss from Gltransaction
             // ============================================================
             var (lastMonthProfitLoss, thisMonthProfitLoss) = await CalculateProfitLossFromGltransactionAsync(companyCode, isSuperAdmin);
 
@@ -1560,55 +1623,14 @@ namespace SACCOBlockChainSystem.Services
             }
 
             // ============================================================
-            // QUERY #13: Quick Stats
-            // FIXED: Use same property names in the anonymous type
+            // QUERY #12: Gender distribution
             // ============================================================
-            //dashboard.QuickStats = new DashboardQuickStats
-            //{
-            //    TransactionsToday = await _context.Transactions2
-            //        .Join(_context.Members,
-            //              t => new { t.MemberNo, CompanyCode = t.Companycode },
-            //              m => new { m.MemberNo, m.CompanyCode },
-            //              (t, m) => new { t, m })
-            //        .Where(x => x.t.ContributionDate.Date == DateTime.Today
-            //                    && x.t.Status.ToUpper() == "COMPLETED"
-            //                    && x.m.CompanyCode == companyCode)
-            //        .CountAsync(),
-
-            //    NewMembersToday = await memberQuery
-            //        .CountAsync(m => m.EffectDate.HasValue && m.EffectDate.Value.Date == DateTime.Today),
-
-            //    AverageDeposit = await _context.Transactions2
-            //        .Join(_context.Members,
-            //              t => new { t.MemberNo, CompanyCode = t.Companycode },
-            //              m => new { m.MemberNo, m.CompanyCode },
-            //              (t, m) => new { t, m })
-            //        .Where(x => x.t.TransactionType.ToUpper() == "DEPOSIT"
-            //                    && x.t.Status.ToUpper() == "COMPLETED"
-            //                    && x.m.CompanyCode == companyCode)
-            //        .AverageAsync(x => (decimal?)x.t.Amount) ?? 0,
-
-            //    AverageLoan = await _context.Loans
-            //        .Join(_context.Members,
-            //              l => new { l.MemberNo, l.CompanyCode },
-            //              m => new { m.MemberNo, m.CompanyCode },
-            //              (l, m) => new { l, m })
-            //        .Where(x => x.l.Status == 1 && x.m.CompanyCode == companyCode)
-            //        .AverageAsync(x => (decimal?)x.l.LoanAmt) ?? 0,
-
-            //    BlockchainUptime = 99.9m,
-            //    LoanApprovalRate = 85.5m
-            //};
-
-            // ============================================================
-            // QUERY #14: Gender distribution
-            // ============================================================
-            //dashboard.GenderStats = new GenderDistribution
-            //{
-            //    MaleCount = dashboard.TotalMen,
-            //    FemaleCount = dashboard.TotalWomen,
-            //    OtherCount = dashboard.TotalOthers
-            //};
+            dashboard.GenderStats = new GenderDistribution
+            {
+                MaleCount = dashboard.TotalMen,
+                FemaleCount = dashboard.TotalWomen,
+                OtherCount = dashboard.TotalOthers
+            };
 
             // Set selected company name
             if (!string.IsNullOrEmpty(companyCode))
@@ -1724,9 +1746,7 @@ namespace SACCOBlockChainSystem.Services
             await Task.CompletedTask;
         }
 
-        // ============================================================
-        // NEW: Calculate dashboard data for multiple companies
-        // ============================================================
+
         private async Task<DashboardVM> CalculateFullDashboardDataForCompaniesAsync(List<string> companyCodes, bool isCountyAdmin)
         {
             var dashboard = new DashboardVM();
@@ -1929,10 +1949,9 @@ namespace SACCOBlockChainSystem.Services
 
             // ============================================================
             // QUERY #10: Loan Metrics (PAR, Arrears, Repayment Rate, etc.)
-            // USING SQL APPROACH - NO Posted/Status Filters
             // ============================================================
 
-            // Get all loans for these companies (NO Status filter)
+            // Get all loans for these companies
             var loans = await _context.Loans
                 .Where(l => companyCodes.Contains(l.CompanyCode))
                 .Select(l => new { l.LoanNo, l.MemberNo, l.LoanAmt, l.Aamount, l.AuditTime, l.ApplicDate, l.CompanyCode, l.LoanCode })
@@ -1942,25 +1961,19 @@ namespace SACCOBlockChainSystem.Services
 
             if (loanNos.Any())
             {
-                // ============================================================
-                // Get loan balances (NO Posted filter)
-                // ============================================================
+                // Get loan balances
                 var loanBalancesDict = await _context.Loanbal
                     .Where(lb => loanNos.Contains(lb.LoanNo) && companyCodes.Contains(lb.Companycode))
                     .Select(lb => new { lb.LoanNo, lb.Balance, lb.LastDate })
                     .ToDictionaryAsync(lb => lb.LoanNo, lb => new { lb.Balance, lb.LastDate });
 
-                // ============================================================
-                // Get loan disbursement dates (NO filter)
-                // ============================================================
+                // Get loan disbursement dates
                 var loanDisbursements = await _context.Cheques
                     .Where(c => loanNos.Contains(c.LoanNo) && companyCodes.Contains(c.CompanyCode) && c.Amount > 0)
                     .Select(c => new { c.LoanNo, c.DateIssued })
                     .ToDictionaryAsync(c => c.LoanNo, c => c.DateIssued);
 
-                // ============================================================
-                // Get latest repayments (NO Posted filter)
-                // ============================================================
+                // Get latest repayments
                 var latestRepayments = await _context.Repay
                     .Where(r => loanNos.Contains(r.LoanNo) && companyCodes.Contains(r.CompanyCode))
                     .GroupBy(r => r.LoanNo)
@@ -1973,9 +1986,7 @@ namespace SACCOBlockChainSystem.Services
                     })
                     .ToDictionaryAsync(r => r.LoanNo, r => new { r.LastDateReceived, r.TotalPrincipal, r.TotalAmount });
 
-                // ============================================================
-                // Get current month repayments (NO Posted filter)
-                // ============================================================
+                // Get current month repayments
                 var currentDate = DateTime.Now;
                 var startOfCurrentMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
                 var endOfCurrentMonth = startOfCurrentMonth.AddMonths(1).AddDays(-1);
@@ -2000,16 +2011,12 @@ namespace SACCOBlockChainSystem.Services
                 decimal totalArrears60 = 0;
                 decimal totalCurrentMonthReceived = 0;
 
-                // ============================================================
-                // Calculate PAR, Arrears, and other metrics per loan
-                // ============================================================
                 foreach (var loan in loans)
                 {
                     decimal balance = 0;
                     DateTime? lastPaymentDate = null;
                     DateTime? disbursementDate = null;
 
-                    // Get balance
                     if (loanBalancesDict.ContainsKey(loan.LoanNo))
                     {
                         balance = loanBalancesDict[loan.LoanNo].Balance;
@@ -2022,23 +2029,19 @@ namespace SACCOBlockChainSystem.Services
                         balance = loan.Aamount ?? loan.LoanAmt ?? 0;
                     }
 
-                    // Skip if balance is zero or negative
                     if (balance <= 0) continue;
                     totalBalance += balance;
 
-                    // Get last payment date from repayments
                     if (latestRepayments.ContainsKey(loan.LoanNo))
                     {
                         lastPaymentDate = latestRepayments[loan.LoanNo].LastDateReceived ?? lastPaymentDate;
                     }
 
-                    // Get disbursement date
                     if (loanDisbursements.ContainsKey(loan.LoanNo))
                     {
                         disbursementDate = loanDisbursements[loan.LoanNo];
                     }
 
-                    // Calculate days in arrears
                     int daysInArrears = 0;
                     if (lastPaymentDate.HasValue && lastPaymentDate.Value != DateTime.MinValue)
                     {
@@ -2059,14 +2062,12 @@ namespace SACCOBlockChainSystem.Services
                             daysInArrears = (asAtDate - firstDueDate).Days;
                     }
 
-                    // Accumulate arrears
                     if (daysInArrears > 30)
                         totalArrears30 += balance;
 
                     if (daysInArrears > 60)
                         totalArrears60 += balance;
 
-                    // Accumulate current month received
                     if (currentMonthRepayments.ContainsKey(loan.CompanyCode))
                     {
                         totalCurrentMonthReceived += currentMonthRepayments[loan.CompanyCode];
@@ -2074,124 +2075,144 @@ namespace SACCOBlockChainSystem.Services
                 }
 
                 // ============================================================
-                // Calculate all metrics
+                // FIX: ADD THESE CALLS FOR COUNTY ADMIN
+                // Pass null for companyCode since we're using companyCodes list
                 // ============================================================
 
-                // PAR > 30
+                // Get Loanees Statistics (Distinct Members with Loans)
+                // Pass null because the helper methods will handle the companyCodes internally
+                var loaneesData = await CalculateLoaneesDataAsync(null);
+                dashboard.TotalLoanees = loaneesData.Total;
+                dashboard.WomenLoanees = loaneesData.Women;
+                dashboard.MenLoanees = loaneesData.Men;
+                dashboard.OthersLoanees = loaneesData.Others;
+
+                // Get Loan Count Statistics
+                var loanCountData = await CalculateLoanCountDataAsync(null);
+                dashboard.TotalLoanCount = loanCountData.Total;
+                dashboard.WomenLoanCount = loanCountData.Women;
+                dashboard.MenLoanCount = loanCountData.Men;
+                dashboard.OthersLoanCount = loanCountData.Others;
+
+                // Get Loan Status Breakdown
+                var statusBreakdown = await CalculateLoanStatusBreakdownAsync(null);
+                dashboard.CompletedLoansCount = statusBreakdown.Completed;
+                dashboard.UncompletedLoansCount = statusBreakdown.Uncompleted;
+                dashboard.OverdueLoansCount = statusBreakdown.Overdue;
+                dashboard.ActiveLoansCount = statusBreakdown.Active;
+
+                // Get Loan Status by Gender
+                var statusByGender = await CalculateLoanStatusByGenderAsync(null);
+                dashboard.WomenCompletedLoans = statusByGender.WomenCompleted;
+                dashboard.MenCompletedLoans = statusByGender.MenCompleted;
+                dashboard.OthersCompletedLoans = statusByGender.OthersCompleted;
+                dashboard.WomenActiveLoans = statusByGender.WomenActive;
+                dashboard.MenActiveLoans = statusByGender.MenActive;
+                dashboard.OthersActiveLoans = statusByGender.OthersActive;
+                dashboard.WomenOverdueLoans = statusByGender.WomenOverdue;
+                dashboard.MenOverdueLoans = statusByGender.MenOverdue;
+                dashboard.OthersOverdueLoans = statusByGender.OthersOverdue;
+
+                // Calculate metrics
                 dashboard.PARPercent = totalBalance > 0 ? (totalArrears30 / totalBalance) * 100 : 0;
-
-                // PAR > 60
                 dashboard.PAR60Percent = totalBalance > 0 ? (totalArrears60 / totalBalance) * 100 : 0;
-
-                // Arrears Balance (Balance of loans with arrears > 30 days)
                 dashboard.ArrearsBalance = totalArrears30;
-
-                // Total Arrears > 30 Days
                 dashboard.TotalArrears = totalArrears30;
 
-                // Amount Past Due Rate = (Total Arrears / Total Loan Balance) * 100
                 dashboard.AmountPastDueRate = dashboard.TotalLoanBalances > 0
                     ? (dashboard.TotalArrears / dashboard.TotalLoanBalances) * 100
                     : 0;
 
-                // Repayment Rate (Current Month)
                 dashboard.RepaymentRate = dashboard.TotalLoanBalances > 0
                     ? Math.Min((totalCurrentMonthReceived / dashboard.TotalLoanBalances) * 100, 100)
                     : 0;
 
-                // Outstanding Loan Portfolio
                 dashboard.OutstandingLoanPortfolio = dashboard.TotalLoanBalances;
 
-                // ============================================================
-                // QUERY #11: Profit/Loss from Gltransaction
-                // ============================================================
-                var (lastMonthProfitLoss, thisMonthProfitLoss) = await CalculateProfitLossFromGltransactionForCompaniesAsync(companyCodes);
-                dashboard.LastMonthProfitLoss = lastMonthProfitLoss;
-                dashboard.ThisMonthProfitLoss = thisMonthProfitLoss;
-
-                if (dashboard.LastMonthProfitLoss != 0)
-                {
-                    dashboard.ProfitLossChange = ((dashboard.ThisMonthProfitLoss - dashboard.LastMonthProfitLoss) / Math.Abs(dashboard.LastMonthProfitLoss)) * 100;
-                }
-                else
-                {
-                    dashboard.ProfitLossChange = dashboard.ThisMonthProfitLoss > 0 ? 100 : 0;
-                }
-
-                // ============================================================
-                // QUERY #12: Loan Portfolio Health
-                // ============================================================
                 if (dashboard.PARPercent < 5) dashboard.LoanPortfolioHealth = "Excellent";
                 else if (dashboard.PARPercent < 10) dashboard.LoanPortfolioHealth = "Good";
                 else if (dashboard.PARPercent < 20) dashboard.LoanPortfolioHealth = "Fair";
                 else dashboard.LoanPortfolioHealth = "At Risk";
 
-                // ============================================================
-                // QUERY #13: Women Participation Rate
-                // ============================================================
                 dashboard.WomenParticipationRate = dashboard.TotalMembers > 0 ? (dashboard.TotalWomen * 100m / dashboard.TotalMembers) : 0;
             }
 
             // ============================================================
-            // QUERY #14: Recent transactions
+            // QUERY #11: Profit/Loss from Gltransaction
             // ============================================================
-            var recentTxQuery = from t in _context.Transactions2
-                                join m in _context.Members on t.MemberNo equals m.MemberNo
-                                where t.Status.ToUpper() == "COMPLETED"
-                                      && memberNos.Contains(m.MemberNo)
-                                      && companyCodes.Contains(m.CompanyCode)
-                                orderby t.ContributionDate descending
-                                select new RecentTransaction
-                                {
-                                    TransactionId = t.TransactionNo,
-                                    MemberName = m.Surname + " " + m.OtherNames,
-                                    Type = t.TransactionType,
-                                    Amount = t.Amount,
-                                    Date = t.ContributionDate,
-                                    Status = t.Status,
-                                    BlockchainTxId = t.BlockchainTxId ?? "Pending"
-                                };
+            var (lastMonthProfitLoss, thisMonthProfitLoss) = await CalculateProfitLossFromGltransactionForCompaniesAsync(companyCodes);
+            dashboard.LastMonthProfitLoss = lastMonthProfitLoss;
+            dashboard.ThisMonthProfitLoss = thisMonthProfitLoss;
 
-            dashboard.RecentTransactions = await recentTxQuery.Take(10).ToListAsync();
-
-            // ============================================================
-            // QUERY #15: Quick Stats
-            // ============================================================
-            dashboard.QuickStats = new DashboardQuickStats
+            if (dashboard.LastMonthProfitLoss != 0)
             {
-                TransactionsToday = await _context.Transactions2
-                    .Where(t => t.ContributionDate.Date == DateTime.Today
-                                && t.Status.ToUpper() == "COMPLETED")
-                    .Join(_context.Members,
-                          t => t.MemberNo,
-                          m => m.MemberNo,
-                          (t, m) => new { t, m.CompanyCode })
-                    .Where(x => companyCodes.Contains(x.CompanyCode))
-                    .CountAsync(),
+                dashboard.ProfitLossChange = ((dashboard.ThisMonthProfitLoss - dashboard.LastMonthProfitLoss) / Math.Abs(dashboard.LastMonthProfitLoss)) * 100;
+            }
+            else
+            {
+                dashboard.ProfitLossChange = dashboard.ThisMonthProfitLoss > 0 ? 100 : 0;
+            }
 
-                NewMembersToday = await memberQuery
-                    .CountAsync(m => m.EffectDate.HasValue && m.EffectDate.Value.Date == DateTime.Today),
+            //// ============================================================
+            //// QUERY #12: Recent transactions
+            //// ============================================================
+            //var recentTxQuery = from t in _context.Transactions2
+            //                    join m in _context.Members on t.MemberNo equals m.MemberNo
+            //                    where t.Status.ToUpper() == "COMPLETED"
+            //                          && memberNos.Contains(m.MemberNo)
+            //                          && companyCodes.Contains(m.CompanyCode)
+            //                    orderby t.ContributionDate descending
+            //                    select new RecentTransaction
+            //                    {
+            //                        TransactionId = t.TransactionNo,
+            //                        MemberName = m.Surname + " " + m.OtherNames,
+            //                        Type = t.TransactionType,
+            //                        Amount = t.Amount,
+            //                        Date = t.ContributionDate,
+            //                        Status = t.Status,
+            //                        BlockchainTxId = t.BlockchainTxId ?? "Pending"
+            //                    };
 
-                AverageDeposit = await _context.Transactions2
-                    .Where(t => t.TransactionType.ToUpper() == "DEPOSIT"
-                                && t.Status.ToUpper() == "COMPLETED")
-                    .Join(_context.Members,
-                          t => t.MemberNo,
-                          m => m.MemberNo,
-                          (t, m) => new { t.Amount, m.CompanyCode })
-                    .Where(x => companyCodes.Contains(x.CompanyCode))
-                    .AverageAsync(x => (decimal?)x.Amount) ?? 0,
+            //dashboard.RecentTransactions = await recentTxQuery.Take(10).ToListAsync();
 
-                AverageLoan = await _context.Loans
-                    .Where(l => l.Status == 1 && companyCodes.Contains(l.CompanyCode))
-                    .AverageAsync(l => (decimal?)l.LoanAmt) ?? 0,
+            //// ============================================================
+            //// QUERY #13: Quick Stats
+            //// ============================================================
+            //dashboard.QuickStats = new DashboardQuickStats
+            //{
+            //    TransactionsToday = await _context.Transactions2
+            //        .Where(t => t.ContributionDate.Date == DateTime.Today
+            //                    && t.Status.ToUpper() == "COMPLETED")
+            //        .Join(_context.Members,
+            //              t => t.MemberNo,
+            //              m => m.MemberNo,
+            //              (t, m) => new { t, m.CompanyCode })
+            //        .Where(x => companyCodes.Contains(x.CompanyCode))
+            //        .CountAsync(),
 
-                BlockchainUptime = 99.9m,
-                LoanApprovalRate = 85.5m
-            };
+            //    NewMembersToday = await memberQuery
+            //        .CountAsync(m => m.EffectDate.HasValue && m.EffectDate.Value.Date == DateTime.Today),
+
+            //    AverageDeposit = await _context.Transactions2
+            //        .Where(t => t.TransactionType.ToUpper() == "DEPOSIT"
+            //                    && t.Status.ToUpper() == "COMPLETED")
+            //        .Join(_context.Members,
+            //              t => t.MemberNo,
+            //              m => m.MemberNo,
+            //              (t, m) => new { t.Amount, m.CompanyCode })
+            //        .Where(x => companyCodes.Contains(x.CompanyCode))
+            //        .AverageAsync(x => (decimal?)x.Amount) ?? 0,
+
+            //    AverageLoan = await _context.Loans
+            //        .Where(l => l.Status == 1 && companyCodes.Contains(l.CompanyCode))
+            //        .AverageAsync(l => (decimal?)l.LoanAmt) ?? 0,
+
+            //    BlockchainUptime = 99.9m,
+            //    LoanApprovalRate = 85.5m
+            //};
 
             // ============================================================
-            // QUERY #16: Gender distribution
+            // QUERY #14: Gender distribution
             // ============================================================
             dashboard.GenderStats = new GenderDistribution
             {

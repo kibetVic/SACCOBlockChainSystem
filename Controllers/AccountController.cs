@@ -296,11 +296,16 @@ namespace SACCOBlockChainSystem.Controllers
 
                     _logger.LogInformation($"User {user.UserName} (Company: {companyName} - {user.CompanyCode}) logged in successfully.");
 
+
+                    // comment this if you what otp for login
                     if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
                     {
                         return Redirect(returnUrl);
                     }
                     return RedirectToAction("Index", "Home");
+
+                    //// Redirect to OTP verification after successful login
+                    //return RedirectToAction("LoginOTPVerification", new { returnUrl = returnUrl });
                 }
                 else
                 {
@@ -320,19 +325,6 @@ namespace SACCOBlockChainSystem.Controllers
                     {
                         return await SendCode(user);
                     }
-                        
-                    //return Redirect("/Account/VerifyMember?user="+EncryptionHelper.Encrypt(user.MemberNo));
-                    //var claims = new List<Claim>
-                    //{
-                    //    new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                    //    new Claim(ClaimTypes.Name, user.UserName),
-                    //    new Claim("FullName", user.UserName ?? string.Empty),
-                    //    new Claim("Email", user.Email ?? string.Empty),
-                    //    new Claim("UserId", user.UserId.ToString()),
-                    //    new Claim("CompanyCode", user.CompanyCode ?? "000"),
-                    //    new Claim("CompanyName", companyName),
-                    //    new Claim("UserLoginId", user.UserLoginId ?? string.Empty)
-                    //};
                 }
                 // Hash the password for comparison
 
@@ -2561,6 +2553,265 @@ namespace SACCOBlockChainSystem.Controllers
             using var sha256 = SHA256.Create();
             var hashedBytes = await Task.Run(() => sha256.ComputeHash(Encoding.UTF8.GetBytes(json)));
             return Convert.ToBase64String(hashedBytes);
+        }
+
+
+
+        // ============================================================
+        // LOGIN OTP VERIFICATION - Auto-verification on OTP entry
+        // ============================================================
+
+        [HttpGet]
+        [Authorize]
+        public async Task<IActionResult> LoginOTPVerification(string returnUrl = null)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var userName = User.Identity?.Name;
+            var email = User.FindFirstValue("Email");
+
+            _logger.LogInformation($"LoginOTPVerification GET: UserId={userId}, ReturnUrl={returnUrl}");
+
+            // Check if user already has a valid OTP
+            if (_otpService.HasValidOtp(userId))
+            {
+                _logger.LogInformation($"User {userId} already has valid OTP.");
+
+                HttpContext.Session.SetString($"LoginOtpValidated_{userId}", "true");
+                HttpContext.Session.SetString($"LoginOtpValidatedAt_{userId}", DateTime.UtcNow.ToString("O"));
+
+                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                {
+                    return Redirect(returnUrl);
+                }
+                return RedirectToAction("Index", "Home");
+            }
+
+            // Clear any existing OTP for this user
+            _otpService.ClearOtp(userId);
+
+            // Generate new OTP
+            var otp = _otpService.GenerateOtp(userId);
+            var generatedOtpExpiry = _otpService.GetOtpExpiry(userId);
+
+            _logger.LogInformation($"Generated new Login OTP for user {userId}. OTP: {otp}");
+
+            // Send OTP via email
+            var emailService = HttpContext.RequestServices.GetService<IEmailService>();
+            string emailSentMessage = null;
+
+            if (emailService != null)
+            {
+                var user = await _context.UserAccounts1.FirstOrDefaultAsync(u => u.UserId.ToString() == userId);
+                if (user != null && !string.IsNullOrEmpty(user.Email))
+                {
+                    string maskedEmail = MaskEmail(user.Email);
+                    var emailSent = await emailService.SendOtpAsync(user.Email, user.UserName, otp, 5);
+
+                    if (emailSent)
+                    {
+                        _logger.LogInformation($"Login OTP sent to {user.Email} for user {user.UserName}");
+                        emailSentMessage = $"✅ OTP has been sent to {maskedEmail}";
+                        TempData["EmailSentMessage"] = emailSentMessage;
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"Failed to send Login OTP email to {user.Email}");
+                        emailSentMessage = "⚠️ Failed to send OTP email. Please try again or contact support.";
+                        TempData["ErrorMessage"] = emailSentMessage;
+                    }
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = "No email address associated with this account. Please contact administrator.";
+                }
+            }
+            else
+            {
+                // For development/testing - show code on screen
+                _logger.LogWarning($"Email service not configured. Login OTP for {userId}: {otp}");
+                TempData["EmailSentMessage"] = $"[DEV MODE] Login OTP: {otp}";
+            }
+
+            var remainingSeconds = _otpService.GetRemainingSeconds(userId);
+            if (remainingSeconds <= 0)
+            {
+                remainingSeconds = 300;
+            }
+
+            var model = new OtpVerificationViewModel
+            {
+                ReturnUrl = returnUrl,
+                UserId = userId,
+                UserName = userName,
+                Email = email,
+                OtpExpiry = generatedOtpExpiry,
+                IsOtpValid = false,
+                RemainingSeconds = remainingSeconds
+            };
+
+            return View(model);
+        }
+
+        [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ValidateLoginOtp(OtpVerificationViewModel model)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            _logger.LogInformation($"=== ValidateLoginOtp START ===");
+            _logger.LogInformation($"UserId: {userId}");
+            _logger.LogInformation($"Otp: {model.Otp}");
+            _logger.LogInformation($"IsAjaxRequest: {Request.Headers["X-Requested-With"] == "XMLHttpRequest"}");
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                _logger.LogWarning("ValidateLoginOtp: UserId is null or empty");
+                TempData["ErrorMessage"] = "User not authenticated. Please login again.";
+
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = "User not authenticated" });
+                }
+                return RedirectToAction("Login", "Account");
+            }
+
+            // Validate the OTP
+            bool isValid = _otpService.ValidateOtp(userId, model.Otp);
+
+            _logger.LogInformation($"ValidateLoginOtp: Validation result = {isValid} for user {userId}");
+
+            if (isValid)
+            {
+                // Store OTP validation in session
+                HttpContext.Session.SetString($"LoginOtpValidated_{userId}", "true");
+                HttpContext.Session.SetString($"LoginOtpValidatedAt_{userId}", DateTime.UtcNow.ToString("O"));
+
+                _logger.LogInformation($"ValidateLoginOtp: OTP validated successfully for user {userId}");
+                TempData["SuccessMessage"] = "OTP validated successfully. Welcome!";
+
+                // Clear the OTP after successful validation
+                _otpService.ClearOtp(userId);
+
+                // Determine redirect URL
+                string redirectUrl;
+                if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
+                {
+                    redirectUrl = model.ReturnUrl;
+                }
+                else
+                {
+                    redirectUrl = Url.Action("Index", "Home");
+                }
+
+                // For AJAX requests, return JSON with redirect URL
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new
+                    {
+                        success = true,
+                        redirectUrl = redirectUrl,
+                        message = "OTP validated successfully!"
+                    });
+                }
+
+                // For normal form submissions, redirect directly
+                return Redirect(redirectUrl);
+            }
+
+            // OTP validation failed
+            _logger.LogWarning($"ValidateLoginOtp: OTP validation failed for user {userId}");
+
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "Invalid OTP. Please try again.",
+                    remainingSeconds = _otpService.GetRemainingSeconds(userId)
+                });
+            }
+
+            ModelState.AddModelError("Otp", "Invalid OTP. Please try again.");
+            model.RemainingSeconds = _otpService.GetRemainingSeconds(userId);
+            model.OtpExpiry = _otpService.GetOtpExpiry(userId);
+
+            return View("LoginOTPVerification", model);
+        }
+
+        [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResendLoginOtp(string userId)
+        {
+            try
+            {
+                _logger.LogInformation($"ResendLoginOtp: UserId={userId}");
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Json(new { success = false, message = "User ID is required." });
+                }
+
+                var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (userId != currentUserId)
+                {
+                    _logger.LogWarning($"ResendLoginOtp: Unauthorized access. UserId={userId}, CurrentUserId={currentUserId}");
+                    return Json(new { success = false, message = "Unauthorized access." });
+                }
+
+                // Clear existing OTP
+                _otpService.ClearOtp(userId);
+
+                // Generate new OTP
+                var otp = _otpService.GenerateOtp(userId);
+                var resendOtpExpiry = _otpService.GetOtpExpiry(userId);
+
+                _logger.LogInformation($"ResendLoginOtp: New OTP generated for user {userId}. OTP: {otp}, Expiry: {resendOtpExpiry:HH:mm:ss}");
+
+                // Send OTP via email
+                var emailService = HttpContext.RequestServices.GetService<IEmailService>();
+                var user = await _context.UserAccounts1.FirstOrDefaultAsync(u => u.UserId.ToString() == userId);
+
+                if (user == null)
+                {
+                    return Json(new { success = false, message = "User not found." });
+                }
+
+                if (string.IsNullOrEmpty(user.Email))
+                {
+                    return Json(new { success = false, message = "No email address associated with this account." });
+                }
+
+                var emailSent = await emailService.SendOtpAsync(user.Email, user.UserName, otp, 5);
+
+                if (emailSent)
+                {
+                    var remainingSeconds = _otpService.GetRemainingSeconds(userId);
+                    _logger.LogInformation($"ResendLoginOtp: RemainingSeconds={remainingSeconds}");
+
+                    return Json(new
+                    {
+                        success = true,
+                        message = "New OTP has been sent to your email.",
+                        expiry = resendOtpExpiry,
+                        remainingSeconds = remainingSeconds
+                    });
+                }
+                else
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Failed to send OTP. Please try again or contact administrator."
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error resending Login OTP for user {userId}");
+                return Json(new { success = false, message = "An error occurred. Please try again." });
+            }
         }
 
 

@@ -1349,6 +1349,8 @@ namespace SACCOBlockChainSystem.Controllers
 
             return Json(result);
         }
+
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddGuarantor(string loanNo, string guarantorMemberNo, decimal guaranteeAmount, string remarks)
@@ -1380,6 +1382,28 @@ namespace SACCOBlockChainSystem.Controllers
                 if (guaranteeAmount < 1000)
                 {
                     return Json(new { success = false, message = "Guarantee amount must be at least KES 1,000." });
+                }
+
+                // ============================================================
+                // CHECK MAX GUARANTEE AMOUNT BASED ON GUARANTOR TYPE
+                // ============================================================
+                if (isSelfGuarantor)
+                {
+                    // Self guarantee: max 90% of loan amount
+                    decimal maxSelfGuarantee = (loan.LoanAmt ?? 0) * 0.9m;
+                    if (guaranteeAmount > maxSelfGuarantee)
+                    {
+                        return Json(new { success = false, message = $"Self guarantee amount cannot exceed 90% of loan amount (KES {maxSelfGuarantee:N0})." });
+                    }
+                }
+                else
+                {
+                    // Other guarantors: max 50% of loan amount
+                    decimal maxGuarantee = (loan.LoanAmt ?? 0) * 0.5m;
+                    if (guaranteeAmount > maxGuarantee)
+                    {
+                        return Json(new { success = false, message = $"Guarantee amount cannot exceed 50% of loan amount (KES {maxGuarantee:N0})." });
+                    }
                 }
 
                 if (!isSelfGuarantor)
