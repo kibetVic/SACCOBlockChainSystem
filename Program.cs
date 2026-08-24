@@ -125,6 +125,8 @@ builder.Services.AddScoped<ISelfServiceLoanService, SelfServiceLoanService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<ICountyReportService, CountyReportService>();
 builder.Services.AddScoped<IAssetsRegisterService, AssetsRegisterService>();
+builder.Services.AddScoped<IUserSessionService, UserSessionService>();
+builder.Services.AddScoped<IIpAddressHelper, IpAddressHelper>();
 
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IDashboardCacheService, DashboardCacheService>();

@@ -452,7 +452,7 @@ namespace SACCOBlockChainSystem.Services
                 }
             }
 
-            return $"{prefix}{date}{sequence:D3}";
+            return $"{prefix}{date}-{sequence:D3}";
         }
 
         public async Task<bool> IsCompanyCodeUniqueAsync(string companyCode, int? excludeId = null)

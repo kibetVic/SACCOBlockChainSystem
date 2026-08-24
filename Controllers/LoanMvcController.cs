@@ -3221,48 +3221,84 @@ namespace SACCOBlockChainSystem.Controllers
 
         #region Loan Disbursement
 
+        // LoanMvcController.cs - Updated PendingDisbursement
+
         [HttpGet]
         [FinanceOfficerOnly]
-        public async Task<IActionResult> PendingDisbursement()
+        public async Task<IActionResult> PendingDisbursement(string otpAccess = null)
         {
             try
             {
                 var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                _logger.LogInformation($"PendingDisbursement: UserId={userId}");
+                _logger.LogInformation($"PendingDisbursement: UserId={userId}, OtpAccess={otpAccess}");
 
-                // Check if OTP was validated in this session
+                // ============================================================
+                // ✅ CHECK OTP VALIDATION - Always require fresh OTP
+                // ============================================================
                 var otpValidated = HttpContext.Session.GetString($"OtpValidated_{userId}");
                 var otpValidatedAt = HttpContext.Session.GetString($"OtpValidatedAt_{userId}");
+                var storedToken = HttpContext.Session.GetString($"OtpPageAccess_{userId}");
 
-                bool isValidated = false;
-                if (otpValidated == "true" && !string.IsNullOrEmpty(otpValidatedAt))
+                bool isAuthorized = false;
+
+                // Check if OTP is validated AND token matches
+                if (otpValidated == "true" && !string.IsNullOrEmpty(otpValidatedAt) && !string.IsNullOrEmpty(storedToken))
                 {
-                    if (DateTime.TryParse(otpValidatedAt, out var validatedAt))
+                    // Check if token matches
+                    if (otpAccess == storedToken)
                     {
-                        var timeSinceValidation = DateTime.UtcNow - validatedAt;
-                        isValidated = timeSinceValidation.TotalMinutes <= 5;
-
-                        _logger.LogInformation($"PendingDisbursement: Validation check - IsValidated: {isValidated}, TimeSince: {timeSinceValidation.TotalMinutes:F2} minutes");
-
-                        if (!isValidated)
+                        // Check if validation is still valid (5 minutes)
+                        if (DateTime.TryParse(otpValidatedAt, out var validatedAt))
                         {
-                            _logger.LogInformation($"PendingDisbursement: OTP validation expired for user {userId}");
+                            var timeSinceValidation = DateTime.UtcNow - validatedAt;
+                            if (timeSinceValidation.TotalMinutes <= 5)
+                            {
+                                isAuthorized = true;
+                                _logger.LogInformation($"PendingDisbursement: User {userId} authorized with OTP");
+
+                                // ============================================================
+                                // ✅ CONSUME THE TOKEN - Remove it so it can't be used again
+                                // ============================================================
+                                HttpContext.Session.Remove($"OtpPageAccess_{userId}");
+                                HttpContext.Session.Remove($"OtpValidated_{userId}");
+                                HttpContext.Session.Remove($"OtpValidatedAt_{userId}");
+
+                                _logger.LogInformation($"PendingDisbursement: Token consumed for user {userId}");
+                            }
+                            else
+                            {
+                                _logger.LogInformation($"PendingDisbursement: OTP validation expired for user {userId}");
+                            }
                         }
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"PendingDisbursement: Token mismatch for user {userId}");
                     }
                 }
 
-                if (!isValidated)
+                // ============================================================
+                // ✅ IF NOT AUTHORIZED, REDIRECT TO OTP VERIFICATION
+                // ============================================================
+                if (!isAuthorized)
                 {
-                    // Clear invalid session
+                    _logger.LogInformation($"PendingDisbursement: User {userId} not authorized, redirecting to OTP");
+
+                    // Clear any stale session data
                     HttpContext.Session.Remove($"OtpValidated_{userId}");
                     HttpContext.Session.Remove($"OtpValidatedAt_{userId}");
-
-                    _logger.LogInformation($"PendingDisbursement: OTP not validated, redirecting to verification for user {userId}");
+                    HttpContext.Session.Remove($"OtpPageAccess_{userId}");
 
                     TempData["ErrorMessage"] = "Please verify your identity with OTP to access pending disbursements.";
-                    return RedirectToAction("OtpVerification", "Account", new { returnUrl = Url.Action("PendingDisbursement", "LoanMvc") });
+
+                    // Store the current URL as return URL
+                    var returnUrl = Url.Action("PendingDisbursement", "LoanMvc");
+                    return RedirectToAction("OtpVerification", "Account", new { returnUrl = returnUrl });
                 }
 
+                // ============================================================
+                // ✅ USER IS AUTHORIZED - Show the page
+                // ============================================================
                 var companyCode = GetUserCompanyCode();
                 _logger.LogInformation($"PendingDisbursement: User {userId} accessing pending disbursements for company {companyCode}");
 
@@ -3276,67 +3312,40 @@ namespace SACCOBlockChainSystem.Controllers
 
                 foreach (var loan in endorsedLoans)
                 {
-                    // Check if already disbursed (has Loanbal record)
+                    // Check if already disbursed
                     var existingDisbursement = await _context.Loanbal
                         .FirstOrDefaultAsync(lb => lb.LoanNo == loan.LoanNo && lb.Companycode == companyCode);
 
                     if (existingDisbursement != null)
                     {
-                        continue; // Skip already disbursed loans
+                        continue;
                     }
 
-                    // Get endorsement record
                     var endorsement = await _context.Endmain
                         .FirstOrDefaultAsync(e => e.LoanNo == loan.LoanNo && e.CompanyCode == companyCode);
 
                     if (endorsement == null)
                     {
-                        continue; // Skip if no endorsement found
+                        continue;
                     }
 
-                    // Get cheque record
                     var cheque = await _context.Cheques
                         .FirstOrDefaultAsync(c => c.LoanNo == loan.LoanNo && c.CompanyCode == companyCode);
 
                     if (cheque == null)
                     {
-                        continue; // Skip if no cheque found
+                        continue;
                     }
 
-                    // Get member details
                     var member = await _context.Members
                         .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
 
-                    // Get loan type
                     var loanType = await _context.Loantypes
                         .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
 
-                    // ✅ FIX: Calculate values correctly using Cheque record
                     decimal approvedAmount = endorsement.AmtApproved;
-
-                    // ✅ Use AmountIssued from Cheque (this is the net amount after deductions)
                     decimal netAmount = cheque.AmountIssued ?? approvedAmount;
-
-                    // ✅ Calculate total deductions from Cheque
                     decimal totalDeductions = approvedAmount - netAmount;
-
-                    // ✅ Optional: Verify with GL transactions if needed (for audit purposes)
-                    // But use Cheque as the source of truth
-                    var glTransactions = await _context.Gltransactions
-                        .Where(g => g.DocumentNo == cheque.Voucherno && g.Source == "LOAN_ENDORSEMENT")
-                        .ToListAsync();
-
-                    // If GL transactions exist, use them for verification but keep Cheque values
-                    if (glTransactions.Any())
-                    {
-                        var glTotal = glTransactions.Sum(g => g.Amount);
-                        // Log if there's a discrepancy for debugging
-                        if (Math.Abs(glTotal - totalDeductions) > 0.01m)
-                        {
-                            _logger.LogWarning($"Deduction mismatch for loan {loan.LoanNo}: Cheque={totalDeductions}, GL={glTotal}");
-                        }
-                        // ✅ Use the Cheque values as the source of truth (they were set during endorsement)
-                    }
 
                     pendingDisbursement.Add(new
                     {
@@ -3347,10 +3356,7 @@ namespace SACCOBlockChainSystem.Controllers
                         TotalDeductions = totalDeductions,
                         NetAmount = netAmount,
                         ApplicationDate = loan.ApplicDate,
-                        MemberMobile = member?.PhoneNo ?? member?.MobileNo ?? "N/A",
-                        // ✅ Add these for debugging if needed
-                        // ChequeAmountIssued = cheque.AmountIssued,
-                        // ChequeAmount = cheque.Amount
+                        MemberMobile = member?.PhoneNo ?? member?.MobileNo ?? "N/A"
                     });
                 }
 
@@ -3365,6 +3371,153 @@ namespace SACCOBlockChainSystem.Controllers
                 return View(new List<dynamic>());
             }
         }
+
+
+        //[HttpGet]
+        //[FinanceOfficerOnly]
+        //public async Task<IActionResult> PendingDisbursement()
+        //{
+        //    try
+        //    {
+        //        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        //        _logger.LogInformation($"PendingDisbursement: UserId={userId}");
+
+        //        // Check if OTP was validated in this session
+        //        var otpValidated = HttpContext.Session.GetString($"OtpValidated_{userId}");
+        //        var otpValidatedAt = HttpContext.Session.GetString($"OtpValidatedAt_{userId}");
+        //        var storedToken = HttpContext.Session.GetString($"OtpPageAccess_{userId}");
+
+        //        bool isValidated = false;
+        //        if (otpValidated == "true" && !string.IsNullOrEmpty(otpValidatedAt))
+        //        {
+        //            if (DateTime.TryParse(otpValidatedAt, out var validatedAt))
+        //            {
+        //                var timeSinceValidation = DateTime.UtcNow - validatedAt;
+        //                isValidated = timeSinceValidation.TotalMinutes <= 5;
+
+        //                _logger.LogInformation($"PendingDisbursement: Validation check - IsValidated: {isValidated}, TimeSince: {timeSinceValidation.TotalMinutes:F2} minutes");
+
+        //                if (!isValidated)
+        //                {
+        //                    _logger.LogInformation($"PendingDisbursement: OTP validation expired for user {userId}");
+        //                }
+        //            }
+        //        }
+
+        //        if (!isValidated)
+        //        {
+        //            // Clear invalid session
+        //            HttpContext.Session.Remove($"OtpValidated_{userId}");
+        //            HttpContext.Session.Remove($"OtpValidatedAt_{userId}");
+
+        //            _logger.LogInformation($"PendingDisbursement: OTP not validated, redirecting to verification for user {userId}");
+
+        //            TempData["ErrorMessage"] = "Please verify your identity with OTP to access pending disbursements.";
+        //            return RedirectToAction("OtpVerification", "Account", new { returnUrl = Url.Action("PendingDisbursement", "LoanMvc") });
+        //        }
+
+        //        var companyCode = GetUserCompanyCode();
+        //        _logger.LogInformation($"PendingDisbursement: User {userId} accessing pending disbursements for company {companyCode}");
+
+        //        // Get loans with Endorsed status (3)
+        //        var endorsedLoans = await _context.Loans
+        //            .Where(l => l.CompanyCode == companyCode && l.Status == (int)Status.Endorsed)
+        //            .OrderByDescending(l => l.AuditDateTime)
+        //            .ToListAsync();
+
+        //        var pendingDisbursement = new List<dynamic>();
+
+        //        foreach (var loan in endorsedLoans)
+        //        {
+        //            // Check if already disbursed (has Loanbal record)
+        //            var existingDisbursement = await _context.Loanbal
+        //                .FirstOrDefaultAsync(lb => lb.LoanNo == loan.LoanNo && lb.Companycode == companyCode);
+
+        //            if (existingDisbursement != null)
+        //            {
+        //                continue; // Skip already disbursed loans
+        //            }
+
+        //            // Get endorsement record
+        //            var endorsement = await _context.Endmain
+        //                .FirstOrDefaultAsync(e => e.LoanNo == loan.LoanNo && e.CompanyCode == companyCode);
+
+        //            if (endorsement == null)
+        //            {
+        //                continue; // Skip if no endorsement found
+        //            }
+
+        //            // Get cheque record
+        //            var cheque = await _context.Cheques
+        //                .FirstOrDefaultAsync(c => c.LoanNo == loan.LoanNo && c.CompanyCode == companyCode);
+
+        //            if (cheque == null)
+        //            {
+        //                continue; // Skip if no cheque found
+        //            }
+
+        //            // Get member details
+        //            var member = await _context.Members
+        //                .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == companyCode);
+
+        //            // Get loan type
+        //            var loanType = await _context.Loantypes
+        //                .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
+
+        //            // ✅ FIX: Calculate values correctly using Cheque record
+        //            decimal approvedAmount = endorsement.AmtApproved;
+
+        //            // ✅ Use AmountIssued from Cheque (this is the net amount after deductions)
+        //            decimal netAmount = cheque.AmountIssued ?? approvedAmount;
+
+        //            // ✅ Calculate total deductions from Cheque
+        //            decimal totalDeductions = approvedAmount - netAmount;
+
+        //            // ✅ Optional: Verify with GL transactions if needed (for audit purposes)
+        //            // But use Cheque as the source of truth
+        //            var glTransactions = await _context.Gltransactions
+        //                .Where(g => g.DocumentNo == cheque.Voucherno && g.Source == "LOAN_ENDORSEMENT")
+        //                .ToListAsync();
+
+        //            // If GL transactions exist, use them for verification but keep Cheque values
+        //            if (glTransactions.Any())
+        //            {
+        //                var glTotal = glTransactions.Sum(g => g.Amount);
+        //                // Log if there's a discrepancy for debugging
+        //                if (Math.Abs(glTotal - totalDeductions) > 0.01m)
+        //                {
+        //                    _logger.LogWarning($"Deduction mismatch for loan {loan.LoanNo}: Cheque={totalDeductions}, GL={glTotal}");
+        //                }
+        //                // ✅ Use the Cheque values as the source of truth (they were set during endorsement)
+        //            }
+
+        //            pendingDisbursement.Add(new
+        //            {
+        //                LoanNo = loan.LoanNo,
+        //                MemberName = member != null ? $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim() : loan.MemberNo,
+        //                LoanType = loanType?.LoanType1 ?? loan.LoanCode ?? "Unknown",
+        //                GrossAmount = approvedAmount,
+        //                TotalDeductions = totalDeductions,
+        //                NetAmount = netAmount,
+        //                ApplicationDate = loan.ApplicDate,
+        //                MemberMobile = member?.PhoneNo ?? member?.MobileNo ?? "N/A",
+        //                // ✅ Add these for debugging if needed
+        //                // ChequeAmountIssued = cheque.AmountIssued,
+        //                // ChequeAmount = cheque.Amount
+        //            });
+        //        }
+
+        //        ViewBag.Count = pendingDisbursement.Count;
+        //        ViewBag.OtpValidated = true;
+        //        return View(pendingDisbursement);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error loading pending disbursement loans");
+        //        TempData["ErrorMessage"] = $"Error loading loans: {ex.Message}";
+        //        return View(new List<dynamic>());
+        //    }
+        //}
 
         [HttpGet]
         [FinanceOfficerOnly]
@@ -3795,7 +3948,7 @@ namespace SACCOBlockChainSystem.Controllers
         {
             public FinanceOfficerOnlyAttribute()
             {
-                Roles = "Finance Officer, Super Admin, Admin";
+                Roles = "Finance Officer, Super Admin,System Administrator";
             }
         }
 

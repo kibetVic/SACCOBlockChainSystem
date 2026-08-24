@@ -23,13 +23,15 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly ILogger<AccountController> _logger;
         private readonly IUserService _userService;
         private readonly IOtpService _otpService;
+        private readonly IUserSessionService _sessionService;
 
-        public AccountController(ApplicationDbContext context, IUserService userService, ILogger<AccountController> logger, IOtpService otpService)
+        public AccountController(ApplicationDbContext context, IUserService userService, ILogger<AccountController> logger, IOtpService otpService, IUserSessionService sessionService)
         {
             _context = context;
             _userService = userService; 
             _logger = logger;
             _otpService = otpService;
+            _sessionService = sessionService;
         }
 
         private async Task<IActionResult> setMemberSession(string? username)
@@ -293,6 +295,24 @@ namespace SACCOBlockChainSystem.Controllers
                         CookieAuthenticationDefaults.AuthenticationScheme,
                         new ClaimsPrincipal(claimsIdentity),
                         authProperties);
+
+                    // ============================================================
+                    // ✅ CREATE USER SESSION RECORD
+                    // ============================================================
+                    var userSession = await _sessionService.CreateSessionAsync(
+                        userId: user.UserId.ToString(),
+                        userName: user.UserName,
+                        companyCode: user.CompanyCode,
+                        companyName: companyName,
+                        userGroup: user.UserGroup ?? "Member"
+                    );
+
+                    // Store session ID in session for later use
+                    if (userSession != null)
+                    {
+                        HttpContext.Session.SetString("CurrentSessionId", userSession.SessionId.ToString());
+                        _logger.LogInformation($"User session created with ID: {userSession.SessionId}");
+                    }
 
                     _logger.LogInformation($"User {user.UserName} (Company: {companyName} - {user.CompanyCode}) logged in successfully.");
 
@@ -639,17 +659,39 @@ namespace SACCOBlockChainSystem.Controllers
             return View(profile);
         }
 
-
         // GET: /Account/Logout
         [HttpGet]
         public async Task<IActionResult> Logout()
         {
-            var userName = User.Identity?.Name;
-            var companyName = User.FindFirstValue("CompanyName");
+            try
+            {
+                var userName = User.Identity?.Name;
+                var companyName = User.FindFirstValue("CompanyName");
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
-            return RedirectToAction("Login", "Account");
+                // ============================================================
+                // ✅ UPDATE SESSION LOGOUT TIME
+                // ============================================================
+                var sessionIdStr = HttpContext.Session.GetString("CurrentSessionId");
+                if (!string.IsNullOrEmpty(sessionIdStr) && long.TryParse(sessionIdStr, out long sessionId))
+                {
+                    await _sessionService.UpdateSessionLogoutAsync(sessionId, "Manual");
+                    _logger.LogInformation($"Session {sessionId} logged out for user {userName}");
+                }
+
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                HttpContext.Session.Clear();
+
+                _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
+                return RedirectToAction("Login", "Account");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during logout");
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                HttpContext.Session.Clear();
+                return RedirectToAction("Login", "Account");
+            }
         }
 
         // POST: /Account/Logout - For form submissions
@@ -657,13 +699,57 @@ namespace SACCOBlockChainSystem.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> LogoutPost()
         {
-            var userName = User.Identity?.Name;
-            var companyName = User.FindFirstValue("CompanyName");
+            try
+            {
+                var userName = User.Identity?.Name;
+                var companyName = User.FindFirstValue("CompanyName");
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
-            return RedirectToAction("Login", "Account");
+                var sessionIdStr = HttpContext.Session.GetString("CurrentSessionId");
+                if (!string.IsNullOrEmpty(sessionIdStr) && long.TryParse(sessionIdStr, out long sessionId))
+                {
+                    await _sessionService.UpdateSessionLogoutAsync(sessionId, "Manual");
+                }
+
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                HttpContext.Session.Clear();
+
+                _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
+                return RedirectToAction("Login", "Account");
+            }
+            catch
+            {
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                HttpContext.Session.Clear();
+                return RedirectToAction("Login", "Account");
+            }
         }
+
+
+        //// GET: /Account/Logout
+        //[HttpGet]
+        //public async Task<IActionResult> Logout()
+        //{
+        //    var userName = User.Identity?.Name;
+        //    var companyName = User.FindFirstValue("CompanyName");
+
+        //    await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        //    _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
+        //    return RedirectToAction("Login", "Account");
+        //}
+
+        //// POST: /Account/Logout - For form submissions
+        //[HttpPost]
+        //[ValidateAntiForgeryToken]
+        //public async Task<IActionResult> LogoutPost()
+        //{
+        //    var userName = User.Identity?.Name;
+        //    var companyName = User.FindFirstValue("CompanyName");
+
+        //    await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        //    _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
+        //    return RedirectToAction("Login", "Account");
+        //}
 
 
         [HttpGet]
@@ -2815,7 +2901,7 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
 
-        // OtpVerification GET action
+        // AccountController.cs - Updated OtpVerification GET
 
         [HttpGet]
         [Authorize]
@@ -2826,23 +2912,9 @@ namespace SACCOBlockChainSystem.Controllers
 
             _logger.LogInformation($"OtpVerification GET: UserId={userId}, ReturnUrl={returnUrl}");
 
-            // Check if user already has a valid OTP
-            if (_otpService.HasValidOtp(userId))
-            {
-                _logger.LogInformation($"User {userId} already has valid OTP.");
-
-                // Set session validation
-                HttpContext.Session.SetString($"OtpValidated_{userId}", "true");
-                HttpContext.Session.SetString($"OtpValidatedAt_{userId}", DateTime.UtcNow.ToString("O"));
-
-                TempData["SuccessMessage"] = "OTP already verified. Access granted.";
-
-                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
-                {
-                    return Redirect(returnUrl);
-                }
-                return RedirectToAction("PendingDisbursement", "LoanMvc");
-            }
+            // ============================================================
+            // ✅ ALWAYS GENERATE A NEW OTP - No auto-validation
+            // ============================================================
 
             // Clear any existing OTP for this user
             _otpService.ClearOtp(userId);
@@ -2862,7 +2934,6 @@ namespace SACCOBlockChainSystem.Controllers
                 var user = await _context.UserAccounts1.FirstOrDefaultAsync(u => u.UserId.ToString() == userId);
                 if (user != null && !string.IsNullOrEmpty(user.Email))
                 {
-                    // Mask email for display
                     string maskedEmail = MaskEmail(user.Email);
                     var emailSent = await emailService.SendOtpAsync(user.Email, user.UserName, otp, 5);
 
@@ -2897,6 +2968,13 @@ namespace SACCOBlockChainSystem.Controllers
                 remainingSeconds = 300;
             }
 
+            // ============================================================
+            // ✅ CLEAR ALL PREVIOUS VALIDATION FLAGS
+            // ============================================================
+            HttpContext.Session.Remove($"OtpValidated_{userId}");
+            HttpContext.Session.Remove($"OtpValidatedAt_{userId}");
+            HttpContext.Session.Remove($"OtpPageAccess_{userId}");
+
             var model = new OtpVerificationViewModel
             {
                 ReturnUrl = returnUrl,
@@ -2904,12 +2982,14 @@ namespace SACCOBlockChainSystem.Controllers
                 UserName = userName,
                 OtpExpiry = generatedOtpExpiry,
                 IsOtpValid = false,
-                RemainingSeconds = remainingSeconds
+                RemainingSeconds = remainingSeconds,
+                RequireOtp = true
             };
 
             return View(model);
         }
 
+        // AccountController.cs - Updated ValidateOtp
 
         [HttpPost]
         [Authorize]
@@ -2948,7 +3028,7 @@ namespace SACCOBlockChainSystem.Controllers
                 return View("OtpVerification", model);
             }
 
-            // Same pattern as VerifyCode - check expiry first
+            // Check expiry first
             var remainingSeconds = _otpService.GetRemainingSeconds(userId);
             if (remainingSeconds <= 0)
             {
@@ -2959,31 +3039,41 @@ namespace SACCOBlockChainSystem.Controllers
                 return View("OtpVerification", model);
             }
 
-            // Validate OTP - same pattern as VerifyCode
+            // Validate OTP
             bool isValid = _otpService.ValidateOtp(userId, model.Otp);
 
             _logger.LogInformation($"ValidateOtp: Validation result = {isValid} for user {userId}");
 
             if (isValid)
             {
-                // Store OTP validation in session (same pattern as VerifyCode)
+                // ============================================================
+                // ✅ CREATE A ONE-TIME ACCESS TOKEN
+                // ============================================================
+                var accessToken = Guid.NewGuid().ToString();
+
+                // Store the token in session
                 HttpContext.Session.SetString($"OtpValidated_{userId}", "true");
                 HttpContext.Session.SetString($"OtpValidatedAt_{userId}", DateTime.UtcNow.ToString("O"));
+                HttpContext.Session.SetString($"OtpPageAccess_{userId}", accessToken);
 
                 _logger.LogInformation($"ValidateOtp: OTP validated successfully for user {userId}");
 
                 TempData["SuccessMessage"] = "OTP validated successfully. Access granted.";
 
-                // Redirect to the intended page
+                // ============================================================
+                // ✅ REDIRECT WITH TOKEN IN URL
+                // ============================================================
                 if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
                 {
-                    return Redirect(model.ReturnUrl);
+                    var separator = model.ReturnUrl.Contains("?") ? "&" : "?";
+                    var redirectUrl = $"{model.ReturnUrl}{separator}otpAccess={accessToken}";
+                    return Redirect(redirectUrl);
                 }
 
-                return RedirectToAction("PendingDisbursement", "LoanMvc");
+                return RedirectToAction("PendingDisbursement", "LoanMvc", new { otpAccess = accessToken });
             }
 
-            // OTP validation failed - same pattern as VerifyCode
+            // OTP validation failed
             _logger.LogWarning($"ValidateOtp: OTP validation failed for user {userId}");
 
             ModelState.AddModelError("Otp", "Invalid OTP. Please try again.");
@@ -2995,7 +3085,6 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
 
-        // POST: /Account/ResendOtp
         [HttpPost]
         [Authorize]
         [ValidateAntiForgeryToken]

@@ -137,6 +137,7 @@ namespace SACCOBlockChainSystem.Controllers
 
 
         }
+        [Authorize]
         public async Task<IActionResult> Index(string? companyCode)
         {
             try

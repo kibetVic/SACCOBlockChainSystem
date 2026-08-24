@@ -73,6 +73,11 @@
                         <input type="hidden" asp-for="UserId" />
                         <input type="hidden" asp-for="UserName" />
 
+                        @if (ViewBag.ReturnUrl != null)
+                        {
+                            <input type="hidden" id="returnUrl" value="@ViewBag.ReturnUrl" />
+                        }
+
                         <div class="mb-4">
                             <div class="form-floating">
                                 <input asp-for="Otp" class="form-control form-control-lg text-center"

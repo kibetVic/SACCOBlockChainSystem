@@ -3,7 +3,7 @@
     ViewData["Title"] = "Pending Disbursement";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
-
+<input type="hidden" id="otpAccessToken" value="@Context.Request.Query["otpAccess"]" />
 <div class="container py-4">
     <div class="row mb-4">
         <div class="col-12">
@@ -53,6 +53,7 @@
     {
         <div class="card shadow-sm">
             <div class="card-header bg-light">
+
                 <h5 class="card-title mb-0">
                     <i class="bi bi-list-check me-2"></i>Loans Ready for Disbursement
                 </h5>
@@ -141,6 +142,32 @@
 @section Scripts {
     <script>
         $(document).ready(function() {
+            if ($.fn.DataTable) {
+                $('#disbursementTable').DataTable({
+                    pageLength: 10,
+                    ordering: true,
+                    responsive: true,
+                    language: {
+                        search: "Search loans:",
+                        lengthMenu: "Show _MENU_ loans per page",
+                        info: "Showing _START_ to _END_ of _TOTAL_ loans",
+                        infoEmpty: "No loans found",
+                        zeroRecords: "No matching loans found"
+                    }
+                });
+            }
+        });
+        $(document).ready(function() {
+            // Check if OTP token exists in URL
+            var urlParams = new URLSearchParams(window.location.search);
+            var otpAccess = urlParams.get('otpAccess');
+
+            if (!otpAccess) {
+                console.log('No OTP access token found in URL');
+                // The controller will handle the redirect
+            }
+
+            // Initialize DataTable
             if ($.fn.DataTable) {
                 $('#disbursementTable').DataTable({
                     pageLength: 10,
