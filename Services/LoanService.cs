@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
+using MemberModel = SACCOBlockChainSystem.Models.Member;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
@@ -134,6 +135,8 @@ namespace SACCOBlockChainSystem.Services
     }
     public class LoanService : ILoanService
     {
+        // LoanService.cs - Updated with all dependencies
+
         private readonly ApplicationDbContext _context;
         private readonly AppDbContext _appDbContext;
         private readonly ILogger<LoanService> _logger;
@@ -142,7 +145,9 @@ namespace SACCOBlockChainSystem.Services
         private readonly ILoanTypeService _loanTypeService;
         private readonly IShareService _shareService;
         private readonly AuditTrailService _auditService;
-        private readonly IHttpContextAccessor _httpContextAccessor; 
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IConfiguration _configuration;              
+        private readonly IMpesaApiService _impesaapiservice;      
 
         public LoanService(
             ApplicationDbContext context,
@@ -153,7 +158,9 @@ namespace SACCOBlockChainSystem.Services
             ILoanTypeService loanTypeService,
             AuditTrailService auditService,
             IShareService shareService,
-            IHttpContextAccessor httpContextAccessor) 
+            IHttpContextAccessor httpContextAccessor,
+            IConfiguration configuration,
+            IMpesaApiService impesaapiservice)                     
         {
             _context = context;
             _appDbContext = appDbContext;
@@ -163,7 +170,9 @@ namespace SACCOBlockChainSystem.Services
             _loanTypeService = loanTypeService;
             _shareService = shareService;
             _auditService = auditService;
-            _httpContextAccessor = httpContextAccessor; 
+            _httpContextAccessor = httpContextAccessor;
+            _configuration = configuration;
+            _impesaapiservice = _impesaapiservice;                   
         }
 
         #region Loan Deletion - Permanent Delete
@@ -5400,6 +5409,7 @@ namespace SACCOBlockChainSystem.Services
 
 
         #region Disbursement
+
         public async Task<Cheque> DisburseLoanAsync(LoanDisbursementDTO disbursementDto)
         {
             var currentUserRole = _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Role);
@@ -5412,7 +5422,7 @@ namespace SACCOBlockChainSystem.Services
             // Generate base transaction numbers (same for all records)
             string baseTransactionNo = $"DTRS{DateTime.Now:yyyyMMddHHmmss}";
             string initialReceiptNo = $"RCP-{DateTime.Now:yyyyMMddHHmmss}";
-            string mpesaReceiptNo = null; // Will be updated from API response
+            string mpesaTransactionId = null; // Will be updated from B2C response
 
             // Get loan details
             var loan = await _context.Loans
@@ -5438,6 +5448,8 @@ namespace SACCOBlockChainSystem.Services
                     memberPhone = "254" + memberPhone.Substring(1);
                 if (!memberPhone.StartsWith("254") && memberPhone.Length == 9)
                     memberPhone = "254" + memberPhone;
+                if (memberPhone.Length == 10 && memberPhone.StartsWith("254"))
+                    memberPhone = "254" + memberPhone.Substring(3);
             }
 
             // Get endorsement and cheque
@@ -5470,12 +5482,14 @@ namespace SACCOBlockChainSystem.Services
             }
 
             // ============================================================
-            // CHECK B2C SETUP AND CREATE RECORDS FIRST
+            // CHECK B2C SETUP AND CREATE RECORDS
             // ============================================================
             var apiSettings = await _appDbContext.ApiTable
                 .FirstOrDefaultAsync(a => a.CompanyCode == disbursementDto.CompanyCode && a.Status == "Active");
 
-            bool isB2CEnabled = apiSettings != null && !string.IsNullOrEmpty(apiSettings.ConsumerKey) && !string.IsNullOrEmpty(apiSettings.ConsumerSecret);
+            bool isB2CEnabled = apiSettings != null &&
+                                !string.IsNullOrEmpty(apiSettings.ConsumerKey) &&
+                                !string.IsNullOrEmpty(apiSettings.ConsumerSecret);
 
             ApiTransaction? apiTransaction = null;
             TransactionDetail? transactionDetail = null;
@@ -5485,7 +5499,7 @@ namespace SACCOBlockChainSystem.Services
             string b2cResponseMessage = "";
             string conversationId = "";
             string checkoutId = "";
-            string mpesaTransactionId = ""; // Store M-Pesa transaction ID from response
+            string b2cReference = "";
 
             // ============================================================
             // CREATE TRANSACTION RECORDS FIRST (BEFORE MAIN DB TRANSACTION)
@@ -5510,7 +5524,7 @@ namespace SACCOBlockChainSystem.Services
                     };
                     _appDbContext.Transactions.Add(transactionRecord);
                     await _appDbContext.SaveChangesAsync();
-                    _logger.LogInformation($"Transaction record created - TransactionNo: {baseTransactionNo}, ReceiptNo: {initialReceiptNo}");
+                    _logger.LogInformation($"Transaction record created - TransactionNo: {baseTransactionNo}");
 
                     // 2. CREATE TRANSACTIONS2 RECORD
                     transaction2Record = new Transactions2
@@ -5518,7 +5532,7 @@ namespace SACCOBlockChainSystem.Services
                         MemberNo = loan.MemberNo,
                         Companycode = disbursementDto.CompanyCode,
                         TransactionNo = baseTransactionNo,
-                        ReceiptNo = initialReceiptNo, 
+                        ReceiptNo = initialReceiptNo,
                         PaymentMode = memberPhone,
                         TransactionType = "Withdraw",
                         Amount = netDisbursedAmount,
@@ -5534,7 +5548,7 @@ namespace SACCOBlockChainSystem.Services
                     };
                     _appDbContext.Transactions2.Add(transaction2Record);
                     await _appDbContext.SaveChangesAsync();
-                    _logger.LogInformation($"Transactions2 record created - TransactionNo: {baseTransactionNo}, ReceiptNo: {initialReceiptNo}");
+                    _logger.LogInformation($"Transactions2 record created - TransactionNo: {baseTransactionNo}");
 
                     // Only create B2C specific records if B2C is enabled
                     if (isB2CEnabled && netDisbursedAmount > 0 && !string.IsNullOrEmpty(memberPhone))
@@ -5608,223 +5622,124 @@ namespace SACCOBlockChainSystem.Services
             }
 
             // ============================================================
-            // SEND B2C PAYMENT REQUEST (if enabled)
+            // SEND B2C PAYMENT REQUEST USING GLOBAL B2C SERVICE
             // ============================================================
-            if (isB2CEnabled && apiTransaction != null && transactionDetail != null)
+            if (isB2CEnabled && apiTransaction != null && transactionDetail != null && !string.IsNullOrEmpty(memberPhone))
             {
                 try
                 {
                     _logger.LogInformation($"Sending B2C payment of {netDisbursedAmount:C} to {memberPhone}");
 
-                    string postdataurl = "https://easysacco.amtech.co.ke:9090/Apis/Simulate";
-
-                    WebRequest request = WebRequest.Create(postdataurl);
-                    request.Method = "POST";
-                    request.Timeout = 60000;
-
-                    var apiSimulate = new
+                    // Create B2C payment request using the global DTO
+                    var b2cRequest = new B2CPaymentRequest
                     {
-                        reference = loan.MemberNo,
-                        amount = netDisbursedAmount,
-                        companycode = disbursementDto.CompanyCode,
-                        phone = memberPhone,
-                        action = "b2c",
-                        ApiKey = "BVmY1Ufl8FeazdlKnWQ5e/hgUN8p/+dapzDagzNL1eCRAOhW67X0risDPOxZdVv+pVHKB7Oi3vsb/skOlxDZjPaW36i6A8n9+xleI6zsyNO1jT0SO9+h5mtZNK5ur7NeZK0gUdJfAGCANbCxzeuZo5PcAfPVfdhFUSuGvfU2nPxpD2dREAE/xuA85XVBdwlwRKCteNbpnLABgaHhfJPYwgTBu+aqLYYNZODBegwyHthTauvCSKVnb1BYgbrsrf34GlrcV7jEZQBMxFoiN2E4n72Mm/z2SeVGhCFGml0bOq8WQTlBC8p9ifT2TcmfFPZ3bv+sd8U0niRGKYfyw9BATg==",
+                        CompanyCode = disbursementDto.CompanyCode,
+                        Amount = netDisbursedAmount,
+                        PhoneNumber = memberPhone,
+                        Reference = loan.LoanNo,
+                        Remarks = $"Loan Disbursement - {loan.LoanNo}",
+                        SourceModule = "LOAN_DISBURSEMENT",
+                        SourceReference = loan.LoanNo,
+                        RecipientName = memberName,
+                        CommandID = "BusinessPayment",
+                        CreatedBy = disbursementDto.DisbursedBy ?? "SYSTEM",
+                        ApiKey = _configuration["MpesaApi:DefaultApiKey"],
+                        OriginatorConversationID = conversationId
                     };
 
-                    string postData = System.Text.Json.JsonSerializer.Serialize(apiSimulate);
-                    byte[] byteArray = Encoding.UTF8.GetBytes(postData);
+                    // ✅ Send B2C payment using the global service
+                    var b2cResponse = await _impesaapiservice.SendB2CPaymentAsync(b2cRequest);
 
-                    request.ContentType = "application/json";
-                    request.ContentLength = byteArray.Length;
-
-                    using (Stream dataStream = await request.GetRequestStreamAsync())
+                    // ✅ Update transaction records based on response
+                    if (b2cResponse.Success)
                     {
-                        await dataStream.WriteAsync(byteArray, 0, byteArray.Length);
-                    }
+                        b2cPaymentSuccess = true;
+                        b2cResponseMessage = "Payment processed successfully";
+                        b2cReference = b2cResponse.TransactionReference ?? conversationId;
+                        mpesaTransactionId = b2cReference;
 
-                    using (WebResponse response = await request.GetResponseAsync())
-                    {
-                        HttpWebResponse httpResponse = (HttpWebResponse)response;
+                        _logger.LogInformation($"B2C payment sent successfully. Reference: {b2cResponse.TransactionReference}");
 
-                        if (httpResponse.StatusCode == HttpStatusCode.OK)
-                        {
-                            using (StreamReader reader = new StreamReader(response.GetResponseStream()))
-                            {
-                                string responseFromServer = await reader.ReadToEndAsync();
-                                _logger.LogInformation($"B2C Response received: {responseFromServer}");
-
-                                // ============================================================
-                                // PARSE M-PESA TRANSACTION ID FROM RESPONSE
-                                // ============================================================
-                                // Try to extract M-Pesa receipt number from response
-                                // The actual response format may vary - adjust parsing based on your API response
-                                try
-                                {
-                                    var jsonResponse = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(responseFromServer);
-
-                                    // Common field names where M-Pesa transaction ID might be
-                                    if (jsonResponse != null)
-                                    {
-                                        // Try different possible field names
-                                        if (jsonResponse.ContainsKey("TransactionID"))
-                                            mpesaTransactionId = jsonResponse["TransactionID"]?.ToString();
-                                        else if (jsonResponse.ContainsKey("MpesaReceiptNumber"))
-                                            mpesaTransactionId = jsonResponse["MpesaReceiptNumber"]?.ToString();
-                                        else if (jsonResponse.ContainsKey("ReceiptNumber"))
-                                            mpesaTransactionId = jsonResponse["ReceiptNumber"]?.ToString();
-                                        else if (jsonResponse.ContainsKey("OriginatorConversationID"))
-                                            mpesaTransactionId = jsonResponse["OriginatorConversationID"]?.ToString();
-                                        else if (jsonResponse.ContainsKey("ConversationID"))
-                                            mpesaTransactionId = jsonResponse["ConversationID"]?.ToString();
-
-                                        // If found, update receipt number
-                                        if (!string.IsNullOrEmpty(mpesaTransactionId))
-                                        {
-                                            _logger.LogInformation($"M-Pesa Transaction ID received: {mpesaTransactionId}");
-                                        }
-                                        else
-                                        {
-                                            _logger.LogWarning("No M-Pesa transaction ID found in response");
-                                            // Use conversation ID as fallback
-                                            mpesaTransactionId = conversationId;
-                                        }
-                                    }
-                                }
-                                catch (Exception parseEx)
-                                {
-                                    _logger.LogWarning(parseEx, "Could not parse M-Pesa transaction ID from response");
-                                    mpesaTransactionId = conversationId; // Fallback to conversation ID
-                                }
-
-                                // Update records to success
-                                b2cPaymentSuccess = true;
-                                b2cResponseMessage = "Payment processed successfully";
-
-                                // ============================================================
-                                // UPDATE RECEIPT NUMBERS WITH MPESA TRANSACTION ID
-                                // ============================================================
-                                string finalReceiptNo = !string.IsNullOrEmpty(mpesaTransactionId)
-                                    ? mpesaTransactionId
-                                    : initialReceiptNo;
-
-                                // Update ApiTransaction
-                                apiTransaction.StatusCode = 0; // Success
-                                apiTransaction.ResultDescription = responseFromServer.Length > 500 ? responseFromServer.Substring(0, 500) : responseFromServer;
-                                apiTransaction.updated_at = DateTime.Now;
-                                _appDbContext.ApiTransactions.Update(apiTransaction);
-
-                                // Update TransactionDetail
-                                transactionDetail.ResultCode = 0;
-                                transactionDetail.ResultMessage = "Payment successful";
-                                transactionDetail.Status = "Completed";
-                                transactionDetail.UpdatedAt = DateTime.Now;
-                                _appDbContext.Transaction_detail.Update(transactionDetail);
-
-                                // Update Transaction with M-Pesa receipt number
-                                if (transactionRecord != null)
-                                {
-                                    transactionRecord.Status = "Completed";
-                                    //transactionRecord.ReceiptNo = finalReceiptNo; // Update to M-Pesa receipt number
-                                    _appDbContext.Transactions.Update(transactionRecord);
-                                    _logger.LogInformation($"Transaction record updated - ReceiptNo: {finalReceiptNo}");
-                                }
-
-                                // Update Transactions2 with M-Pesa receipt number
-                                if (transaction2Record != null)
-                                {
-                                    transaction2Record.Status = "Completed";
-                                    transaction2Record.ReceiptNo = finalReceiptNo; // Update to M-Pesa receipt number
-                                    _appDbContext.Transactions2.Update(transaction2Record);
-                                    _logger.LogInformation($"Transactions2 record updated - ReceiptNo: {finalReceiptNo}");
-                                }
-
-                                await _appDbContext.SaveChangesAsync();
-                                _logger.LogInformation($"✅ B2C Payment successful - Receipt updated to: {finalReceiptNo}");
-                            }
-                        }
-                        else
-                        {
-                            b2cPaymentSuccess = false;
-                            b2cResponseMessage = $"HTTP Error: {httpResponse.StatusCode}";
-
-                            // Update records to failed
-                            apiTransaction.StatusCode = 2;
-                            apiTransaction.ResultDescription = $"HTTP Error: {httpResponse.StatusCode}";
-                            apiTransaction.updated_at = DateTime.Now;
-                            _appDbContext.ApiTransactions.Update(apiTransaction);
-
-                            transactionDetail.ResultCode = 2;
-                            transactionDetail.ResultMessage = $"HTTP Error: {httpResponse.StatusCode}";
-                            transactionDetail.Status = "Failed";
-                            transactionDetail.UpdatedAt = DateTime.Now;
-                            _appDbContext.Transaction_detail.Update(transactionDetail);
-
-                            // Keep initial receipt number for failed transactions
-                            if (transactionRecord != null)
-                            {
-                                transactionRecord.Status = "Failed";
-                                _appDbContext.Transactions.Update(transactionRecord);
-                            }
-                            if (transaction2Record != null)
-                            {
-                                transaction2Record.Status = "Failed";
-                                _appDbContext.Transactions2.Update(transaction2Record);
-                            }
-
-                            await _appDbContext.SaveChangesAsync();
-                            _logger.LogWarning($"❌ B2C HTTP Error: {httpResponse.StatusCode}");
-                        }
-                    }
-                }
-                catch (WebException webEx)
-                {
-                    _logger.LogError(webEx, "WebException during B2C payment");
-                    b2cPaymentSuccess = false;
-                    b2cResponseMessage = $"Network error: {webEx.Message}";
-
-                    if (apiTransaction != null)
-                    {
-                        apiTransaction.StatusCode = 2;
-                        apiTransaction.ResultDescription = $"Network error: {webEx.Message}";
+                        // ✅ Update ApiTransaction with success status
+                        apiTransaction.StatusCode = 0;
+                        apiTransaction.ResultDescription = $"B2C Payment Successful - {b2cResponse.ResponseDescription}";
+                        apiTransaction.ConversationId = b2cResponse.TransactionReference ?? conversationId;
                         apiTransaction.updated_at = DateTime.Now;
                         _appDbContext.ApiTransactions.Update(apiTransaction);
-                    }
 
-                    if (transactionDetail != null)
+                        // ✅ Update TransactionDetail with success status
+                        transactionDetail.ResultCode = 0;
+                        transactionDetail.ResultMessage = "Payment successful";
+                        transactionDetail.Status = "Completed";
+                        transactionDetail.ConversationId = b2cResponse.TransactionReference ?? conversationId;
+                        transactionDetail.UpdatedAt = DateTime.Now;
+                        _appDbContext.Transaction_detail.Update(transactionDetail);
+
+                        // ✅ Update Transaction record
+                        if (transactionRecord != null)
+                        {
+                            transactionRecord.Status = "Completed";
+                            _appDbContext.Transactions.Update(transactionRecord);
+                        }
+
+                        // ✅ Update Transactions2 record
+                        if (transaction2Record != null)
+                        {
+                            transaction2Record.Status = "Completed";
+                            transaction2Record.ReceiptNo = b2cResponse.TransactionReference ?? initialReceiptNo;
+                            _appDbContext.Transactions2.Update(transaction2Record);
+                        }
+
+                        await _appDbContext.SaveChangesAsync();
+                        _logger.LogInformation($"✅ B2C Payment successful - Receipt: {b2cResponse.TransactionReference}");
+                    }
+                    else
                     {
+                        b2cPaymentSuccess = false;
+                        b2cResponseMessage = b2cResponse.ResponseDescription;
+                        b2cReference = conversationId;
+
+                        _logger.LogWarning($"B2C payment failed: {b2cResponse.ResponseDescription}");
+
+                        // ✅ Update records to failed
+                        apiTransaction.StatusCode = 2;
+                        apiTransaction.ResultDescription = $"B2C Payment Failed: {b2cResponse.ResponseDescription}";
+                        apiTransaction.updated_at = DateTime.Now;
+                        _appDbContext.ApiTransactions.Update(apiTransaction);
+
                         transactionDetail.ResultCode = 2;
-                        transactionDetail.ResultMessage = $"Network error: {webEx.Message}";
+                        transactionDetail.ResultMessage = b2cResponse.ResponseDescription;
                         transactionDetail.Status = "Failed";
                         transactionDetail.UpdatedAt = DateTime.Now;
                         _appDbContext.Transaction_detail.Update(transactionDetail);
-                    }
 
-                    // Keep initial receipt number for failed transactions
-                    if (transactionRecord != null)
-                    {
-                        transactionRecord.Status = "Failed";
-                        _appDbContext.Transactions.Update(transactionRecord);
-                    }
-                    if (transaction2Record != null)
-                    {
-                        transaction2Record.Status = "Failed";
-                        _appDbContext.Transactions2.Update(transaction2Record);
-                    }
+                        if (transactionRecord != null)
+                        {
+                            transactionRecord.Status = "Failed";
+                            _appDbContext.Transactions.Update(transactionRecord);
+                        }
+                        if (transaction2Record != null)
+                        {
+                            transaction2Record.Status = "Failed";
+                            _appDbContext.Transactions2.Update(transaction2Record);
+                        }
 
-                    await _appDbContext.SaveChangesAsync();
-                    _logger.LogWarning($"B2C failed but continuing with loan disbursement");
+                        await _appDbContext.SaveChangesAsync();
+                        _logger.LogWarning($"❌ B2C Payment Failed: {b2cResponse.ResponseDescription}");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Exception during B2C payment");
+                    _logger.LogError(ex, $"B2C payment error: {ex.Message}");
                     b2cPaymentSuccess = false;
                     b2cResponseMessage = $"Error: {ex.Message}";
+                    b2cReference = conversationId;
 
+                    // Update records to failed
                     if (apiTransaction != null)
                     {
                         apiTransaction.StatusCode = 2;
-                        apiTransaction.ResultDescription = $"Error: {ex.Message}";
+                        apiTransaction.ResultDescription = $"B2C Payment Error: {ex.Message}";
                         apiTransaction.updated_at = DateTime.Now;
                         _appDbContext.ApiTransactions.Update(apiTransaction);
                     }
@@ -5838,7 +5753,6 @@ namespace SACCOBlockChainSystem.Services
                         _appDbContext.Transaction_detail.Update(transactionDetail);
                     }
 
-                    // Keep initial receipt number for failed transactions
                     if (transactionRecord != null)
                     {
                         transactionRecord.Status = "Failed";
@@ -5871,6 +5785,13 @@ namespace SACCOBlockChainSystem.Services
             }
 
             // ============================================================
+            // DETERMINE FINAL RECEIPT NUMBER
+            // ============================================================
+            string finalReceiptNumber = b2cPaymentSuccess && !string.IsNullOrEmpty(mpesaTransactionId)
+                ? mpesaTransactionId
+                : (b2cPaymentSuccess ? b2cReference : initialReceiptNo);
+
+            // ============================================================
             // NOW PROCEED WITH MAIN LOAN DISBURSEMENT TRANSACTION
             // ============================================================
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -5878,11 +5799,6 @@ namespace SACCOBlockChainSystem.Services
             try
             {
                 _logger.LogInformation($"Proceeding with loan disbursement for {disbursementDto.LoanNo}");
-
-                // Determine the final receipt number to use
-                string finalReceiptNumber = b2cPaymentSuccess && !string.IsNullOrEmpty(mpesaTransactionId)
-                    ? mpesaTransactionId
-                    : initialReceiptNo;
 
                 // Store old values for audit
                 int oldLoanStatus = (int)loan.Status;
@@ -5983,11 +5899,12 @@ namespace SACCOBlockChainSystem.Services
                     ChequeNo = existingCheque.ChequeNo,
                     VoucherNo = existingCheque.Voucherno,
                     TransactionNo = baseTransactionNo,
-                    ReceiptNo = finalReceiptNumber, // Store final receipt number (M-Pesa code or system code)
+                    ReceiptNo = finalReceiptNumber,
                     B2CEnabled = isB2CEnabled,
                     B2CSuccess = b2cPaymentSuccess,
-                    B2CConversationId = conversationId,
-                    MpesaTransactionId = mpesaTransactionId
+                    B2CConversationId = b2cReference,
+                    MpesaTransactionId = mpesaTransactionId,
+                    B2CResponseMessage = b2cResponseMessage
                 };
 
                 // Record GL transactions
@@ -6035,7 +5952,6 @@ namespace SACCOBlockChainSystem.Services
                     MemberNo = loan.MemberNo,
                     Balance = approvedAmount,
                     IntrOwed = isUpfrontInterest ? 0 : totalInterest,
-                    //IntrOwed = totalInterest,
                     Installments = repaymentPeriod,
                     IntrOwed2 = 0,
                     FirstDate = disbursementDto.DisbursementDate,
@@ -6043,7 +5959,6 @@ namespace SACCOBlockChainSystem.Services
                     LastDate = disbursementDto.DisbursementDate.AddMonths(repaymentPeriod),
                     Duedate = disbursementDto.DisbursementDate.AddMonths(1),
                     IntrCharged = isUpfrontInterest ? totalInterest : totalInterest,
-                   // IntrCharged = totalInterest,
                     Interest = annualInterestRate,
                     Companycode = disbursementDto.CompanyCode,
                     Penalty = 0,
@@ -6057,12 +5972,11 @@ namespace SACCOBlockChainSystem.Services
                     AuditId = disbursementDto.DisbursedBy,
                     AuditTime = DateTime.Now,
                     IntBalance = isUpfrontInterest ? 0 : totalInterest,
-                    //IntBalance = totalInterest,
                     CategoryCode = null,
                     InterestAccrued = 0,
                     Defaulter = "N",
                     Processdate = DateTime.Now,
-                    Receiptno = finalReceiptNumber, // Store final receipt number
+                    Receiptno = finalReceiptNumber,
                     Cease = "N",
                     Nextduedate = disbursementDto.DisbursementDate.AddMonths(1),
                     TransactionNo = baseTransactionNo,
@@ -6070,7 +5984,7 @@ namespace SACCOBlockChainSystem.Services
                     Month = DateTime.Now.Month.ToString(),
                     RepayMode = 1,
                     Gperiod = null,
-                    ApiKey = apiTransaction?.ConversationId,
+                    ApiKey = apiTransaction?.ConversationId ?? b2cReference,
                     UserName = disbursementDto.DisbursedBy,
                     Run = 0,
                     SerialNo = null,
@@ -6089,7 +6003,7 @@ namespace SACCOBlockChainSystem.Services
                 existingCheque.AuditDateTime = DateTime.Now;
                 existingCheque.UserName = disbursementDto.DisbursedBy;
                 existingCheque.TransactionNo = baseTransactionNo;
-                existingCheque.Voucherno = finalReceiptNumber; // Store final receipt number
+                existingCheque.Voucherno = finalReceiptNumber;
                 if (apiTransaction != null)
                 {
                     existingCheque.ApiKey = apiTransaction.ConversationId;
@@ -6138,27 +6052,6 @@ namespace SACCOBlockChainSystem.Services
                 netDisbursementGL.BlockchainTxId = blockchainTx.TransactionId;
                 existingCheque.BlockchainTxId = blockchainTx.TransactionId;
 
-                //if (apiTransaction != null)
-                //{
-                //    apiTransaction.BlockchainTxId = blockchainTx.TransactionId;
-                //    _appDbContext.ApiTransactions.Update(apiTransaction);
-                //}
-                //if (transactionDetail != null)
-                //{
-                //    transactionDetail.BlockchainTxId = blockchainTx.TransactionId;
-                //    _appDbContext.TransactionDetail.Update(transactionDetail);
-                //}
-                //if (transactionRecord != null)
-                //{
-                //    transactionRecord.BlockchainTxId = blockchainTx.TransactionId;
-                //    _appDbContext.Transactions.Update(transactionRecord);
-                //}
-                //if (transaction2Record != null)
-                //{
-                //    transaction2Record.BlockchainTxId = blockchainTx.TransactionId;
-                //    _appDbContext.Transactions2.Update(transaction2Record);
-                //}
-
                 await _context.SaveChangesAsync();
                 await _appDbContext.SaveChangesAsync();
 
@@ -6197,6 +6090,804 @@ namespace SACCOBlockChainSystem.Services
                 throw;
             }
         }
+
+        //public async Task<Cheque> DisburseLoanAsync(LoanDisbursementDTO disbursementDto)
+        //{
+        //    var currentUserRole = _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Role);
+
+        //    if (currentUserRole != "Finance Officer" && currentUserRole != "Super Admin" && currentUserRole != "Admin")
+        //    {
+        //        throw new UnauthorizedAccessException("Only Finance Officers can disburse loans");
+        //    }
+
+        //    // Generate base transaction numbers (same for all records)
+        //    string baseTransactionNo = $"DTRS{DateTime.Now:yyyyMMddHHmmss}";
+        //    string initialReceiptNo = $"RCP-{DateTime.Now:yyyyMMddHHmmss}";
+        //    string mpesaReceiptNo = null; // Will be updated from API response
+
+        //    // Get loan details
+        //    var loan = await _context.Loans
+        //        .FirstOrDefaultAsync(l => l.LoanNo == disbursementDto.LoanNo && l.CompanyCode == disbursementDto.CompanyCode);
+
+        //    if (loan == null)
+        //    {
+        //        throw new InvalidOperationException($"Loan {disbursementDto.LoanNo} not found");
+        //    }
+
+        //    // Get member details
+        //    var member = await _context.Members
+        //        .FirstOrDefaultAsync(m => m.MemberNo == loan.MemberNo && m.CompanyCode == disbursementDto.CompanyCode);
+
+        //    string memberName = member != null ? $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim() : loan.MemberNo;
+        //    string memberPhone = member?.PhoneNo ?? member?.MobileNo ?? "";
+
+        //    // Clean phone number
+        //    if (!string.IsNullOrEmpty(memberPhone))
+        //    {
+        //        memberPhone = memberPhone.Replace("+", "").Replace(" ", "").Replace("-", "");
+        //        if (memberPhone.StartsWith("0"))
+        //            memberPhone = "254" + memberPhone.Substring(1);
+        //        if (!memberPhone.StartsWith("254") && memberPhone.Length == 9)
+        //            memberPhone = "254" + memberPhone;
+        //    }
+
+        //    // Get endorsement and cheque
+        //    var endmain = await _context.Endmain
+        //        .FirstOrDefaultAsync(e => e.LoanNo == disbursementDto.LoanNo && e.CompanyCode == disbursementDto.CompanyCode);
+
+        //    if (endmain == null)
+        //    {
+        //        throw new InvalidOperationException($"Endorsement not found for loan {disbursementDto.LoanNo}");
+        //    }
+
+        //    var existingCheque = await _context.Cheques
+        //        .FirstOrDefaultAsync(c => c.LoanNo == disbursementDto.LoanNo && c.CompanyCode == disbursementDto.CompanyCode);
+
+        //    if (existingCheque == null)
+        //    {
+        //        throw new InvalidOperationException($"Cheque record not found for loan {disbursementDto.LoanNo}");
+        //    }
+
+        //    decimal approvedAmount = endmain.AmtApproved;
+        //    decimal netDisbursedAmount = existingCheque.AmountIssued ?? approvedAmount;
+
+        //    // Check if already disbursed
+        //    var existingLoanbal = await _context.Loanbal
+        //        .FirstOrDefaultAsync(lb => lb.LoanNo == disbursementDto.LoanNo && lb.Companycode == disbursementDto.CompanyCode);
+
+        //    if (existingLoanbal != null)
+        //    {
+        //        throw new InvalidOperationException($"Loan already disbursed. Loan balance record exists.");
+        //    }
+
+        //    // ============================================================
+        //    // CHECK B2C SETUP AND CREATE RECORDS FIRST
+        //    // ============================================================
+        //    var apiSettings = await _appDbContext.ApiTable
+        //        .FirstOrDefaultAsync(a => a.CompanyCode == disbursementDto.CompanyCode && a.Status == "Active");
+
+        //    bool isB2CEnabled = apiSettings != null && !string.IsNullOrEmpty(apiSettings.ConsumerKey) && !string.IsNullOrEmpty(apiSettings.ConsumerSecret);
+
+        //    ApiTransaction? apiTransaction = null;
+        //    TransactionDetail? transactionDetail = null;
+        //    Transaction? transactionRecord = null;
+        //    Transactions2? transaction2Record = null;
+        //    bool b2cPaymentSuccess = false;
+        //    string b2cResponseMessage = "";
+        //    string conversationId = "";
+        //    string checkoutId = "";
+        //    string mpesaTransactionId = ""; // Store M-Pesa transaction ID from response
+
+        //    // ============================================================
+        //    // CREATE TRANSACTION RECORDS FIRST (BEFORE MAIN DB TRANSACTION)
+        //    // ============================================================
+        //    using (var b2cScope = await _appDbContext.Database.BeginTransactionAsync())
+        //    {
+        //        try
+        //        {
+        //            // 1. CREATE TRANSACTION RECORD
+        //            transactionRecord = new Transaction
+        //            {
+        //                TransactionNo = baseTransactionNo,
+        //                Amount = netDisbursedAmount,
+        //                TransDate = DateTime.Now,
+        //                AuditId = disbursementDto.DisbursedBy ?? "SYSTEM",
+        //                AuditTime = DateTime.Now,
+        //                TransDescription = $"Loan Disbursement - {loan.LoanNo} - Member: {memberName}",
+        //                Status = "Pending",
+        //                CompanyCode = disbursementDto.CompanyCode,
+        //                Channel = "B2C",
+        //                AuditDateTime = DateTime.Now
+        //            };
+        //            _appDbContext.Transactions.Add(transactionRecord);
+        //            await _appDbContext.SaveChangesAsync();
+        //            _logger.LogInformation($"Transaction record created - TransactionNo: {baseTransactionNo}, ReceiptNo: {initialReceiptNo}");
+
+        //            // 2. CREATE TRANSACTIONS2 RECORD
+        //            transaction2Record = new Transactions2
+        //            {
+        //                MemberNo = loan.MemberNo,
+        //                Companycode = disbursementDto.CompanyCode,
+        //                TransactionNo = baseTransactionNo,
+        //                ReceiptNo = initialReceiptNo, 
+        //                PaymentMode = memberPhone,
+        //                TransactionType = "Withdraw",
+        //                Amount = netDisbursedAmount,
+        //                ContributionDate = DateTime.Now,
+        //                DepositedDate = DateTime.Now,
+        //                AuditId = disbursementDto.DisbursedBy ?? "SYSTEM",
+        //                AuditTime = DateTime.Now,
+        //                Status = "Pending",
+        //                RunE = 0,
+        //                SessionId = Guid.NewGuid().ToString(),
+        //                Contact = memberPhone,
+        //                AuditDateTime = DateTime.Now,
+        //            };
+        //            _appDbContext.Transactions2.Add(transaction2Record);
+        //            await _appDbContext.SaveChangesAsync();
+        //            _logger.LogInformation($"Transactions2 record created - TransactionNo: {baseTransactionNo}, ReceiptNo: {initialReceiptNo}");
+
+        //            // Only create B2C specific records if B2C is enabled
+        //            if (isB2CEnabled && netDisbursedAmount > 0 && !string.IsNullOrEmpty(memberPhone))
+        //            {
+        //                conversationId = DateTime.Now.ToString("yyyyMMddHHmmss") + Guid.NewGuid().ToString().Substring(0, 8);
+        //                checkoutId = Guid.NewGuid().ToString();
+
+        //                // 3. CREATE APITRANSACTION RECORD
+        //                apiTransaction = new ApiTransaction
+        //                {
+        //                    CompanyCode = disbursementDto.CompanyCode,
+        //                    ApiUser = disbursementDto.DisbursedBy ?? "SYSTEM",
+        //                    ShortCode = apiSettings.ShortCode,
+        //                    TransactionCode = $"DISP-{disbursementDto.LoanNo}",
+        //                    CheckoutId = checkoutId,
+        //                    ConversationId = conversationId,
+        //                    Amount = netDisbursedAmount,
+        //                    Recipient = memberPhone,
+        //                    StatusCode = 1, // 1 = Pending
+        //                    ResultDescription = "B2C payment initiated - pending processing",
+        //                    created_at = DateTime.Now,
+        //                    updated_at = DateTime.Now,
+        //                    LoanNo = disbursementDto.LoanNo,
+        //                    AuditDateTime = DateTime.Now,
+        //                };
+        //                _appDbContext.ApiTransactions.Add(apiTransaction);
+        //                await _appDbContext.SaveChangesAsync();
+        //                _logger.LogInformation($"ApiTransaction record created - ConversationId: {conversationId}");
+
+        //                // 4. CREATE TRANSACTIONDETAIL RECORD
+        //                transactionDetail = new TransactionDetail
+        //                {
+        //                    CompanyCode = disbursementDto.CompanyCode,
+        //                    TransactionId = Guid.NewGuid().ToString(),
+        //                    TransactionCode = $"DISP-{disbursementDto.LoanNo}",
+        //                    ResultCode = 1,
+        //                    ResultMessage = "B2C payment initiated - pending",
+        //                    Amount = netDisbursedAmount,
+        //                    Status = "Pending",
+        //                    ConversationId = conversationId,
+        //                    ShortCode = apiSettings.ShortCode ?? 0,
+        //                    UpdatedAt = DateTime.Now,
+        //                    CreatedAt = DateTime.Now,
+        //                    MemberNo = loan.MemberNo,
+        //                    Phone = memberPhone,
+        //                    OriginatorConversationId = conversationId,
+        //                    MerchantRequestId = conversationId,
+        //                    CheckoutRequestId = checkoutId,
+        //                    AuditDateTime = DateTime.Now,
+        //                };
+        //                _appDbContext.Transaction_detail.Add(transactionDetail);
+        //                await _appDbContext.SaveChangesAsync();
+        //                _logger.LogInformation($"TransactionDetail record created");
+
+        //                await b2cScope.CommitAsync();
+        //                _logger.LogInformation("All B2C records created successfully before sending payment request");
+        //            }
+        //            else
+        //            {
+        //                await b2cScope.CommitAsync();
+        //                _logger.LogInformation($"Transaction records created. B2C not enabled. Phone: {(string.IsNullOrEmpty(memberPhone) ? "missing" : "present")}");
+        //            }
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            await b2cScope.RollbackAsync();
+        //            _logger.LogError(ex, "Failed to create transaction records before B2C");
+        //            isB2CEnabled = false;
+        //            b2cResponseMessage = $"Failed to create transaction records: {ex.Message}";
+        //        }
+        //    }
+
+        //    // ============================================================
+        //    // SEND B2C PAYMENT REQUEST (if enabled)
+        //    // ============================================================
+        //    if (isB2CEnabled && apiTransaction != null && transactionDetail != null)
+        //    {
+        //        try
+        //        {
+        //            _logger.LogInformation($"Sending B2C payment of {netDisbursedAmount:C} to {memberPhone}");
+
+        //            string postdataurl = "https://easysacco.amtech.co.ke:9090/Apis/Simulate";
+
+        //            WebRequest request = WebRequest.Create(postdataurl);
+        //            request.Method = "POST";
+        //            request.Timeout = 60000;
+
+        //            var apiSimulate = new
+        //            {
+        //                reference = loan.MemberNo,
+        //                amount = netDisbursedAmount,
+        //                companycode = disbursementDto.CompanyCode,
+        //                phone = memberPhone,
+        //                action = "b2c",
+        //                ApiKey = "BVmY1Ufl8FeazdlKnWQ5e/hgUN8p/+dapzDagzNL1eCRAOhW67X0risDPOxZdVv+pVHKB7Oi3vsb/skOlxDZjPaW36i6A8n9+xleI6zsyNO1jT0SO9+h5mtZNK5ur7NeZK0gUdJfAGCANbCxzeuZo5PcAfPVfdhFUSuGvfU2nPxpD2dREAE/xuA85XVBdwlwRKCteNbpnLABgaHhfJPYwgTBu+aqLYYNZODBegwyHthTauvCSKVnb1BYgbrsrf34GlrcV7jEZQBMxFoiN2E4n72Mm/z2SeVGhCFGml0bOq8WQTlBC8p9ifT2TcmfFPZ3bv+sd8U0niRGKYfyw9BATg==",
+        //            };
+
+        //            string postData = System.Text.Json.JsonSerializer.Serialize(apiSimulate);
+        //            byte[] byteArray = Encoding.UTF8.GetBytes(postData);
+
+        //            request.ContentType = "application/json";
+        //            request.ContentLength = byteArray.Length;
+
+        //            using (Stream dataStream = await request.GetRequestStreamAsync())
+        //            {
+        //                await dataStream.WriteAsync(byteArray, 0, byteArray.Length);
+        //            }
+
+        //            using (WebResponse response = await request.GetResponseAsync())
+        //            {
+        //                HttpWebResponse httpResponse = (HttpWebResponse)response;
+
+        //                if (httpResponse.StatusCode == HttpStatusCode.OK)
+        //                {
+        //                    using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+        //                    {
+        //                        string responseFromServer = await reader.ReadToEndAsync();
+        //                        _logger.LogInformation($"B2C Response received: {responseFromServer}");
+
+        //                        // ============================================================
+        //                        // PARSE M-PESA TRANSACTION ID FROM RESPONSE
+        //                        // ============================================================
+        //                        // Try to extract M-Pesa receipt number from response
+        //                        // The actual response format may vary - adjust parsing based on your API response
+        //                        try
+        //                        {
+        //                            var jsonResponse = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(responseFromServer);
+
+        //                            // Common field names where M-Pesa transaction ID might be
+        //                            if (jsonResponse != null)
+        //                            {
+        //                                // Try different possible field names
+        //                                if (jsonResponse.ContainsKey("TransactionID"))
+        //                                    mpesaTransactionId = jsonResponse["TransactionID"]?.ToString();
+        //                                else if (jsonResponse.ContainsKey("MpesaReceiptNumber"))
+        //                                    mpesaTransactionId = jsonResponse["MpesaReceiptNumber"]?.ToString();
+        //                                else if (jsonResponse.ContainsKey("ReceiptNumber"))
+        //                                    mpesaTransactionId = jsonResponse["ReceiptNumber"]?.ToString();
+        //                                else if (jsonResponse.ContainsKey("OriginatorConversationID"))
+        //                                    mpesaTransactionId = jsonResponse["OriginatorConversationID"]?.ToString();
+        //                                else if (jsonResponse.ContainsKey("ConversationID"))
+        //                                    mpesaTransactionId = jsonResponse["ConversationID"]?.ToString();
+
+        //                                // If found, update receipt number
+        //                                if (!string.IsNullOrEmpty(mpesaTransactionId))
+        //                                {
+        //                                    _logger.LogInformation($"M-Pesa Transaction ID received: {mpesaTransactionId}");
+        //                                }
+        //                                else
+        //                                {
+        //                                    _logger.LogWarning("No M-Pesa transaction ID found in response");
+        //                                    // Use conversation ID as fallback
+        //                                    mpesaTransactionId = conversationId;
+        //                                }
+        //                            }
+        //                        }
+        //                        catch (Exception parseEx)
+        //                        {
+        //                            _logger.LogWarning(parseEx, "Could not parse M-Pesa transaction ID from response");
+        //                            mpesaTransactionId = conversationId; // Fallback to conversation ID
+        //                        }
+
+        //                        // Update records to success
+        //                        b2cPaymentSuccess = true;
+        //                        b2cResponseMessage = "Payment processed successfully";
+
+        //                        // ============================================================
+        //                        // UPDATE RECEIPT NUMBERS WITH MPESA TRANSACTION ID
+        //                        // ============================================================
+        //                        string finalReceiptNo = !string.IsNullOrEmpty(mpesaTransactionId)
+        //                            ? mpesaTransactionId
+        //                            : initialReceiptNo;
+
+        //                        // Update ApiTransaction
+        //                        apiTransaction.StatusCode = 0; // Success
+        //                        apiTransaction.ResultDescription = responseFromServer.Length > 500 ? responseFromServer.Substring(0, 500) : responseFromServer;
+        //                        apiTransaction.updated_at = DateTime.Now;
+        //                        _appDbContext.ApiTransactions.Update(apiTransaction);
+
+        //                        // Update TransactionDetail
+        //                        transactionDetail.ResultCode = 0;
+        //                        transactionDetail.ResultMessage = "Payment successful";
+        //                        transactionDetail.Status = "Completed";
+        //                        transactionDetail.UpdatedAt = DateTime.Now;
+        //                        _appDbContext.Transaction_detail.Update(transactionDetail);
+
+        //                        // Update Transaction with M-Pesa receipt number
+        //                        if (transactionRecord != null)
+        //                        {
+        //                            transactionRecord.Status = "Completed";
+        //                            //transactionRecord.ReceiptNo = finalReceiptNo; // Update to M-Pesa receipt number
+        //                            _appDbContext.Transactions.Update(transactionRecord);
+        //                            _logger.LogInformation($"Transaction record updated - ReceiptNo: {finalReceiptNo}");
+        //                        }
+
+        //                        // Update Transactions2 with M-Pesa receipt number
+        //                        if (transaction2Record != null)
+        //                        {
+        //                            transaction2Record.Status = "Completed";
+        //                            transaction2Record.ReceiptNo = finalReceiptNo; // Update to M-Pesa receipt number
+        //                            _appDbContext.Transactions2.Update(transaction2Record);
+        //                            _logger.LogInformation($"Transactions2 record updated - ReceiptNo: {finalReceiptNo}");
+        //                        }
+
+        //                        await _appDbContext.SaveChangesAsync();
+        //                        _logger.LogInformation($"✅ B2C Payment successful - Receipt updated to: {finalReceiptNo}");
+        //                    }
+        //                }
+        //                else
+        //                {
+        //                    b2cPaymentSuccess = false;
+        //                    b2cResponseMessage = $"HTTP Error: {httpResponse.StatusCode}";
+
+        //                    // Update records to failed
+        //                    apiTransaction.StatusCode = 2;
+        //                    apiTransaction.ResultDescription = $"HTTP Error: {httpResponse.StatusCode}";
+        //                    apiTransaction.updated_at = DateTime.Now;
+        //                    _appDbContext.ApiTransactions.Update(apiTransaction);
+
+        //                    transactionDetail.ResultCode = 2;
+        //                    transactionDetail.ResultMessage = $"HTTP Error: {httpResponse.StatusCode}";
+        //                    transactionDetail.Status = "Failed";
+        //                    transactionDetail.UpdatedAt = DateTime.Now;
+        //                    _appDbContext.Transaction_detail.Update(transactionDetail);
+
+        //                    // Keep initial receipt number for failed transactions
+        //                    if (transactionRecord != null)
+        //                    {
+        //                        transactionRecord.Status = "Failed";
+        //                        _appDbContext.Transactions.Update(transactionRecord);
+        //                    }
+        //                    if (transaction2Record != null)
+        //                    {
+        //                        transaction2Record.Status = "Failed";
+        //                        _appDbContext.Transactions2.Update(transaction2Record);
+        //                    }
+
+        //                    await _appDbContext.SaveChangesAsync();
+        //                    _logger.LogWarning($"❌ B2C HTTP Error: {httpResponse.StatusCode}");
+        //                }
+        //            }
+        //        }
+        //        catch (WebException webEx)
+        //        {
+        //            _logger.LogError(webEx, "WebException during B2C payment");
+        //            b2cPaymentSuccess = false;
+        //            b2cResponseMessage = $"Network error: {webEx.Message}";
+
+        //            if (apiTransaction != null)
+        //            {
+        //                apiTransaction.StatusCode = 2;
+        //                apiTransaction.ResultDescription = $"Network error: {webEx.Message}";
+        //                apiTransaction.updated_at = DateTime.Now;
+        //                _appDbContext.ApiTransactions.Update(apiTransaction);
+        //            }
+
+        //            if (transactionDetail != null)
+        //            {
+        //                transactionDetail.ResultCode = 2;
+        //                transactionDetail.ResultMessage = $"Network error: {webEx.Message}";
+        //                transactionDetail.Status = "Failed";
+        //                transactionDetail.UpdatedAt = DateTime.Now;
+        //                _appDbContext.Transaction_detail.Update(transactionDetail);
+        //            }
+
+        //            // Keep initial receipt number for failed transactions
+        //            if (transactionRecord != null)
+        //            {
+        //                transactionRecord.Status = "Failed";
+        //                _appDbContext.Transactions.Update(transactionRecord);
+        //            }
+        //            if (transaction2Record != null)
+        //            {
+        //                transaction2Record.Status = "Failed";
+        //                _appDbContext.Transactions2.Update(transaction2Record);
+        //            }
+
+        //            await _appDbContext.SaveChangesAsync();
+        //            _logger.LogWarning($"B2C failed but continuing with loan disbursement");
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            _logger.LogError(ex, "Exception during B2C payment");
+        //            b2cPaymentSuccess = false;
+        //            b2cResponseMessage = $"Error: {ex.Message}";
+
+        //            if (apiTransaction != null)
+        //            {
+        //                apiTransaction.StatusCode = 2;
+        //                apiTransaction.ResultDescription = $"Error: {ex.Message}";
+        //                apiTransaction.updated_at = DateTime.Now;
+        //                _appDbContext.ApiTransactions.Update(apiTransaction);
+        //            }
+
+        //            if (transactionDetail != null)
+        //            {
+        //                transactionDetail.ResultCode = 2;
+        //                transactionDetail.ResultMessage = $"Error: {ex.Message}";
+        //                transactionDetail.Status = "Failed";
+        //                transactionDetail.UpdatedAt = DateTime.Now;
+        //                _appDbContext.Transaction_detail.Update(transactionDetail);
+        //            }
+
+        //            // Keep initial receipt number for failed transactions
+        //            if (transactionRecord != null)
+        //            {
+        //                transactionRecord.Status = "Failed";
+        //                _appDbContext.Transactions.Update(transactionRecord);
+        //            }
+        //            if (transaction2Record != null)
+        //            {
+        //                transaction2Record.Status = "Failed";
+        //                _appDbContext.Transactions2.Update(transaction2Record);
+        //            }
+
+        //            await _appDbContext.SaveChangesAsync();
+        //            _logger.LogWarning($"B2C failed but continuing with loan disbursement");
+        //        }
+        //    }
+        //    else
+        //    {
+        //        // B2C not enabled - update transaction records to completed
+        //        if (transactionRecord != null)
+        //        {
+        //            transactionRecord.Status = "Completed";
+        //            _appDbContext.Transactions.Update(transactionRecord);
+        //        }
+        //        if (transaction2Record != null)
+        //        {
+        //            transaction2Record.Status = "Completed";
+        //            _appDbContext.Transactions2.Update(transaction2Record);
+        //        }
+        //        await _appDbContext.SaveChangesAsync();
+        //    }
+
+        //    // ============================================================
+        //    // NOW PROCEED WITH MAIN LOAN DISBURSEMENT TRANSACTION
+        //    // ============================================================
+        //    using var transaction = await _context.Database.BeginTransactionAsync();
+
+        //    try
+        //    {
+        //        _logger.LogInformation($"Proceeding with loan disbursement for {disbursementDto.LoanNo}");
+
+        //        // Determine the final receipt number to use
+        //        string finalReceiptNumber = b2cPaymentSuccess && !string.IsNullOrEmpty(mpesaTransactionId)
+        //            ? mpesaTransactionId
+        //            : initialReceiptNo;
+
+        //        // Store old values for audit
+        //        int oldLoanStatus = (int)loan.Status;
+        //        string oldLoanPosted = loan.Posted ?? "";
+        //        decimal oldLoanAmt = loan.LoanAmt ?? 0;
+        //        decimal oldAamount = loan.Aamount ?? 0;
+        //        string oldChequeStatus = existingCheque.Status ?? "";
+        //        decimal? oldChequeAmountIssued = existingCheque.AmountIssued;
+        //        decimal? oldChequeBalance = existingCheque.Balance;
+
+        //        // Get LoanType for repayment method
+        //        var loanType = await _context.Loantypes
+        //            .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == disbursementDto.CompanyCode);
+
+        //        // Calculate total interest
+        //        decimal annualInterestRate = loan.Interest ?? 0;
+        //        decimal monthlyInterestRate = (annualInterestRate / 100) / 12;
+        //        int repaymentPeriod = loan.RepayPeriod ?? 12;
+        //        string repayMethod = loan.RepayMethod ?? loanType?.Repaymethod ?? "AMT";
+
+        //        bool isUpfrontInterest = loan.InterestUpront ?? false;
+        //        decimal totalInterest = 0;
+        //        decimal monthlyPayment = 0;
+        //        decimal totalRepayable = 0;
+
+        //        if (repayMethod == "AMT")
+        //        {
+        //            if (monthlyInterestRate > 0)
+        //            {
+        //                decimal factor = (decimal)Math.Pow((double)(1 + monthlyInterestRate), repaymentPeriod);
+        //                monthlyPayment = approvedAmount * monthlyInterestRate * factor / (factor - 1);
+        //                totalInterest = (monthlyPayment * repaymentPeriod) - approvedAmount;
+        //            }
+        //            else
+        //            {
+        //                monthlyPayment = approvedAmount / repaymentPeriod;
+        //                totalInterest = 0;
+        //            }
+        //            totalRepayable = approvedAmount + totalInterest;
+        //        }
+        //        else if (repayMethod == "STL")
+        //        {
+        //            totalInterest = approvedAmount * (annualInterestRate / 100) * (repaymentPeriod / 12m);
+        //            monthlyPayment = (approvedAmount + totalInterest) / repaymentPeriod;
+        //            totalRepayable = approvedAmount + totalInterest;
+        //        }
+        //        else if (repayMethod == "RBAL")
+        //        {
+        //            decimal remainingBalance = approvedAmount;
+        //            decimal totalMinimumInterest = 0;
+
+        //            for (int i = 1; i <= repaymentPeriod; i++)
+        //            {
+        //                decimal interestForMonth = remainingBalance * monthlyInterestRate;
+        //                totalMinimumInterest += interestForMonth;
+        //            }
+
+        //            totalInterest = totalMinimumInterest;
+        //            monthlyPayment = remainingBalance * monthlyInterestRate;
+        //            totalRepayable = approvedAmount + totalInterest;
+        //        }
+
+        //        // Create Block record
+        //        string blockHash = Guid.NewGuid().ToString().Replace("-", "");
+        //        if (blockHash.Length < 64) blockHash = blockHash.PadRight(64, '0');
+        //        else if (blockHash.Length > 64) blockHash = blockHash.Substring(0, 64);
+
+        //        var block = new Block
+        //        {
+        //            BlockHash = blockHash,
+        //            PreviousHash = await GetLastBlockHashAsync(),
+        //            Timestamp = DateTime.Now,
+        //            Nonce = 0,
+        //            MerkleRoot = Guid.NewGuid().ToString(),
+        //            Confirmed = true,
+        //            CreatedAt = DateTime.Now
+        //        };
+
+        //        _context.Blocks.Add(block);
+        //        await _context.SaveChangesAsync();
+
+        //        // Prepare block data
+        //        var blockData = new
+        //        {
+        //            TransactionType = "LOAN_DISBURSEMENT",
+        //            LoanNo = disbursementDto.LoanNo,
+        //            MemberNo = loan.MemberNo,
+        //            ApprovedAmount = approvedAmount,
+        //            NetDisbursedAmount = netDisbursedAmount,
+        //            TotalInterest = totalInterest,
+        //            MonthlyPayment = monthlyPayment,
+        //            RepaymentPeriod = repaymentPeriod,
+        //            RepaymentMethod = repayMethod,
+        //            DisbursementDate = disbursementDto.DisbursementDate,
+        //            DisbursementMethod = disbursementDto.DisbursementMethod,
+        //            SourceBankId = disbursementDto.BankId,
+        //            GlAccountNo = disbursementDto.GlAccountNo,
+        //            ChequeNo = existingCheque.ChequeNo,
+        //            VoucherNo = existingCheque.Voucherno,
+        //            TransactionNo = baseTransactionNo,
+        //            ReceiptNo = finalReceiptNumber, // Store final receipt number (M-Pesa code or system code)
+        //            B2CEnabled = isB2CEnabled,
+        //            B2CSuccess = b2cPaymentSuccess,
+        //            B2CConversationId = conversationId,
+        //            MpesaTransactionId = mpesaTransactionId
+        //        };
+
+        //        // Record GL transactions
+        //        string loanAssetAccount = existingCheque.LoanAcc ?? loanType?.LoanAcc ?? "LOAN_ASSET_ACCOUNT";
+        //        string sourceAccount = existingCheque.ContraAcc ?? disbursementDto.GlAccountNo ?? "BANK_ACCOUNT";
+
+        //        var endorsementGLTransactions = await _context.Gltransactions
+        //            .Where(gl => gl.DocumentNo == existingCheque.Voucherno && gl.Source == "LOAN_ENDORSEMENT")
+        //            .ToListAsync();
+
+        //        var totalDeductions = endorsementGLTransactions.Sum(gl => gl.Amount);
+
+        //        var netDisbursementGL = new Gltransaction
+        //        {
+        //            TransDate = disbursementDto.DisbursementDate,
+        //            Amount = netDisbursedAmount,
+        //            DrAccNo = loanAssetAccount,
+        //            CrAccNo = sourceAccount,
+        //            Temp = "DISBURSEMENT",
+        //            DocumentNo = existingCheque.Voucherno,
+        //            Source = "LOAN_DISBURSEMENT",
+        //            CompanyCode = disbursementDto.CompanyCode,
+        //            TransDescript = $"Loan Disbursement - Net Amount - Loan {disbursementDto.LoanNo}",
+        //            AuditTime = DateTime.Now,
+        //            AuditId = disbursementDto.DisbursedBy,
+        //            Cash = 0,
+        //            DocPosted = 1,
+        //            ChequeNo = existingCheque.ChequeNo,
+        //            Dregard = false,
+        //            Recon = false,
+        //            TransactionNo = baseTransactionNo,
+        //            Module = "LOAN",
+        //            ReconId = 0,
+        //            AuditDateTime = DateTime.Now
+        //        };
+
+        //        _context.Gltransactions.Add(netDisbursementGL);
+        //        await _context.SaveChangesAsync();
+
+        //        // Create Loanbal record
+        //        var loanbal = new Loanbal
+        //        {
+        //            LoanNo = disbursementDto.LoanNo,
+        //            LoanCode = loan.LoanCode ?? "",
+        //            MemberNo = loan.MemberNo,
+        //            Balance = approvedAmount,
+        //            IntrOwed = isUpfrontInterest ? 0 : totalInterest,
+        //            //IntrOwed = totalInterest,
+        //            Installments = repaymentPeriod,
+        //            IntrOwed2 = 0,
+        //            FirstDate = disbursementDto.DisbursementDate,
+        //            RepayRate = monthlyPayment,
+        //            LastDate = disbursementDto.DisbursementDate.AddMonths(repaymentPeriod),
+        //            Duedate = disbursementDto.DisbursementDate.AddMonths(1),
+        //            IntrCharged = isUpfrontInterest ? totalInterest : totalInterest,
+        //           // IntrCharged = totalInterest,
+        //            Interest = annualInterestRate,
+        //            Companycode = disbursementDto.CompanyCode,
+        //            Penalty = 0,
+        //            RepayRate2 = monthlyPayment,
+        //            RepayMethod = repayMethod,
+        //            Cleared = false,
+        //            AutoCalc = true,
+        //            IntrAmount = 0,
+        //            RepayPeriod = repaymentPeriod,
+        //            Remarks = disbursementDto.Remarks + (isB2CEnabled ? $" | B2C Payment: {(b2cPaymentSuccess ? "Success" : "Failed")} - {b2cResponseMessage}" : ""),
+        //            AuditId = disbursementDto.DisbursedBy,
+        //            AuditTime = DateTime.Now,
+        //            IntBalance = isUpfrontInterest ? 0 : totalInterest,
+        //            //IntBalance = totalInterest,
+        //            CategoryCode = null,
+        //            InterestAccrued = 0,
+        //            Defaulter = "N",
+        //            Processdate = DateTime.Now,
+        //            Receiptno = finalReceiptNumber, // Store final receipt number
+        //            Cease = "N",
+        //            Nextduedate = disbursementDto.DisbursementDate.AddMonths(1),
+        //            TransactionNo = baseTransactionNo,
+        //            Year = DateTime.Now.Year.ToString(),
+        //            Month = DateTime.Now.Month.ToString(),
+        //            RepayMode = 1,
+        //            Gperiod = null,
+        //            ApiKey = apiTransaction?.ConversationId,
+        //            UserName = disbursementDto.DisbursedBy,
+        //            Run = 0,
+        //            SerialNo = null,
+        //            AuditDateTime = DateTime.Now,
+        //            BlockchainTxId = null
+        //        };
+
+        //        _context.Loanbal.Add(loanbal);
+        //        await _context.SaveChangesAsync();
+
+        //        // Update Cheque record
+        //        existingCheque.Status = (isB2CEnabled && !b2cPaymentSuccess) ? "B2C_Pending" : "Disbursed";
+        //        existingCheque.DateIssued = disbursementDto.DisbursementDate;
+        //        existingCheque.AmountIssued = netDisbursedAmount;
+        //        existingCheque.Balance = netDisbursedAmount;
+        //        existingCheque.AuditDateTime = DateTime.Now;
+        //        existingCheque.UserName = disbursementDto.DisbursedBy;
+        //        existingCheque.TransactionNo = baseTransactionNo;
+        //        existingCheque.Voucherno = finalReceiptNumber; // Store final receipt number
+        //        if (apiTransaction != null)
+        //        {
+        //            existingCheque.ApiKey = apiTransaction.ConversationId;
+        //        }
+        //        _context.Cheques.Update(existingCheque);
+        //        await _context.SaveChangesAsync();
+
+        //        // Update Loan table
+        //        loan.Status = (int)Status.Disbursed;
+        //        loan.Posted = "ACTIVE";
+        //        loan.Aamount = approvedAmount;
+        //        loan.AuditTime = disbursementDto.DisbursementDate;
+        //        loan.UserName = disbursementDto.DisbursedBy;
+        //        loan.AuditDateTime = DateTime.Now;
+        //        loan.TransactionNo = baseTransactionNo;
+        //        if (apiTransaction != null)
+        //        {
+        //            loan.ApiKey = apiTransaction.ConversationId;
+        //        }
+        //        _context.Loans.Update(loan);
+        //        await _context.SaveChangesAsync();
+
+        //        // Create Blockchain Transaction
+        //        var blockchainTx = new BlockchainTransaction
+        //        {
+        //            TransactionId = Guid.NewGuid().ToString(),
+        //            TransactionType = "LOAN_DISBURSEMENT",
+        //            MemberNo = loan.MemberNo,
+        //            CompanyCode = loan.CompanyCode,
+        //            Amount = netDisbursedAmount,
+        //            Timestamp = DateTime.Now,
+        //            DataHash = await _blockchainService.GenerateTransactionHash(blockData),
+        //            PayloadJson = System.Text.Json.JsonSerializer.Serialize(blockData),
+        //            OffChainReferenceId = existingCheque.Voucherno,
+        //            Status = "CONFIRMED",
+        //            BlockHash = block.BlockHash,
+        //            CreatedAt = DateTime.Now
+        //        };
+
+        //        _context.BlockchainTransactions.Add(blockchainTx);
+        //        await _context.SaveChangesAsync();
+
+        //        // Update ALL records with BlockchainTxId
+        //        loanbal.BlockchainTxId = blockchainTx.TransactionId;
+        //        loan.BlockchainTxId = blockchainTx.TransactionId;
+        //        netDisbursementGL.BlockchainTxId = blockchainTx.TransactionId;
+        //        existingCheque.BlockchainTxId = blockchainTx.TransactionId;
+
+        //        //if (apiTransaction != null)
+        //        //{
+        //        //    apiTransaction.BlockchainTxId = blockchainTx.TransactionId;
+        //        //    _appDbContext.ApiTransactions.Update(apiTransaction);
+        //        //}
+        //        //if (transactionDetail != null)
+        //        //{
+        //        //    transactionDetail.BlockchainTxId = blockchainTx.TransactionId;
+        //        //    _appDbContext.TransactionDetail.Update(transactionDetail);
+        //        //}
+        //        //if (transactionRecord != null)
+        //        //{
+        //        //    transactionRecord.BlockchainTxId = blockchainTx.TransactionId;
+        //        //    _appDbContext.Transactions.Update(transactionRecord);
+        //        //}
+        //        //if (transaction2Record != null)
+        //        //{
+        //        //    transaction2Record.BlockchainTxId = blockchainTx.TransactionId;
+        //        //    _appDbContext.Transactions2.Update(transaction2Record);
+        //        //}
+
+        //        await _context.SaveChangesAsync();
+        //        await _appDbContext.SaveChangesAsync();
+
+        //        // Generate Loan Schedule
+        //        await GenerateLoanScheduleAsync(disbursementDto.LoanNo, approvedAmount, annualInterestRate,
+        //            repaymentPeriod, disbursementDto.DisbursementDate, disbursementDto.CompanyCode, repayMethod, isUpfrontInterest);
+
+        //        await transaction.CommitAsync();
+
+        //        _logger.LogInformation($"Disbursement successful for loan {disbursementDto.LoanNo}");
+
+        //        string successMessage = $"Loan {loan.LoanNo} disbursed successfully. " +
+        //            $"Approved: {approvedAmount:C}, Net Disbursed: {netDisbursedAmount:C}, " +
+        //            $"Total Interest: {totalInterest:C}, Monthly Payment: {monthlyPayment:C}";
+
+        //        if (isB2CEnabled)
+        //        {
+        //            if (b2cPaymentSuccess)
+        //            {
+        //                successMessage += $" M-Pesa payment of {netDisbursedAmount:C} sent to {memberPhone} successfully. M-Pesa Receipt: {finalReceiptNumber}";
+        //            }
+        //            else
+        //            {
+        //                successMessage += $" M-Pesa payment failed: {b2cResponseMessage}. Please process manual payment. Reference: {initialReceiptNo}";
+        //            }
+        //        }
+
+        //        _logger.LogInformation(successMessage);
+
+        //        return existingCheque;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        await transaction.RollbackAsync();
+        //        _logger.LogError(ex, $"Error disbursing loan {disbursementDto.LoanNo}");
+        //        throw;
+        //    }
+        //}
 
         public async Task GenerateLoanScheduleAsync(string loanNo, decimal principalAmount, decimal interestRate,
             int repaymentPeriod, DateTime disbursementDate, string companyCode, string repayMethod, bool isUpfrontInterest = false)
@@ -6576,6 +7267,7 @@ namespace SACCOBlockChainSystem.Services
 
 
         #region Repayments
+
         public async Task<Repay> ProcessRepaymentAsync(LoanRepaymentDTO repaymentDto)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -6590,6 +7282,9 @@ namespace SACCOBlockChainSystem.Services
 
                 if (loan == null)
                     throw new InvalidOperationException($"Loan {repaymentDto.LoanNo} not found");
+
+                var member = await _context.Members
+                   .FirstOrDefaultAsync(m => m.MemberNo == repaymentDto.MemberNo && m.CompanyCode == repaymentDto.CompanyCode);
 
                 // ============================================================
                 // GET REPAYMENT METHOD - DIRECTLY FROM LOANS TABLE
@@ -7133,6 +7828,22 @@ namespace SACCOBlockChainSystem.Services
                 await _context.SaveChangesAsync();
 
 
+                // SEND STK PUSH TO MEMBER (NEW!)
+                // Send STK Push confirmation to the member after successful repayment
+                if (repaymentDto.SendSTKConfirmation ?? true)
+                {
+                    try
+                    {
+                        await SendRepaymentSTKConfirmationAsync(repaymentDto, repayment, loan, member);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, $"Failed to send STK confirmation for repayment {receiptNo}");
+                        // Don't fail the repayment if STK fails
+                    }
+                }
+
+
                 // 11. CREATE GL TRANSACTIONS 
                 var loanType = await _context.Loantypes
                     .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == repaymentDto.CompanyCode);
@@ -7526,10 +8237,6 @@ namespace SACCOBlockChainSystem.Services
                 // ============================================================
                 // SAVE AUDIT TRAIL FOR REPAYMENT
                 // ============================================================
-
-                var member = await _context.Members
-                    .FirstOrDefaultAsync(m => m.MemberNo == repaymentDto.MemberNo && m.CompanyCode == repaymentDto.CompanyCode);
-
                 string memberName = member != null ? $"{member.Surname ?? ""} {member.OtherNames ?? ""}".Trim() : repaymentDto.MemberNo;
 
                 var auditExtraData = new
@@ -8406,12 +9113,6 @@ namespace SACCOBlockChainSystem.Services
                 // Don't throw - this should not block the repayment
             }
         }
-
-
-
-        // ============================================================
-        // RUN PENALTY METHOD 
-        // ============================================================
         public async Task<PenaltyRunResultDTO> RunPenaltyAsync(string companyCode, DateTime? asAtDate = null)
         {
             var result = new PenaltyRunResultDTO
@@ -8778,10 +9479,6 @@ namespace SACCOBlockChainSystem.Services
                 return result;
             }
         }
-
-        /// <summary>
-        /// Calculates the number of penalty periods based on the rate type
-        /// </summary>
         private int CalculatePenaltyPeriods(string rateType, int overdueDays)
         {
             if (overdueDays <= 0) return 0;
@@ -8811,6 +9508,73 @@ namespace SACCOBlockChainSystem.Services
             if (periods < 1) periods = 1;
 
             return periods;
+        }
+
+        private async Task SendRepaymentSTKConfirmationAsync( LoanRepaymentDTO repaymentDto, Repay repayment, Loan loan, MemberModel member)
+        {
+            try
+            {
+                _logger.LogInformation($"Sending STK confirmation for repayment {repayment.ReceiptNo}");
+
+                // Get member phone number
+                string memberPhone = member?.PhoneNo ?? member?.MobileNo;
+                if (string.IsNullOrEmpty(memberPhone))
+                {
+                    _logger.LogWarning($"No phone number found for member {repaymentDto.MemberNo}");
+                    return;
+                }
+
+                // Format phone number
+                memberPhone = memberPhone.Replace("+", "").Replace(" ", "").Replace("-", "");
+                if (memberPhone.StartsWith("0"))
+                    memberPhone = "254" + memberPhone.Substring(1);
+                if (!memberPhone.StartsWith("254") && memberPhone.Length == 9)
+                    memberPhone = "254" + memberPhone;
+                if (memberPhone.Length == 10 && memberPhone.StartsWith("254"))
+                    memberPhone = "254" + memberPhone.Substring(3);
+
+                if (string.IsNullOrEmpty(memberPhone) || memberPhone.Length < 10)
+                {
+                    _logger.LogWarning($"Invalid phone number for member {repaymentDto.MemberNo}: {memberPhone}");
+                    return;
+                }
+
+                // Build STK Push request
+                var stkRequest = new StkPushRequest
+                {
+                    CompanyCode = repaymentDto.CompanyCode,
+                    Amount = repaymentDto.AmountPaid,
+                    PhoneNumber = memberPhone,
+                    Reference = $"LOAN-REPAYMENT-{loan.LoanNo}",
+                    Remarks = $"Repayment of loan {loan.LoanNo}. Receipt: {repayment.ReceiptNo}",
+                    ApiKey = _configuration["MpesaApi:DefaultApiKey"],
+                    CustomerName = member != null ? $"{member.Surname} {member.OtherNames}".Trim() : repaymentDto.MemberNo,
+                    TransactionType = "LOAN_REPAYMENT",
+                    AccountReference = repayment.ReceiptNo
+                };
+
+                // Send STK Push
+                var stkResponse = await _impesaapiservice.SendStkPushAsync(stkRequest);
+
+                if (stkResponse.Success)
+                {
+                    _logger.LogInformation($"STK confirmation sent successfully for repayment {repayment.ReceiptNo}. Reference: {stkResponse.TransactionReference}");
+
+                    // Update repayment with STK reference
+                    repayment.ApiKey = stkResponse.TransactionReference;
+                    repayment.Remarks = $"{repayment.Remarks}\nSTK Ref: {stkResponse.TransactionReference}";
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    _logger.LogWarning($"STK confirmation failed for repayment {repayment.ReceiptNo}: {stkResponse.ResponseDescription}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error sending STK confirmation for repayment {repayment.ReceiptNo}");
+                // Don't throw - STK confirmation is optional
+            }
         }
         #endregion
 

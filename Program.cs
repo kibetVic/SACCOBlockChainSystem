@@ -128,6 +128,15 @@ builder.Services.AddScoped<IAssetsRegisterService, AssetsRegisterService>();
 builder.Services.AddScoped<IUserSessionService, UserSessionService>();
 builder.Services.AddScoped<IIpAddressHelper, IpAddressHelper>();
 
+
+builder.Services.AddScoped<IMpesaApiService, MpesaApiService>();
+builder.Services.AddHttpClient();
+
+// Configuration for M-PESA API
+builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+
+
+
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IDashboardCacheService, DashboardCacheService>();
 

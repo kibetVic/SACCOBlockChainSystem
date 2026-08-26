@@ -43,6 +43,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
         [Display(Name = "Cash/Bank Account")]
         public string? CashAccountNo { get; set; }
+        public bool? SendB2CPayment { get; internal set; }
     }
 
     public class EmployeePaymentResponseDTO
@@ -68,6 +69,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? BlockchainTxId { get; set; }
         public DateTime CreatedAt { get; set; }
         public string? CreatedBy { get; set; }
+        public string? B2CReference { get; internal set; }
+        public bool B2CPaymentSent { get; internal set; }
     }
 
     public class EmployeePaymentListDTO

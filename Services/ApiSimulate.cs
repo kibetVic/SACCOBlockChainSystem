@@ -13,7 +13,7 @@ namespace SACCOBlockChainSystem.Models
 
         public string? phone { get; set; }
         public string? description { get; set; }
-        public string apiUrl { get; set; } = "https://easysacco.amtech.co.ke:9090/APIS/BULK";
+        public string apiUrl { get; set; } = "https://easysacco.amtech.co.ke:9090/ApisController/BULK";
         public string? reference { get; set; } = "https://easysacco.amtech.co.ke:8049/api/transactions/run?module=ussd";
         public string? remarks { get; set; }
         public string? occassion { get; set; }
@@ -31,7 +31,7 @@ namespace SACCOBlockChainSystem.Models
         }
         public List<UserInfo>? Users { get; set; } = new List<UserInfo>();
         public int? app_id { get; set; }
-        public string? simulateUrl { get; set; } = "https://easysacco.amtech.co.ke:9090/APIS/Simulate";
+        public string? simulateUrl { get; set; } = "https://easysacco.amtech.co.ke:9090/ApisController/Simulate";
     }
 
 }

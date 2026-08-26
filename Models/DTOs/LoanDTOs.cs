@@ -243,21 +243,15 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
         [Required]
         public string LoanNo { get; set; } = null!;
-
         [Required]
         public string MemberNo { get; set; } = null!;
-
         [Required]
         public DateTime PaymentDate { get; set; }
-
         [Required]
         [Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than 0")]
         public decimal AmountPaid { get; set; }
-
         [Required]
         public string PaymentMethod { get; set; } = null!;
-       // [Required]
-        //public string GlAccountNo { get; set; } = null!;
         public decimal Amount { get; set; }
         public string? GlAccountName { get; set; }
         public string? ReferenceNo { get; set; }
@@ -267,6 +261,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? ReferenceNumber { get; set; }
         public string? ChequeNumber { get; set; }
         public string? IpAddress { get; set; }
+        public bool? SendSTKConfirmation { get; set; } = false;
     }
 
     public class LoanOffsetDTO

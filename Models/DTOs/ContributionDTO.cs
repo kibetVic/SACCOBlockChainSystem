@@ -260,5 +260,5 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal TotalAmount { get; set; }
         public List<string> Errors { get; set; } = new();
         public List<ContributionResponseDTO> Contributions { get; set; } = new();
-    }
+    }    
 }

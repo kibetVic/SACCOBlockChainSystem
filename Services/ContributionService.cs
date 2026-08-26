@@ -1,5 +1,7 @@
 ﻿using DocumentFormat.OpenXml.Bibliography;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Identity.Client;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
@@ -34,7 +36,9 @@ namespace SACCOBlockChainSystem.Services
         private readonly ICompanyContextService _companyContextService;
         private readonly IHttpContextAccessor _httpContextAccesso;
         private readonly AuditTrailService _auditService;
+        private readonly IMpesaApiService _mpesaApiService;
         private readonly ICryptoService _cryptoService;
+        private readonly IConfiguration _configuration;
         // private readonly UserManager<IdentityUser> _userManager;
 
         public ContributionService(
@@ -45,7 +49,9 @@ namespace SACCOBlockChainSystem.Services
             AuditTrailService auditService,
             //UserManager<IdentityUser> userManager,
             ICompanyContextService companyContextService,
-            ICryptoService cryptoService)
+            ICryptoService cryptoService,
+            IMpesaApiService mpesaApiService,  
+            IConfiguration configuration)
         {
             _context = context;
             _db = db;
@@ -56,9 +62,12 @@ namespace SACCOBlockChainSystem.Services
             //_userManager = userManager;
             _companyContextService = companyContextService;
             _cryptoService = cryptoService;
+            _mpesaApiService = mpesaApiService;  
+            _configuration = configuration;
         }
 
 
+              
         public async Task<BulkContributionResponseDTO> BulkAddContributionsAsync(BulkContributionRequestDTO request)
         {
             var response = new BulkContributionResponseDTO
@@ -375,6 +384,31 @@ namespace SACCOBlockChainSystem.Services
                 _logger.LogInformation($"Generated bulk receipt number: {combinedReceiptNo}");
 
                 // ============================================================
+                // STEP 6.6: GET API CONFIGURATION ONCE FOR ALL CONTRIBUTIONS
+                // ============================================================
+                ApiTable apiConfig = null;
+                bool isAnyMpesaPayment = request.PromptPayment ||
+                                         request.Contributions.Any(c => c.PaymentMethod?.ToUpper() == "MPESA" ||
+                                                                        c.PaymentMethod?.ToUpper() == "MOBILE MONEY");
+
+                if (isAnyMpesaPayment)
+                {
+                    apiConfig = await _context.ApiTables
+                        .FirstOrDefaultAsync(a => a.CompanyCode == request.CompanyCode
+                                                  && a.Status == "active"
+                                                  && (a.Status.Contains("all") || a.Status.Contains("c2b")));
+
+                    if (apiConfig == null)
+                    {
+                        _logger.LogWarning($"No API configuration found for company {request.CompanyCode}. M-PESA payments will fallback to CASH.");
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"Found API configuration: Channel={apiConfig.Channel}, ShortCode={apiConfig.ShortCode}");
+                    }
+                }
+
+                // ============================================================
                 // STEP 7: PROCESS EACH CONTRIBUTION
                 // ============================================================
                 var savedContributions = new List<ContributionResponseDTO>();
@@ -558,28 +592,77 @@ namespace SACCOBlockChainSystem.Services
                     allContribs.Add(contrib);
 
                     // ============================================================
-                    // STEP 7e: HANDLE PROMPT PAYMENT (MPESA STK) - SAME AS SINGLE
+                    // STEP 7e: HANDLE STK PUSH (NEW - Replaces old PromptPayment)
                     // ============================================================
-                    if (request.PromptPayment)
+                    bool isMpesaPayment = item.PaymentMethod?.ToUpper() == "MPESA" ||
+                                          item.PaymentMethod?.ToUpper() == "MOBILE MONEY" ||
+                                          request.PromptPayment;
+
+                    if (isMpesaPayment && apiConfig != null)
                     {
-                        try
+                        _logger.LogInformation($"Processing STK Push for item: {item.SharesCode}");
+
+                        // Call the STK Push method (follows CreateTransactionDeposit pattern)
+                        var stkResult = await ProcessStkPushAsync(
+                            contrib,
+                            request.CompanyCode,
+                            member,
+                            apiConfig
+                        );
+
+                        if (stkResult.Success)
                         {
-                            var res = await CreateTransactionDeposit(contrib, contrib.CompanyCode, contrib.AuditId, contrib.ReceiptNo, null);
-                            if (res != null && res.Success == true)
-                            {
-                                _logger.LogInformation($"Prompt payment initiated for {receiptNo}");
-                            }
-                            else if (res != null && res.Success == false)
-                            {
-                                throw new Exception($"Could not process prompt for {request.MemberNo}. Try again.");
-                            }
+                            _logger.LogInformation($"STK Push successful. Reference: {stkResult.TransactionReference}");
+                            // Status and RefNo already updated in ProcessStkPushAsync
                         }
-                        catch (Exception ex)
+                        else if (stkResult.ShouldFallbackToCash)
                         {
-                            _logger.LogWarning($"Prompt payment failed for {receiptNo}: {ex.Message}");
-                            // Don't fail the transaction - prompt is optional
+                            _logger.LogWarning($"STK Push failed, falling back to CASH: {stkResult.Message}");
+                            // Status and RefNo already updated in ProcessStkPushAsync
+                            // The contribution will continue as CASH
+                        }
+                        else
+                        {
+                            // Critical failure - throw exception
+                            throw new Exception($"STK Push failed: {stkResult.Message}");
                         }
                     }
+                    else if (isMpesaPayment && apiConfig == null)
+                    {
+                        _logger.LogWarning($"No API config for {request.CompanyCode}. Processing as CASH.");
+                        contrib.Status = "COMPLETED";
+                        contrib.Remarks = $"{contrib.Remarks} [MPESA NOT CONFIGURED - CASH]";
+                    }
+                    else
+                    {
+                        // Not an M-PESA payment - mark as completed
+                        contrib.Status = "COMPLETED";
+                    }
+
+
+                    //// ============================================================
+                    //// STEP 7e: HANDLE PROMPT PAYMENT (MPESA STK) - SAME AS SINGLE
+                    //// ============================================================
+                    //if (request.PromptPayment)
+                    //{
+                    //    try
+                    //    {
+                    //        var res = await CreateTransactionDeposit(contrib, contrib.CompanyCode, contrib.AuditId, contrib.ReceiptNo, null);
+                    //        if (res != null && res.Success == true)
+                    //        {
+                    //            _logger.LogInformation($"Prompt payment initiated for {receiptNo}");
+                    //        }
+                    //        else if (res != null && res.Success == false)
+                    //        {
+                    //            throw new Exception($"Could not process prompt for {request.MemberNo}. Try again.");
+                    //        }
+                    //    }
+                    //    catch (Exception ex)
+                    //    {
+                    //        _logger.LogWarning($"Prompt payment failed for {receiptNo}: {ex.Message}");
+                    //        // Don't fail the transaction - prompt is optional
+                    //    }
+                    //}
 
                     // ============================================================
                     // STEP 7f: CREATE CONTRIB SHARE (SAME AS SINGLE)
@@ -1031,6 +1114,108 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
+
+
+        // ============================================================
+        // STK PUSH METHOD - FOLLOWS CreateTransactionDeposit PATTERN
+        // ============================================================
+        public async Task<StkPushResult> ProcessStkPushAsync( Contrib contrib,string companyCode,Member member,ApiTable apiConfig)
+        {
+            try
+            {
+                _logger.LogInformation($"Processing STK Push for contribution: {contrib.ReceiptNo}, Amount: {contrib.Amount:C}");
+
+                // Step 1: Format phone number
+                var phoneNumber = FormatPhoneNumber(member.PhoneNo ?? member.MobileNo);
+                if (string.IsNullOrEmpty(phoneNumber))
+                {
+                    _logger.LogWarning($"Member {member.MemberNo} has no valid phone number for M-PESA");
+                    return new StkPushResult
+                    {
+                        Success = false,
+                        Message = "Member does not have a valid phone number",
+                        ShouldFallbackToCash = true
+                    };
+                }
+
+                // Step 2: Build STK Push request using existing fields
+                var stkRequest = new StkPushRequest
+                {
+                    CompanyCode = companyCode,
+                    Amount = contrib.Amount ?? 0,
+                    PhoneNumber = phoneNumber,
+                    Reference = contrib.Sharescode ?? "CONTRIBUTION",
+                    Remarks = contrib.Remarks ?? "Contribution Payment",
+                    ApiKey = apiConfig?.ApiPassword ?? _configuration["MpesaApi:DefaultApiKey"],
+                    CustomerName = $"{member.Surname} {member.OtherNames}".Trim(),
+                    TransactionType = "CONTRIBUTION",
+                    AccountReference = contrib.ReceiptNo ?? contrib.TransactionNo,
+                    // Pass the channel to identify provider
+                    Provider = apiConfig?.Channel ?? "MPESA"
+                };
+
+                // Step 3: Send STK Push
+                var stkResponse = await _mpesaApiService.SendStkPushAsync(stkRequest);
+
+                if (stkResponse.Success && !string.IsNullOrEmpty(stkResponse.TransactionReference))
+                {
+                    _logger.LogInformation($"STK Push sent successfully. Reference: {stkResponse.TransactionReference}");
+
+                    // Step 4: Store reference in existing fields
+                    // Use RefNo to store the CheckoutRequestID / MessageReference
+                    contrib.RefNo = stkResponse.TransactionReference;
+
+                    // Use Remarks to store provider info
+                    var provider = apiConfig?.Channel ?? "MPESA";
+                    contrib.Remarks = $"{contrib.Remarks} [STK: {provider} - {stkResponse.TransactionReference}]";
+
+                    // Use Status to track payment status
+                    contrib.Status = "PENDING";
+
+                    return new StkPushResult
+                    {
+                        Success = true,
+                        TransactionReference = stkResponse.TransactionReference,
+                        Provider = provider,
+                        Message = "STK Push sent successfully. Please check your phone and enter PIN.",
+                        ShouldFallbackToCash = false
+                    };
+                }
+                else
+                {
+                    _logger.LogWarning($"STK Push failed: {stkResponse.ResponseDescription ?? "Unknown error"}");
+
+                    // Store failure in Remarks
+                    contrib.Remarks = $"{contrib.Remarks} [STK FAILED: {stkResponse.ResponseDescription}]";
+                    contrib.Status = "FAILED";
+
+                    return new StkPushResult
+                    {
+                        Success = false,
+                        Message = stkResponse.ResponseDescription ?? "STK Push failed",
+                        ShouldFallbackToCash = true,
+                        Error = stkResponse.ErrorMessage
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error processing STK Push for {contrib.ReceiptNo}");
+
+                contrib.Remarks = $"{contrib.Remarks} [STK ERROR: {ex.Message}]";
+                contrib.Status = "FAILED";
+
+                return new StkPushResult
+                {
+                    Success = false,
+                    Message = $"STK Push error: {ex.Message}",
+                    ShouldFallbackToCash = true,
+                    Error = ex.Message
+                };
+            }
+        }
+        
+
         public async Task<dynamic> CreateTransactionDeposit(Contrib ld, string CompanyCode, string UserId, string sessionId, string? email)
         {
             try
@@ -1084,8 +1269,8 @@ namespace SACCOBlockChainSystem.Services
 
                 //tra
 
-                transb.ContributionDate = ld.ContrDate ?? DateTime.ParseExact(trans.TransDate.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);// trans.TransDate;//DateTime.ParseExact(contribDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
-                transb.DepositedDate = ld.DepositedDate ?? DateTime.ParseExact(trans.TransDate.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);// trans.TransDate; //DateTime.ParseExact(ld.DateDeposited, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                transb.ContributionDate = ld.ContrDate ?? DateTime.ParseExact(trans.TransDate.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                transb.DepositedDate = ld.DepositedDate ?? DateTime.ParseExact(trans.TransDate.ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
                 transb.PaymentMode = member?.PhoneNo ?? member?.MobileNo;
                 transb.TransactionType = "DEPOSIT";
                 transb.Status = trans.Status;
@@ -3196,6 +3381,28 @@ namespace SACCOBlockChainSystem.Services
             return "SHARE_CAPITAL";
         }
 
+        private string FormatPhoneNumber(string phone)
+        {
+            if (string.IsNullOrEmpty(phone)) return null;
+
+            // Remove any non-digit characters
+            var digits = new string(phone.Where(char.IsDigit).ToArray());
+
+            if (digits.StartsWith("0") && digits.Length == 10)
+            {
+                return "254" + digits.Substring(1);
+            }
+            else if (digits.StartsWith("254") && digits.Length == 12)
+            {
+                return digits;
+            }
+            else if (!digits.StartsWith("0") && digits.Length == 9)
+            {
+                return "254" + digits;
+            }
+
+            return digits;
+        }
 
         private class ValidatedContribution
         {
