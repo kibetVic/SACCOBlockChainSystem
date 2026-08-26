@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SACCOBlockChainSystem.Models;
 
@@ -78,9 +79,18 @@ public partial class Contrib
     public int? Run2 { get; set; }
 
     public DateTime? AuditDateTime { get; set; }
+    public string? TransactionSignature { get; set; }
+    public string? TransactionHash { get; set; }
+    public string? PreviousTransactionHash { get; set; }
+    public long? TransactionSequence { get; set; }
+    public bool? IsSignatureVerified { get; set; }
+    public DateTime? SignatureVerifiedAt { get; set; }
+    public string? CanonicalData { get; set; }
 
     public string? BlockchainTxId { get; set; }
 
     public virtual Sharetype? SharescodeNavigation { get; set; }
     public virtual Member? MemberNoNavigation { get; set; }
+    [NotMapped]
+    public string? Status { get;set; }
 }

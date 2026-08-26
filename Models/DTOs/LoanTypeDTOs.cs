@@ -63,8 +63,11 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public bool Bridging { get; set; }
 
         public bool SelfGuarantee { get; set; }
-
-        public bool MobileLoan { get; set; }        
+        public bool IsProject { get; set; } 
+        public bool IsTopUp { get; set; } 
+        public bool MobileLoan { get; set; }
+        public bool InterestUpront { get; set; }
+        public bool MobileLoanApproval { get; set; }
 
         public decimal? MinLoanAmount { get; set; }
 
@@ -135,8 +138,11 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public bool Bridging { get; set; }
 
         public bool SelfGuarantee { get; set; }
-
+        public bool IsProject { get; set; }
+        public bool IsTopUp { get; set; }
         public bool MobileLoan { get; set; }
+        public bool? InterestUpront { get; set; }
+        public bool MobileLoanApproval { get; set; }
 
         [StringLength(20)]
         public string? Ppacc { get; set; }
@@ -185,7 +191,11 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? RepayMethod { get; set; }
         public bool Bridging { get; set; }
         public bool SelfGuarantee { get; set; }
+        public bool IsProject { get; set; }
+        public bool IsTopUp { get; set; }
         public bool MobileLoan { get; set; }
+        public bool InterestUpront { get; set; }
+        public bool MobileLoanApproval { get; set; }
         public string Ppacc { get; set; } = null!;
         public string ContraAccount { get; set; } = null!;
         public int? MaxLoans { get; set; }
@@ -223,12 +233,17 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? SelfGuarantee { get; set; }
         public string? ProcessingFee { get; set; }
         public bool Bridging { get; set; }
+        public bool IsProject { get; set; }
+        public bool IsTopUp { get; set; }
         public bool MobileLoan { get; set; }
+        public bool InterestUpront { get; set; }
+        public bool? MobileLoanApproval { get; set; }
         public int Priority { get; set; }
         public bool IsEligible { get; set; } = true; // Add this property
         public decimal EligibleAmount { get; set; } // Add this if needed
         public string? Reason { get; set; } // Add this if needed
         public string ApprovalStatus { get; internal set; }
+        public string? RepayMethod { get; internal set; }
     }
 
     public class LoanTypeStatisticsDTO

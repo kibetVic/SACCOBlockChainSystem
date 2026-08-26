@@ -28,8 +28,8 @@ public partial class Transactions2
 
     public string AuditId { get; set; } = null!;
 
-    public DateTime AuditTime { get; set; }
-
+    public DateTime AuditTime { get; set; } = DateTime.Now;
+     
     public string Status { get; set; } = null!;
 
     public int? RunE { get; set; }
@@ -38,7 +38,7 @@ public partial class Transactions2
 
     public string? Contact { get; set; }
 
-    public DateTime? AuditDateTime { get; set; }
+    public DateTime? AuditDateTime { get; set; } = DateTime.Now;
     [NotMapped]
     public string? BlockchainTxId { get; set; }
 }

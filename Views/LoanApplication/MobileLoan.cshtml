@@ -1,0 +1,188 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.MobileLoanViewModel
+@{
+    ViewData["Title"] = "Mobile Loan";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title"><i class="fa fa-mobile-alt"></i> Mobile Loan</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white text-center">
+                    <h4 class="mb-0">Fast & Easy Mobile Loan</h4>
+                    <p class="mb-0">Get funds instantly to your M-Pesa</p>
+                </div>
+                <div class="card-body">
+
+                    <form asp-action="MobileLoan" method="post">
+                        <input type="hidden" asp-for="LoanCode" />
+                        <input type="hidden" asp-for="LoanName" />
+                        <input type="hidden" asp-for="MaxAmount" />
+                        <input type="hidden" asp-for="MinAmount" />
+                        <input type="hidden" asp-for="EligibleAmount" />
+                        <input type="hidden" asp-for="InterestRate" />
+                        <input type="hidden" asp-for="Multiplier" />
+                        <input type="hidden" asp-for="CurrentDeposits" />
+
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <label class="form-label">Loan Amount (KES)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input type="number" class="form-control form-control-lg" asp-for="PrincipalAmount"
+                                           step="1000" min="@Model.MinAmount" max="@Model.EligibleAmount" id="loanAmount" />
+                                </div>
+                                <div class="mt-2">
+                                    <input type="range" class="form-range" id="amountSlider"
+                                           min="@Model.MinAmount" max="@Model.EligibleAmount" step="1000"
+                                           value="@Model.MinAmount" />
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-6">
+                                        <small>Min: @Model.MinAmount.ToString("N0")</small>
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        <small>Max: @Model.EligibleAmount.ToString("N0")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <label class="form-label">Repayment Period (months)</label>
+                                <select asp-for="RepayPeriod" class="form-select" id="repayPeriod">
+                                    @{
+                                        int maxMonths = Model.MaxRepayPeriod > 0 ? Model.MaxRepayPeriod : 12;
+                                    }
+                                    @for (int i = 1; i <= maxMonths; i++)
+                                    {
+                                        string displayText = i switch
+                                        {
+                                            1 => "1 month",
+                                            2 => "2 month",
+                                            3 => "3 months",
+                                            4 => "4 months",
+                                            6 => "6 months",
+                                            _ => $"{i} months"
+                                        };
+
+                                        @if (i == 6)
+                                        {
+                                            <option value="@i" selected="selected">@displayText</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@i">@displayText</option>
+                                        }
+                                    }
+                                </select>
+                                <div class="form-text text-muted">
+                                    <i class="fa fa-info-circle"></i> Choose a repayment period that suits you best.
+                                    Longer periods have lower monthly payments but higher total interest.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <label class="form-label">Purpose (Optional)</label>
+                                <select asp-for="Purpose" class="form-select">
+                                    <option value="">Select purpose...</option>
+                                    <option value="Emergency">Emergency</option>
+                                    <option value="School Fees">School Fees</option>
+                                    <option value="Medical">Medical Expenses</option>
+                                    <option value="Business">Business Capital</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="card bg-light mt-3">
+                            <div class="card-body">
+                                <h6 class="card-title">Loan Summary</h6>
+                                <div class="row">
+                                    <div class="col-6">Loan Amount:</div>
+                                    <div class="col-6 text-end" id="summaryAmount">@Model.MinAmount.ToString("N0")</div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">Monthly Installment:</div>
+                                    <div class="col-6 text-end text-primary fw-bold" id="summaryMonthly">0</div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">Total Interest:</div>
+                                    <div class="col-6 text-end" id="summaryInterest">0</div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">Total Repayment:</div>
+                                    <div class="col-6 text-end" id="summaryTotal">0</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success btn-lg w-100 mt-4">
+                            <i class="fa fa-mobile-alt"></i> Apply & Withdraw
+                        </button>
+
+                        <p class="text-center text-muted small mt-3">
+                            By applying, you agree to the mobile loan terms and conditions
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let amountSlider = document.getElementById('amountSlider');
+        let loanAmount = document.getElementById('loanAmount');
+
+        function calculateLoan() {
+            let amount = parseFloat(loanAmount.value) || 0;
+            let months = parseInt(document.getElementById('repayPeriod').value) || 6;
+            let rate = @Model.InterestRate / 100 / 12;
+
+            let monthlyPayment = 0;
+            let totalInterest = 0;
+
+            if (rate > 0 && months > 0 && amount > 0) {
+                let factor = Math.pow(1 + rate, months);
+                monthlyPayment = amount * rate * factor / (factor - 1);
+                totalInterest = (monthlyPayment * months) - amount;
+            } else if (months > 0 && amount > 0) {
+                monthlyPayment = amount / months;
+            }
+
+            let totalRepayment = amount + totalInterest;
+
+            document.getElementById('summaryAmount').textContent = amount.toLocaleString();
+            document.getElementById('summaryMonthly').textContent = monthlyPayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('summaryInterest').textContent = totalInterest.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('summaryTotal').textContent = totalRepayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+
+        amountSlider.addEventListener('input', function() {
+            loanAmount.value = this.value;
+            calculateLoan();
+        });
+
+        loanAmount.addEventListener('input', function() {
+            amountSlider.value = this.value;
+            calculateLoan();
+        });
+
+        document.getElementById('repayPeriod').addEventListener('change', calculateLoan);
+
+        calculateLoan();
+    </script>
+}

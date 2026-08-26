@@ -1,0 +1,144 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.MemberLoanSummaryDTO>
+@{
+    ViewData["Title"] = "My Loans";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">My Loans</h4>
+            </div>
+        </div>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fa fa-hand-holding-usd" style="font-size: 64px; color: #ccc;"></i>
+                        <h4 class="mt-3">No Loans Yet</h4>
+                        <p class="text-muted">You haven't taken any loans yet.</p>
+                        <a href="@Url.Action("Products")" class="btn btn-primary">Apply for a Loan</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Loan No</th>
+                                        <th>Type</th>
+                                        <th>Amount</th>
+                                        <th>Outstanding</th>
+                                        <th>Monthly</th>
+                                        <th>Status</th>
+                                        <th>Next Due</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var loan in Model)
+                                    {
+                                        var statusClass = loan.Status switch
+                                        {
+                                            "Disbursed" => "success",
+                                            "Approved" => "primary",
+                                            "Endorsed" => "info",
+                                            "Closed" => "secondary",
+                                            "Rejected" => "danger",
+                                            "Defaulted" => "danger",
+                                            "WrittenOff" => "secondary",
+                                            "Submitted" => "warning",
+                                            _ => "warning"
+                                        };
+
+                                        <tr>
+                                            <td><strong>@loan.LoanNo</strong></td>
+                                            <td>@loan.LoanType</td>
+                                            <td>@loan.PrincipalAmount.ToString("N0")</td>
+                                            <td>@loan.OutstandingBalance.ToString("N0")</td>
+                                            <td>@loan.MonthlyInstallment.ToString("N0")</td>
+                                            <td>
+                                                <span class="badge bg-@statusClass">@loan.Status</span>
+                                                @if (loan.Status == "Submitted" && loan.Posted == "PENDING_APPROVAL")
+                                                {
+                                                    <span class="badge bg-warning ms-1">Awaiting Approval</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (loan.NextPaymentDate.HasValue && loan.Status == "Disbursed")
+                                                {
+                                                    <span>@loan.NextPaymentDate.Value.ToString("dd MMM yyyy")</span>
+                                                    @if (loan.NextPaymentDate.Value < DateTime.Now)
+                                                    {
+                                                        <i class="fa fa-exclamation-triangle text-danger" title="Overdue"></i>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", new { loanNo = loan.LoanNo })" class="btn btn-sm btn-info">
+                                                    <i class="fa fa-eye"></i> View
+                                                </a>
+                                                
+                                                @if (loan.Status == "Endorsed")
+                                                {
+                                                    <a href="@Url.Action("Withdraw", new { loanNo = loan.LoanNo })" class="btn btn-sm btn-success mt-1">
+                                                        <i class="fa fa-download"></i> Withdraw
+                                                    </a>
+                                                }
+                                                
+                                                @if (loan.Status == "Disbursed" && loan.OutstandingBalance > 0)
+                                                {
+                                                    <a href="@Url.Action("Repay", "LoanApplication", new { loanNo = loan.LoanNo })" class="btn btn-sm btn-primary mt-1">
+                                                        <i class="fa fa-money-bill-wave"></i> Pay
+                                                    </a>
+                                                }
+                                                
+                                                @if (loan.Status == "Disbursed" || loan.Status == "Closed")
+                                                {
+                                                    <a href="@Url.Action("RepaymentHistory", "LoanApplication", new { loanNo = loan.LoanNo })" class="btn btn-sm btn-info mt-1">
+                                                        <i class="fa fa-history"></i> History
+                                                    </a>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">Need a New Loan?</h6>
+                        <p>Check your eligibility and apply for a new loan.</p>
+                        <a href="@Url.Action("Products")" class="btn btn-primary">
+                            <i class="fa fa-plus"></i> Apply for Loan
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>

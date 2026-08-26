@@ -1,0 +1,475 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.PendingApprovalDetailViewModel
+@{
+    ViewData["Title"] = "Loan Approval Details - " + Model.LoanNo;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    .detail-card {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .detail-label {
+        font-weight: 600;
+        color: #6c757d;
+        font-size: 0.85rem;
+    }
+
+    .detail-value {
+        font-weight: 500;
+        font-size: 1.1rem;
+    }
+
+    .approval-actions {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+
+    .capacity-meter {
+        height: 8px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 5px;
+    }
+
+    .capacity-meter-bar {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">
+                    <i class="fa fa-file-text text-primary"></i> Loan Approval Details
+                    <small class="text-muted">@Model.LoanNo</small>
+                </h4>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show">
+            <i class="fa fa-exclamation-circle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="row">
+        <!-- Left Column - Member & Loan Info -->
+        <div class="col-lg-6">
+            <!-- Member Information -->
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="fa fa-user"></i> Member Information</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Member Number</div>
+                                <div class="detail-value">@Model.MemberNo</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Full Name</div>
+                                <div class="detail-value">@Model.MemberName</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">ID Number</div>
+                                <div class="detail-value">@Model.IdNo</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Phone Number</div>
+                                <div class="detail-value">@Model.PhoneNo</div>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="detail-card">
+                                <div class="detail-label">Email</div>
+                                <div class="detail-value">@Model.Email</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loan Information -->
+            <div class="card mt-3">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fa fa-hand-holding-usd"></i> Loan Information</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Loan Type</div>
+                                <div class="detail-value">@Model.LoanType</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Application Date</div>
+                                <div class="detail-value">@Model.ApplicationDate.ToString("dd MMM yyyy")</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Loan Amount</div>
+                                <div class="detail-value text-primary fw-bold">@Model.LoanAmount.ToString("N0") KES</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Repayment Period</div>
+                                <div class="detail-value">@Model.RepayPeriod months</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Interest Rate</div>
+                                <div class="detail-value">@Model.InterestRate% p.a</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Monthly Installment</div>
+                                <div class="detail-value text-warning fw-bold">@Model.MonthlyInstallment.ToString("N0") KES</div>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="detail-card">
+                                <div class="detail-label">Purpose</div>
+                                <div class="detail-value">@Model.Purpose</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Mobile Loan</div>
+                                <div class="detail-value">@(Model.IsMobileLoan ? "Yes" : "No")</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Self Guarantee</div>
+                                <div class="detail-value">@(Model.IsSelfGuarantee ? "Yes" : "No")</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Requires Guarantor</div>
+                                <div class="detail-value">@(Model.RequiresGuarantor ? "Yes" : "No")</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Existing Loans</div>
+                                <div class="detail-value">@Model.ExistingLoansCount</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Financial Assessment -->
+        <div class="col-lg-6">
+            <!-- Financial Summary -->
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="fa fa-chart-line"></i> Financial Assessment</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Total Deposits</div>
+                                <div class="detail-value text-success">@Model.TotalDeposits.ToString("N0") KES</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Total Shares</div>
+                                <div class="detail-value text-primary">@Model.TotalShares.ToString("N0") KES</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Monthly Income</div>
+                                <div class="detail-value text-info">@Model.MonthlyIncome.ToString("N0") KES</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <div class="detail-label">Repayment Capacity</div>
+                                <div class="detail-value text-warning">@Model.RepaymentCapacity.ToString("N0") KES</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FIXED: Convert decimal to double for percentage calculation -->
+                    @{
+                        double capacityRatio = (double)Model.CapacityRatio;
+                        var capacityClass = capacityRatio >= 0.3 ? "bg-success" : (capacityRatio >= 0.15 ? "bg-warning" : "bg-danger");
+                        var capacityTextClass = capacityRatio >= 0.3 ? "text-success" : (capacityRatio >= 0.15 ? "text-warning" : "text-danger");
+                        var capacityMessage = capacityRatio >= 0.3 ? "✓ Good repayment capacity" : (capacityRatio >= 0.15 ? "⚠️ Moderate repayment capacity" : "✗ Low repayment capacity");
+                        var capacityWidth = Math.Min(capacityRatio * 100, 100);
+                    }
+
+                    <div class="mt-3">
+                        <div class="detail-label">Capacity Ratio</div>
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <div class="capacity-meter">
+                                    <div class="capacity-meter-bar @capacityClass"
+                                         style="width: @(capacityWidth)%">
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="ms-3 fw-bold @capacityTextClass">
+                                @(capacityRatio > 0 ? (capacityRatio * 100).ToString("F0") + "%" : "0%")
+                            </span>
+                        </div>
+                        <small class="text-muted @capacityTextClass">
+                            @capacityMessage
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guarantors -->
+            <div class="card mt-3">
+                <div class="card-header @(Model.RequiresGuarantor ? "bg-warning" : "bg-secondary") text-white">
+                    <h6 class="mb-0"><i class="fa fa-users"></i> Guarantors</h6>
+                </div>
+                <div class="card-body">
+                    @{
+                        // Cast Guarantors to a list of dynamic objects
+                        var guarantorList = Model.Guarantors as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+                        var hasGuarantors = guarantorList.Any();
+                    }
+
+                    @if (hasGuarantors)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Member No</th>
+                                        <th>Name</th>
+                                        <th>Amount</th>
+                                        <th>Contact</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var g in guarantorList)
+                                    {
+                                        <tr>
+                                            <td>@g?.MemberNo</td>
+                                            <td>@g?.FullNames</td>
+                                            <td class="text-end">@(g?.Amount != null ? ((decimal)g.Amount).ToString("N0") : "0") KES</td>
+                                            <td>@g?.Phone</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr class="fw-bold">
+                                        <td colspan="2" class="text-end">Total Guarantee:</td>
+                                        <td class="text-end text-success">@guarantorList.Sum(g => (decimal)(g?.Amount ?? 0)).ToString("N0") KES</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted">
+                            <i class="fa fa-users fa-2x"></i>
+                            <p class="mt-2">
+                                @if (Model.RequiresGuarantor)
+                                {
+                                    <span class="text-warning">⚠️ No guarantors assigned</span>
+                                }
+                                else
+                                {
+                                    <span>No guarantors required</span>
+                                }
+                            </p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contribution & Repayment History -->
+    <div class="row mt-3">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0"><i class="fa fa-history"></i> Contribution History</h6>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    @{
+                        var contribList = Model.ContributionHistory as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+                        var hasContributions = contribList.Any();
+                    }
+
+                    @if (hasContributions)
+                    {
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Deposits</th>
+                                    <th>Shares</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in contribList)
+                                {
+                                    <tr>
+                                        <td>@(c?.AuditTime?.ToString("dd MMM yyyy") ?? "-")</td>
+                                        <td class="text-center">@(c?.DepositsAmount != null ? ((decimal)c.DepositsAmount).ToString("N0") : "0")</td>
+                                        <td class="text-center">@(c?.ShareCapitalAmount != null ? ((decimal)c.ShareCapitalAmount).ToString("N0") : "0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <p class="text-center text-muted">No contribution records found</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0"><i class="fa fa-money-bill-wave"></i> Repayment History</h6>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    @{
+                        var repayList = Model.PreviousRepayments as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+                        var hasRepayments = repayList.Any();
+                    }
+
+                    @if (hasRepayments)
+                    {
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Receipt</th>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in repayList)
+                                {
+                                    <tr>
+                                        <td>@r?.ReceiptNo</td>
+                                        <td>@(r?.DateReceived?.ToString("dd MMM yyyy") ?? "-")</td>
+                                        <td class="text-end">@(r?.Amount != null ? ((decimal)r.Amount).ToString("N0") : "0")</td>
+                                        <td class="text-end">@(r?.LoanBalance != null ? ((decimal)r.LoanBalance).ToString("N0") : "0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <p class="text-center text-muted">No repayment records found</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Approval Actions -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="approval-actions">
+                <h6 class="text-center mb-3"><i class="fa fa-gavel"></i> Approval Actions</h6>
+
+                <form method="post" id="approvalForm" class="row g-3">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="loanNo" value="@Model.LoanNo" />
+
+                    <div class="col-md-6">
+                        <label for="approvalNotes" class="form-label fw-bold">Approval Notes</label>
+                        <textarea name="approvalNotes" id="approvalNotes" class="form-control" rows="3"
+                                  placeholder="Enter any notes about this approval decision..."></textarea>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Decision</label>
+                        <div class="d-grid gap-2">
+                            <button type="submit" formaction="@Url.Action("ApproveLoan")" class="btn btn-success btn-lg"
+                                    onclick="return confirm('Are you sure you want to APPROVE this loan?');">
+                                <i class="fa fa-check-circle"></i> Approve Loan
+                            </button>
+                            <button type="submit" formaction="@Url.Action("RejectLoan")" class="btn btn-danger btn-lg"
+                                    onclick="return confirm('Are you sure you want to REJECT this loan?');">
+                                <i class="fa fa-times-circle"></i> Reject Loan
+                            </button>
+                        </div>
+                        <div class="text-center mt-2">
+                            <a href="@Url.Action("PendingApprovals")" class="btn btn-outline-secondary">
+                                <i class="fa fa-arrow-left"></i> Back to Pending List
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Confirm before approve/reject
+            $('button[formaction*="ApproveLoan"]').on('click', function(e) {
+                var notes = $('#approvalNotes').val();
+                if (!notes) {
+                    if (!confirm('No approval notes provided. Are you sure you want to approve this loan?')) {
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            $('button[formaction*="RejectLoan"]').on('click', function(e) {
+                var notes = $('#approvalNotes').val();
+                if (!notes) {
+                    if (!confirm('No rejection reason provided. Are you sure you want to reject this loan?')) {
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+                return true;
+            });
+        });
+    </script>
+}

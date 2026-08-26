@@ -1,10 +1,8 @@
 ﻿// Controllers/CollateralController.cs
 using ClosedXML.Excel;
-using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using QuestPDF.Fluent;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -21,14 +19,16 @@ namespace SACCOBlockChainSystem.Controllers
     {
         private readonly ICollateralService _collateralService;
         private readonly IUserService _userService;
-        private readonly ApplicationDbContext _context; // Add this
+        private readonly ApplicationDbContext _context;
+        private readonly ILogger<CollateralController> _logger;
 
-        public CollateralController(ICollateralService collateralService, IUserService userService, ApplicationDbContext context)
+        public CollateralController(ICollateralService collateralService, IUserService userService, ILogger<CollateralController> logger, ApplicationDbContext context)
         {
-                _collateralService = collateralService;
-                _userService = userService;
-                _context = context; // Initialize here
-            }
+            _collateralService = collateralService;
+            _userService = userService;
+            _context = context;
+            _logger = logger;
+        }
 
         private async Task<string> GetCurrentUserCompanyCodeAsync()
         {
@@ -58,9 +58,40 @@ namespace SACCOBlockChainSystem.Controllers
             return View(collaterals);
         }
 
+        // GET: Search members
+        [HttpGet]
+        public async Task<IActionResult> SearchMembers(string term)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(term) || term.Length < 2)
+                {
+                    return Json(new { success = true, data = new List<object>() });
+                }
+
+                var companyCode = await GetCurrentUserCompanyCodeAsync();
+                var members = await _collateralService.SearchMembersAsync(term, companyCode);
+
+                var results = members.Select(m => new
+                {
+                    m.MemberNo,
+                    FullName = $"{m.Surname} {m.OtherNames}".Trim(),
+                    m.Idno,
+                    m.PhoneNo,
+                    m.Email
+                }).ToList();
+
+                return Json(new { success = true, data = results });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([FromBody] CollateralDTO dto)
+        public async Task<IActionResult> Create([FromForm] CollateralDTO dto)
         {
             try
             {
@@ -73,21 +104,31 @@ namespace SACCOBlockChainSystem.Controllers
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error creating collateral");
                 return Json(new { success = false, message = ex.Message });
             }
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(long id, [FromBody] CollateralDTO dto)
+        public async Task<IActionResult> Edit(long id, [FromForm] CollateralDTO dto)
         {
             try
             {
+                if (dto == null)
+                    return Json(new { success = false, message = "Invalid data" });
+
+                if (string.IsNullOrEmpty(dto.CompanyCode))
+                {
+                    dto.CompanyCode = await GetCurrentUserCompanyCodeAsync();
+                }
+
                 var result = await _collateralService.UpdateAsync(id, dto, GetCurrentUserId());
                 return Json(new { success = true, message = "Collateral updated successfully", collateral = result });
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Error updating collateral {id}");
                 return Json(new { success = false, message = ex.Message });
             }
         }
@@ -103,6 +144,40 @@ namespace SACCOBlockChainSystem.Controllers
             }
             catch (Exception ex)
             {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        // Controllers/CollateralController.cs - Add these new endpoints
+
+        [HttpGet]
+        public async Task<IActionResult> GetMemberCollaterals(string memberNo)
+        {
+            try
+            {
+                var companyCode = await GetCurrentUserCompanyCodeAsync();
+                var collaterals = await _collateralService.GetMemberCollateralsAsync(memberNo, companyCode);
+                return Json(new { success = true, data = collaterals });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting member collaterals");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAvailableCollateralsForGuarantee(string memberNo)
+        {
+            try
+            {
+                var companyCode = await GetCurrentUserCompanyCodeAsync();
+                var collaterals = await _collateralService.GetAvailableMemberCollateralsForGuaranteeAsync(memberNo, companyCode);
+                return Json(new { success = true, data = collaterals });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting available collaterals for guarantee");
                 return Json(new { success = false, message = ex.Message });
             }
         }
@@ -136,9 +211,6 @@ namespace SACCOBlockChainSystem.Controllers
                 return Json(new { success = false, message = ex.Message });
             }
         }
-
-
-        // Controllers/CollateralController.cs - Add these methods
 
         #region Collateral Report
 
@@ -177,26 +249,26 @@ namespace SACCOBlockChainSystem.Controllers
 
                 // Header - Company Name
                 worksheet.Cell(currentRow, 1).Value = companyName.ToUpper();
-                worksheet.Range(currentRow, 1, currentRow, 7).Merge();
+                worksheet.Range(currentRow, 1, currentRow, 8).Merge();
                 worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(18);
                 worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
                 currentRow += 2;
 
                 // Report Title
                 worksheet.Cell(currentRow, 1).Value = "COLLATERAL REPORT";
-                worksheet.Range(currentRow, 1, currentRow, 7).Merge();
+                worksheet.Range(currentRow, 1, currentRow, 8).Merge();
                 worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
                 worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
                 currentRow += 2;
 
                 // Printed By and Date
                 worksheet.Cell(currentRow, 1).Value = $"Printed By: {User.Identity?.Name ?? "System"} On: {DateTime.Now:dd-MMM-yyyy HH:mm}";
-                worksheet.Range(currentRow, 1, currentRow, 7).Merge();
+                worksheet.Range(currentRow, 1, currentRow, 8).Merge();
                 worksheet.Cell(currentRow, 1).Style.Font.SetItalic();
                 currentRow += 2;
 
                 // Headers
-                string[] headers = { "Member No", "Names", "Loan No", "Collateral Description", "Market Value (KES)", "Balance (KES)", "Percentage" };
+                string[] headers = { "Member No", "Names", "Loan No", "Collateral Code", "Collateral Description", "Market Value (KES)", "Balance (KES)", "Percentage" };
 
                 for (int i = 0; i < headers.Length; i++)
                 {
@@ -217,13 +289,14 @@ namespace SACCOBlockChainSystem.Controllers
                     worksheet.Cell(currentRow, 1).Value = item.MemberNo;
                     worksheet.Cell(currentRow, 2).Value = item.Names;
                     worksheet.Cell(currentRow, 3).Value = item.LoanNo;
-                    worksheet.Cell(currentRow, 4).Value = item.Coldescription;
-                    worksheet.Cell(currentRow, 5).Value = item.Mktvalue;
-                    worksheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
-                    worksheet.Cell(currentRow, 6).Value = item.Balance;
+                    worksheet.Cell(currentRow, 4).Value = item.ColCode;
+                    worksheet.Cell(currentRow, 5).Value = item.Coldescription;
+                    worksheet.Cell(currentRow, 6).Value = item.Mktvalue;
                     worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
-                    worksheet.Cell(currentRow, 7).Value = item.Percentage;
-                    worksheet.Cell(currentRow, 7).Style.NumberFormat.Format = "0.00%";
+                    worksheet.Cell(currentRow, 7).Value = item.Balance;
+                    worksheet.Cell(currentRow, 7).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 8).Value = item.Percentage;
+                    worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "0.00%";
 
                     totalBalance += item.Balance;
                     totalMarketValue += item.Mktvalue;
@@ -232,15 +305,15 @@ namespace SACCOBlockChainSystem.Controllers
 
                 // Totals row
                 currentRow++;
-                worksheet.Cell(currentRow, 4).Value = "TOTALS:";
-                worksheet.Cell(currentRow, 4).Style.Font.SetBold();
-                worksheet.Cell(currentRow, 4).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-                worksheet.Cell(currentRow, 5).Value = totalMarketValue;
+                worksheet.Cell(currentRow, 5).Value = "TOTALS:";
                 worksheet.Cell(currentRow, 5).Style.Font.SetBold();
-                worksheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0.00";
-                worksheet.Cell(currentRow, 6).Value = totalBalance;
+                worksheet.Cell(currentRow, 5).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
+                worksheet.Cell(currentRow, 6).Value = totalMarketValue;
                 worksheet.Cell(currentRow, 6).Style.Font.SetBold();
                 worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 7).Value = totalBalance;
+                worksheet.Cell(currentRow, 7).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 7).Style.NumberFormat.Format = "#,##0.00";
 
                 // Summary statistics
                 currentRow += 2;
@@ -355,6 +428,7 @@ namespace SACCOBlockChainSystem.Controllers
                                     cols.RelativeColumn(0.8f);  // Member No
                                     cols.RelativeColumn(1.5f);  // Names
                                     cols.RelativeColumn(1.0f);  // Loan No
+                                    cols.RelativeColumn(0.8f);  // Col Code
                                     cols.RelativeColumn(1.8f);  // Description
                                     cols.RelativeColumn(1.0f);  // Market Value
                                     cols.RelativeColumn(1.0f);  // Balance
@@ -366,6 +440,7 @@ namespace SACCOBlockChainSystem.Controllers
                                     header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Member No").Bold().FontSize(8);
                                     header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Names").Bold().FontSize(8);
                                     header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Loan No").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Col Code").Bold().FontSize(8);
                                     header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Description").Bold().FontSize(8);
                                     header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Market Value").Bold().FontSize(8);
                                     header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Balance").Bold().FontSize(8);
@@ -377,6 +452,7 @@ namespace SACCOBlockChainSystem.Controllers
                                     table.Cell().Border(0.2f).Padding(4).Text(item.MemberNo ?? "").FontSize(8);
                                     table.Cell().Border(0.2f).Padding(4).Text(item.Names ?? "").FontSize(8);
                                     table.Cell().Border(0.2f).Padding(4).Text(item.LoanNo ?? "").FontSize(8);
+                                    table.Cell().Border(0.2f).Padding(4).Text(item.ColCode ?? "").FontSize(8);
                                     table.Cell().Border(0.2f).Padding(4).Text(item.Coldescription ?? "").FontSize(8);
                                     table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{item.Mktvalue:N0}").FontSize(8);
                                     table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{item.Balance:N0}").FontSize(8);
@@ -384,7 +460,7 @@ namespace SACCOBlockChainSystem.Controllers
                                 }
 
                                 // Totals row
-                                table.Cell().ColumnSpan(4).Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text("TOTALS:").Bold().FontSize(9);
+                                table.Cell().ColumnSpan(5).Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text("TOTALS:").Bold().FontSize(9);
                                 table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{totalMarketValue:N0}").Bold().FontSize(9);
                                 table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{totalBalance:N0}").Bold().FontSize(9);
                                 table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4);
@@ -420,19 +496,18 @@ namespace SACCOBlockChainSystem.Controllers
             if (string.IsNullOrEmpty(companyCode))
                 return "SACCO BlockChain System";
 
-            // Get from UserService or direct from Companies table
-            var user = await _userService.GetUserByUsernameAsync(User.Identity?.Name);
-            if (user != null && !string.IsNullOrEmpty(user.CompanyCode))
+            try
             {
-                // You may need to fetch from Companies table
                 var company = await _context.Companies
-                    .Where(c => c.CompanyCode == user.CompanyCode)
+                    .Where(c => c.CompanyCode == companyCode)
                     .Select(c => c.CompanyName)
                     .FirstOrDefaultAsync();
                 return company ?? "SACCO BlockChain System";
             }
-
-            return "SACCO BlockChain System";
+            catch
+            {
+                return "SACCO BlockChain System";
+            }
         }
 
         #endregion

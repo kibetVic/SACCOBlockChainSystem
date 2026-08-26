@@ -1,4 +1,4 @@
-﻿@model SACCOBlockChainSystem.Models.DTOs.LoanApplicationDTO﻿
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanApplicationDTO
 @{
     ViewData["Title"] = "Loan Application";
     Layout = "~/Views/Shared/_Layout.cshtml";
@@ -137,6 +137,13 @@
                                         <div id="eligibilityContent"></div>
                                     </div>
                                 </div>
+
+                                <!-- Existing Loans Display for Top-Up -->
+                                <div id="existingLoansInfo" style="display: none;" class="mt-3">
+                                    <div class="alert alert-info" id="existingLoansAlert">
+                                        <div id="existingLoansContent"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -154,24 +161,21 @@
                                     <div class="col-sm-9">
                                         <select asp-for="LoanCode" class="form-select" id="loanType" disabled required>
                                             <option value="">-- Select Loan Type --</option>
-                                            @if (loanTypes != null)
-                                            {
-                                                foreach (var loanType in loanTypes)
-                                                {
-                                                    <option value="@loanType.LoanCode"
-                                                            data-max-amount="@loanType.MaxAmount"
-                                                            data-interest="@loanType.Interest"
-                                                            data-repay-period="@loanType.RepayPeriod"
-                                                            data-guarantor="@loanType.Guarantor"
-                                                            data-self-guarantee="@loanType.SelfGuarantee"
-                                                            data-processing-fee="@loanType.ProcessingFee"
-                                                            data-repay-method="@loanType.RepayMethod">
-                                                        @loanType.LoanType
-                                                    </option>
-                                                }
-                                            }
+                                            <!-- Populated by JavaScript -->
                                         </select>
                                         <span asp-validation-for="LoanCode" class="text-danger"></span>
+                                        <div id="loanTypeMessage" class="form-text"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Top-Up Warning/Info Section -->
+                                <div id="topUpInfo" class="d-none">
+                                    <div id="topUpAlert" class="alert alert-warning">
+                                        <div id="topUpContent">
+                                            <i class="fas fa-arrow-up-circle me-2"></i>
+                                            @* <strong>Top-Up Loan Application</strong>
+                                            <p class="mb-0 mt-1">This member has existing loans. Only Top-Up loan products are available.</p> *@
+                                        </div>
                                     </div>
                                 </div>
 
@@ -182,7 +186,7 @@
                                         <div class="input-group">
                                             <span class="input-group-text">KES</span>
                                             <input asp-for="PrincipalAmount" class="form-control" id="principalAmount"
-                                                   type="number" step="1000" min="0" disabled required />
+                                                   type="number" min="0" disabled required />
                                         </div>
                                         <span asp-validation-for="PrincipalAmount" class="text-danger"></span>
                                         <div id="maxAmountHint" class="form-text"></div>
@@ -211,7 +215,7 @@
                                     <label asp-for="ApplicationDate" class="col-sm-3 col-form-label fw-bold">Application Date</label>
                                     <div class="col-sm-9">
                                         <input asp-for="ApplicationDate" class="form-control" type="date"
-                                               value="@Model.ApplicationDate.ToString("yyyy-MM-dd")" />
+                                               id="applicationDate" />
                                         <span asp-validation-for="ApplicationDate" class="text-danger"></span>
                                     </div>
                                 </div>
@@ -286,84 +290,116 @@
                             <i class="bi bi-check-circle-fill text-success me-2"></i>
                             Guarantors may be required
                         </li>
+                        <li class="mb-2" id="topUpGuideline">
+                            <i class="bi bi-arrow-up-circle-fill text-warning me-2"></i>
+                            <strong>Top-Up Loans:</strong> Members with existing loans can apply for Top-Up loan products
+                        </li>
                     </ul>
+                </div>
+            </div>
+
+            <!-- Top-Up Information Card -->
+            <div class="card mt-4" id="topUpInfoCard" style="display: none;">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-arrow-up-circle"></i> Top-Up Loan Info
+                    </h5>
+                </div>
+                <div class="card-body" id="topUpInfoCardBody">
+                    <div id="topUpInfoCardContent"></div>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Existing Loans Warning -->
-    @if (ViewBag.ExistingLoans != null && ((List<SACCOBlockChainSystem.Models.DTOs.LoanSummaryDTO>)ViewBag.ExistingLoans).Any())
-    {
-        var existingLoans = (List<SACCOBlockChainSystem.Models.DTOs.LoanSummaryDTO>)ViewBag.ExistingLoans;
-        <div class="alert alert-warning alert-dismissible fade show" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <strong>Existing Active Loans Found!</strong>
-            <p class="mb-2">This member has existing loans that need to be cleared before applying for a new loan:</p>
-            <div class="table-responsive">
-                <table class="table table-sm table-bordered">
-                    <thead>
-                        <tr>
-                            <th>Loan No</th>
-                            <th>Loan Type</th>
-                            <th>Principal</th>
-                            <th>Outstanding</th>
-                            <th>Status</th>
-                            <th>Application Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var loan in existingLoans)
-                        {
-                            <tr>
-                                <td>@loan.LoanNo</td>
-                                <td>@loan.LoanType</td>
-                                <td>KES @loan.PrincipalAmount.ToString("N0")</td>
-                                <td>KES @loan.OutstandingBalance.ToString("N0")</td>
-                                <td>
-                                    <span class="badge @(loan.LoanStatus == "Disbursed" || loan.LoanStatus == "Active" ? "bg-warning" : "bg-info")">
-                                        @loan.LoanStatus
-                                    </span>
-                                </td>
-                                <td>@loan.ApplicationDate.ToString("dd/MM/yyyy")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
 </div>
-
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        // Pass loan types from server to JavaScript using a safe approach
+        var allLoanTypes = @Html.Raw(Json.Serialize(loanTypes));
+
+        // Set application date
+        document.addEventListener('DOMContentLoaded', function() {
+            var dateInput = document.getElementById('applicationDate');
+            if (dateInput) {
+                var today = new Date();
+                var year = today.getFullYear();
+                var month = String(today.getMonth() + 1).padStart(2, '0');
+                var day = String(today.getDate()).padStart(2, '0');
+                dateInput.value = year + '-' + month + '-' + day;
+            }
+        });
+
         let currentMemberNo = null;
         let selectedMemberData = null;
         let memberEligibilityData = null;
-        let loanTypeData = null;
         let currentMaxRepayPeriod = 360;
         let isMemberEligible = false;
+        let hasExistingLoan = false;
+        let canApplyForTopUp = false;
+        let topUpLoanTypeCodes = [];
+        let bridgingLoanTypeCode = null;
+        let bridgingLoanTypeName = null;
+        let existingLoansList = [];
+        let searchTimeout = null;
+
+        // Auto-search with debounce
+        document.getElementById('searchInput').addEventListener('keyup', function(e) {
+            // Don't trigger on Enter key (handled separately)
+            if (e.key === 'Enter') {
+                searchMembers();
+                return;
+            }
+
+            // Clear previous timeout
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+
+            var searchTerm = this.value.trim();
+
+            // Only search if 3 or more characters
+            if (searchTerm.length >= 3) {
+                searchTimeout = setTimeout(function() {
+                    searchMembers();
+                }, 500); // 500ms debounce delay
+            } else if (searchTerm.length === 0) {
+                clearSearch();
+            }
+        });
+
+        // Enter key support for search
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchMembers();
+            }
+        });
 
         // Search members function
         async function searchMembers() {
             const searchTerm = document.getElementById('searchInput').value.trim();
 
             if (searchTerm.length < 3) {
-                Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
+                // Don't show warning for auto-search, just clear results
+                if (searchTerm.length > 0) {
+                    Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
+                }
+                document.getElementById('searchResults').style.display = 'none';
                 return;
             }
 
-            // Show loading
             document.getElementById('searchLoading').style.display = 'block';
             document.getElementById('searchResults').style.display = 'none';
             document.getElementById('searchResultsBody').innerHTML = '';
 
             try {
-                const response = await fetch(`/api/Member/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+                // Get company code from hidden field or session
+                var companyCode = '@ViewBag.CompanyCode';
+
+                const response = await fetch('/api/LoanApi/search?searchTerm=' + encodeURIComponent(searchTerm) + '&companyCode=' + encodeURIComponent(companyCode));
 
                 if (response.ok) {
                     const data = await response.json();
@@ -374,7 +410,9 @@
                         document.getElementById('searchResultsBody').innerHTML =
                             '<tr><td colspan="7" class="text-center text-danger">No members found matching your search</td></tr>';
                         document.getElementById('searchResults').style.display = 'block';
-                        Swal.fire('Info', 'No members found matching your search', 'info');
+                        if (searchTerm.length > 0) {
+                            Swal.fire('Info', 'No members found matching your search', 'info');
+                        }
                     }
                 } else {
                     throw new Error('Search failed');
@@ -384,19 +422,25 @@
                 document.getElementById('searchResultsBody').innerHTML =
                     '<tr><td colspan="7" class="text-center text-danger">Error searching members. Please try again.</td></tr>';
                 document.getElementById('searchResults').style.display = 'block';
-                Swal.fire('Error', 'Error searching members', 'error');
+                if (searchTerm.length > 0) {
+                    Swal.fire('Error', 'Error searching members', 'error');
+                }
             } finally {
                 document.getElementById('searchLoading').style.display = 'none';
             }
         }
 
-        // Display search results
         function displaySearchResults(members) {
             const tbody = document.getElementById('searchResultsBody');
             tbody.innerHTML = '';
 
-            members.forEach(member => {
-                const row = tbody.insertRow();
+            for (var i = 0; i < members.length; i++) {
+                var member = members[i];
+                var row = tbody.insertRow();
+                var isActive = member.isActive != false;
+                var statusText = isActive ? 'Active' : 'Inactive';
+                var statusClass = isActive ? 'bg-success' : 'bg-danger';
+
                 row.innerHTML = `
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-success" onclick="selectMember('${member.memberNo}')">
@@ -404,84 +448,179 @@
                         </button>
                     </td>
                     <td><strong>${escapeHtml(member.memberNo)}</strong></td>
-                    <td>${escapeHtml(member.surname)} ${escapeHtml(member.otherNames)}</td>
-                    <td>${escapeHtml(member.idno || 'N/A')}</td>
-                    <td>${escapeHtml(member.phoneNo || member.phone || 'N/A')}</td>
+                    <td>${escapeHtml(member.fullName || member.surname + ' ' + member.otherNames)}</td>
+                    <td>${escapeHtml(member.idNo || 'N/A')}</td>
+                    <td>${escapeHtml(member.phoneNo || 'N/A')}</td>
                     <td>${escapeHtml(member.email || 'N/A')}</td>
                     <td>
-                        <span class="badge ${member.status == 1 ? 'bg-success' : 'bg-danger'}">
-                            ${member.status == 1 ? 'Active' : (member.withdrawn == true ? 'Withdrawn' : 'Inactive')}
+                        <span class="badge ${statusClass}">
+                            ${statusText}
                         </span>
                     </td>
                 `;
-            });
+            }
 
             document.getElementById('searchResults').style.display = 'block';
         }
 
-        // Select a member and check eligibility
+        // Updated: selectMember function with Top-Up support
         async function selectMember(memberNo) {
             try {
-                // Show loading in eligibility area
-                const eligibilityDiv = document.getElementById('memberEligibilityInfo');
+                var eligibilityDiv = document.getElementById('memberEligibilityInfo');
                 eligibilityDiv.style.display = 'block';
-                const eligibilityAlert = document.getElementById('eligibilityAlert');
+                var eligibilityAlert = document.getElementById('eligibilityAlert');
                 eligibilityAlert.className = 'alert alert-info';
                 document.getElementById('eligibilityContent').innerHTML = `
                     <i class="fas fa-spinner fa-spin me-2"></i>
                     Checking member eligibility...
                 `;
 
-                // Fetch member details and eligibility
-                const response = await fetch(`/LoanMvc/CheckMemberEligibility?memberNo=${memberNo}`);
-                const data = await response.json();
+                document.getElementById('existingLoansInfo').style.display = 'none';
+                document.getElementById('loanTypeMessage').innerHTML = '';
+                document.getElementById('topUpInfoCard').style.display = 'none';
+                document.getElementById('topUpInfo').classList.add('d-none');
+
+                var companyCode = '@ViewBag.CompanyCode';
+                var response = await fetch('/LoanMvc/CheckMemberEligibility?memberNo=' + memberNo);
+                var data = await response.json();
 
                 if (response.ok && data.success) {
                     memberEligibilityData = data.data;
                     currentMemberNo = memberNo;
                     selectedMemberData = data.data;
+                    hasExistingLoan = data.hasExistingLoan || false;
+                    canApplyForTopUp = data.canApplyForTopUp || false;
+                    topUpLoanTypeCodes = data.topUpLoanTypeCodes || [];
+                    bridgingLoanTypeCode = data.bridgingLoanTypeCode || null;
+                    bridgingLoanTypeName = data.bridgingLoanTypeName || null;
+                    existingLoansList = data.existingLoans || [];
 
-                    // Update selected member display
                     document.getElementById('selectedMemberNo').value = memberNo;
-                    document.getElementById('selectedMemberName').innerHTML = 
-                        `<strong>${escapeHtml(data.data.name || data.data.memberNo)}</strong>`;
+                    document.getElementById('selectedMemberName').innerHTML =
+                        '<strong>' + escapeHtml(data.data.name || data.data.memberNo) + '</strong>';
                     document.getElementById('selectedMemberNoDisplay').innerHTML = memberNo;
-                    document.getElementById('selectedMemberIdNo').innerHTML = data.data.idno || 'N/A';
+                    document.getElementById('selectedMemberIdNo').innerHTML = data.data.idNo || 'N/A';
                     document.getElementById('selectedMemberPhone').innerHTML = data.data.phone || 'N/A';
 
                     document.getElementById('selectedMemberCard').style.display = 'block';
                     document.getElementById('searchResults').style.display = 'none';
                     document.getElementById('searchInput').value = '';
 
-                    // Check if member has existing loans
-                    if (data.hasExistingLoan) {
-                        isMemberEligible = false;
-                        eligibilityAlert.className = 'alert alert-warning';
-                        let existingLoansHtml = '';
-                        if (data.existingLoans && data.existingLoans.length > 0) {
-                            existingLoansHtml = `
-                                <div class="mt-2">
-                                    <strong>Existing Loans:</strong>
-                                    <ul class="mb-0 mt-1">
-                                        ${data.existingLoans.map(loan => 
-                                            `<li>${loan.loanNo} is the existing loan</li>`
-                                        ).join('')}
-                                    </ul>
-                                </div>
+                    // Check: Does member have existing loans?
+                    if (hasExistingLoan) {
+                        // Case: Member has existing loans - Show only Top-Up loan types
+                        if (topUpLoanTypeCodes.length === 0) {
+                            // No Top-Up loan types available
+                            isMemberEligible = false;
+                            eligibilityAlert.className = 'alert alert-warning';
+
+                            var existingLoansHtml = '';
+                            if (existingLoansList.length > 0) {
+                                existingLoansHtml = '<div class="mt-2"><strong>Existing Loans:</strong><ul class="mb-0 mt-1">';
+                                for (var k = 0; k < existingLoansList.length; k++) {
+                                    var loan = existingLoansList[k];
+                                    var bridgingText = loan.bridgingAllowed ? '✅ Top-Up Allowed' : '❌ No Top-Up';
+                                    existingLoansHtml += '<li>' + loan.loanNo + ' - ' + loan.loanType + ' (' + loan.loanStatus + ') - Paid: ' + loan.percentagePaid + '% - ' + bridgingText + '</li>';
+                                }
+                                existingLoansHtml += '</ul></div>';
+                            }
+
+                            document.getElementById('eligibilityContent').innerHTML = `
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>Member Has Existing Loans</strong>
+                                <p class="mb-0 mt-1">This member has existing loans but no Top-Up loan products are currently available.</p>
+                                ${existingLoansHtml}
+                                <small class="text-muted mt-2 d-block">Please clear existing loans first or contact the administrator to enable Top-Up loan products.</small>
                             `;
+
+                            populateLoanTypes([]);
+                            document.getElementById('loanTypeMessage').innerHTML =
+                                '<span class="text-danger"><i class="bi bi-exclamation-circle"></i> No loan types available. Please clear existing loans first.</span>';
+                            disableLoanForm();
+                            return;
                         }
+
+                        // Filter loan types to ONLY Top-Up eligible ones (IsTopUp = true)
+                        var filteredLoanTypes = allLoanTypes.filter(function(lt) {
+                            return topUpLoanTypeCodes.indexOf(lt.loanCode) !== -1;
+                        });
+
+                        if (filteredLoanTypes.length === 0) {
+                            isMemberEligible = false;
+                            eligibilityAlert.className = 'alert alert-warning';
+                            document.getElementById('eligibilityContent').innerHTML = `
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>No Top-Up Loan Types Available</strong>
+                                <p class="mb-0 mt-1">This member has existing loans but no eligible Top-Up loan types are currently available.</p>
+                                <small class="text-muted mt-2 d-block">Please contact the administrator to configure Top-Up loan types.</small>
+                            `;
+                            populateLoanTypes([]);
+                            document.getElementById('loanTypeMessage').innerHTML =
+                                '<span class="text-danger"><i class="bi bi-exclamation-circle"></i> No Top-Up loan types available.</span>';
+                            disableLoanForm();
+                            return;
+                        }
+
+                        // Populate ONLY Top-Up loan types
+                        populateLoanTypes(filteredLoanTypes);
+
+                        var topUpNames = filteredLoanTypes.map(function(lt) {
+                            return lt.loanType;
+                        }).join(', ');
+
+                        
+                        // Enable loan form
+                        document.getElementById('loanType').disabled = false;
+                        document.getElementById('principalAmount').disabled = false;
+                        document.getElementById('repayPeriod').disabled = false;
+                        document.getElementById('Purpose').disabled = false;
+
+                        var existingLoansHtml = '';
+                        if (existingLoansList.length > 0) {
+                            existingLoansHtml = '<div class="mt-2"><strong>Existing Loans (will be topped up):</strong><ul class="mb-0 mt-1">';
+                            for (var j = 0; j < existingLoansList.length; j++) {
+                                var loan = existingLoansList[j];
+                                var bridgingText = loan.bridgingAllowed ? '✅ Top-Up Allowed' : '❌ No Top-Up';
+                                existingLoansHtml += '<li>' + loan.loanNo + ' - Paid: ' + loan.percentagePaid + '% - ' + bridgingText + '</li>';
+                            }
+                            existingLoansHtml += '</ul></div>';
+                        }
+
+                        eligibilityAlert.className = 'alert alert-info';
                         document.getElementById('eligibilityContent').innerHTML = `
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Member Not Eligible for New Loan</strong>
-                            <p class="mb-0 mt-1">${data.message}</p>
+                            <i class="fas fa-arrow-up-circle me-2"></i>
+                            <strong>Top-Up Loan Available</strong>
+                            <p class="mb-0 mt-1">This member has existing loans but can apply for a Top-Up loan.</p>
                             ${existingLoansHtml}
-                            <small class="text-muted mt-2 d-block">Please clear existing loans before applying for a new loan.</small>
+                            <div class="mt-2">
+                                <span class="badge bg-warning text-dark">Available Top-Up Products: ${topUpNames}</span>
+                            </div>
+                            <small class="text-info mt-2 d-block">✓ The new loan will be added on top of existing loans. Maximum loan amount is reduced by outstanding balance.</small>
                         `;
-                        disableLoanForm();
+
+                        enableLoanForm(data.data.maxLoanAmount || 50000, data.data.eligibleShares || 0);
+                        isMemberEligible = true;
+
+                        document.getElementById('topUpInfoCard').style.display = 'block';
+                        document.getElementById('topUpInfoCardContent').innerHTML = `
+                            <div class="alert alert-warning mb-0">
+                                <i class="bi bi-arrow-up-circle-fill me-2"></i>
+                                <strong>Top-Up Loan</strong>
+                                <p class="mb-0 mt-1">This is a Top-Up loan application. The new loan will be added on top of existing loans.</p>
+                                <small class="text-muted">Please ensure the new loan amount plus existing balance does not exceed the maximum eligible amount.</small>
+                            </div>
+                        `;
+
                         return;
                     }
 
-                    // Check if member has valid shares
+                    // Case: No existing loans - Show all loan types (normal)
+                    populateLoanTypes(allLoanTypes);
+                    document.getElementById('loanTypeMessage').innerHTML =
+                        '<span class="text-success"><i class="bi bi-check-circle"></i> You can apply for any available loan type.</span>';
+                    document.getElementById('loanType').disabled = false;
+                    document.getElementById('topUpInfo').classList.add('d-none');
+
                     if (!data.data.hasValidShares) {
                         isMemberEligible = false;
                         eligibilityAlert.className = 'alert alert-danger';
@@ -495,7 +634,6 @@
                         return;
                     }
 
-                    // Member is eligible
                     isMemberEligible = true;
                     eligibilityAlert.className = 'alert alert-success';
                     document.getElementById('eligibilityContent').innerHTML = `
@@ -517,7 +655,7 @@
                         </div>
                     `;
 
-                    // Enable loan form
+                    document.getElementById('topUpInfoCard').style.display = 'none';
                     enableLoanForm(data.data.maxLoanAmount || 50000, data.data.eligibleShares || 0);
 
                 } else {
@@ -531,7 +669,7 @@
                 }
             } catch (error) {
                 console.error('Error:', error);
-                const eligibilityAlert = document.getElementById('eligibilityAlert');
+                var eligibilityAlert = document.getElementById('eligibilityAlert');
                 eligibilityAlert.className = 'alert alert-danger';
                 document.getElementById('eligibilityContent').innerHTML = `
                     <i class="fas fa-exclamation-triangle me-2"></i>
@@ -542,46 +680,92 @@
             }
         }
 
-        // Enable loan form fields
+        function populateLoanTypes(loanTypes) {
+            var select = document.getElementById('loanType');
+            select.innerHTML = '<option value="">-- Select Loan Type --</option>';
+
+            if (!loanTypes || loanTypes.length === 0) {
+                select.innerHTML = '<option value="">-- No loan types available --</option>';
+                return;
+            }
+
+            for (var i = 0; i < loanTypes.length; i++) {
+                var lt = loanTypes[i];
+                var option = document.createElement('option');
+                option.value = lt.loanCode;
+
+                var displayText = lt.loanType;
+                var tags = [];
+
+                if (lt.mobileLoan) tags.push('Mobile');
+                if (lt.isProject) tags.push('Project');
+                if (lt.isTopUp) tags.push('Top-Up');
+
+                if (tags.length > 0) {
+                    displayText += ' (' + tags.join(', ') + ')';
+                }
+
+                option.text = displayText;
+                option.dataset.maxAmount = lt.maxAmount || 0;
+                option.dataset.interest = lt.interest || 0;
+                option.dataset.repayPeriod = lt.repayPeriod || 360;
+                option.dataset.guarantor = lt.guarantor || '';
+                option.dataset.selfGuarantee = lt.selfGuarantee || false;
+                option.dataset.processingFee = lt.processingFee || 0;
+                option.dataset.repayMethod = lt.repayMethod || 'AMT';
+                option.dataset.mobile = lt.mobileLoan || false;
+                option.dataset.project = lt.isProject || false;
+                option.dataset.isTopUp = lt.isTopUp || false;
+                option.dataset.maxLoans = lt.maxLoans || 5;
+
+                select.appendChild(option);
+            }
+        }
+
         function enableLoanForm(maxLoanAmount, eligibleShares) {
             document.getElementById('loanType').disabled = false;
             document.getElementById('principalAmount').disabled = false;
             document.getElementById('repayPeriod').disabled = false;
             document.getElementById('Purpose').disabled = false;
 
-            // Set max loan amount from eligible shares
             document.getElementById('principalAmount').setAttribute('max', maxLoanAmount);
             document.getElementById('principalAmount').setAttribute('min', 1000);
-            document.getElementById('maxAmountHint').innerHTML = `
-                <i class="bi bi-piggy-bank-fill me-1"></i>
-                Maximum loan based on eligible shares (${eligibleShares.toLocaleString()}): KES ${maxLoanAmount.toLocaleString()}
-                <br><small class="text-muted">Loan-to-Share ratio: ${(maxLoanAmount / (eligibleShares || 1)).toFixed(1)}x</small>
-            `;
+            document.getElementById('maxAmountHint').innerHTML =
+                '<i class="bi bi-piggy-bank-fill me-1"></i>' +
+                'Maximum loan based on eligible shares (' + (eligibleShares || 0).toLocaleString() + '): KES ' + (maxLoanAmount || 0).toLocaleString() +
+                '<br><small class="text-muted">Loan-to-Share ratio: ' + ((maxLoanAmount || 0) / ((eligibleShares || 1))).toFixed(1) + 'x</small>';
         }
 
-        // Disable loan form fields
         function disableLoanForm() {
             document.getElementById('loanType').disabled = true;
             document.getElementById('principalAmount').disabled = true;
             document.getElementById('repayPeriod').disabled = true;
             document.getElementById('Purpose').disabled = true;
             document.getElementById('submitBtn').disabled = true;
-            document.getElementById('loanSummary').innerHTML = `
-                <i class="bi bi-calculator fs-1"></i>
-                <p class="mt-3">Select an eligible member to see loan summary</p>
-            `;
+            document.getElementById('loanSummary').innerHTML =
+                '<i class="bi bi-calculator fs-1"></i>' +
+                '<p class="mt-3">Select an eligible member to see loan summary</p>';
+            document.getElementById('topUpInfo').classList.add('d-none');
+            document.getElementById('topUpInfoCard').style.display = 'none';
+            document.getElementById('loanTypeMessage').innerHTML = '';
         }
 
-        // Clear selected member
         function clearSelectedMember() {
             currentMemberNo = null;
             selectedMemberData = null;
             memberEligibilityData = null;
             isMemberEligible = false;
+            hasExistingLoan = false;
+            canApplyForTopUp = false;
+            topUpLoanTypeCodes = [];
+            bridgingLoanTypeCode = null;
+            bridgingLoanTypeName = null;
+            existingLoansList = [];
 
             document.getElementById('selectedMemberNo').value = '';
             document.getElementById('selectedMemberCard').style.display = 'none';
             document.getElementById('memberEligibilityInfo').style.display = 'none';
+            document.getElementById('existingLoansInfo').style.display = 'none';
             document.getElementById('loanType').value = '';
             document.getElementById('principalAmount').value = '';
             document.getElementById('repayPeriod').value = '';
@@ -589,11 +773,14 @@
             document.getElementById('maxAmountHint').innerHTML = '';
             document.getElementById('maxRepayPeriodHint').innerHTML = '';
             document.getElementById('guarantorInfo').classList.add('d-none');
+            document.getElementById('loanTypeMessage').innerHTML = '';
 
+            populateLoanTypes(allLoanTypes);
+            document.getElementById('topUpInfo').classList.add('d-none');
+            document.getElementById('topUpInfoCard').style.display = 'none';
             disableLoanForm();
         }
 
-        // Clear search
         function clearSearch() {
             document.getElementById('searchInput').value = '';
             document.getElementById('searchResults').style.display = 'none';
@@ -601,144 +788,153 @@
         }
 
         // Update loan type details when selected
-        $('#loanType').on('change', function() {
+        document.getElementById('loanType').addEventListener('change', function() {
             if (!isMemberEligible) {
                 alert('Please select an eligible member first');
-                $(this).val('');
+                this.value = '';
                 return;
             }
 
-            const selected = $(this).find('option:selected');
-            const maxAmount = parseFloat(selected.data('max-amount')) || 0;
-            const eligibleAmount = memberEligibilityData?.maxLoanAmount || 0;
-            const guarantor = selected.data('guarantor');
-            const selfGuarantee = selected.data('self-guarantee');
-            const processingFee = parseFloat(selected.data('processing-fee')) || 0;
-            const maxRepayPeriodFromLoanType = parseInt(selected.data('repay-period')) || 360;
+            var selected = this.options[this.selectedIndex];
+            if (!selected || !selected.value) {
+                return;
+            }
+
+            var maxAmount = parseFloat(selected.dataset.maxAmount) || 0;
+            var eligibleAmount = memberEligibilityData?.maxLoanAmount || 0;
+            var guarantor = selected.dataset.guarantor;
+            var selfGuarantee = selected.dataset.selfGuarantee;
+            var processingFee = parseFloat(selected.dataset.processingFee) || 0;
+            var maxRepayPeriodFromLoanType = parseInt(selected.dataset.repayPeriod) || 360;
 
             currentMaxRepayPeriod = maxRepayPeriodFromLoanType;
-            $('#repayPeriod').attr('max', maxRepayPeriodFromLoanType);
-            $('#repayPeriod').attr('min', 1);
-            $('#maxRepayPeriodHint').html(`
-                <i class="bi bi-info-circle me-1"></i>
-                Maximum allowed for this loan type: <strong>${maxRepayPeriodFromLoanType} months</strong>
-                ${maxRepayPeriodFromLoanType < 12 ? '<span class="text-danger ms-2">Short-term loan</span>' : ''}
-            `);
+            var repayPeriodInput = document.getElementById('repayPeriod');
+            repayPeriodInput.setAttribute('max', maxRepayPeriodFromLoanType);
+            repayPeriodInput.setAttribute('min', 1);
+            document.getElementById('maxRepayPeriodHint').innerHTML =
+                '<i class="bi bi-info-circle me-1"></i>' +
+                'Maximum allowed for this loan type: <strong>' + maxRepayPeriodFromLoanType + ' months</strong>' +
+                (maxRepayPeriodFromLoanType < 12 ? '<span class="text-danger ms-2">Short-term loan</span>' : '');
 
-            const currentValue = parseInt($('#repayPeriod').val());
+            var currentValue = parseInt(repayPeriodInput.value);
             if (currentValue && currentValue > maxRepayPeriodFromLoanType) {
-                $('#repayPeriod').val(maxRepayPeriodFromLoanType);
+                repayPeriodInput.value = maxRepayPeriodFromLoanType;
             }
 
-            if (!$('#repayPeriod').val()) {
-                const defaultPeriod = Math.min(12, maxRepayPeriodFromLoanType);
-                $('#repayPeriod').val(defaultPeriod);
+            if (!repayPeriodInput.value) {
+                var defaultPeriod = Math.min(12, maxRepayPeriodFromLoanType);
+                repayPeriodInput.value = defaultPeriod;
             }
 
-            let currentMaxAmount = maxAmount > 0 ? Math.min(maxAmount, eligibleAmount) : eligibleAmount;
+            var currentMaxAmount = maxAmount > 0 ? Math.min(maxAmount, eligibleAmount) : eligibleAmount;
 
             if (currentMaxAmount > 0) {
-                $('#principalAmount').attr('max', currentMaxAmount);
-                $('#maxAmountHint').html(`
-                    Maximum allowed: KES ${currentMaxAmount.toLocaleString()}
-                    ${maxAmount > 0 && maxAmount < eligibleAmount ? '<br><small class="text-muted">Loan type limit: KES ' + maxAmount.toLocaleString() + '</small>' : ''}
-                    ${eligibleAmount > 0 && eligibleAmount < maxAmount ? '<br><small class="text-muted">Member limit: KES ' + eligibleAmount.toLocaleString() + '</small>' : ''}
-                `);
-                $('#submitBtn').prop('disabled', false);
+                var principalInput = document.getElementById('principalAmount');
+                principalInput.setAttribute('max', currentMaxAmount);
+                document.getElementById('maxAmountHint').innerHTML =
+                    'Maximum allowed: KES ' + (currentMaxAmount || 0).toLocaleString() +
+                    (maxAmount > 0 && maxAmount < eligibleAmount ? '<br><small class="text-muted">Loan type limit: KES ' + (maxAmount || 0).toLocaleString() + '</small>' : '') +
+                    (eligibleAmount > 0 && eligibleAmount < maxAmount ? '<br><small class="text-muted">Member limit: KES ' + (eligibleAmount || 0).toLocaleString() + '</small>' : '');
+                document.getElementById('submitBtn').disabled = false;
             } else {
-                $('#submitBtn').prop('disabled', true);
-                $('#maxAmountHint').html('<span class="text-danger">No eligible amount available for this loan type</span>');
+                document.getElementById('submitBtn').disabled = true;
+                document.getElementById('maxAmountHint').innerHTML = '<span class="text-danger">No eligible amount available for this loan type</span>';
             }
 
-            const requiresGuarantor = guarantor && guarantor !== 'No' && guarantor !== 'N';
+            var requiresGuarantor = guarantor && guarantor !== 'No' && guarantor !== 'N';
+            var guarantorInfo = document.getElementById('guarantorInfo');
+            var guarantorMessage = document.getElementById('guarantorMessage');
+
             if (requiresGuarantor) {
-                let guarantorCount = 1;
+                var guarantorCount = 1;
                 if (guarantor === 'Yes' || guarantor === 'Y') {
                     guarantorCount = 1;
                 } else if (!isNaN(parseInt(guarantor))) {
                     guarantorCount = parseInt(guarantor);
                 }
 
-                $('#guarantorInfo').removeClass('d-none');
+                guarantorInfo.classList.remove('d-none');
                 if (selfGuarantee === true || selfGuarantee === 'true' || selfGuarantee === 'Yes') {
-                    $('#guarantorMessage').html(`
-                        <i class="bi bi-shield-check me-2"></i>
-                        <strong>Guarantor Required:</strong> This loan requires ${guarantorCount} guarantor(s).
-                        You can use your own shares as guarantee.
-                    `);
+                    guarantorMessage.innerHTML =
+                        '<i class="bi bi-shield-check me-2"></i>' +
+                        '<strong>Guarantor Required:</strong> This loan requires ' + guarantorCount + ' guarantor(s).' +
+                        'You can use your own shares as guarantee.';
                 } else {
-                    $('#guarantorMessage').html(`
-                        <i class="bi bi-people me-2"></i>
-                        <strong>Guarantor Required:</strong> This loan requires ${guarantorCount} guarantor(s).
-                        You will need to assign guarantors after creating the application.
-                    `);
+                    guarantorMessage.innerHTML =
+                        '<i class="bi bi-people me-2"></i>' +
+                        '<strong>Guarantor Required:</strong> This loan requires ' + guarantorCount + ' guarantor(s).' +
+                        'You will need to assign guarantors after creating the application.';
                 }
             } else {
-                $('#guarantorInfo').addClass('d-none');
+                guarantorInfo.classList.add('d-none');
             }
 
             updateLoanSummary();
         });
 
         // Real-time validation for repayment period
-        $('#repayPeriod').on('input', function() {
-            const enteredValue = parseInt($(this).val());
-            const maxAllowed = currentMaxRepayPeriod;
+        document.getElementById('repayPeriod').addEventListener('input', function() {
+            var enteredValue = parseInt(this.value);
+            var maxAllowed = currentMaxRepayPeriod;
 
             if (enteredValue > maxAllowed) {
-                $(this).val(maxAllowed);
-                $('#repayPeriodHint').html(`
-                    <span id="maxRepayPeriodHint" class="text-danger">
-                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                        Value adjusted to maximum allowed: ${maxAllowed} months
-                    </span>
-                    <small class="text-muted d-block">Enter the number of months you want to repay this loan</small>
-                `);
-                setTimeout(() => {
-                    $('#maxRepayPeriodHint').html(`
-                        <i class="bi bi-info-circle me-1"></i>
-                        Maximum allowed for this loan type: <strong>${maxAllowed} months</strong>
-                    `);
+                this.value = maxAllowed;
+                document.getElementById('repayPeriodHint').innerHTML =
+                    '<span id="maxRepayPeriodHint" class="text-danger">' +
+                        '<i class="bi bi-exclamation-triangle-fill me-1"></i>' +
+                        'Value adjusted to maximum allowed: ' + maxAllowed + ' months' +
+                    '</span>' +
+                    '<small class="text-muted d-block">Enter the number of months you want to repay this loan</small>';
+                setTimeout(function() {
+                    document.getElementById('maxRepayPeriodHint').innerHTML =
+                        '<i class="bi bi-info-circle me-1"></i>' +
+                        'Maximum allowed for this loan type: <strong>' + maxAllowed + ' months</strong>';
                 }, 3000);
             } else if (enteredValue < 1) {
-                $(this).val(1);
+                this.value = 1;
             } else {
-                $('#maxRepayPeriodHint').html(`
-                    <i class="bi bi-info-circle me-1"></i>
-                    Maximum allowed for this loan type: <strong>${maxAllowed} months</strong>
-                    ${enteredValue > 0 ? `<br><span class="text-success">Selected: ${enteredValue} months</span>` : ''}
-                `);
+                document.getElementById('maxRepayPeriodHint').innerHTML =
+                    '<i class="bi bi-info-circle me-1"></i>' +
+                    'Maximum allowed for this loan type: <strong>' + maxAllowed + ' months</strong>' +
+                    (enteredValue > 0 ? '<br><span class="text-success">Selected: ' + enteredValue + ' months</span>' : '');
             }
             updateLoanSummary();
         });
 
         // Update summary on amount or period change
-        $('#principalAmount, #repayPeriod').on('input', updateLoanSummary);
+        document.getElementById('principalAmount').addEventListener('input', updateLoanSummary);
 
         function updateLoanSummary() {
             if (!isMemberEligible) return;
 
-            const amount = parseFloat($('#principalAmount').val()) || 0;
-            const repayPeriod = parseInt($('#repayPeriod').val()) || 12;
-            const selected = $('#loanType').find('option:selected');
-            const interestRate = parseFloat(selected.data('interest')) || 0;
-            const processingFee = parseFloat(selected.data('processing-fee')) || 0;
-            const maxAmount = parseFloat($('#principalAmount').attr('max')) || 0;
-            const maxRepayPeriod = currentMaxRepayPeriod;
-            const repaymentMethod = selected.data('repay-method') || 'AMT';
+            var amount = parseFloat(document.getElementById('principalAmount').value) || 0;
+            var repayPeriod = parseInt(document.getElementById('repayPeriod').value) || 12;
+            var selected = document.getElementById('loanType').options[document.getElementById('loanType').selectedIndex];
+
+            if (!selected || !selected.value) {
+                return;
+            }
+
+            var interestRate = parseFloat(selected.dataset.interest) || 0;
+            var processingFee = parseFloat(selected.dataset.processingFee) || 0;
+            var maxAmount = parseFloat(document.getElementById('principalAmount').getAttribute('max')) || 0;
+            var maxRepayPeriod = currentMaxRepayPeriod;
+            var repaymentMethod = selected.dataset.repayMethod || 'AMT';
+
+            var loanSummary = document.getElementById('loanSummary');
 
             if (amount > 0 && interestRate > 0 && amount <= maxAmount && repayPeriod <= maxRepayPeriod && repayPeriod >= 1) {
-                const monthlyRate = interestRate / 100 / 12;
-                const months = repayPeriod;
+                var monthlyRate = interestRate / 100 / 12;
+                var months = repayPeriod;
 
-                let emi = 0;
-                let totalInterest = 0;
-                let totalRepayable = 0;
-                let netDisbursement = amount - processingFee;
+                var emi = 0;
+                var totalInterest = 0;
+                var totalRepayable = 0;
+                var netDisbursement = amount - (processingFee || 0);
 
                 if (repaymentMethod === 'AMT') {
                     if (monthlyRate > 0) {
-                        const factor = Math.pow(1 + monthlyRate, months);
+                        var factor = Math.pow(1 + monthlyRate, months);
                         emi = amount * monthlyRate * factor / (factor - 1);
                     } else {
                         emi = amount / months;
@@ -747,16 +943,16 @@
                     totalRepayable = amount + totalInterest;
                 } else if (repaymentMethod === 'STL') {
                     totalInterest = amount * (interestRate / 100) * (months / 12);
-                    const monthlyPrincipal = amount / months;
-                    const monthlyInterest = totalInterest / months;
+                    var monthlyPrincipal = amount / months;
+                    var monthlyInterest = totalInterest / months;
                     emi = monthlyPrincipal + monthlyInterest;
                     totalRepayable = amount + totalInterest;
                 } else if (repaymentMethod === 'RBAL') {
-                    const monthlyPrincipal = amount / months;
-                    let balance = amount;
-                    let totalInterestRB = 0;
-                    for (let i = 0; i < months; i++) {
-                        const interest = balance * monthlyRate;
+                    var monthlyPrincipal = amount / months;
+                    var balance = amount;
+                    var totalInterestRB = 0;
+                    for (var i = 0; i < months; i++) {
+                        var interest = balance * monthlyRate;
                         totalInterestRB += interest;
                         balance -= monthlyPrincipal;
                     }
@@ -764,7 +960,7 @@
                     totalRepayable = amount + totalInterest;
                     emi = totalRepayable / months;
                 } else {
-                    const factor = Math.pow(1 + monthlyRate, months);
+                    var factor = Math.pow(1 + monthlyRate, months);
                     emi = amount * monthlyRate * factor / (factor - 1);
                     totalInterest = (emi * months) - amount;
                     totalRepayable = amount + totalInterest;
@@ -775,7 +971,7 @@
                 totalRepayable = Math.round(totalRepayable * 100) / 100;
                 netDisbursement = Math.round(netDisbursement * 100) / 100;
 
-                let methodDescription = '';
+                var methodDescription = '';
                 if (repaymentMethod === 'AMT') {
                     methodDescription = '<span class="badge bg-info">Amortized (EMI)</span>';
                 } else if (repaymentMethod === 'STL') {
@@ -784,40 +980,38 @@
                     methodDescription = '<span class="badge bg-warning">Reducing Balance</span>';
                 }
 
-                $('#loanSummary').html(`
-                    <h6>Loan Summary <small class="text-muted">${methodDescription}</small></h6>
-                    <table class="table table-sm table-borderless">
-                        <tr><td>Principal:</td><td class="text-end fw-bold">KES ${amount.toLocaleString()}</td></tr>
-                        <tr><td>Interest Rate:</td><td class="text-end">${interestRate}% p.a.</td></tr>
-                        <tr><td>Repayment Period:</td><td class="text-end">${months} months</td></tr>
-                        <tr><td>Monthly Payment:</td><td class="text-end fw-bold">KES ${emi.toLocaleString()}</td></tr>
-                        <tr><td>Total Interest:</td><td class="text-end">KES ${totalInterest.toLocaleString()}</td></tr>
-                        ${processingFee > 0 ? `<tr><td>Processing Fee:</td><td class="text-end">KES ${processingFee.toLocaleString()}</td></tr>
-                        <tr><td>Net Disbursement:</td><td class="text-end fw-bold text-primary">KES ${netDisbursement.toLocaleString()}</td></tr>` : ''}
-                        <tr class="border-top"><td class="fw-bold">Total Repayable:</td><td class="text-end fw-bold text-primary">KES ${totalRepayable.toLocaleString()}</td></tr>
-                    </table>
-                `);
+                loanSummary.innerHTML =
+                    '<h6>Loan Summary <small class="text-muted">' + methodDescription + '</small></h6>' +
+                    '<table class="table table-sm table-borderless">' +
+                        '<tr><td>Principal:</td><td class="text-end fw-bold">KES ' + (amount || 0).toLocaleString() + '</td></tr>' +
+                        '<tr><td>Interest Rate:</td><td class="text-end">' + interestRate + '% p.a.</td></tr>' +
+                        '<tr><td>Repayment Period:</td><td class="text-end">' + months + ' months</td></tr>' +
+                        '<tr><td>Monthly Payment:</td><td class="text-end fw-bold">KES ' + (emi || 0).toLocaleString() + '</td></tr>' +
+                        '<tr><td>Total Interest:</td><td class="text-end">KES ' + (totalInterest || 0).toLocaleString() + '</td></tr>' +
+                        ((processingFee || 0) > 0 ? '<tr><td>Processing Fee:</td><td class="text-end">KES ' + (processingFee || 0).toLocaleString() + '</td></tr>' +
+                        '<tr><td>Net Disbursement:</td><td class="text-end fw-bold text-primary">KES ' + (netDisbursement || 0).toLocaleString() + '</td></tr>' : '') +
+                        '<tr class="border-top"><td class="fw-bold">Total Repayable:</td><td class="text-end fw-bold text-primary">KES ' + (totalRepayable || 0).toLocaleString() + '</td></tr>' +
+                    '</table>';
             } else {
-                $('#loanSummary').html(`
-                    <i class="bi bi-calculator fs-1"></i>
-                    <p class="mt-3">Enter loan details to see summary</p>
-                `);
+                loanSummary.innerHTML =
+                    '<i class="bi bi-calculator fs-1"></i>' +
+                    '<p class="mt-3">Enter loan details to see summary</p>';
             }
         }
 
         // Form validation before submit
-        $('#loanApplicationForm').on('submit', function(e) {
+        document.getElementById('loanApplicationForm').addEventListener('submit', function(e) {
             if (!isMemberEligible) {
                 e.preventDefault();
                 Swal.fire('Error', 'Please select an eligible member first', 'error');
                 return false;
             }
 
-            const amount = parseFloat($('#principalAmount').val()) || 0;
-            const maxAmount = parseFloat($('#principalAmount').attr('max')) || 0;
-            const repayPeriod = parseInt($('#repayPeriod').val()) || 0;
-            const maxRepayPeriod = currentMaxRepayPeriod;
-            const loanType = $('#loanType').val();
+            var amount = parseFloat(document.getElementById('principalAmount').value) || 0;
+            var maxAmount = parseFloat(document.getElementById('principalAmount').getAttribute('max')) || 0;
+            var repayPeriod = parseInt(document.getElementById('repayPeriod').value) || 0;
+            var maxRepayPeriod = currentMaxRepayPeriod;
+            var loanType = document.getElementById('loanType').value;
 
             if (!loanType) {
                 e.preventDefault();
@@ -833,13 +1027,13 @@
 
             if (amount > maxAmount) {
                 e.preventDefault();
-                Swal.fire('Error', `Loan amount cannot exceed KES ${maxAmount.toLocaleString()}`, 'error');
+                Swal.fire('Error', 'Loan amount cannot exceed KES ' + (maxAmount || 0).toLocaleString(), 'error');
                 return false;
             }
 
-            if (amount < 1000) {
+            if (amount < 100) {
                 e.preventDefault();
-                Swal.fire('Error', 'Minimum loan amount is KES 1,00', 'error');
+                Swal.fire('Error', 'Minimum loan amount is KES 100', 'error');
                 return false;
             }
 
@@ -851,43 +1045,34 @@
 
             if (repayPeriod > maxRepayPeriod) {
                 e.preventDefault();
-                Swal.fire('Error', `Repayment period (${repayPeriod} months) exceeds maximum allowed of ${maxRepayPeriod} months for this loan type`, 'error');
+                Swal.fire('Error', 'Repayment period (' + repayPeriod + ' months) exceeds maximum allowed of ' + maxRepayPeriod + ' months for this loan type', 'error');
                 return false;
             }
 
-            const purpose = $('#Purpose').val().trim();
+            var purpose = document.getElementById('Purpose').value.trim();
             if (!purpose) {
                 e.preventDefault();
                 Swal.fire('Error', 'Please enter the loan purpose', 'error');
                 return false;
             }
 
-            // Show loading on submit
-            const submitBtn = $('#submitBtn');
-            submitBtn.prop('disabled', true);
-            submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Processing...');
+            var submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
             return true;
         });
 
-        // Helper functions
         function escapeHtml(text) {
             if (!text) return '';
-            const div = document.createElement('div');
+            var div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        // Enter key to search
-        document.getElementById('searchInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                searchMembers();
-            }
-        });
-
-        // Auto-focus on search field
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('searchInput').focus();
+            populateLoanTypes(allLoanTypes);
         });
     </script>
 }

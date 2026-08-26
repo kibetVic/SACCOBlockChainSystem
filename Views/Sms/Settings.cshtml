@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "SMS Settings";
     Layout = "~/Views/Shared/_Layout.cshtml";
-    var companyName = ViewBag.CompanyName as string ?? "JUHUDI SACCO";
+    var companyName = ViewBag.CompanyName as string ?? " COMPANY ";
 }
 
 <div class="container-fluid py-4">
@@ -86,19 +86,21 @@
                                 <small class="text-muted">Select your SMS service provider</small>
                             </div>
                             <div class="col-md-6">
-                                <label asp-for="SenderId" class="form-label fw-bold">Sender ID / From</label>
+                                <label asp-for="SenderId" class="form-label fw-bold"> Sender ID / From </label>
                                 <div class="input-group">
-                                    <input asp-for="SenderId" class="form-control" placeholder="Auto-generated from company name" />
+                                    <input asp-for="SenderId" class="form-control" placeholder="Enter Sender ID" />
                                     <button type="button" class="btn btn-outline-secondary" onclick="resetToCompanyName()">
                                         <i class="bi bi-arrow-repeat"></i> Reset
                                     </button>
                                 </div>
                                 <span asp-validation-for="SenderId" class="text-danger"></span>
+
                                 <small class="text-muted">
                                     <i class="bi bi-building me-1"></i>
-                                    Based on company name: <strong id="companyNamePreview">@companyName</strong>
+                                    Based on company name:
+                                    <strong id="companyNamePreview">@companyName</strong>
                                     <br />
-                                    Max 11 characters, uppercase only
+                                    You can edit this value if needed.
                                 </small>
                             </div>
                         </div>
@@ -382,28 +384,24 @@
     <script>
         let currentCompanyName = '@companyName';
 
-        $(document).ready(function() {
-            // Toggle provider fields based on selection
-            const provider = $('#providerSelect').val();
-            toggleProviderFields(provider);
+        $(document).ready(function () {
 
-            $('#providerSelect').on('change', function() {
-                const selectedProvider = $(this).val();
-                toggleProviderFields(selectedProvider);
+            // Toggle provider fields
+            toggleProviderFields($('#providerSelect').val());
+
+            $('#providerSelect').on('change', function () {
+                toggleProviderFields($(this).val());
             });
 
-            // If Sender ID is empty, set from company name
-            if (!$('#SenderId').val()) {
+            // Set Sender ID only if it's empty
+            if (!$('#SenderId').val().trim()) {
                 resetToCompanyName();
             }
+
         });
 
         function resetToCompanyName() {
-            let senderId = currentCompanyName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-            if (senderId.length > 11) {
-                senderId = senderId.substring(0, 11);
-            }
-            $('#SenderId').val(senderId);
+            $('#SenderId').val(currentCompanyName);
         }
 
         function toggleProviderFields(provider) {

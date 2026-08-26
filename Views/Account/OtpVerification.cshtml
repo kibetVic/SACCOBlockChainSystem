@@ -1,0 +1,318 @@
+﻿<!-- Views/Account/OtpVerification.cshtml -->
+@model SACCOBlockChainSystem.Models.ViewModels.OtpVerificationViewModel
+
+@{
+    ViewData["Title"] = "OTP Verification";
+    Layout = "_Layout";
+}
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white text-center py-3">
+                    <h4 class="mb-0">
+                        <i class="fas fa-shield-alt me-2"></i>OTP Verification
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+
+                    <!-- Success Message Section -->
+                    @if (TempData["SuccessMessage"] != null)
+                    {
+                        <div class="alert alert-success alert-dismissible fade show" role="alert" id="successAlert">
+                            <i class="fas fa-check-circle me-2"></i>
+                            @TempData["SuccessMessage"]
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    }
+
+                    <!-- Error Message Section -->
+                    @if (TempData["ErrorMessage"] != null)
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert" id="errorAlert">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            @TempData["ErrorMessage"]
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    }
+
+                    <!-- Email Sent Notification (from controller) -->
+                    @if (TempData["EmailSentMessage"] != null)
+                    {
+                        <div class="alert alert-info alert-dismissible fade show" role="alert" id="emailSentAlert">
+                            <i class="fas fa-envelope me-2"></i>
+                            @TempData["EmailSentMessage"]
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    }
+
+                    <div class="text-center mb-4">
+                        <div class="otp-icon mb-3">
+                            <i class="fas fa-lock text-primary" style="font-size: 4rem;"></i>
+                        </div>
+                        <h5 class="text-muted">Enter OTP to Access Pending Disbursements</h5>
+                        <p class="text-muted small">
+                            A One-Time Password has been sent to your registered email.
+                            <br />
+                            <span id="otpTimer" class="fw-bold text-primary">
+                                Expires in: <span id="timerDisplay">--:--</span>
+                            </span>
+                        </p>
+                        @if (!string.IsNullOrEmpty(Model.UserName))
+                        {
+                            @* <p class="text-muted small">
+                                <i class="fas fa-user me-1"></i> User: <strong>@Model.UserName</strong>
+                            </p> *@
+                        }
+                    </div>
+
+                    <form asp-action="ValidateOtp" asp-controller="Account" method="post" id="otpForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="ReturnUrl" />
+                        <input type="hidden" asp-for="UserId" />
+                        <input type="hidden" asp-for="UserName" />
+
+                        @if (ViewBag.ReturnUrl != null)
+                        {
+                            <input type="hidden" id="returnUrl" value="@ViewBag.ReturnUrl" />
+                        }
+
+                        <div class="mb-4">
+                            <div class="form-floating">
+                                <input asp-for="Otp" class="form-control form-control-lg text-center"
+                                       placeholder="Enter 6-digit OTP" maxlength="6"
+                                       autocomplete="off" id="otpInput"
+                                       style="letter-spacing: 8px; font-size: 1.5rem; font-weight: bold;" />
+                                <label asp-for="Otp">6-Digit OTP</label>
+                            </div>
+                            <span asp-validation-for="Otp" class="text-danger small"></span>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg" id="verifyBtn">
+                                <i class="fas fa-check-circle me-2"></i>Verify & Access
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="text-center mt-4">
+                        <hr />
+                        <div class="d-flex justify-content-between align-items-center">
+                            <button type="button" class="btn btn-link text-decoration-none" id="resendOtpBtn">
+                                <i class="fas fa-redo me-1"></i>Resend OTP
+                            </button>
+                            <a asp-action="AllLoans" asp-controller="LoanMvc" class="btn btn-link text-decoration-none">
+                                <i class="fas fa-arrow-left me-1"></i>Back
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function() {
+            let timerInterval;
+            let remainingSeconds = @Model.RemainingSeconds;
+            let isSubmitting = false;
+
+            // ============================================================
+            // AUTO-DISMISS ALERTS AFTER 3 SECONDS
+            // ============================================================
+            function autoDismissAlerts() {
+                // Success Alert - dismiss after 3 seconds
+                var successAlert = document.getElementById('successAlert');
+                if (successAlert) {
+                    setTimeout(function() {
+                        $(successAlert).fadeOut('slow', function() {
+                            $(this).remove();
+                        });
+                    }, 3000);
+                }
+
+                // Error Alert - dismiss after 5 seconds (longer for errors)
+                var errorAlert = document.getElementById('errorAlert');
+                if (errorAlert) {
+                    setTimeout(function() {
+                        $(errorAlert).fadeOut('slow', function() {
+                            $(this).remove();
+                        });
+                    }, 5000);
+                }
+
+                // Email Sent Alert - dismiss after 3 seconds
+                var emailSentAlert = document.getElementById('emailSentAlert');
+                if (emailSentAlert) {
+                    setTimeout(function() {
+                        $(emailSentAlert).fadeOut('slow', function() {
+                            $(this).remove();
+                        });
+                    }, 3000);
+                }
+            }
+
+            // Call auto-dismiss on page load
+            autoDismissAlerts();
+
+            // Log initial remaining seconds
+            console.log('Initial remaining seconds:', remainingSeconds);
+
+            // Focus on OTP input
+            $('#otpInput').focus();
+
+            // Show initial timer state
+            if (remainingSeconds <= 0) {
+                $('#timerDisplay').text('Expired');
+                $('#timerDisplay').removeClass('text-primary').addClass('text-danger');
+                $('#verifyBtn').prop('disabled', true);
+                $('#otpInput').prop('disabled', true);
+                showAlert('error', 'OTP has expired. Please click "Resend OTP" to get a new one.');
+            }
+
+            // Start timer function
+            function startTimer() {
+                if (remainingSeconds <= 0) {
+                    $('#timerDisplay').text('Expired');
+                    $('#timerDisplay').removeClass('text-primary').addClass('text-danger');
+                    $('#verifyBtn').prop('disabled', true);
+                    $('#otpInput').prop('disabled', true);
+                    clearInterval(timerInterval);
+                    showAlert('error', 'OTP has expired. Please click "Resend OTP" to get a new one.');
+                    return;
+                }
+
+                const minutes = Math.floor(remainingSeconds / 60);
+                const seconds = remainingSeconds % 60;
+                const displayText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                $('#timerDisplay').text(displayText);
+                remainingSeconds--;
+            }
+
+            // Start the timer immediately if there are remaining seconds
+            if (remainingSeconds > 0) {
+                startTimer();
+                timerInterval = setInterval(startTimer, 1000);
+            } else {
+                $('#timerDisplay').text('Expired');
+                $('#timerDisplay').removeClass('text-primary').addClass('text-danger');
+                $('#verifyBtn').prop('disabled', true);
+                $('#otpInput').prop('disabled', true);
+            }
+
+            // Auto-submit when 6 digits are entered
+            $('#otpInput').on('input', function() {
+                // Only allow digits
+                $(this).val($(this).val().replace(/[^0-9]/g, ''));
+
+                if ($(this).val().length === 6 && !isSubmitting && remainingSeconds > 0) {
+                    setTimeout(function() {
+                        $('#otpForm').submit();
+                    }, 100);
+                }
+            });
+
+            // Handle form submission
+            $('#otpForm').on('submit', function(e) {
+                if (isSubmitting) {
+                    e.preventDefault();
+                    return false;
+                }
+
+                var otp = $('#otpInput').val();
+
+                if (!otp || otp.length !== 6) {
+                    e.preventDefault();
+                    showAlert('error', 'Please enter a valid 6-digit OTP.');
+                    return false;
+                }
+
+                if (remainingSeconds <= 0) {
+                    e.preventDefault();
+                    showAlert('error', 'OTP has expired. Please click "Resend OTP" to get a new one.');
+                    return false;
+                }
+
+                isSubmitting = true;
+                $('#verifyBtn').prop('disabled', true);
+                $('#verifyBtn').html('<i class="fas fa-spinner fa-spin me-2"></i>Verifying...');
+
+                return true;
+            });
+
+            // Resend OTP
+            $('#resendOtpBtn').on('click', function() {
+                const userId = $('#UserId').val();
+                if (!userId) {
+                    showAlert('error', 'User ID not found. Please try again.');
+                    return;
+                }
+
+                $(this).prop('disabled', true);
+                $(this).html('<i class="fas fa-spinner fa-spin me-1"></i>Sending...');
+
+                $.ajax({
+                    url: '@Url.Action("ResendOtp", "Account")',
+                    type: 'POST',
+                    data: { userId: userId },
+                    headers: {
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            showAlert('success', response.message);
+                            // Reset timer with the new remaining seconds
+                            remainingSeconds = response.remainingSeconds || 300;
+                            $('#verifyBtn').prop('disabled', false);
+                            $('#otpInput').prop('disabled', false);
+                            $('#otpInput').val('');
+                            $('#otpInput').focus();
+                            $('#timerDisplay').removeClass('text-danger').addClass('text-primary');
+                            clearInterval(timerInterval);
+                            isSubmitting = false;
+                            // Start the timer immediately
+                            startTimer();
+                            timerInterval = setInterval(startTimer, 1000);
+                        } else {
+                            showAlert('error', response.message);
+                            isSubmitting = false;
+                        }
+                    },
+                    error: function() {
+                        showAlert('error', 'Failed to resend OTP. Please try again.');
+                        isSubmitting = false;
+                    },
+                    complete: function() {
+                        $('#resendOtpBtn').prop('disabled', false);
+                        $('#resendOtpBtn').html('<i class="fas fa-redo me-1"></i>Resend OTP');
+                    }
+                });
+            });
+
+            function showAlert(type, message) {
+                $('.alert').remove();
+
+                const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+                const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+                const alertHtml = `
+                    <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+                        <i class="fas ${icon} me-2"></i>${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                `;
+                $('.card-body').prepend(alertHtml);
+
+                // Auto-dismiss the alert after 3 seconds for success, 5 seconds for error
+                setTimeout(function() {
+                    $('.alert').fadeOut('slow', function() {
+                        $(this).remove();
+                    });
+                }, type === 'success' ? 3000 : 5000);
+            }
+        });
+    </script>
+}

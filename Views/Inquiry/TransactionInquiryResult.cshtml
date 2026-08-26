@@ -68,7 +68,6 @@
                         <th class="text-end">Credit (Withdrawals)</th>
                         <th class="text-end">Balance</th>
                         <th>Reference</th>
-                        <th>Blockchain Tx</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -95,7 +94,6 @@
                             <td class="text-end text-danger">@(trans.Credit > 0 ? trans.Credit.ToString("N2") : "-")</td>
                             <td class="text-end">@trans.Balance.ToString("N2")</td>
                             <td>@trans.Reference</td>
-                            <td><code>@(trans.BlockchainTxId?.Substring(0, Math.Min(8, trans.BlockchainTxId.Length)) ?? "N/A")...</code></td>
                         </tr>
                     }
                 </tbody>

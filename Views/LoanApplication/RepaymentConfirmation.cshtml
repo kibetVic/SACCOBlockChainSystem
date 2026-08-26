@@ -1,0 +1,90 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.RepaymentConfirmationViewModel
+@{
+    ViewData["Title"] = "Repayment Confirmation";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fa fa-check-circle text-success" style="font-size: 80px;"></i>
+                    </div>
+                    <h2 class="text-success">Payment Successful!</h2>
+                    <p class="lead">Your loan repayment has been processed successfully.</p>
+
+                    <div class="alert alert-info mt-4">
+                        <h4>Receipt No: <strong>@Model.ReceiptNo</strong></h4>
+                        <small>Transaction Reference: @Model.TransactionReference</small>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <small class="text-muted">Amount Paid</small>
+                                    <h4 class="text-success">@Math.Round(Model.AmountPaid, 0).ToString("N0") KES</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <small class="text-muted">New Balance</small>
+                                    <h4 class="text-primary">@Math.Round(Model.NewBalance, 0).ToString("N0") KES</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-2">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <small class="text-muted">Principal Paid</small>
+                                    <h5>@Math.Round(Model.PrincipalPaid, 0).ToString("N0") KES</h5>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <small class="text-muted">Interest Paid</small>
+                                    <h5>@Math.Round(Model.InterestPaid, 0).ToString("N0") KES</h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (Model.IsFullyPaid)
+                    {
+                        <div class="alert alert-success mt-3">
+                            <i class="fa fa-trophy"></i> Congratulations! Your loan is now fully paid.
+                        </div>
+                    }
+
+                    <div class="mt-4">
+                        <a href="@Url.Action("Details", new { loanNo = Model.LoanNo })" class="btn btn-info">
+                            <i class="fa fa-eye"></i> View Loan Details
+                        </a>
+                        <a href="@Url.Action("MyLoans")" class="btn btn-primary">
+                            <i class="fa fa-folder-open"></i> My Loans
+                        </a>
+                        <a href="@Url.Action("RepaymentHistory", new { loanNo = Model.LoanNo })" class="btn btn-secondary">
+                            <i class="fa fa-history"></i> Payment History
+                        </a>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.BlockchainTxId))
+                    {
+                        <div class="alert alert-secondary mt-3 small">
+                            <i class="fa fa-link"></i> Blockchain TX: @Model.BlockchainTxId
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

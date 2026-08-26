@@ -66,7 +66,7 @@ namespace SACCOBlockChainSystem.Services
                     LoanCode = loanTypeDto.LoanCode,
                     LoanType1 = loanTypeDto.LoanType,
                     ValueChain = loanTypeDto.ValueChain,
-                    LoanProduct = loanTypeDto.LoanProduct,
+                    LoanProduct = loanTypeDto.LoanType,
                     LoanAcc = loanTypeDto.LoanAcc,
                     InterestAcc = loanTypeDto.InterestAcc,
                     PenaltyAcc = loanTypeDto.PenaltyAcc,
@@ -83,6 +83,10 @@ namespace SACCOBlockChainSystem.Services
                     Bridging = loanTypeDto.Bridging ? 1 : 0,
                     SelfGuarantee = loanTypeDto.SelfGuarantee,
                     MobileLoan = loanTypeDto.MobileLoan,
+                    InterestUpront = loanTypeDto.InterestUpront,
+                    IsProject = loanTypeDto.IsProject,
+                    IsTopUp = loanTypeDto.IsTopUp,
+                    MobileLoanApproval = loanTypeDto.MobileLoanApproval,
                     Ppacc = loanTypeDto.Ppacc ?? string.Empty,
                     ContraAccount = loanTypeDto.ContraAccount ?? string.Empty,
                     Priority = loanTypeDto.Priority,
@@ -159,7 +163,11 @@ namespace SACCOBlockChainSystem.Services
                         loanType.RepayPeriod,
                         loanType.Interest,
                         loanType.Bridging,
+                        loanType.LoanProduct,
                         loanType.MobileLoan,
+                        loanType.InterestUpront,
+                        loanType.IsProject,
+                        loanType.IsTopUp,
                         loanType.Priority,
                         loanType.Guarantor,
                         loanType.SelfGuarantee,
@@ -216,6 +224,7 @@ namespace SACCOBlockChainSystem.Services
                     loanTypeName = loanType.LoanType1,
                     maxAmount = loanType.MaxAmount,
                     repayPeriod = loanType.RepayPeriod,
+                    loanproduct = loanType.LoanProduct,
                     interest = loanType.Interest,
                     guarantor = loanType.Guarantor,
                     selfGuarantee = loanType.SelfGuarantee,
@@ -224,6 +233,9 @@ namespace SACCOBlockChainSystem.Services
                     repayMethod = loanType.Repaymethod,
                     bridging = loanType.Bridging,
                     mobileLoan = loanType.MobileLoan,
+                    interestUpront = loanType.InterestUpront,
+                    isProject = loanType.IsProject,
+                    IsTopUp = loanType.IsTopUp,
                     priority = loanType.Priority,
                     maxLoans = loanType.MaxLoans,
                     loanAccount = loanType.LoanAcc,
@@ -261,6 +273,9 @@ namespace SACCOBlockChainSystem.Services
                     loanType.Bridging,
                     loanType.SelfGuarantee,
                     loanType.MobileLoan,
+                    loanType.InterestUpront,
+                    loanType.IsProject,
+                    loanType.IsTopUp,
                     loanType.Ppacc,
                     loanType.ContraAccount,
                     loanType.Priority,
@@ -423,6 +438,9 @@ namespace SACCOBlockChainSystem.Services
                     loanType.Bridging,
                     loanType.SelfGuarantee,
                     loanType.MobileLoan,
+                    loanType.InterestUpront,
+                    loanType.IsProject,
+                    loanType.IsTopUp,
                     loanType.Ppacc,
                     loanType.ContraAccount,
                     loanType.Priority,
@@ -445,7 +463,7 @@ namespace SACCOBlockChainSystem.Services
                 // Update loan type fields (all fields are updatable)
                 loanType.LoanType1 = loanTypeDto.LoanType;
                 loanType.ValueChain = loanTypeDto.ValueChain;
-                loanType.LoanProduct = loanTypeDto.LoanProduct;
+                loanType.LoanProduct = loanTypeDto.LoanType;
                 loanType.LoanAcc = loanTypeDto.LoanAcc;
                 loanType.InterestAcc = loanTypeDto.InterestAcc;
                 loanType.PenaltyAcc = loanTypeDto.PenaltyAcc;
@@ -455,17 +473,18 @@ namespace SACCOBlockChainSystem.Services
                 loanType.Guarantor = loanTypeDto.Guarantor;
                 loanType.UseintRange = loanTypeDto.UseIntRange;
                 loanType.EarningRation = loanTypeDto.EarningRatio;
-
-                // IMPORTANT: Use AttractsPenalty from DTO, not Penalty
                 bool attractsPenaltyFlag = loanTypeDto.AttractsPenalty || loanTypeDto.Penalty;
                 loanType.Penalty = attractsPenaltyFlag ? 1 : 0;
-
                 loanType.Processingfee = loanTypeDto.ProcessingFee;
                 loanType.GracePeriod = loanTypeDto.GracePeriod;
                 loanType.Repaymethod = loanTypeDto.RepayMethod;
                 loanType.Bridging = loanTypeDto.Bridging ? 1 : 0;
                 loanType.SelfGuarantee = loanTypeDto.SelfGuarantee;
                 loanType.MobileLoan = loanTypeDto.MobileLoan;
+                loanType.InterestUpront = loanTypeDto.InterestUpront;
+                loanType.IsProject = loanTypeDto.IsProject;
+                loanType.IsTopUp = loanTypeDto.IsTopUp;
+                loanType.MobileLoanApproval = loanTypeDto.MobileLoanApproval;
                 loanType.Ppacc = loanTypeDto.Ppacc ?? string.Empty;
                 loanType.ContraAccount = loanTypeDto.ContraAccount ?? string.Empty;
                 loanType.Priority = loanTypeDto.Priority;
@@ -564,6 +583,9 @@ namespace SACCOBlockChainSystem.Services
                     loanType.Bridging,
                     loanType.SelfGuarantee,
                     loanType.MobileLoan,
+                    loanType.InterestUpront,
+                    loanType.IsProject,
+                    loanType.IsTopUp,
                     loanType.Ppacc,
                     loanType.ContraAccount,
                     loanType.Priority,
@@ -624,6 +646,7 @@ namespace SACCOBlockChainSystem.Services
                 {
                     loanTypeCode = loanType.LoanCode,
                     loanTypeName = loanType.LoanType1,
+                    Loanproduct = loanType.LoanProduct,
                     usageCount = usageCount,
                     isUsed = isUsed,
                     note = isUsed ? "Changes will only affect NEW loan applications" : "Full update allowed",
@@ -637,6 +660,9 @@ namespace SACCOBlockChainSystem.Services
                     repayMethod = loanType.Repaymethod,
                     bridging = loanType.Bridging,
                     mobileLoan = loanType.MobileLoan,
+                    interestUpront = loanType.InterestUpront,
+                    isProject = loanType.IsProject,
+                    IsTopUp = loanType.IsTopUp,
                     priority = loanType.Priority,
                     maxLoans = loanType.MaxLoans,
                     oldApprovalStatus = oldApprovalStatus,
@@ -678,6 +704,9 @@ namespace SACCOBlockChainSystem.Services
                     loanType.Bridging,
                     loanType.SelfGuarantee,
                     loanType.MobileLoan,
+                    loanType.InterestUpront,
+                    loanType.IsProject,
+                    loanType.IsTopUp,
                     loanType.Ppacc,
                     loanType.ContraAccount,
                     loanType.Priority,
@@ -748,70 +777,6 @@ namespace SACCOBlockChainSystem.Services
                 return Guid.NewGuid().ToString().Replace("-", "");
             }
         }        
-
-        //public async Task<LoanTypeResponseDTO> ApproveLoanTypeAsync(string loanCode, string companyCode, string approvedBy)
-        //{
-        //    _logger.LogInformation($"Approving loan type: {loanCode}");
-
-        //    using var transaction = await _context.Database.BeginTransactionAsync();
-
-        //    try
-        //    {
-        //        var loanType = await _context.Loantypes
-        //            .FirstOrDefaultAsync(lt => lt.LoanCode == loanCode &&
-        //                                      lt.CompanyCode == companyCode);
-
-        //        if (loanType == null)
-        //        {
-        //            throw new KeyNotFoundException($"Loan type '{loanCode}' not found");
-        //        }
-
-        //        if (loanType.ApprovalStatus == "Approved")
-        //        {
-        //            throw new ValidationException($"Loan type '{loanCode}' is already approved");
-        //        }
-
-        //        // Update status to Approved
-        //        loanType.ApprovalStatus = "Approved";
-        //        loanType.AuditId = approvedBy;
-        //        loanType.AuditTime = DateTime.Now;
-        //        loanType.AuditDateTime = DateTime.Now;
-
-        //        await _context.SaveChangesAsync();
-
-        //        // Create blockchain transaction for approval
-        //        var blockchainData = new
-        //        {
-        //            LoanTypeCode = loanType.LoanCode,
-        //            LoanTypeName = loanType.LoanType1,
-        //            CompanyCode = loanType.CompanyCode,
-        //            ApprovedBy = approvedBy,
-        //            ApprovedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-        //            PreviousStatus = "Pending",
-        //            NewStatus = "Approved"
-        //        };
-
-        //        var blockchainTx = await _blockchainService.CreateAndAddTransactionAsync(
-        //            "LOAN_TYPE_APPROVE",
-        //            approvedBy ?? "SYSTEM",
-        //            loanType.CompanyCode,
-        //            0,
-        //            loanType.LoanCode,
-        //            blockchainData
-        //        );
-
-        //        await transaction.CommitAsync();
-        //        _logger.LogInformation($"Loan type {loanCode} approved successfully");
-
-        //        return await GetLoanTypeResponseDto(loanType);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        await transaction.RollbackAsync();
-        //        _logger.LogError(ex, $"Error approving loan type {loanCode}");
-        //        throw;
-        //    }
-        //}
 
 
         public async Task<LoanTypeResponseDTO> ApproveLoanTypeAsync( string loanCode, string companyCode,string approvedBy)
@@ -1000,30 +965,6 @@ namespace SACCOBlockChainSystem.Services
             return result;
         }
 
-        //public async Task<List<LoanTypeSimpleDTO>> GetActiveLoanTypesAsync(string companyCode)
-        //{
-        //    return await _context.Loantypes
-        //        .Where(lt => lt.CompanyCode == companyCode &&
-        //                    lt.ApprovalStatus == "Approved")
-        //        .OrderBy(lt => lt.Priority)
-        //        .Select(lt => new LoanTypeSimpleDTO
-        //        {
-        //            LoanCode = lt.LoanCode,
-        //            LoanType = lt.LoanType1,
-        //            MaxAmount = lt.MaxAmount,
-        //            RepayPeriod = lt.RepayPeriod,
-        //            Interest = lt.Interest,
-        //            Guarantor = lt.Guarantor,
-        //            ProcessingFee = lt.Processingfee.ToString(),
-        //            Bridging = lt.Bridging == 0,
-        //            MobileLoan = lt.MobileLoan ?? false,
-        //            SelfGuarantee = lt.SelfGuarantee.ToString(),
-        //            Priority = lt.Priority ?? 1,
-        //            IsEligible = true
-        //        })
-        //        .ToListAsync();
-        //}
-
         public async Task<List<LoanTypeResponseDTO>> SearchLoanTypesAsync(string searchTerm, string companyCode)
         {
             var query = _context.Loantypes
@@ -1185,6 +1126,9 @@ namespace SACCOBlockChainSystem.Services
                     ProcessingFee = loanType.Processingfee?.ToString(),
                     Bridging = loanType.Bridging == 0,
                     MobileLoan = loanType.MobileLoan ?? false,
+                    InterestUpront = loanType.InterestUpront ?? false,
+                    IsProject = loanType.IsProject ?? false,
+                    IsTopUp = loanType.IsTopUp ?? false,
                     SelfGuarantee = loanType.SelfGuarantee?.ToString(),
                     Priority = loanType.Priority ?? 1,
                     IsEligible = isEligible,
@@ -1289,6 +1233,10 @@ namespace SACCOBlockChainSystem.Services
                 Bridging = loanType.Bridging == 1,  // Returns true if bridging is allowed
                 SelfGuarantee = loanType.SelfGuarantee ?? false,
                 MobileLoan = loanType.MobileLoan ?? false,
+                InterestUpront = loanType.InterestUpront ?? false,
+                IsProject = loanType.IsProject ?? false,
+                IsTopUp = loanType.IsTopUp ?? false,
+                MobileLoanApproval = loanType.MobileLoanApproval ?? false,
                 Ppacc = loanType.Ppacc,
                 ContraAccount = loanType.ContraAccount,
                 MaxLoans = loanType.MaxLoans,
@@ -1330,6 +1278,9 @@ namespace SACCOBlockChainSystem.Services
                         lt.Interest,
                         lt.Bridging,
                         lt.MobileLoan,
+                        lt.InterestUpront,
+                        lt.IsProject,
+                        lt.IsTopUp,
                         lt.Priority,
                         lt.Guarantor,
                         lt.SelfGuarantee,
@@ -1357,13 +1308,15 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
+
+        //check the code to save the Glcode or accno and not Glaccname
         private async Task ValidateAccountsExist(LoanTypeCreateDTO loanTypeDto)
         {
             // Check if loan account exists (still required)
             if (!string.IsNullOrEmpty(loanTypeDto.LoanAcc))
             {
                 var loanAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(a => a.Glaccname == loanTypeDto.LoanAcc &&
+                    .FirstOrDefaultAsync(a => a.Glcode == loanTypeDto.LoanAcc &&
                                              a.CompanyCode == loanTypeDto.CompanyCode);
                 if (loanAccount == null)
                     throw new ValidationException($"Loan account '{loanTypeDto.LoanAcc}' does not exist");
@@ -1373,7 +1326,7 @@ namespace SACCOBlockChainSystem.Services
             if (!string.IsNullOrEmpty(loanTypeDto.InterestAcc))
             {
                 var interestAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(a => a.Glaccname == loanTypeDto.InterestAcc &&
+                    .FirstOrDefaultAsync(a => a.Glcode == loanTypeDto.InterestAcc &&
                                              a.CompanyCode == loanTypeDto.CompanyCode);
                 if (interestAccount == null)
                     throw new ValidationException($"Interest account '{loanTypeDto.InterestAcc}' does not exist");
@@ -1383,7 +1336,7 @@ namespace SACCOBlockChainSystem.Services
             if (!string.IsNullOrEmpty(loanTypeDto.PenaltyAcc))
             {
                 var penaltyAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(a => a.Glaccname == loanTypeDto.PenaltyAcc &&
+                    .FirstOrDefaultAsync(a => a.Glcode == loanTypeDto.PenaltyAcc &&
                                              a.CompanyCode == loanTypeDto.CompanyCode);
                 if (penaltyAccount == null)
                     throw new ValidationException($"Penalty account '{loanTypeDto.PenaltyAcc}' does not exist");
@@ -1393,7 +1346,7 @@ namespace SACCOBlockChainSystem.Services
             if (!string.IsNullOrEmpty(loanTypeDto.Ppacc))
             {
                 var ppAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(a => a.Glaccname == loanTypeDto.Ppacc &&
+                    .FirstOrDefaultAsync(a => a.Glcode == loanTypeDto.Ppacc &&
                                              a.CompanyCode == loanTypeDto.CompanyCode);
                 if (ppAccount == null)
                     throw new ValidationException($"PP account '{loanTypeDto.Ppacc}' does not exist");
@@ -1403,7 +1356,7 @@ namespace SACCOBlockChainSystem.Services
             if (!string.IsNullOrEmpty(loanTypeDto.ContraAccount))
             {
                 var contraAccount = await _context.GlSetup
-                    .FirstOrDefaultAsync(a => a.Glaccname == loanTypeDto.ContraAccount &&
+                    .FirstOrDefaultAsync(a => a.Glcode == loanTypeDto.ContraAccount &&
                                              a.CompanyCode == loanTypeDto.CompanyCode);
                 if (contraAccount == null)
                     throw new ValidationException($"Contra account '{loanTypeDto.ContraAccount}' does not exist");
@@ -1602,6 +1555,9 @@ namespace SACCOBlockChainSystem.Services
                     loanType.Interest,
                     loanType.Bridging,
                     loanType.MobileLoan,
+                    loanType.InterestUpront,
+                    loanType.IsProject,
+                    loanType.IsTopUp,
                     loanType.Priority,
                     loanType.Guarantor,
                     loanType.SelfGuarantee,

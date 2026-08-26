@@ -1,0 +1,250 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@model Member
+@{
+}
+
+<div>
+    <div class="card-body">
+        <div class="row">
+            <!-- LEFT SIDE - Form Fields -->
+            <div class="col-md-8">
+                <!-- Basic Information Row -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label>Member Number</label>
+                        <input type="text" id="DisplayMemberNo" value="@Model.MemberNo" class="form-control" />
+                        <small class="text-muted">Auto-generated, can be edited for new members</small>
+                        <span id="memberNoError" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="required">ID Number *</label>
+                        <input type="text" id="IdNo" value="@Model.Idno" class="form-control" maxlength="20" />
+                        <span id="idNoError" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label>Registration Date</label>
+                        <input type="date" id="RegistrationDate" value="@Model.EffectDate" class="form-control" />
+                        <span id="regDateError" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- Name Row -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="required">Surname *</label>
+                        <input type="text" id="Surname" value="@Model.Surname" class="form-control" />
+                        <span id="surnameError" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="required">Other Names *</label>
+                        <input type="text" id="OtherNames" value="@Model.OtherNames" class="form-control" />
+                        <span id="othernamesError" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- Contact Row -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="required">Phone Number *</label>
+                        <input type="tel" id="PhoneNo" value="@Model.PhoneNo" class="form-control" placeholder="0712345678" />
+                        <span id="phoneError" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label>Landline</label>
+                        <input type="tel" id="LandLine" class="form-control" placeholder="0201234567" />
+                    </div>
+                    <div class="col-md-4">
+                        <label>Email</label>
+                        <input type="email" id="Email" value="@Model.Email" class="form-control" placeholder="member@example.com" />
+                        <span id="emailError" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- Personal Details Row -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label>Gender</label>
+                        <select id="Gender" class="form-control">
+                            <option value="">Select</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label>Date of Birth</label>
+                        <input type="date" id="DateOfBirth" value="@Model.Dob" class="form-control" />
+                        <span id="ageError" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-2">
+                        <label>Age</label>
+                        <input type="number" id="Age" value="@Model.Age" class="form-control" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label>Marital Status</label>
+                        <select id="MaritalStatus" class="form-control">
+                            <option value="">Select</option>
+                            <option value="Single">Single</option>
+                            <option value="Married">Married</option>
+                            <option value="Divorced">Divorced</option>
+                            <option value="Widowed">Widowed</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Location Row -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label>Department</label>
+                        <input type="text" id="Department" value="@Model.Dept" class="form-control" />
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <label>Present Address</label>
+                        <textarea id="PresentAddress" class="form-control" value="@Model.HomeAddr" rows="1"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT SIDE - Checkboxes and Dropdowns -->
+            <div class="col-md-4">
+                <div class="card bg-light mb-3">
+                    <div class="card-header bg-secondary text-white">
+                        <h6 class="mb-0"><i class="fas fa-check-square"></i> Membership Settings</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label>Member Status</label>
+                            <select id="Status" class="form-control">
+                                <option value="Active">Active</option>
+                                <option value="Withdrawn">Withdrawn</option>
+                                <option value="Deceased">Deceased</option>
+                                <option value="Dormant">Dormant</option>
+                                <option value="Suspended">Suspended</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Membership Type</label><br />
+                            <div class="form-check form-check-inline">
+                                <input type="radio" id="MembershipType_Individual" name="MembershipType" value="Individual" class="form-check-input" checked />
+                                <label class="form-check-label" for="MembershipType_Individual">Individual</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input type="radio" id="MembershipType_Corporate" name="MembershipType" value="Corporate" class="form-check-input" />
+                                <label class="form-check-label" for="MembershipType_Corporate">Corporate</label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Registration Type</label><br />
+                            <div class="form-check form-check-inline">
+                                <input type="radio" id="RegistrationType_Ordinary" name="RegistrationType" value="Ordinary Member" class="form-check-input" checked />
+                                <label class="form-check-label" for="RegistrationType_Ordinary">Ordinary Member</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input type="radio" id="RegistrationType_Board" name="RegistrationType" value="Board Member" class="form-check-input" />
+                                <label class="form-check-label" for="RegistrationType_Board">Board Member</label>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            @if (Model.Wallet == null)
+                            {
+                                <button type="button" class="btn btn-primary" id="btnSave">
+                                    <i class="fas fa-save"></i> Create Wallet
+                                </button>
+                            }
+                            else
+                            {
+                                <a type="button" class="btn btn-secondary" id="btnview" asp-action="ViewWallet" asp-route-mno="@Model.MemberNo">
+                                    <i class="fas fa-save"></i> View Wallet
+                                </a>
+                            }
+
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@section Scripts{
+    <script>
+         $(document).ready(function() {
+            $('#btnSave').on('click', function() {
+                saveMemberWallet();
+            });
+         })
+
+         function saveMemberWallet() {
+            console.log("SAVE clicked → calling CREATE");
+
+           // if (!validateForm()) return;
+
+            showLoading(true);
+
+            
+
+            $.ajax({
+                url: '/Wallet/RegisterMemberWallet?id=@Model.Id&mno=@Model.MemberNo',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({}),
+
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+
+                success: function (response) {
+                    showLoading(false);
+                    console.log('Create response:', response);
+
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+
+                error: function (xhr) {
+                    showLoading(false);
+                    console.error('Create error:', xhr.responseText);
+
+                    let errorMsg = 'Error creating member';
+
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+
+                    showNotification(errorMsg, 'error');
+                }
+            });
+        }
+        function showNotification(message, type) {
+            const alertDiv = $(`
+                <div class="alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed top-0 end-0 m-3"
+                     style="z-index: 9999; min-width: 300px;" role="alert">
+                    <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info'} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `);
+            $('body').append(alertDiv);
+            setTimeout(() => alertDiv.fadeOut('slow', function() { $(this).remove(); }), 5000);
+        }
+        function showLoading(show) {
+            if (show) {
+                $('#loadingOverlay').fadeIn(200);
+            } else {
+                $('#loadingOverlay').fadeOut(200);
+            }
+        }
+       
+
+    </script>
+}
+                              

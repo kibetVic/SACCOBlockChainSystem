@@ -17,6 +17,7 @@ namespace SACCOBlockChainSystem.Services
         Task<LoanInquiryResponseDTO> GetLoanInquiryAsync(string memberNo, string companyCode, string userId);
         Task<TransactionInquiryResponseDTO> GetTransactionInquiryAsync(string memberNo, string companyCode, string userId);
         Task<MemberSearchResponseDTO> SearchMembersAsync(MemberSearchDTO searchDto, string companyCode, string userId);
+        Task<LoanRepaymentHistoryDTO> GetLoanRepaymentHistoryAsync(string memberNo, string loanNo, string companyCode, string userId);
     }
 
     public class InquiryService : IInquiryService
@@ -119,26 +120,49 @@ namespace SACCOBlockChainSystem.Services
                 throw new Exception($"Member {memberNo} not found");
             }
 
-            // Get all share contributions grouped by share type
-            var shareContributions = await _context.ContribShares
-                .Where(cs => cs.MemberNo == memberNo && cs.CompanyCode == companyCode)
-                .Include(cs => cs.SharescodeNavigation)
-                .OrderByDescending(cs => cs.ContrDate)
+            // Get valid share types for this company
+            var validShareTypes = await _context.Sharetypes
+                .Where(st => st.CompanyCode == companyCode)
+                .Select(st => st.SharesCode)
                 .ToListAsync();
 
-            // Get share purchases from Contrib table
-            var sharePurchases = await _context.Contribs
-                .Where(c => c.MemberNo == memberNo && c.CompanyCode == companyCode && c.Sharescode != null)
-                .Include(c => c.SharescodeNavigation)
-                .OrderByDescending(c => c.ContrDate)
+            // Get from ContribShares - ONLY where Sharescode exists in Sharetypes
+            var shareContributions = await _context.ContribShares
+                .Where(cs => cs.MemberNo == memberNo
+                    && cs.CompanyCode == companyCode
+                    && cs.Sharescode != null
+                    && validShareTypes.Contains(cs.Sharescode))  // Strict validation
+                .Include(cs => cs.SharescodeNavigation)
                 .ToListAsync();
+
+            // Get from Contribs - ONLY where Sharescode exists in Sharetypes
+            var sharePurchases = await _context.Contribs
+                .Where(c => c.MemberNo == memberNo
+                    && c.CompanyCode == companyCode
+                    && c.Sharescode != null
+                    && validShareTypes.Contains(c.Sharescode))  // Strict validation
+                .Include(c => c.SharescodeNavigation)
+                .ToListAsync();
+
+            // Create a set of receipt numbers that exist in ContribShares (primary source)
+            var contribSharesReceipts = new HashSet<string>(shareContributions
+                .Where(cs => !string.IsNullOrEmpty(cs.ReceiptNo))
+                .Select(cs => cs.ReceiptNo));
+
+            // Filter out purchases that have matching receipts in ContribShares
+            var filteredPurchases = sharePurchases
+                .Where(cp => string.IsNullOrEmpty(cp.ReceiptNo) || !contribSharesReceipts.Contains(cp.ReceiptNo))
+                .ToList();
 
             // Calculate totals by share type
             var shareTypeSummaries = new Dictionary<string, ShareTypeSummaryDTO>();
 
+            // Process ContribShares first (primary source)
             foreach (var cs in shareContributions)
             {
-                var code = cs.Sharescode ?? "Unknown";
+                var code = cs.Sharescode;
+                if (string.IsNullOrEmpty(code) || !validShareTypes.Contains(code)) continue; // Skip invalid
+
                 if (!shareTypeSummaries.ContainsKey(code))
                 {
                     shareTypeSummaries[code] = new ShareTypeSummaryDTO
@@ -156,30 +180,41 @@ namespace SACCOBlockChainSystem.Services
                     };
                 }
 
+                var transactionTotal = (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0) +
+                                       (cs.RegFeeAmount ?? 0) + (cs.Donor ?? 0) +
+                                       (cs.LoanAmount ?? 0) + (cs.PassBookAmount ?? 0);
+
                 shareTypeSummaries[code].ShareCapital += cs.ShareCapitalAmount ?? 0;
                 shareTypeSummaries[code].Deposits += cs.DepositsAmount ?? 0;
                 shareTypeSummaries[code].RegFees += cs.RegFeeAmount ?? 0;
                 shareTypeSummaries[code].Donations += cs.Donor ?? 0;
                 shareTypeSummaries[code].LoanAllocations += cs.LoanAmount ?? 0;
                 shareTypeSummaries[code].PassBook += cs.PassBookAmount ?? 0;
-                shareTypeSummaries[code].TotalShares = shareTypeSummaries[code].ShareCapital + shareTypeSummaries[code].Deposits;
+                shareTypeSummaries[code].TotalShares += transactionTotal;
 
                 shareTypeSummaries[code].Transactions.Add(new ShareTransactionDetailDTO
                 {
                     TransactionDate = cs.ContrDate ?? DateTime.Now,
                     TransactionType = "Contribution",
-                    Amount = (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0),
+                    Amount = transactionTotal,
                     ShareCapital = cs.ShareCapitalAmount ?? 0,
                     Deposits = cs.DepositsAmount ?? 0,
+                    RegFees = cs.RegFeeAmount ?? 0,
+                    Donations = cs.Donor ?? 0,
+                    LoanAllocations = cs.LoanAmount ?? 0,
+                    PassBook = cs.PassBookAmount ?? 0,
                     ReceiptNo = cs.ReceiptNo,
                     Remarks = cs.Remarks,
                     BlockchainTxId = cs.BlockchainTxId
                 });
             }
 
-            foreach (var cp in sharePurchases)
+            // Process only unique purchases (those without matching receipts in ContribShares)
+            foreach (var cp in filteredPurchases)
             {
-                var code = cp.Sharescode ?? "Unknown";
+                var code = cp.Sharescode;
+                if (string.IsNullOrEmpty(code) || !validShareTypes.Contains(code)) continue; // Skip invalid
+
                 if (!shareTypeSummaries.ContainsKey(code))
                 {
                     shareTypeSummaries[code] = new ShareTypeSummaryDTO
@@ -197,15 +232,16 @@ namespace SACCOBlockChainSystem.Services
                     };
                 }
 
-                shareTypeSummaries[code].ShareCapital += cp.Amount ?? 0;
-                shareTypeSummaries[code].TotalShares = shareTypeSummaries[code].ShareCapital + shareTypeSummaries[code].Deposits;
+                var amount = cp.Amount ?? 0;
+                shareTypeSummaries[code].ShareCapital += amount;
+                shareTypeSummaries[code].TotalShares += amount;
 
                 shareTypeSummaries[code].Transactions.Add(new ShareTransactionDetailDTO
                 {
                     TransactionDate = cp.ContrDate ?? DateTime.Now,
-                    TransactionType = "Purchase",
-                    Amount = cp.Amount ?? 0,
-                    ShareCapital = cp.Amount ?? 0,
+                    TransactionType = "Share Purchase",
+                    Amount = amount,
+                    ShareCapital = amount,
                     Deposits = 0,
                     ReceiptNo = cp.ReceiptNo,
                     Remarks = cp.Remarks,
@@ -213,7 +249,7 @@ namespace SACCOBlockChainSystem.Services
                 });
             }
 
-            // Calculate shares locked for guarantees
+            // Calculate locked shares
             var lockedShares = await _context.Loanguar
                 .Where(lg => lg.MemberNo == memberNo && lg.CompanyCode == companyCode)
                 .SumAsync(lg => lg.Balance ?? 0);
@@ -221,7 +257,7 @@ namespace SACCOBlockChainSystem.Services
             var response = new ShareInquiryResponseDTO
             {
                 MemberNo = member.MemberNo,
-                MemberName = $"{member.Surname} {member.OtherNames}",
+                MemberName = $"{member.Surname} {member.OtherNames}".Trim(),
                 TotalShareBalance = shareTypeSummaries.Values.Sum(s => s.TotalShares),
                 TotalShareCapital = shareTypeSummaries.Values.Sum(s => s.ShareCapital),
                 TotalDeposits = shareTypeSummaries.Values.Sum(s => s.Deposits),
@@ -531,6 +567,249 @@ namespace SACCOBlockChainSystem.Services
                 PageSize = searchDto.PageSize,
                 TotalPages = (int)Math.Ceiling((double)totalCount / searchDto.PageSize),
                 Members = members,
+                InquiryTimestamp = DateTime.Now,
+                InquiredBy = userId
+            };
+
+            return response;
+        }
+
+        /// <summary>
+        /// Gets the complete repayment history for a specific loan with accurate balance tracking
+        /// </summary>
+        /// <param name="memberNo">The member number</param>
+        /// <param name="loanNo">The loan number</param>
+        /// <param name="companyCode">The company code</param>
+        /// <param name="userId">The user ID performing the inquiry</param>
+        /// <returns>LoanRepaymentHistoryDTO with full repayment details</returns>
+        public async Task<LoanRepaymentHistoryDTO> GetLoanRepaymentHistoryAsync(string memberNo, string loanNo, string companyCode, string userId)
+        {
+            // 1. Get the member details
+            var member = await _context.Members
+                .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
+
+            if (member == null)
+            {
+                throw new Exception($"Member {memberNo} not found");
+            }
+
+            // 2. Get the loan details
+            var loan = await _context.Loans
+                .FirstOrDefaultAsync(l => l.LoanNo == loanNo && l.CompanyCode == companyCode);
+
+            if (loan == null)
+            {
+                throw new Exception($"Loan {loanNo} not found");
+            }
+
+            // 3. Get the loan type details
+            var loanType = await _context.Loantypes
+                .FirstOrDefaultAsync(lt => lt.LoanCode == loan.LoanCode && lt.CompanyCode == companyCode);
+
+            // 4. Get all repayments for this loan ordered by date (oldest first for accurate running balance)
+            var repayments = await _context.Repay
+                .Where(r => r.LoanNo == loanNo && r.CompanyCode == companyCode)
+                .OrderBy(r => r.DateReceived)
+                .ToListAsync();
+
+            // 5. Get the current loan balance
+            var loanbal = await _context.Loanbal
+                .FirstOrDefaultAsync(lb => lb.LoanNo == loanNo && lb.Companycode == companyCode);
+
+            // 6. Get company details
+            var company = await _context.Companies
+                .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+            // 7. Calculate totals from repayment data
+            decimal totalPrincipalPaid = repayments.Sum(r => r.Principal ?? 0);
+            decimal totalInterestPaid = repayments.Sum(r => r.Interest ?? 0);
+            decimal totalPenaltyPaid = repayments.Sum(r => r.Penalty ?? 0);
+            decimal totalAmountPaid = repayments.Sum(r => r.Amount ?? 0);
+
+            // 8. Get outstanding balances from Loanbal
+            decimal outstandingPrincipal = loanbal?.Balance ?? 0;
+            decimal outstandingInterest = loanbal?.IntrOwed ?? 0;
+            decimal outstandingPenalty = loanbal?.Penalty ?? 0;
+            decimal totalOutstanding = outstandingPrincipal + outstandingInterest + outstandingPenalty;
+
+            // 9. Calculate original total amount (principal + total interest)
+            decimal originalTotalAmount = (loan.LoanAmt ?? 0) + ((loan.Interest ?? 0) / 100) * (loan.LoanAmt ?? 0);
+
+            // 10. Determine if fully paid (total outstanding is 0 or very close to 0)
+            bool isFullyPaid = totalOutstanding <= 0.01m;
+
+            // 11. Calculate percentage paid
+            decimal percentagePaid = originalTotalAmount > 0 ? (totalAmountPaid / originalTotalAmount) * 100 : 0;
+
+            // 12. Build repayment history with CORRECT balance tracking
+            var repaymentDetails = new List<RepaymentHistoryDetailDTO>();
+
+            // Start with the original principal amount
+            decimal runningPrincipalBalance = loan.LoanAmt ?? 0;
+            decimal runningInterestBalance = 0;
+            decimal runningPenaltyBalance = 0;
+
+            // Determine if the loan has upfront interest
+            bool isUpfrontInterest = loan.InterestUpront ?? false;
+
+            // If upfront interest, add it to the initial balance
+            if (isUpfrontInterest && loan.Interest.HasValue && loan.RepayPeriod.HasValue)
+            {
+                decimal upfrontInterest = (loan.LoanAmt ?? 0) * (loan.Interest.Value / 100) * (loan.RepayPeriod.Value / 12m);
+                runningInterestBalance = upfrontInterest;
+            }
+
+            // 13. Calculate running balances for each repayment
+            foreach (var repayment in repayments)
+            {
+                // Get balances before this payment
+                decimal principalBefore = runningPrincipalBalance;
+                decimal interestBefore = runningInterestBalance;
+                decimal penaltyBefore = runningPenaltyBalance;
+                decimal totalBefore = principalBefore + interestBefore + penaltyBefore;
+
+                // Apply the payment amounts (subtract what was paid)
+                runningPrincipalBalance -= (repayment.Principal ?? 0);
+                runningInterestBalance -= (repayment.Interest ?? 0);
+                runningPenaltyBalance -= (repayment.Penalty ?? 0);
+
+                // Ensure balances don't go negative (safety check)
+                if (runningPrincipalBalance < 0) runningPrincipalBalance = 0;
+                if (runningInterestBalance < 0) runningInterestBalance = 0;
+                if (runningPenaltyBalance < 0) runningPenaltyBalance = 0;
+
+                // Get balances after this payment
+                decimal principalAfter = runningPrincipalBalance;
+                decimal interestAfter = runningInterestBalance;
+                decimal penaltyAfter = runningPenaltyBalance;
+                decimal totalAfter = principalAfter + interestAfter + penaltyAfter;
+
+                // 14. Determine status for this payment
+                string status = "On-time";
+                int? daysOverdue = null;
+
+                // Check if payment was overdue
+                if (repayment.DateReceived.HasValue && loanbal?.Nextduedate.HasValue == true)
+                {
+                    var dueDate = loanbal.Nextduedate.Value;
+                    if (repayment.DateReceived.Value.Date > dueDate.Date)
+                    {
+                        daysOverdue = (repayment.DateReceived.Value.Date - dueDate.Date).Days;
+                        status = "Overdue";
+                    }
+                }
+
+                // Check if this payment resulted in full settlement
+                // A payment is a "Full Settlement" if after this payment, the total outstanding is 0
+                if (totalAfter <= 0.01m)
+                {
+                    status = "Full Settlement";
+                }
+                // Check if this is the final payment and total is very low
+                else if (repayment == repayments.LastOrDefault() && totalAfter <= 0.01m)
+                {
+                    status = "Full Settlement";
+                }
+
+                // 15. Determine payment method
+                string paymentMethod = "CASH";
+                string? referenceNo = repayment.ApiKey;
+
+                if (!string.IsNullOrEmpty(referenceNo))
+                {
+                    if (referenceNo.StartsWith("CHQ"))
+                        paymentMethod = "CHEQUE";
+                    else if (referenceNo.StartsWith("MPESA") || referenceNo.Length == 10)
+                        paymentMethod = "MPESA";
+                    else if (referenceNo.StartsWith("TRF"))
+                        paymentMethod = "BANK_TRANSFER";
+                    else if (referenceNo.StartsWith("BANK") || referenceNo.StartsWith("BNK"))
+                        paymentMethod = "BANK_TRANSFER";
+                }
+                else if (!string.IsNullOrEmpty(repayment.Chequeno))
+                {
+                    paymentMethod = "CHEQUE";
+                    referenceNo = repayment.Chequeno;
+                }
+                else if (!string.IsNullOrEmpty(repayment.TransactionNo))
+                {
+                    paymentMethod = "MPESA";
+                    referenceNo = repayment.TransactionNo;
+                }
+
+                // 16. Add the repayment detail
+                repaymentDetails.Add(new RepaymentHistoryDetailDTO
+                {
+                    Id = repayment.Id,
+                    PaymentDate = repayment.DateReceived ?? DateTime.Now,
+                    PaymentNumber = repayment.PaymentNo ?? 0,
+                    ReceiptNo = repayment.ReceiptNo ?? "N/A",
+                    AmountPaid = repayment.Amount ?? 0,
+                    PrincipalPaid = repayment.Principal ?? 0,
+                    InterestPaid = repayment.Interest ?? 0,
+                    PenaltyPaid = repayment.Penalty ?? 0,
+                    // ✅ Balance Before is the TOTAL before payment (principal + interest + penalty)
+                    BalanceBefore = totalBefore,
+                    // ✅ Balance After is the TOTAL after payment (principal + interest + penalty)
+                    BalanceAfter = totalAfter,
+                    PaymentMethod = paymentMethod,
+                    ReferenceNo = referenceNo,
+                    Remarks = repayment.Remarks,
+                    ProcessedBy = repayment.Transby,
+                    Status = status,
+                    DaysOverdue = daysOverdue,
+                    BlockchainTxId = repayment.BlockchainTxId
+                });
+            }
+
+            // 17. Build the response
+            var response = new LoanRepaymentHistoryDTO
+            {
+                // Company Information
+                CompanyName = company?.CompanyName ?? "SACCO BlockChain System",
+                CompanyAddress = company?.Address ?? "P.O. Box 12345 - 00100, Nairobi, Kenya",
+                CompanyPhone = company?.Telephone ?? "+254 700 000 000",
+                CompanyEmail = company?.Email ?? "info@sacco.co.ke",
+
+                // Member Information
+                MemberNo = member.MemberNo,
+                MemberName = $"{member.Surname} {member.OtherNames}".Trim(),
+                MemberIdNo = member.Idno ?? "N/A",
+                MemberPhone = member.PhoneNo ?? "N/A",
+                MemberEmail = member.Email ?? "N/A",
+
+                // Loan Information
+                LoanNo = loan.LoanNo,
+                LoanType = loanType?.LoanType1 ?? loan.LoanCode ?? "Unknown",
+                LoanCode = loan.LoanCode ?? "N/A",
+                PrincipalAmount = loan.LoanAmt ?? 0,
+                ApprovedAmount = loan.Aamount ?? 0,
+                InterestRate = loan.Interest ?? 0,
+                RepaymentPeriod = loan.RepayPeriod ?? 0,
+                RepaymentMethod = loan.RepayMethod ?? "AMT",
+                ApplicationDate = loan.ApplicDate,
+                DisbursementDate = loan.AuditDateTime,
+                LoanStatus = GetLoanStatusString(loan.Status),
+                IsOverdue = loanbal?.Nextduedate < DateTime.Now && (loanbal?.Balance ?? 0) > 0,
+                BlockchainTxId = loan.BlockchainTxId,
+
+                // Financial Summary
+                TotalPrincipalPaid = totalPrincipalPaid,
+                TotalInterestPaid = totalInterestPaid,
+                TotalPenaltyPaid = totalPenaltyPaid,
+                TotalAmountPaid = totalAmountPaid,
+                OutstandingPrincipal = outstandingPrincipal,
+                OutstandingInterest = outstandingInterest,
+                OutstandingPenalty = outstandingPenalty,
+                TotalOutstanding = totalOutstanding,
+                OriginalTotalAmount = originalTotalAmount,
+                PercentagePaid = percentagePaid,
+                IsFullyPaid = isFullyPaid,
+
+                // Repayment History
+                Repayments = repaymentDetails,
+
+                // Audit
                 InquiryTimestamp = DateTime.Now,
                 InquiredBy = userId
             };

@@ -8,55 +8,249 @@
 
 <style>
     .guarantor-list {
-        max-width: 400px;
+        max-width: 300px;
         white-space: normal;
         word-wrap: break-word;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 4px;
     }
 
     .guarantor-badge {
         display: inline-block;
         background-color: #e9ecef;
         padding: 4px 8px;
-        margin: 2px;
+        margin: 1px;
         border-radius: 4px;
-        font-size: 12px;
+        font-size: 11px;
+        white-space: nowrap;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: default;
+        color: #333;
     }
 
-    .fully-guaranteed {
-        background-color: #d4edda;
-        color: #155724;
-    }
-
-    .partially-guaranteed {
-        background-color: #fff3cd;
-        color: #856404;
-    }
+        .guarantor-badge:hover {
+            overflow: visible;
+            white-space: normal;
+            max-width: none;
+            z-index: 1000;
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            background-color: #d4edda;
+        }
 
     .summary-card {
         border-radius: 8px;
         padding: 15px;
         margin-bottom: 15px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+        height: 100%;
+    }
+
+        .summary-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .loan-row {
+        transition: background-color 0.2s;
+    }
+
+        .loan-row:hover {
+            background-color: #f8f9fa !important;
+        }
+
+    .badge-status {
+        font-size: 12px;
+        padding: 5px 10px;
+        color: #fff !important;
+    }
+
+    .badge-success {
+        background-color: #28a745 !important;
+        color: #fff !important;
+    }
+
+    .badge-warning {
+        background-color: #ffc107 !important;
+        color: #212529 !important;
+    }
+
+    .badge-secondary {
+        background-color: #6c757d !important;
+        color: #fff !important;
+    }
+
+    .badge-info {
+        background-color: #17a2b8 !important;
+        color: #fff !important;
+    }
+
+    .cell-text-truncate {
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
+        vertical-align: middle;
+    }
+
+    .member-info {
+        font-size: 11px;
+        color: #6c757d;
+    }
+
+    .dataTables_wrapper .dataTables_filter input {
+        margin-left: 10px;
+    }
+
+    .modal-body .table td {
+        vertical-align: middle;
+    }
+
+    .loan-number {
+        font-weight: bold;
+        color: #0066cc;
+    }
+
+    /* Fix for white badges */
+    .badge {
+        font-weight: 600;
+        padding: 5px 12px;
+        border-radius: 4px;
+    }
+
+    /* Ensure all badges have proper colors */
+    .bg-success, .badge-success {
+        background-color: #28a745 !important;
+        color: #ffffff !important;
+    }
+
+    .bg-warning, .badge-warning {
+        background-color: #ffc107 !important;
+        color: #212529 !important;
+    }
+
+    .bg-secondary, .badge-secondary {
+        background-color: #6c757d !important;
+        color: #ffffff !important;
+    }
+
+    .bg-info, .badge-info {
+        background-color: #17a2b8 !important;
+        color: #ffffff !important;
+    }
+
+    .btn-view {
+        background-color: #17a2b8;
+        color: #fff;
+        border: none;
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+        .btn-view:hover {
+            background-color: #138496;
+            color: #fff;
+        }
+
+    .status-badge {
+        font-size: 12px;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+
+    /* DataTable custom search styling */
+    .dataTables_wrapper .dataTables_filter {
+        float: right;
+        margin-bottom: 10px;
+    }
+
+        .dataTables_wrapper .dataTables_filter input {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 6px 12px;
+            margin-left: 8px;
+            width: 250px;
+        }
+
+    .dataTables_wrapper .dataTables_length {
+        float: left;
+        margin-bottom: 10px;
+    }
+
+        .dataTables_wrapper .dataTables_length select {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 4px 8px;
+            margin: 0 4px;
+        }
+
+    /* Modal close button fix */
+    .modal-header .close {
+        padding: 0;
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1;
+        color: #fff;
+        text-shadow: 0 1px 0 #fff;
+        opacity: .8;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+    }
+
+        .modal-header .close:hover {
+            opacity: 1;
+            color: #fff;
+        }
+
+    /* Search highlight */
+    .highlight {
+        background-color: #ffff99;
+        padding: 2px 4px;
+        border-radius: 2px;
     }
 </style>
 
 <div class="container-fluid">
     <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap">
             <h6 class="m-0 font-weight-bold text-primary">
                 <i class="fas fa-users"></i> Guarantors Per Loan Report
             </h6>
-            <div>
+            <div class="mt-2 mt-md-0">
                 <a href="@Url.Action("ExportGuarantorsPerLoanToExcel", new { startDate = ViewBag.StartDate, endDate = ViewBag.EndDate })"
                    class="btn btn-success btn-sm">
-                    <i class="fas fa-file-excel"></i> Export to Excel
+                    <i class="fas fa-file-excel"></i> Export to Excel Summary
                 </a>
                 <a href="@Url.Action("ExportGuarantorsPerLoanToPdf", new { startDate = ViewBag.StartDate, endDate = ViewBag.EndDate })"
                    class="btn btn-danger btn-sm">
-                    <i class="fas fa-file-pdf"></i> Export to PDF
+                    <i class="fas fa-file-pdf"></i> Export to PDF Summary
                 </a>
-                <a href="@Url.Action("AllGuarantorsReport")" class="btn btn-info btn-sm">
-                    <i class="fas fa-list"></i> All Guarantors Report
+                @* <a href="@Url.Action("AllGuarantorsReport")" class="btn btn-info btn-sm">
+                    <i class="fas fa-list"></i> All Guarantors
+                </a> *@
+                <a href="@Url.Action("ExportAllGuarantorsToExcel", new { startDate = ViewBag.StartDate, endDate = ViewBag.EndDate })"
+                   class="btn btn-success btn-sm">
+                    <i class="fas fa-file-excel"></i> Export to Excel All Guarantors
+                </a>
+                <a href="@Url.Action("ExportAllGuarantorsToPdf", new { startDate = ViewBag.StartDate, endDate = ViewBag.EndDate })"
+                   class="btn btn-danger btn-sm">
+                    <i class="fas fa-file-pdf"></i> Export to PDF All Guarantors
                 </a>
                 <a href="@Url.Action("AllLoans")" class="btn btn-secondary btn-sm">
                     <i class="fas fa-arrow-left"></i> Back
@@ -108,25 +302,25 @@
             {
                 <!-- Summary Cards -->
                 <div class="row mb-4">
-                    <div class="col-md-3">
+                    <div class="col-md-3 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #e3f2fd;">
                             <h6 class="text-muted">Total Loans with Guarantors</h6>
                             <h2 class="mb-0">@Model.TotalLoans</h2>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-3 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #e8f5e9;">
                             <h6 class="text-muted">Total Guarantors</h6>
                             <h2 class="mb-0">@Model.TotalGuarantors</h2>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-3 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #fff3e0;">
                             <h6 class="text-muted">Total Guarantee Amount</h6>
                             <h2 class="mb-0">@Model.TotalGuaranteeAmount.ToString("N0")</h2>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-3 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #fce4ec;">
                             <h6 class="text-muted">Fully / Partially Guaranteed</h6>
                             <h2 class="mb-0">@Model.FullyGuaranteedLoans / @Model.PartiallyGuaranteedLoans</h2>
@@ -147,8 +341,7 @@
                         <thead class="thead-light">
                             <tr>
                                 <th>Loan No</th>
-                                <th>Member No</th>
-                                <th>Member Name</th>
+                                <th>Borrower</th>
                                 <th>Loan Amount</th>
                                 <th>Total Guarantee</th>
                                 <th>Status</th>
@@ -160,133 +353,66 @@
                         <tbody>
                             @foreach (var loan in Model.Loans)
                             {
-                                <tr>
-                                    <td>@loan.LoanNo</td>
-                                    <td>@loan.MemberNo</td>
-                                    <td>@loan.MemberName</td>
+                                <tr class="loan-row">
+                                    <td>
+                                        <span class="loan-number">@loan.LoanNo</span>
+                                        <div class="member-info">@loan.MemberNo</div>
+                                    </td>
+                                    <td>
+                                        <span class="cell-text-truncate" title="@loan.MemberName">
+                                            @loan.MemberName
+                                        </span>
+                                    </td>
                                     <td class="text-right">@loan.LoanAmount.ToString("N2")</td>
-                                    <td class="text-right">@loan.TotalGuaranteeAmount.ToString("N2")</td>
+                                    <td class="text-right font-weight-bold">@loan.TotalGuaranteeAmount.ToString("N2")</td>
                                     <td>
                                         @if (loan.IsFullyGuaranteed)
                                         {
-                                            <span class="badge badge-success">Fully Guaranteed</span>
+                                            <span class="badge badge-success status-badge">Fully Guaranteed</span>
                                         }
                                         else
                                         {
-                                            <span class="badge badge-warning">Partially Guaranteed</span>
-                                        }
-                                    </td>
-                                    <td class="text-center">@loan.Guarantors.Count</td>
-                                    <td class="guarantor-list">
-                                        @foreach (var g in loan.Guarantors)
-                                        {
-                                            <span class="guarantor-badge" title="Guarantee: KES @g.GuaranteeAmount.ToString("N0")">
-                                                @g.GuarantorName
-                                            </span>
+                                            <span class="badge badge-warning status-badge">Partially Guaranteed</span>
                                         }
                                     </td>
                                     <td class="text-center">
-                                        <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#guarantorModal_@loan.LoanNo.Replace("-", "_")">
+                                        <span class="badge badge-secondary" style="font-size: 14px; padding: 5px 12px;">@loan.Guarantors.Count</span>
+                                    </td>
+                                    <td>
+                                        <div class="guarantor-list">
+                                            @if (loan.Guarantors != null && loan.Guarantors.Any())
+                                            {
+                                                @foreach (var g in loan.Guarantors)
+                                                {
+                                                    <span class="guarantor-badge" title="Guarantee: KES @g.GuaranteeAmount.ToString("N0")">
+                                                        @g.GuarantorName (KES @g.GuaranteeAmount.ToString("N0"))
+                                                    </span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted font-italic">No guarantors</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-info btn-sm view-guarantors"
+                                                data-loan-no="@loan.LoanNo"
+                                                data-borrower="@loan.MemberName"
+                                                data-member-no="@loan.MemberNo"
+                                                data-loan-amount="@loan.LoanAmount"
+                                                data-total-guarantee="@loan.TotalGuaranteeAmount"
+                                                data-is-fully-guaranteed="@loan.IsFullyGuaranteed.ToString().ToLower()"
+                                                data-guarantors='@Html.Raw(Json.Serialize(loan.Guarantors))'>
                                             <i class="fas fa-eye"></i> View
                                         </button>
                                     </td>
                                 </tr>
-
-                                <!-- Modal for Guarantor Details -->
-                                <div class="modal fade" id="guarantorModal_@loan.LoanNo.Replace("-", "_")" tabindex="-1" role="dialog">
-                                    <div class="modal-dialog modal-lg" role="document">
-                                        <div class="modal-content">
-                                            <div class="modal-header bg-primary text-white">
-                                                <h5 class="modal-title">Guarantors for Loan @loan.LoanNo</h5>
-                                                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
-                                                    <span aria-hidden="true">&times;</span>
-                                                </button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <div class="row mb-3">
-                                                    <div class="col-md-6">
-                                                        <strong>Borrower:</strong> @loan.MemberName (@loan.MemberNo)
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <strong>Loan Amount:</strong> KES @loan.LoanAmount.ToString("N0")
-                                                    </div>
-                                                </div>
-                                                <div class="row mb-3">
-                                                    <div class="col-md-6">
-                                                        <strong>Total Guarantee:</strong> KES @loan.TotalGuaranteeAmount.ToString("N0")
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <strong>Status:</strong>
-                                                        @if (loan.IsFullyGuaranteed)
-                                                        {
-                                                            <span class="badge badge-success">Fully Guaranteed</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="badge badge-warning">Partially Guaranteed</span>
-                                                        }
-                                                    </div>
-                                                </div>
-
-                                                <table class="table table-sm table-bordered">
-                                                    <thead class="thead-light">
-                                                        <tr>
-                                                            <th>#</th>
-                                                            <th>Guarantor No</th>
-                                                            <th>Guarantor Name</th>
-                                                            <th>ID No</th>
-                                                            <th>Phone</th>
-                                                            <th>Guarantee Amount</th>
-                                                            <th>Status</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @{
-                                                            int counter = 1;
-                                                        }
-                                                        @foreach (var g in loan.Guarantors)
-                                                        {
-                                                            <tr>
-                                                                <td>@counter</td>
-                                                                <td>@g.GuarantorMemberNo</td>
-                                                                <td>@g.GuarantorName</td>
-                                                                <td>@(g.IdNo ?? "-")</td>
-                                                                <td>@(g.PhoneNo ?? "-")</td>
-                                                                <td class="text-right">@g.GuaranteeAmount.ToString("N2")</td>
-                                                                <td>
-                                                                    @if (g.Transfered)
-                                                                    {
-                                                                        <span class="badge badge-secondary">Released</span>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <span class="badge badge-success">Active</span>
-                                                                    }
-                                                                </td>
-                                                            </tr>
-                                                            counter++;
-                                                        }
-                                                    </tbody>
-                                                    <tfoot>
-                                                        <tr class="table-active">
-                                                            <td colspan="5" class="text-right"><strong>TOTAL:</strong></td>
-                                                            <td class="text-right"><strong>@loan.TotalGuaranteeAmount.ToString("N2")</strong></td>
-                                                            <td></td>
-                                                        </tr>
-                                                    </tfoot>
-                                                </table>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             }
                         </tbody>
                         <tfoot class="bg-light font-weight-bold">
                             <tr>
-                                <td colspan="4" class="text-right">TOTALS:</td>
+                                <td colspan="3" class="text-right">TOTALS:</td>
                                 <td class="text-right">@Model.TotalGuaranteeAmount.ToString("N2")</td>
                                 <td colspan="4"></td>
                             </tr>
@@ -298,18 +424,281 @@
     </div>
 </div>
 
+<!-- Modal for Guarantor Details -->
+<div class="modal fade" id="guarantorModal" tabindex="-1" role="dialog" aria-labelledby="guarantorModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="guarantorModalLabel">
+                    <i class="fas fa-users"></i> Guarantors for Loan <span id="modalLoanNo"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: #fff; opacity: 1;">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Borrower:</strong> <span id="modalBorrower"></span>
+                        <br />
+                        <small class="text-muted">Member No: <span id="modalMemberNo"></span></small>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Loan Amount:</strong> KES <span id="modalLoanAmount"></span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Total Guarantee:</strong> KES <span id="modalTotalGuarantee"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Status:</strong> <span id="modalStatus"></span>
+                    </div>
+                </div>
+
+                <hr />
+
+                <div id="guarantorDetailsContainer">
+                    <h6 class="mb-3">Guarantor Details</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Guarantor No</th>
+                                    <th>Guarantor Name</th>
+                                    <th>ID No</th>
+                                    <th>Phone</th>
+                                    <th>Guarantee Amount</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="guarantorDetailsBody">
+                                <!-- Dynamically populated -->
+                            </tbody>
+                            <tfoot id="guarantorDetailsFooter">
+                                <!-- Dynamically populated -->
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
+    <script src="https://cdn.datatables.net/1.10.24/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.24/js/dataTables.bootstrap4.min.js"></script>
+
     <script>
         $(document).ready(function() {
-            $('#guarantorsTable').DataTable({
+            // Initialize DataTable with search
+            var table = $('#guarantorsTable').DataTable({
                 "order": [[0, "asc"]],
                 "pageLength": 25,
                 "language": {
-                    "search": "Search:",
+                    "search": "Search Table:",
                     "lengthMenu": "Show _MENU_ entries",
-                    "info": "Showing _START_ to _END_ of _TOTAL_ entries"
+                    "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                    "infoEmpty": "No records found",
+                    "infoFiltered": "(filtered from _MAX_ total records)",
+                    "zeroRecords": "No matching records found"
+                },
+                "columnDefs": [
+                    {
+                        "targets": 6, // Guarantors column
+                        "orderable": false,
+                        "searchable": true
+                    },
+                    {
+                        "targets": 7, // Actions column
+                        "orderable": false,
+                        "searchable": false
+                    }
+                ],
+                "autoWidth": false,
+                "responsive": true,
+                "dom": '<"top"lf>rt<"bottom"ip>',
+                "drawCallback": function() {
+                    // Add highlight to search results
+                    var searchTerm = $('.dataTables_filter input').val();
+                    if (searchTerm && searchTerm.length > 0) {
+                        $('.guarantor-list .guarantor-badge').each(function() {
+                            var text = $(this).text();
+                            if (text.toLowerCase().indexOf(searchTerm.toLowerCase()) >= 0) {
+                                $(this).css('background-color', '#ffff99');
+                            } else {
+                                $(this).css('background-color', '');
+                            }
+                        });
+                    }
                 }
             });
+
+            // Custom search - search in the guarantor list as well
+            $('.dataTables_filter input').on('keyup', function() {
+                var searchTerm = $(this).val().toLowerCase();
+                if (searchTerm.length > 0) {
+                    $('.guarantor-list .guarantor-badge').each(function() {
+                        var text = $(this).text().toLowerCase();
+                        if (text.indexOf(searchTerm) >= 0) {
+                            $(this).css('background-color', '#ffff99');
+                            $(this).parent().closest('tr').show();
+                        } else {
+                            $(this).css('background-color', '');
+                        }
+                    });
+                } else {
+                    $('.guarantor-list .guarantor-badge').each(function() {
+                        $(this).css('background-color', '');
+                    });
+                }
+            });
+
+            // Handle View button click
+            $(document).on('click', '.view-guarantors', function(e) {
+                e.preventDefault();
+
+                try {
+                    // Get data from button attributes
+                    var loanNo = $(this).data('loan-no') || 'N/A';
+                    var borrower = $(this).data('borrower') || 'N/A';
+                    var memberNo = $(this).data('member-no') || 'N/A';
+                    var loanAmount = parseFloat($(this).data('loan-amount')) || 0;
+                    var totalGuarantee = parseFloat($(this).data('total-guarantee')) || 0;
+                    var isFullyGuaranteed = $(this).data('is-fully-guaranteed') === 'true';
+                    var guarantors = $(this).data('guarantors');
+
+                    // Log for debugging
+                    console.log('Loan Data:', {
+                        loanNo: loanNo,
+                        borrower: borrower,
+                        memberNo: memberNo,
+                        loanAmount: loanAmount,
+                        totalGuarantee: totalGuarantee,
+                        isFullyGuaranteed: isFullyGuaranteed,
+                        guarantors: guarantors
+                    });
+
+                    // Set modal header
+                    $('#modalLoanNo').text(loanNo);
+                    $('#modalBorrower').text(borrower);
+                    $('#modalMemberNo').text(memberNo);
+                    $('#modalLoanAmount').text(loanAmount.toFixed(2));
+                    $('#modalTotalGuarantee').text(totalGuarantee.toFixed(2));
+
+                    // Set status
+                    var statusHtml = isFullyGuaranteed
+                        ? '<span class="badge badge-success status-badge">Fully Guaranteed</span>'
+                        : '<span class="badge badge-warning status-badge">Partially Guaranteed</span>';
+                    $('#modalStatus').html(statusHtml);
+
+                    // Populate guarantor details
+                    var bodyHtml = '';
+                    var totalGuaranteeSum = 0;
+
+                    if (guarantors && Array.isArray(guarantors) && guarantors.length > 0) {
+                        $.each(guarantors, function(index, g) {
+                            var statusBadge = g.transfered === true
+                                ? '<span class="badge badge-secondary">Released</span>'
+                                : '<span class="badge badge-success">Active</span>';
+
+                            var guaranteeAmount = parseFloat(g.guaranteeAmount) || 0;
+                            totalGuaranteeSum += guaranteeAmount;
+
+                            bodyHtml += '<tr>' +
+                                '<td>' + (index + 1) + '</td>' +
+                                '<td>' + (g.guarantorMemberNo || '-') + '</td>' +
+                                '<td>' + (g.guarantorName || '-') + '</td>' +
+                                '<td>' + (g.idNo || '-') + '</td>' +
+                                '<td>' + (g.phoneNo || '-') + '</td>' +
+                                '<td class="text-right">' + guaranteeAmount.toFixed(2) + '</td>' +
+                                '<td>' + statusBadge + '</td>' +
+                                '</tr>';
+                        });
+
+                        $('#guarantorDetailsBody').html(bodyHtml);
+
+                        // Add footer with total
+                        var footerHtml = '<tr class="table-active font-weight-bold">' +
+                            '<td colspan="5" class="text-right">TOTAL GUARANTEE:</td>' +
+                            '<td class="text-right">' + totalGuaranteeSum.toFixed(2) + '</td>' +
+                            '<td></td>' +
+                            '</tr>';
+                        $('#guarantorDetailsFooter').html(footerHtml);
+                    } else {
+                        $('#guarantorDetailsBody').html(
+                            '<tr><td colspan="7" class="text-center text-muted py-3">' +
+                            '<i class="fas fa-info-circle"></i> No guarantors found for this loan</td></tr>'
+                        );
+                        $('#guarantorDetailsFooter').html('');
+                    }
+
+                    // Show modal
+                    $('#guarantorModal').modal({
+                        backdrop: 'static',
+                        keyboard: true
+                    });
+                    $('#guarantorModal').modal('show');
+
+                } catch (error) {
+                    console.error('Error opening modal:', error);
+                    alert('Error loading guarantor details. Please try again.');
+                }
+            });
+
+            // Handle modal close - ensure it closes properly
+            $('#guarantorModal .close, #guarantorModal .btn-secondary').on('click', function() {
+                $('#guarantorModal').modal('hide');
+            });
+
+            // Handle modal hidden event to reset content
+            $('#guarantorModal').on('hidden.bs.modal', function() {
+                // Clear modal content when closed
+                $('#modalLoanNo').text('');
+                $('#modalBorrower').text('');
+                $('#modalMemberNo').text('');
+                $('#modalLoanAmount').text('');
+                $('#modalTotalGuarantee').text('');
+                $('#modalStatus').html('');
+                $('#guarantorDetailsBody').html('');
+                $('#guarantorDetailsFooter').html('');
+            });
+
+            // Handle modal show event to ensure proper display
+            $('#guarantorModal').on('shown.bs.modal', function() {
+                // Ensure the modal is properly positioned
+                $(this).find('.modal-dialog').css('margin-top', '5%');
+            });
+
+            // Fix for any old modals
+            $('[data-toggle="modal"]').on('click', function() {
+                var target = $(this).data('target');
+                if (target && target !== '#guarantorModal') {
+                    // If it's using the old modal system, try to find the view button
+                    var loanNo = $(this).data('loan-no');
+                    if (loanNo) {
+                        $('.view-guarantors[data-loan-no="' + loanNo + '"]').click();
+                    }
+                }
+            });
+
+            // Add custom search box styling
+            $('.dataTables_filter input').attr('placeholder', 'Search by Loan, Member, Guarantor...');
+        });
+
+        // Handle modal close via keyboard escape
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape' && $('#guarantorModal').hasClass('show')) {
+                $('#guarantorModal').modal('hide');
+            }
         });
     </script>
 }
+

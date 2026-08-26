@@ -12,34 +12,69 @@
         padding: 15px;
         margin-bottom: 15px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+        height: 100%;
     }
+
+        .summary-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
 
     .status-active {
         color: #155724;
         background-color: #d4edda;
-        padding: 4px 8px;
+        padding: 4px 12px;
         border-radius: 4px;
         font-size: 12px;
         font-weight: bold;
+        display: inline-block;
     }
 
     .status-released {
         color: #721c24;
         background-color: #f8d7da;
-        padding: 4px 8px;
+        padding: 4px 12px;
         border-radius: 4px;
         font-size: 12px;
         font-weight: bold;
+        display: inline-block;
+    }
+
+    .badge-status {
+        font-size: 12px;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .dataTables_wrapper .dataTables_filter input {
+        margin-left: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 6px 12px;
+    }
+
+    .loan-status {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 3px;
+        background-color: #e9ecef;
+        color: #333;
     }
 </style>
 
 <div class="container-fluid">
     <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap">
             <h6 class="m-0 font-weight-bold text-primary">
                 <i class="fas fa-handshake"></i> All Guarantors Report
             </h6>
-            <div>
+            <div class="mt-2 mt-md-0">
                 <a href="@Url.Action("ExportAllGuarantorsToExcel", new { startDate = ViewBag.StartDate, endDate = ViewBag.EndDate })"
                    class="btn btn-success btn-sm">
                     <i class="fas fa-file-excel"></i> Export to Excel
@@ -101,25 +136,25 @@
             {
                 <!-- Summary Cards -->
                 <div class="row mb-4">
-                    <div class="col-md-3">
+                    <div class="col-md-3 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #e3f2fd;">
                             <h6 class="text-muted">Total Records</h6>
                             <h2 class="mb-0">@Model.TotalRecords</h2>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-3 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #e8f5e9;">
                             <h6 class="text-muted">Unique Loans</h6>
                             <h2 class="mb-0">@Model.UniqueLoans</h2>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-3 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #fff3e0;">
                             <h6 class="text-muted">Unique Guarantors</h6>
                             <h2 class="mb-0">@Model.UniqueGuarantors</h2>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-3 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #fce4ec;">
                             <h6 class="text-muted">Total Guarantee Amount</h6>
                             <h2 class="mb-0">@Model.TotalGuaranteeAmount.ToString("N0")</h2>
@@ -127,20 +162,20 @@
                     </div>
                 </div>
 
-                <div class="row mb-3">
-                    <div class="col-md-4">
+                <div class="row mb-4">
+                    <div class="col-md-4 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #d4edda;">
                             <h6 class="text-muted">Active Guarantors</h6>
                             <h3 class="mb-0 text-success">@Model.ActiveGuarantors</h3>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #f8d7da;">
                             <h6 class="text-muted">Released Guarantors</h6>
                             <h3 class="mb-0 text-danger">@Model.ReleasedGuarantors</h3>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4 col-sm-6 mb-3">
                         <div class="summary-card" style="background-color: #d1ecf1;">
                             <h6 class="text-muted">Coverage Ratio</h6>
                             <h3 class="mb-0">
@@ -183,7 +218,11 @@
                             @foreach (var item in Model.Guarantors)
                             {
                                 <tr>
-                                    <td>@item.LoanNo</td>
+                                    <td>
+                                        <span class="font-weight-bold">@item.LoanNo</span>
+                                        <br />
+                                        <span class="loan-status">@item.LoanStatus</span>
+                                    </td>
                                     <td>@item.MemberNo</td>
                                     <td>@item.MemberName</td>
                                     <td>@item.GuarantorMemberNo</td>
@@ -222,17 +261,35 @@
 </div>
 
 @section Scripts {
+    <script src="https://cdn.datatables.net/1.10.24/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.24/js/dataTables.bootstrap4.min.js"></script>
+
     <script>
         $(document).ready(function() {
             $('#guarantorsTable').DataTable({
                 "order": [[0, "asc"]],
                 "pageLength": 25,
                 "language": {
-                    "search": "Search:",
+                    "search": "Search Table:",
                     "lengthMenu": "Show _MENU_ entries",
-                    "info": "Showing _START_ to _END_ of _TOTAL_ entries"
-                }
+                    "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                    "infoEmpty": "No records found",
+                    "infoFiltered": "(filtered from _MAX_ total records)",
+                    "zeroRecords": "No matching records found"
+                },
+                "columnDefs": [
+                    {
+                        "targets": [9, 10], // Status and Assigned Date columns
+                        "orderable": true,
+                        "searchable": true
+                    }
+                ],
+                "autoWidth": false,
+                "responsive": true,
+                "dom": '<"top"lf>rt<"bottom"ip>'
             });
         });
     </script>
 }
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.10.24/css/dataTables.bootstrap4.min.css" />

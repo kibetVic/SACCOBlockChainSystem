@@ -4,6 +4,7 @@
     Layout = "~/Views/Shared/_Layout.cshtml";
     var templates = ViewBag.Templates as List<SACCOBlockChainSystem.Models.SmsTemplate> ?? new List<SACCOBlockChainSystem.Models.SmsTemplate>();
     var companyCode = ViewBag.CompanyCode as string;
+    var companyName = ViewBag.CompanyName as string ?? "SACCO";
 }
 
 <div class="container-fluid py-4">
@@ -151,7 +152,11 @@
                                     <option value="">-- Select Template --</option>
                                     @foreach (var template in templates.Where(t => t.IsActive))
                                     {
-                                        <option value="@template.TemplateCode" data-content="@template.TemplateContent">
+                                        <option value="@template.TemplateCode"
+                                                data-content="@template.TemplateContent"
+                                                data-agmdate="@(template.AGMDate?.ToString("yyyy-MM-dd") ?? "")"
+                                                data-agmtime="@(template.AGMTime?.ToString() ?? "")"
+                                                data-agmvenue="@(template.AGMVenue ?? "")">
                                             @template.TemplateName (@template.TemplateCode)
                                         </option>
                                     }
@@ -161,6 +166,41 @@
                                 </a>
                             </div>
                             <small class="text-muted">Select a template to auto-fill the message content</small>
+                        </div>
+
+                        <!-- AGM Details Section (shown when AGM template is selected) -->
+                        <div id="agmDetailsSection" class="card bg-light border-info mb-3" style="display: none;">
+                            <div class="card-header bg-info text-white">
+                                <i class="bi bi-calendar-event me-2"></i>AGM Details
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">AGM Date</label>
+                                        <input type="date" id="agmDate" class="form-control" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">AGM Time</label>
+                                        <input type="time" id="agmTime" class="form-control" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">AGM Venue</label>
+                                        <input type="text" id="agmVenue" class="form-control" placeholder="Enter venue" />
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-success btn-sm" onclick="insertAGMPlaceholders()">
+                                        <i class="bi bi-check-circle"></i> Apply AGM Details to Message
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearAGMFields()">
+                                        <i class="bi bi-eraser"></i> Clear
+                                    </button>
+                                    <small class="text-muted ms-2">
+                                        <i class="bi bi-info-circle"></i>
+                                        These details will replace {{AGMDate}}, {{AGMTime}}, {{AGMVenue}} placeholders
+                                    </small>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Message Content -->
@@ -211,6 +251,12 @@
                                             <li><code>{{Time}}</code> - Current time</li>
                                             <li><code>{{DateTime}}</code> - Current date and time</li>
                                         </ul>
+                                        <h6 class="mt-2">AGM Information:</h6>
+                                        <ul class="list-unstyled">
+                                            <li><code>{{AGMDate}}</code> - AGM Date</li>
+                                            <li><code>{{AGMTime}}</code> - AGM Time</li>
+                                            <li><code>{{AGMVenue}}</code> - AGM Venue</li>
+                                        </ul>
                                         <h6 class="mt-2">Transaction Information:</h6>
                                         <ul class="list-unstyled">
                                             <li><code>{{Amount}}</code> - Transaction amount</li>
@@ -239,6 +285,7 @@
                                 <option value="Contribution">Contribution</option>
                                 <option value="Reminder">Reminder</option>
                                 <option value="Notification">Notification</option>
+                                <option value="AGM">AGM Notification</option>
                             </select>
                             <span asp-validation-for="MessageType" class="text-danger"></span>
                             <small class="text-muted">Categorize your message for reporting purposes</small>
@@ -337,7 +384,12 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         let currentMemberData = null;
-        var companyName = '@(ViewBag.CompanyName)';
+        var companyName = '@ViewBag.CompanyName';
+        var currentAGMData = {
+            date: '',
+            time: '',
+            venue: ''
+        };
 
         $(document).ready(function() {
             // Character counter
@@ -431,7 +483,7 @@
         function updatePreview() {
             let message = $('#messageContent').val();
 
-            // Replace placeholders with sample data if member selected
+            // Replace member placeholders
             if (currentMemberData) {
                 message = message.replace(/{{FullName}}/g, currentMemberData.fullName);
                 message = message.replace(/{{Surname}}/g, currentMemberData.surname || currentMemberData.fullName.split(' ')[0]);
@@ -439,6 +491,23 @@
                 message = message.replace(/{{PhoneNo}}/g, currentMemberData.phoneNo);
                 message = message.replace(/{{IdNo}}/g, currentMemberData.idNo || 'N/A');
                 message = message.replace(/{{Email}}/g, currentMemberData.email || 'N/A');
+            }
+
+            // Replace AGM placeholders
+            const agmDate = $('#agmDate').val();
+            const agmTime = $('#agmTime').val();
+            const agmVenue = $('#agmVenue').val();
+
+            if (agmDate) {
+                const formattedDate = formatDate(agmDate);
+                message = message.replace(/{{AGMDate}}/g, formattedDate);
+            }
+            if (agmTime) {
+                const formattedTime = formatTime(agmTime);
+                message = message.replace(/{{AGMTime}}/g, formattedTime);
+            }
+            if (agmVenue) {
+                message = message.replace(/{{AGMVenue}}/g, agmVenue);
             }
 
             // Replace system placeholders
@@ -451,17 +520,106 @@
             $('#previewContent').text(message || 'Message preview will appear here');
         }
 
+        function formatDate(dateString) {
+            const date = new Date(dateString + 'T00:00:00');
+            const day = date.getDate();
+            const month = date.toLocaleString('default', { month: 'long' });
+            const year = date.getFullYear();
+
+            let suffix = 'th';
+            if (day === 1 || day === 21 || day === 31) suffix = 'st';
+            else if (day === 2 || day === 22) suffix = 'nd';
+            else if (day === 3 || day === 23) suffix = 'rd';
+
+            return `${day}${suffix} ${month} ${year}`;
+        }
+
+        function formatTime(timeString) {
+            if (!timeString) return '';
+            const [hours, minutes] = timeString.split(':');
+            const hour = parseInt(hours);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const hour12 = hour % 12 || 12;
+            return `${hour12}:${minutes} ${ampm}`;
+        }
+
         function loadTemplate() {
             const templateCode = $('#templateSelect').val();
             if (templateCode) {
                 const selectedOption = $('#templateSelect option:selected');
                 const content = selectedOption.data('content');
+                const agmDate = selectedOption.data('agmdate');
+                const agmTime = selectedOption.data('agmtime');
+                const agmVenue = selectedOption.data('agmvenue');
+
                 if (content) {
                     $('#messageContent').val(content);
+
+                    // Check if it's an AGM template
+                    if (templateCode === 'AGM_NOTIFICATION' || content.includes('{{AGMDate}}')) {
+                        $('#agmDetailsSection').show();
+
+                        // Set AGM values from template
+                        if (agmDate) {
+                            $('#agmDate').val(agmDate);
+                            currentAGMData.date = agmDate;
+                        }
+                        if (agmTime) {
+                            $('#agmTime').val(agmTime);
+                            currentAGMData.time = agmTime;
+                        }
+                        if (agmVenue) {
+                            $('#agmVenue').val(agmVenue);
+                            currentAGMData.venue = agmVenue;
+                        }
+                    } else {
+                        $('#agmDetailsSection').hide();
+                    }
+
                     updateCharacterCount();
                     updatePreview();
                 }
+            } else {
+                $('#agmDetailsSection').hide();
             }
+        }
+
+        function insertAGMPlaceholders() {
+            const agmDate = $('#agmDate').val();
+            const agmTime = $('#agmTime').val();
+            const agmVenue = $('#agmVenue').val();
+
+            if (!agmDate && !agmTime && !agmVenue) {
+                showToast('warning', 'Please enter AGM details first');
+                return;
+            }
+
+            let message = $('#messageContent').val();
+
+            if (agmDate) {
+                const formattedDate = formatDate(agmDate);
+                message = message.replace(/{{AGMDate}}/g, formattedDate);
+            }
+            if (agmTime) {
+                const formattedTime = formatTime(agmTime);
+                message = message.replace(/{{AGMTime}}/g, formattedTime);
+            }
+            if (agmVenue) {
+                message = message.replace(/{{AGMVenue}}/g, agmVenue);
+            }
+
+            $('#messageContent').val(message);
+            updateCharacterCount();
+            updatePreview();
+            showToast('success', 'AGM details applied to message');
+        }
+
+        function clearAGMFields() {
+            $('#agmDate').val('');
+            $('#agmTime').val('');
+            $('#agmVenue').val('');
+            currentAGMData = { date: '', time: '', venue: '' };
+            showToast('info', 'AGM fields cleared');
         }
 
         async function searchMember() {

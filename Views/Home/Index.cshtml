@@ -1,6 +1,6 @@
 ﻿@model SACCOBlockChainSystem.Models.ViewModels.DashboardVM
 @{
-    ViewData["Title"] = "SACCO Blockchain Dashboard";
+    ViewData["Title"] = "Dashboard";
 }
 
 <!-- Member Statistics Cards -->
@@ -298,6 +298,109 @@
     </div>
 </div>
 
+<!-- NEW ROW: Loanees & Loan Statistics -->
+<div class="row g-3 mb-4">
+    <!-- Total Loans Card -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">TOTAL LOANS:</small>
+                    <strong>@Model.TotalLoanCount.ToString("N0")</strong>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center mt-1">
+                    <small class="text-primary fw-semibold">WOMEN:</small>
+                    <strong class="text-warning">@Model.WomenLoanCount.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between ms-2">
+                    <small class="text-primary fw-semibold">MEN:</small>
+                    <small>@Model.MenLoanCount.ToString("N0")</small>
+                </div>
+                <div class="d-flex justify-content-between ms-2">
+                    <small class="text-primary fw-semibold">OTHERS:</small>
+                    <small>@Model.OthersLoanCount.ToString("N0")</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Completed Loans by Gender Card -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">COMPLETED LOANS:</small>
+                    <strong>@Model.CompletedLoansCount.ToString("N0")</strong>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">WOMEN:</small>
+                    <strong class="text-warning">@Model.WomenCompletedLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">MEN:</small>
+                    <strong>@Model.MenCompletedLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">OTHERS:</small>
+                    <strong>@Model.OthersCompletedLoans.ToString("N0")</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Loans by Gender Card -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">ACTIVE LOANS:</small>
+                    <strong>@Model.ActiveLoansCount.ToString("N0")</strong>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">WOMEN:</small>
+                    <strong class="text-warning">@Model.WomenActiveLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">MEN:</small>
+                    <strong>@Model.MenActiveLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">OTHERS:</small>
+                    <strong>@Model.OthersActiveLoans.ToString("N0")</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overdue Loans by Gender Card -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">OVERDUE LOANS:</small>
+                    <strong>@Model.OverdueLoansCount.ToString("N0")</strong>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">WOMEN:</small>
+                    <strong class="text-warning">@Model.WomenOverdueLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">MEN:</small>
+                    <strong>@Model.MenOverdueLoans.ToString("N0")</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-primary fw-semibold">OTHERS:</small>
+                    <strong>@Model.OthersOverdueLoans.ToString("N0")</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Repayment & Risk Card -->
 <div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">
@@ -305,7 +408,7 @@
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">PORTFOLIO AT RISK>30 DAYS (PAR):</small>
-                    <h2 class="mb-1 fw-bold @(Model.PARPercent < 5 ? "text-success" : Model.PARPercent < 10 ? "text-warning" : "text-danger")">@Model.PARPercent.ToString("F1")%</h2>
+                    <h5 class="mb-1 fw-bold @(Model.PARPercent < 5 ? "text-success" : Model.PARPercent < 10 ? "text-warning" : "text-danger")">@Model.PARPercent.ToString("F1")%</h5>
                 </div>
             </div>
         </div>
@@ -317,31 +420,34 @@
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">INCLUSION GRANT:</small>
-                    <strong> @(Model.InclusionGrantTotal.ToString("N0") ?? "0")</strong>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.InclusionGrantTotal.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
     </div>
 
     <!--  Matching Grants Card -->
-
     <div class="col-xl-3 col-md-6">
         <div class="card h-100 shadow-sm border-0 rounded-3">
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">MATCHING GRANT:</small>
-                    <strong> @(Model.MatchingGrantTotal.ToString("N0") ?? "0")</strong>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.MatchingGrantTotal.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
     </div>
-    <!--  Matching Grants Card -->
+    <!--  repayment rate card -->
     <div class="col-xl-3 col-md-6">
         <div class="card h-100 shadow-sm border-0 rounded-3">
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">REPAYMENT RATE(CURRENT MONTH):</small>
-                    <h2 class="mb-1 fw-bold @(Model.RepaymentRate < 5 ? "text-success" : Model.RepaymentRate < 10 ? "text-warning" : "text-danger")">@Model.RepaymentRate.ToString("F1")%</h2>
+                    <h5 class="mb-1 fw-bold @(Model.RepaymentRate < 5 ? "text-success" : Model.RepaymentRate < 10 ? "text-warning" : "text-danger")">@Model.RepaymentRate.ToString("F1")%</h5>
                 </div>
             </div>
         </div>
@@ -356,37 +462,25 @@
                     <small class="text-primary fw-semibold">
                         AMOUNT PAST DUE RATE:
                     </small>
-                    <h2 class="mb-1 fw-bold @(Model.AmountPastDueRate < 5 ? "text-success" : Model.AmountPastDueRate < 10 ? "text-warning" : "text-danger")">
+                    <h5 class="mb-1 fw-bold @(Model.AmountPastDueRate < 5 ? "text-success" : Model.AmountPastDueRate < 10 ? "text-warning" : "text-danger")">
                         @Model.AmountPastDueRate.ToString("F1")%
-                    </h2>
+                    </h5>
                 </div>
             </div>
         </div>
     </div>
 
-    @* <div class="col-xl-3 col-md-6">
-        <div class="card h-100 shadow-sm border-0 rounded-3">
-            <div class="card-body py-2 px-3">
-                <div class="text-center mb-1">
-                    <small class="text-primary fw-semibold">
-                        AMOUNT PAST DUE RATE:
-                    </small>
-                    <h2 class="mb-1 fw-bold @(Model.PARPercent < 5 ? "text-success" : Model.AmountPastDueRate < 10 ? "text-warning" : "text-danger")">@Model.AmountPastDueRate.ToString("F1")%</h2>
-                </div>
-            </div>
-        </div>
-    </div> *@
-
-    <!--
-    BALANCE OF LOANS WITH AREARS >30 DAYS: -->
+    <!--BALANCE OF LOANS WITH AREARS >30 DAYS: -->
     <div class="col-xl-3 col-md-6">
         <div class="card h-100 shadow-sm border-0 rounded-3">
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">
-                        BALANCE OF LOANS WITH AREARS >30 DAYS::
+                        BALANCE OF LOANS WITH AREARS >30 DAYS:
                     </small>
-                    <strong> @(Model.ArrearsBalance.ToString("N0") ?? "0")</strong>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.ArrearsBalance.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
@@ -399,7 +493,9 @@
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">TOTAL AREARS >30 DAYS:</small>
-                    <strong> @(Model.TotalArrears.ToString("N0") ?? "0")</strong>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.TotalArrears.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
@@ -410,58 +506,80 @@
             <div class="card-body py-2 px-3">
                 <div class="text-center mb-1">
                     <small class="text-primary fw-semibold">OUTSTANDING LOAN PORTFOLIO:</small>
-                    <strong> @(Model.TotalLoanBalances.ToString("N0") ?? "0")</strong>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.TotalLoanBalances.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Charts Row -->
-<div class="row g-4">
-    <!-- Transaction Statistics Chart -->
-    <div class="col-lg-5 col-xl-8 mb-4">
-        <div class="card shadow border-0 rounded-3 h-100">
-            <div class="card-header bg-white py-3 d-flex flex-row align-items-center justify-content-between border-0">
-                <h6 class="m-0 fw-bold text-primary">Monthly Transaction Statistics</h6>
-                <div class="dropdown no-arrow">
-                    <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink"
-                       data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                        <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in">
-                        <a class="dropdown-item" href="#" onclick="updateChart('6m')">Last 6 Months</a>
-                        <a class="dropdown-item" href="#" onclick="updateChart('1y')">Last 1 Year</a>
-                        <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" href="/Reports/Financial">View Detailed Report</a>
-                    </div>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="chart-area" style="position: relative; height: 280px; width: 100%;">
-                    <canvas id="transactionChart" style="width: 100%; height: 100%;"></canvas>
+<!-- Last month PROFIT/LOSS -->
+<div class="row g-3 mb-4">
+    <!-- Last Month PROFIT/LOSS -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">
+                        LAST MONTH PROFIT/LOSS:
+                    </small>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.ArrearsBalance.ToString("N0") ?? "0")
+                    </h5>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Member Growth Chart -->
-    <div class="col-lg-5 col-xl-4 mb-4">
-        <div class="card shadow border-0 rounded-3 h-100">
-            <div class="card-header bg-white py-3 border-0">
-                <h6 class="m-0 fw-bold text-primary">Member Growth</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-pie" style="position: relative; height: 280px; width: 100%;">
-                    <canvas id="memberGrowthChart" style="width: 100%; height: 100%;"></canvas>
+    <!-- This Month PROFIT/LOSS -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">
+                        THIS MONTH PROFIT/LOSS:
+                    </small>
+                    <h5 class="mb-1 fw-bold">
+                        @(Model.ThisMonthProfitLoss.ToString("N0") ?? "0")
+                    </h5>
                 </div>
-                <div class="mt-4 text-center small">
-                    <span class="me-3">
-                        <i class="fas fa-circle text-success"></i> New Members
-                    </span>
-                    <span>
-                        <i class="fas fa-circle text-primary"></i> Total Members
-                    </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- PORTFOLIO AT RISK >60 DAYS (PAR) -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">
+                        PORTFOLIO AT RISK >60 DAYS (PAR):
+                    </small>
+                    <h5 class="mb-1 fw-bold @(Model.PAR60Percent < 5 ? "text-success" : Model.PAR60Percent < 10 ? "text-warning" : "text-danger")">
+                        @Model.PAR60Percent.ToString("F1")%
+                    </h5>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Run Penalty Button -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0 rounded-3">
+            <div class="card-body py-2 px-3">
+                <div class="text-center mb-1">
+                    <small class="text-primary fw-semibold">RUN PENALTY:</small> 
+                    <strong id="penaltyStatusBadge">Checking...</strong>
+                    <div class="mt-2">
+                        <!-- IMPORTANT: Specify the correct controller -->
+                        <form asp-action="RunPenalty" asp-controller="LoanMvc" method="post" id="penaltyForm">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-primary btn-sm w-100" id="runPenaltyBtn">
+                                <i class="fas fa-clock"></i> Run Penalty
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -773,6 +891,215 @@
         // If you have a company filter dropdown, add this event handler
         $(document).on('change', '#companyFilter', function() {
             loadChartData();
+        });
+
+        // ============================================================
+        // PENALTY RUN STATUS CHECK
+        // ============================================================
+
+        var isPenaltyRunning = false;
+
+        function checkPenaltyStatus() {
+            // Don't check status if penalty is running
+            if (isPenaltyRunning) return;
+
+            $.ajax({
+                url: '/LoanMvc/GetPenaltyStatus',  
+                type: 'GET',
+                success: function(response) {
+                    if (response.success) {
+                        var badge = $('#penaltyStatusBadge');
+                        if (response.hasOverdue) 
+                        {
+                            // Remove all background color classes
+                            badge.removeClass('bg-secondary bg-success bg-danger bg-info bg-warning')
+                                .html(`<i class="fas fa-exclamation-triangle text-danger"></i> ${response.overdueLoans} loan(s)`);
+                            $('#runPenaltyBtn').prop('disabled', false);
+                        }
+                        else 
+                        {
+                            // Remove all background color classes
+                            badge.removeClass('bg-secondary bg-success bg-danger bg-info bg-warning')
+                                .html('<i class="fas fa-check-circle text-success"></i> No overdue loans');
+                            $('#runPenaltyBtn').prop('disabled', true);
+                        }
+                    }
+                    
+                },
+                error: function() {
+                    $('#penaltyStatusBadge')
+                        .removeClass('bg-secondary')
+                        .addClass('bg-warning')
+                        .text('Unable to check status');
+                }
+            });
+        }
+
+        // function confirmRunPenalty() {
+        //     // Prevent multiple clicks while processing
+        //     if (isPenaltyRunning) {
+        //         return false;
+        //     }
+
+        //     // Check if there are any overdue loans
+        //     var badgeText = $('#penaltyStatusBadge').text();
+        //     if (badgeText.includes('No overdue loans')) {
+        //         return confirm('There are no overdue loans. Do you still want to run penalty?');
+        //     }
+        //     return confirm('Are you sure you want to run penalty for all overdue loans? This action will add penalty charges to loan balances and schedules.');
+        // }
+
+        function runPenalty() {
+            // Prevent multiple submissions
+            if (isPenaltyRunning) return false;
+
+            // // Show confirmation first
+            // if (!confirmRunPenalty()) {
+            //     return false;
+            // }
+
+            // Set running state
+            isPenaltyRunning = true;
+
+            // Disable the button and show processing state
+            var $btn = $('#runPenaltyBtn');
+            var $badge = $('#penaltyStatusBadge');
+            var originalBtnHtml = $btn.html();
+
+            $btn.prop('disabled', true)
+                .html('<i class="fas fa-spinner fa-spin"></i> Processing...');
+
+            // Update badge to show processing
+            $badge.removeClass('bg-secondary bg-danger bg-success')
+                .addClass('bg-info')
+                .html('<i class="fas fa-spinner fa-spin"></i> Running penalties...');
+
+            // Get the anti-forgery token
+            var token = $('input[name="__RequestVerificationToken"]').val();
+
+            // Execute the AJAX request to the correct controller
+            $.ajax({
+                url: '/LoanMvc/RunPenalty',  // Correct controller
+                type: 'POST',
+                data: {
+                    __RequestVerificationToken: token,
+                    companyCode: null  // Will use the user's company code from the server
+                },
+                success: function(response) {
+                    // Reset running state
+                    isPenaltyRunning = false;
+
+                    // Restore button
+                    $btn.prop('disabled', false)
+                        .html(originalBtnHtml);
+
+                    if (response.success) {
+                        // Show success message with details
+                        var message = response.message;
+                        if (response.totalPenaltiesApplied > 0) {
+                            message = `<i class="fas fa-check-circle text-success"></i> ${response.totalPenaltiesApplied} penalties applied totaling KES ${response.totalPenaltyAmount.toFixed(2)}`;
+                        } else {
+                            message = `<i class="fas fa-check-circle text-success"></i> ${response.message}`;
+                        }
+
+                        // Update badge with success
+                        $badge.removeClass('bg-secondary bg-danger bg-info')
+                            .addClass('bg-success')
+                            .html(message);
+
+                        // Show a toast notification
+                        showNotification('success', 'Penalty Run Complete',
+                            response.message);
+
+                        // Re-check status after a delay
+                        setTimeout(function() {
+                            checkPenaltyStatus();
+                        }, 3000);
+                    } else {
+                        // Show error
+                        $badge.removeClass('bg-secondary bg-danger bg-info bg-success')
+                            .addClass('bg-danger')
+                            .html(`<i class="fas fa-exclamation-circle"></i> ${response.message || 'Error running penalty'}`);
+
+                        showNotification('error', 'Penalty Run Failed', response.message || 'An error occurred');
+
+                        // Re-enable button
+                        $btn.prop('disabled', false);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    // Reset running state
+                    isPenaltyRunning = false;
+
+                    // Restore button
+                    $btn.prop('disabled', false)
+                        .html(originalBtnHtml);
+
+                    // Show error
+                    $badge.removeClass('bg-secondary bg-danger bg-info bg-success')
+                        .addClass('bg-danger')
+                        .html('<i class="fas fa-exclamation-circle"></i> Error running penalty');
+
+                    showNotification('error', 'Penalty Run Failed', 'An error occurred while processing. Please try again.');
+
+                    console.error('Penalty run error:', error);
+                    console.error('Response:', xhr.responseText);
+                }
+            });
+
+            return false;
+        }
+
+        // ============================================================
+        // NOTIFICATION HELPER
+        // ============================================================
+        function showNotification(type, title, message) {
+            // Remove existing notifications
+            $('.penalty-notification').remove();
+
+            var icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            var bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
+
+            var notificationHtml = `
+                <div class="penalty-notification position-fixed top-0 end-0 p-3" style="z-index: 9999">
+                    <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="toast-header ${bgClass} text-white">
+                            <i class="fas ${icon} me-2"></i>
+                            <strong class="me-auto">${title}</strong>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                        <div class="toast-body">
+                            ${message}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            $('body').append(notificationHtml);
+
+            // Auto-remove after 5 seconds
+            setTimeout(function() {
+                $('.penalty-notification').fadeOut(function() {
+                    $(this).remove();
+                });
+            }, 5000);
+        }
+
+        // ============================================================
+        // INITIALIZATION
+        // ============================================================
+        $(document).ready(function() {
+            // Override form submission to use AJAX
+            $('#penaltyForm').on('submit', function(e) {
+                e.preventDefault();
+                return runPenalty();
+            });
+
+            // Initial status check
+            checkPenaltyStatus();
+
+            // Refresh status every 60 seconds
+            setInterval(checkPenaltyStatus, 60000);
         });
     </script>
 }

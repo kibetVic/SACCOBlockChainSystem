@@ -4,7 +4,7 @@
     <div class="card-header bg-white py-3" style="border-bottom: 2px solid #3f2b96;">
         <div class="d-flex justify-content-between align-items-center">
             <h5 class="mb-0" style="color: #3f2b96; font-weight: 600;">
-                <i class="fas fa-money-bill-wave me-2"></i> Cash Flow Statement
+                <i class="fas fa-money-bill-wave me-2"></i> CASH FLOW STATEMENT
             </h5>
             <span class="badge bg-info p-2">
                 <i class="fas fa-calendar me-1"></i> @Model.StartDate.ToString("dd/MM/yyyy") - @Model.EndDate.ToString("dd/MM/yyyy")
@@ -13,108 +13,201 @@
     </div>
 
     <div class="card-body">
-        <!-- Operating Activities -->
-        <div class="mb-4">
-            <h6 class="text-primary mb-3" style="font-weight: 600;">
-                <i class="fas fa-industry me-2"></i> OPERATING ACTIVITIES
-            </h6>
-            <table class="table table-sm">
-                @foreach (var item in Model.CashFlow.OperatingActivities)
-                {
-                    <tr>
-                        <td style="padding: 8px; border: none;">@item.Description</td>
-                        <td style="padding: 8px; text-align: right; border: none; font-weight: 500; color: @(item.Amount >= 0 ? "#28a745" : "#dc3545");">
-                            @item.Amount.ToString("N2")
-                        </td>
-                    </tr>
-                }
-                <tr class="border-top">
-                    <td style="padding: 10px; font-weight: 600;">Net Cash from Operating Activities</td>
-                    <td style="padding: 10px; text-align: right; font-weight: 600; color: #17a2b8;">
-                        @Model.CashFlow.NetOperating.ToString("N2")
-                    </td>
-                </tr>
-            </table>
-        </div>
+        @{
+            var hasOperating = Model.CashFlow.OperatingActivities.Any();
+            var hasInvesting = Model.CashFlow.InvestingActivities.Any();
+            var hasFinancing = Model.CashFlow.FinancingActivities.Any();
+            var hasAnyActivity = hasOperating || hasInvesting || hasFinancing;
+        }
 
-        <!-- Investing Activities -->
-        <div class="mb-4">
-            <h6 class="text-success mb-3" style="font-weight: 600;">
-                <i class="fas fa-chart-line me-2"></i> INVESTING ACTIVITIES
-            </h6>
-            <table class="table table-sm">
-                @foreach (var item in Model.CashFlow.InvestingActivities)
-                {
-                    <tr>
-                        <td style="padding: 8px; border: none;">@item.Description</td>
-                        <td style="padding: 8px; text-align: right; border: none; font-weight: 500; color: @(item.Amount >= 0 ? "#28a745" : "#dc3545");">
-                            @item.Amount.ToString("N2")
-                        </td>
-                    </tr>
-                }
-                <tr class="border-top">
-                    <td style="padding: 10px; font-weight: 600;">Net Cash from Investing Activities</td>
-                    <td style="padding: 10px; text-align: right; font-weight: 600; color: #17a2b8;">
-                        @Model.CashFlow.NetInvesting.ToString("N2")
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <!-- Financing Activities -->
-        <div class="mb-4">
-            <h6 class="text-warning mb-3" style="font-weight: 600;">
-                <i class="fas fa-hand-holding-usd me-2"></i> FINANCING ACTIVITIES
-            </h6>
-            <table class="table table-sm">
-                @foreach (var item in Model.CashFlow.FinancingActivities)
-                {
-                    <tr>
-                        <td style="padding: 8px; border: none;">@item.Description</td>
-                        <td style="padding: 8px; text-align: right; border: none; font-weight: 500; color: @(item.Amount >= 0 ? "#28a745" : "#dc3545");">
-                            @item.Amount.ToString("N2")
-                        </td>
-                    </tr>
-                }
-                <tr class="border-top">
-                    <td style="padding: 10px; font-weight: 600;">Net Cash from Financing Activities</td>
-                    <td style="padding: 10px; text-align: right; font-weight: 600; color: #17a2b8;">
-                        @Model.CashFlow.NetFinancing.ToString("N2")
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <!-- Cash Summary -->
-        <div class="mt-4 p-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; color: white;">
-            <div class="row align-items-center">
-                <div class="col-md-6">
-                    <h5 class="mb-0">Beginning Cash Balance</h5>
+        @if (!hasAnyActivity)
+        {
+            <div class="text-center py-5">
+                <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No cash flow data available for this period</h5>
+                <p class="text-muted">There are no cash transactions recorded between @Model.StartDate.ToString("dd/MM/yyyy") and @Model.EndDate.ToString("dd/MM/yyyy")</p>
+            </div>
+        }
+        else
+        {
+            <div class="row">
+                <!-- Operating Activities -->
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <i class="fas fa-industry me-2"></i> OPERATING
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm mb-0">
+                                @if (!hasOperating)
+                                {
+                                    <tr>
+                                        <td colspan="2" class="text-muted text-center py-2" style="font-style: italic;">No transactions</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var item in Model.CashFlow.OperatingActivities.Take(5))
+                                    {
+                                        <tr>
+                                            <td style="padding: 6px 10px; font-size: 12px; border-bottom: 1px solid #eee;">@item.Description</td>
+                                            <td style="padding: 6px 10px; text-align: right; font-size: 12px; border-bottom: 1px solid #eee; color: @(item.Amount >= 0 ? "#28a745" : "#dc3545");">
+                                                @(item.Amount >= 0 ? "" : "-")@Math.Abs(item.Amount).ToString("N2")
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (Model.CashFlow.OperatingActivities.Count > 5)
+                                    {
+                                        <tr>
+                                            <td colspan="2" class="text-muted text-center py-1" style="font-size: 11px; font-style: italic;">
+                                                + @(Model.CashFlow.OperatingActivities.Count - 5) more transactions
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                <tr style="background-color: #f8f9fa; font-weight: bold;">
+                                    <td style="padding: 8px 10px; font-size: 12px; border-top: 2px solid #dee2e6;">Net Operating</td>
+                                    <td style="padding: 8px 10px; text-align: right; font-size: 12px; border-top: 2px solid #dee2e6; color: @(Model.CashFlow.NetOperating >= 0 ? "#17a2b8" : "#dc3545");">
+                                        @(Model.CashFlow.NetOperating >= 0 ? "" : "-")@Math.Abs(Model.CashFlow.NetOperating).ToString("N2")
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-6 text-end">
-                    <h4 class="mb-0">@Model.CashFlow.BeginningCash.ToString("N2")</h4>
+
+                <!-- Investing Activities -->
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header bg-success text-white">
+                            <i class="fas fa-chart-line me-2"></i> INVESTING
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm mb-0">
+                                @if (!hasInvesting)
+                                {
+                                    <tr>
+                                        <td colspan="2" class="text-muted text-center py-2" style="font-style: italic;">No transactions</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var item in Model.CashFlow.InvestingActivities.Take(5))
+                                    {
+                                        <tr>
+                                            <td style="padding: 6px 10px; font-size: 12px; border-bottom: 1px solid #eee;">@item.Description</td>
+                                            <td style="padding: 6px 10px; text-align: right; font-size: 12px; border-bottom: 1px solid #eee; color: @(item.Amount >= 0 ? "#28a745" : "#dc3545");">
+                                                @(item.Amount >= 0 ? "" : "-")@Math.Abs(item.Amount).ToString("N2")
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (Model.CashFlow.InvestingActivities.Count > 5)
+                                    {
+                                        <tr>
+                                            <td colspan="2" class="text-muted text-center py-1" style="font-size: 11px; font-style: italic;">
+                                                + @(Model.CashFlow.InvestingActivities.Count - 5) more transactions
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                <tr style="background-color: #f8f9fa; font-weight: bold;">
+                                    <td style="padding: 8px 10px; font-size: 12px; border-top: 2px solid #dee2e6;">Net Investing</td>
+                                    <td style="padding: 8px 10px; text-align: right; font-size: 12px; border-top: 2px solid #dee2e6; color: @(Model.CashFlow.NetInvesting >= 0 ? "#17a2b8" : "#dc3545");">
+                                        @(Model.CashFlow.NetInvesting >= 0 ? "" : "-")@Math.Abs(Model.CashFlow.NetInvesting).ToString("N2")
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financing Activities -->
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header bg-warning text-dark">
+                            <i class="fas fa-hand-holding-usd me-2"></i> FINANCING
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm mb-0">
+                                @if (!hasFinancing)
+                                {
+                                    <tr>
+                                        <td colspan="2" class="text-muted text-center py-2" style="font-style: italic;">No transactions</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var item in Model.CashFlow.FinancingActivities.Take(5))
+                                    {
+                                        <tr>
+                                            <td style="padding: 6px 10px; font-size: 12px; border-bottom: 1px solid #eee;">@item.Description</td>
+                                            <td style="padding: 6px 10px; text-align: right; font-size: 12px; border-bottom: 1px solid #eee; color: @(item.Amount >= 0 ? "#28a745" : "#dc3545");">
+                                                @(item.Amount >= 0 ? "" : "-")@Math.Abs(item.Amount).ToString("N2")
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (Model.CashFlow.FinancingActivities.Count > 5)
+                                    {
+                                        <tr>
+                                            <td colspan="2" class="text-muted text-center py-1" style="font-size: 11px; font-style: italic;">
+                                                + @(Model.CashFlow.FinancingActivities.Count - 5) more transactions
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                <tr style="background-color: #f8f9fa; font-weight: bold;">
+                                    <td style="padding: 8px 10px; font-size: 12px; border-top: 2px solid #dee2e6;">Net Financing</td>
+                                    <td style="padding: 8px 10px; text-align: right; font-size: 12px; border-top: 2px solid #dee2e6; color: @(Model.CashFlow.NetFinancing >= 0 ? "#17a2b8" : "#dc3545");">
+                                        @(Model.CashFlow.NetFinancing >= 0 ? "" : "-")@Math.Abs(Model.CashFlow.NetFinancing).ToString("N2")
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="row align-items-center mt-2">
-                <div class="col-md-6">
-                    <h5 class="mb-0">Net Cash Flow</h5>
+
+            <!-- Cash Summary -->
+            <div class="mt-3 p-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; color: white;">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <small>Beginning Cash</small>
+                        <h4>@Model.CashFlow.BeginningCash.ToString("N2")</h4>
+                    </div>
+                    <div class="col-md-3">
+                        <small>Net Operating</small>
+                        <h4 style="color: @(Model.CashFlow.NetOperating >= 0 ? "#90EE90" : "#FF6B6B");">
+                            @(Model.CashFlow.NetOperating >= 0 ? "+" : "")@Model.CashFlow.NetOperating.ToString("N2")
+                        </h4>
+                    </div>
+                    <div class="col-md-3">
+                        <small>Net Investing</small>
+                        <h4 style="color: @(Model.CashFlow.NetInvesting >= 0 ? "#90EE90" : "#FF6B6B");">
+                            @(Model.CashFlow.NetInvesting >= 0 ? "+" : "")@Model.CashFlow.NetInvesting.ToString("N2")
+                        </h4>
+                    </div>
+                    <div class="col-md-3">
+                        <small>Net Financing</small>
+                        <h4 style="color: @(Model.CashFlow.NetFinancing >= 0 ? "#90EE90" : "#FF6B6B");">
+                            @(Model.CashFlow.NetFinancing >= 0 ? "+" : "")@Model.CashFlow.NetFinancing.ToString("N2")
+                        </h4>
+                    </div>
                 </div>
-                <div class="col-md-6 text-end">
-                    <h4 class="mb-0 @(Model.CashFlow.NetCashFlow >= 0 ? "text-white" : "text-danger")">
-                        @(Model.CashFlow.NetCashFlow >= 0 ? "+" : "")@Model.CashFlow.NetCashFlow.ToString("N2")
-                    </h4>
+                <hr class="bg-white">
+                <div class="row text-center">
+                    <div class="col-md-6">
+                        <small>Net Cash Flow</small>
+                        <h3 style="color: @(Model.CashFlow.NetCashFlow >= 0 ? "#90EE90" : "#FF6B6B");">
+                            @(Model.CashFlow.NetCashFlow >= 0 ? "+" : "")@Model.CashFlow.NetCashFlow.ToString("N2")
+                        </h3>
+                    </div>
+                    <div class="col-md-6">
+                        <small>Ending Cash Balance</small>
+                        <h3>@Model.CashFlow.EndingCash.ToString("N2")</h3>
+                    </div>
                 </div>
             </div>
-            <hr class="bg-white">
-            <div class="row align-items-center">
-                <div class="col-md-6">
-                    <h5 class="mb-0">Ending Cash Balance</h5>
-                </div>
-                <div class="col-md-6 text-end">
-                    <h3 class="mb-0">@Model.CashFlow.EndingCash.ToString("N2")</h3>
-                </div>
-            </div>
-        </div>
+        }
     </div>
 
     <div class="card-footer bg-white py-3">
@@ -126,10 +219,180 @@
                 </small>
             </div>
             <div class="col-md-6 text-end">
-                <button class="btn btn-sm btn-outline-primary" onclick="window.print()">
-                    <i class="fas fa-print me-1"></i> Print
+                <button class="btn btn-success btn-sm me-2" onclick="exportToExcel('cashFlowTable', 'Cash_Flow')">
+                    <i class="fas fa-file-excel me-2"></i> Excel
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="exportCashFlowToPDF()">
+                    <i class="fas fa-file-pdf me-2"></i> PDF
                 </button>
             </div>
         </div>
     </div>
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+    function exportToExcel(tableId, fileName) {
+        // For cash flow, we need to create a table from the data
+        var data = [];
+
+        // Add header
+        data.push(['CASH FLOW STATEMENT']);
+        data.push(['Period: @Model.StartDate.ToString("dd/MM/yyyy") - @Model.EndDate.ToString("dd/MM/yyyy")']);
+        data.push([]);
+
+        // Operating Activities
+        data.push(['OPERATING ACTIVITIES']);
+        data.push(['Description', 'Amount']);
+        @foreach (var item in Model.CashFlow.OperatingActivities)
+        {
+                <text>data.push(['@item.Description', @item.Amount]);</text>
+        }
+        data.push(['Net Operating', @Model.CashFlow.NetOperating]);
+        data.push([]);
+
+        // Investing Activities
+        data.push(['INVESTING ACTIVITIES']);
+        data.push(['Description', 'Amount']);
+        @foreach (var item in Model.CashFlow.InvestingActivities)
+        {
+                <text>data.push(['@item.Description', @item.Amount]);</text>
+        }
+        data.push(['Net Investing', @Model.CashFlow.NetInvesting]);
+        data.push([]);
+
+        // Financing Activities
+        data.push(['FINANCING ACTIVITIES']);
+        data.push(['Description', 'Amount']);
+        @foreach (var item in Model.CashFlow.FinancingActivities)
+        {
+                <text>data.push(['@item.Description', @item.Amount]);</text>
+        }
+        data.push(['Net Financing', @Model.CashFlow.NetFinancing]);
+        data.push([]);
+
+        // Summary
+        data.push(['CASH SUMMARY']);
+        data.push(['Beginning Cash', @Model.CashFlow.BeginningCash]);
+        data.push(['Net Cash Flow', @Model.CashFlow.NetCashFlow]);
+        data.push(['Ending Cash', @Model.CashFlow.EndingCash]);
+
+        var wb = XLSX.utils.book_new();
+        var ws = XLSX.utils.aoa_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, 'CashFlow');
+        XLSX.writeFile(wb, fileName + '_@Model.EndDate.ToString("yyyyMMdd")' + '.xlsx');
+    }
+
+    function exportCashFlowToPDF() {
+        const { jsPDF } = window.jspdf;
+        var doc = new jsPDF('landscape', 'mm', 'a4');
+
+        // Title
+        doc.setFontSize(16);
+        doc.text('CASH FLOW STATEMENT', 14, 15);
+        doc.setFontSize(10);
+        doc.text('Period: @Model.StartDate.ToString("dd/MM/yyyy") - @Model.EndDate.ToString("dd/MM/yyyy")', 14, 22);
+        doc.text('Generated: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")', 14, 28);
+
+        var startY = 35;
+
+        // Operating Activities
+        doc.setFontSize(12);
+        doc.text('OPERATING ACTIVITIES', 14, startY);
+        startY += 5;
+
+        var operatingData = [];
+        @foreach (var item in Model.CashFlow.OperatingActivities)
+        {
+                <text>operatingData.push(['@item.Description', '@item.Amount.ToString("N2")']);</text>
+        }
+        operatingData.push(['Net Operating', '@Model.CashFlow.NetOperating.ToString("N2")']);
+
+        doc.autoTable({
+            body: operatingData,
+            startY: startY,
+            theme: 'grid',
+            styles: { fontSize: 8 },
+            columnStyles: {
+                0: { cellWidth: 80 },
+                1: { cellWidth: 30, halign: 'right' }
+            }
+        });
+        startY = doc.lastAutoTable.finalY + 10;
+
+        // Investing Activities
+        doc.setFontSize(12);
+        doc.text('INVESTING ACTIVITIES', 14, startY);
+        startY += 5;
+
+        var investingData = [];
+        @foreach (var item in Model.CashFlow.InvestingActivities)
+        {
+                <text>investingData.push(['@item.Description', '@item.Amount.ToString("N2")']);</text>
+        }
+        investingData.push(['Net Investing', '@Model.CashFlow.NetInvesting.ToString("N2")']);
+
+        doc.autoTable({
+            body: investingData,
+            startY: startY,
+            theme: 'grid',
+            styles: { fontSize: 8 },
+            columnStyles: {
+                0: { cellWidth: 80 },
+                1: { cellWidth: 30, halign: 'right' }
+            }
+        });
+        startY = doc.lastAutoTable.finalY + 10;
+
+        // Financing Activities
+        doc.setFontSize(12);
+        doc.text('FINANCING ACTIVITIES', 14, startY);
+        startY += 5;
+
+        var financingData = [];
+        @foreach (var item in Model.CashFlow.FinancingActivities)
+        {
+                <text>financingData.push(['@item.Description', '@item.Amount.ToString("N2")']);</text>
+        }
+        financingData.push(['Net Financing', '@Model.CashFlow.NetFinancing.ToString("N2")']);
+
+        doc.autoTable({
+            body: financingData,
+            startY: startY,
+            theme: 'grid',
+            styles: { fontSize: 8 },
+            columnStyles: {
+                0: { cellWidth: 80 },
+                1: { cellWidth: 30, halign: 'right' }
+            }
+        });
+        startY = doc.lastAutoTable.finalY + 10;
+
+        // Summary
+        doc.setFontSize(12);
+        doc.text('CASH SUMMARY', 14, startY);
+        startY += 5;
+
+        var summaryData = [
+            ['Beginning Cash', '@Model.CashFlow.BeginningCash.ToString("N2")'],
+            ['Net Cash Flow', '@Model.CashFlow.NetCashFlow.ToString("N2")'],
+            ['Ending Cash', '@Model.CashFlow.EndingCash.ToString("N2")']
+        ];
+
+        doc.autoTable({
+            body: summaryData,
+            startY: startY,
+            theme: 'grid',
+            styles: { fontSize: 9 },
+            columnStyles: {
+                0: { cellWidth: 80 },
+                1: { cellWidth: 30, halign: 'right' }
+            }
+        });
+
+        doc.save('Cash_Flow_@Model.EndDate.ToString("yyyyMMdd")' + '.pdf');
+    }
+</script>

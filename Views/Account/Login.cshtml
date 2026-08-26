@@ -8,7 +8,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/png" href="/AdminLte/dist/assets/img/LoginPG.png" />
+    <link rel="icon" type="image/png" href="/AdminLte/dist/assets/img/Easyblock.png" />
     <title>Login - EasySacco BlockChain System</title>
 
     <!-- Bootstrap CSS -->
@@ -244,7 +244,7 @@
             <div class="image-section">
                 <div class="blockchain-badge">
                     <i class="fas fa-link"></i>
-                    <span>Powered by Blockchain Technology</span>
+                    <span>Powered by Amtech Technology Ltd</span>
                 </div>
 
                 <div class="security-tagline">
@@ -279,8 +279,8 @@
 
             <!-- Right side - Form Section -->
             <div class="form-section">
-                <h2 class="brand-title">EasySacco</h2>
-                <p class="brand-subtitle">BlockChain System - Secure Login</p>
+                <h2 class="brand-title">EasySacco MIS</h2>
+                <p class="brand-subtitle">Sacco System - Secure Login</p>
 
                 <form asp-action="Login" method="post">
                     @Html.AntiForgeryToken()
@@ -321,11 +321,14 @@
                         </div>
                         <span asp-validation-for="Password" class="text-danger small"></span>
                     </div>
+                    <input type="hidden"  asp-for="MemberLogin" value="false" />
 
                     <div class="form-check mb-3">
                         <input type="checkbox" id="rememberMe" class="form-check-input" />
                         <label class="form-check-label small" for="rememberMe">Remember me</label>
                     </div>
+
+                    <div class="mb-3 " style="float:right;"><a asp-action="MemberLogin">Member Login</a></div>
 
                     <button type="submit" class="btn-login">
                         <i class="fas fa-sign-in-alt me-2"></i>Login to Dashboard

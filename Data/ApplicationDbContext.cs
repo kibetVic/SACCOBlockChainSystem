@@ -12,12 +12,19 @@ namespace SACCOBlockChainSystem.Data
             : base(options)
         {
         }
+        //public virtual DbSet<Usergroup> Usergroups { get; set; }
+        public virtual DbSet<Usergrp> GroupRights { get; set; }
+
+        public virtual DbSet<WalletConfig> WalletConfigurations { get; set; }
+        public DbSet<UserSession> UserSessions { get; set; }
+        public DbSet<Dividend> Dividends { get; set; }
         public DbSet<UserGroup> UserGroups { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
+        public DbSet<Loanschd> LOANSCHD { get; set; }
         public DbSet<ColloanGuar> ColloanGuars { get; set; }
         public DbSet<Collateral> Collaterals { get; set; }
         public DbSet<Privillage> Privilages { get; set; }
-        public DbSet<RolePrivilage> RolePrivileges { get; set; }
+        public DbSet<RolePrivilege> RolePrivileges { get; set; }
         public DbSet<Client> Clients { get; set; }
         public DbSet<Company> Companies { get; set; }
         public DbSet<SaccoParram> SaccoParram { get; set; }
@@ -49,6 +56,9 @@ namespace SACCOBlockChainSystem.Data
         public DbSet<Wallet> Wallets { get; set; }
         public DbSet<Agent> Agents { get; set; }
         public DbSet<GlSetup> GlSetup { get; set; }
+        public DbSet<AccountType> GLAccountTypes { get; set; }
+        public DbSet<AccountGroup> GLAccountGroups { get; set; }
+        public DbSet<AccountSubCategory> GLAccSubCatego { get; set; }
         public DbSet<GIGs> CIGs { get; set; }
         public DbSet<MemberNumberCounter> MemberNumberCounters { get; set; }
         public DbSet<Block> Blocks { get; set; }
@@ -57,7 +67,11 @@ namespace SACCOBlockChainSystem.Data
         public DbSet<SmsTemplate> SmsTemplates { get; set; }
         public DbSet<SmsSetting> SmsSettings { get; set; }
         public DbSet<JournalsListing> JournalsListings { get; set; }
-        public DbSet<AssetsRegister> AssetsRegisters { get; set; }
+        public DbSet<AssetsRegister> AssetsRegister { get; set; }
+        public DbSet<Supplier> Suppliers { get; set; }
+        public DbSet<InvoiceReceive> InvoiceReceive { get; set; }
+        public DbSet<InvoicePayment> InvoicePayments { get; set; }
+        public DbSet<InvoiceItem> InvoiceItems { get; set; }
         public DbSet<County> Counties { get; set; }
         public DbSet<SubCounty> SubCounties { get; set; }
         public DbSet<Ward> Wards { get; set; }
@@ -73,10 +87,24 @@ namespace SACCOBlockChainSystem.Data
         public DbSet<ApiTransaction> ApiTransactions { get; set; }
         public DbSet<ApiTable> ApiTables { get; set; }
         public DbSet<PaymentType> PaymentTypes { get; set; }
+        public DbSet<Devidend> Devidends { get; set; }
+        public DbSet<DividendDetails> DividendDetails { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Index for faster pending transaction queries
+            modelBuilder.Entity<Transactions2>()
+                .HasIndex(t => new { t.BlockchainTxId, t.Status })
+                .HasFilter("[BlockchainTxId] IS NULL AND [Status] = 'COMPLETED'");
+
+            modelBuilder.Entity<Contrib>()
+                .HasIndex(c => new { c.BlockchainTxId, c.Amount })
+                .HasFilter("[BlockchainTxId] IS NULL AND [Amount] IS NOT NULL");
+
+            modelBuilder.Entity<BlockchainTransaction>()
+                .HasIndex(b => new { b.Status, b.Timestamp });
 
             // Configure primary keys for tables without explicit [Key] attribute
             modelBuilder.Entity<Loantype>().HasKey(l => l.Id);
@@ -85,6 +113,16 @@ namespace SACCOBlockChainSystem.Data
             modelBuilder.Entity<TransactionDetail>().HasKey(t => t.Id);
             modelBuilder.Entity<Transactions2>().HasKey(t => t.Id);
 
+            modelBuilder.Entity<UserGroup>(entity =>
+            {
+                entity.HasKey(e => e.UserGroupId);
+                entity.ToTable("UserGroups");
+            });
+
+            modelBuilder.Entity<Usergrp>(entity =>
+            {
+                entity.HasKey(e => e.RightId);
+            });
             // Configure Contrib to Member relationship
             modelBuilder.Entity<Contrib>(entity =>
             {
@@ -186,6 +224,15 @@ namespace SACCOBlockChainSystem.Data
                 .HasForeignKey(n => new { n.MemberNo, n.CompanyCode })
                 .HasPrincipalKey(m => new { m.MemberNo, m.CompanyCode });
 
+            modelBuilder.Entity<Collateral>(entity =>
+            {
+                entity.HasOne(c => c.Member)
+                    .WithMany() // Member doesn't have a collection of Collaterals
+                    .HasForeignKey(c => new { c.MemberNo, c.CompanyCode })
+                    .HasPrincipalKey(m => new { m.MemberNo, m.CompanyCode })
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
             // Configure GIGs - Company relationship
             modelBuilder.Entity<GIGs>(entity =>
             {
@@ -245,7 +292,7 @@ namespace SACCOBlockChainSystem.Data
                     .HasPrincipalKey(l => l.LoanCode);
             });
 
-            modelBuilder.Entity<Member>().Ignore(m => m.Id);
+            //modelBuilder.Entity<Member>().Ignore(m => m.Id);
 
             // Explicitly configure Company entity
             modelBuilder.Entity<Company>(entity =>
@@ -294,8 +341,10 @@ namespace SACCOBlockChainSystem.Data
                     .HasColumnName("BlockchainTxId");
             });
 
-            modelBuilder.Entity<RolePrivilage>()
-  .HasKey(rp => new { rp.UserGroupId, rp.PrivilageId });
+  //          modelBuilder.Entity<RolePrivilage>()
+  //.HasKey(rp => new { rp.UserGroupId, rp.PrivilageId });
+            modelBuilder.Entity<RolePrivilege>()
+               .HasKey(rp => new { rp.GroupId, rp.RightId });
 
             modelBuilder.Entity<Loan>()
                 .ToTable(tb => tb.UseSqlOutputClause(false));
@@ -321,6 +370,32 @@ namespace SACCOBlockChainSystem.Data
                 entity.Property(e => e.Interest).HasPrecision(5, 4); // For percentages like 0.1250
                 entity.Property(e => e.ElseRatio).HasPrecision(5, 4);
             });
+
+            // Supplier - InvoiceReceive relationship
+            modelBuilder.Entity<InvoiceReceive>()
+                .HasOne(i => i.Supplier)
+                .WithMany(s => s.Invoices)
+                .HasForeignKey(i => i.SupplierCode)
+                .HasPrincipalKey(s => s.SupplierCode)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // InvoiceReceive - InvoicePayment relationship
+            // FIX: Configure the relationship using InvoiceNo as the principal key
+            modelBuilder.Entity<InvoicePayment>()
+                .HasOne(p => p.Invoice)
+                .WithMany(i => i.Payments)
+                .HasForeignKey(p => p.InvoiceNo)
+                .HasPrincipalKey(i => i.InvoiceNo)  
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Supplier - InvoicePayment relationship
+            modelBuilder.Entity<InvoicePayment>()
+                .HasOne(p => p.Supplier)
+                .WithMany(s => s.Payments)
+                .HasForeignKey(p => p.SupplierId)
+                .HasPrincipalKey(s => s.SupplierCode)
+                .OnDelete(DeleteBehavior.Restrict);
+
 
             // Add indexes for performance
             modelBuilder.Entity<Member>().HasIndex(m => m.MemberNo).IsUnique();

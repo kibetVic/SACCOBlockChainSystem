@@ -91,6 +91,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? BlockchainTxId { get; set; }
         public DateTime CreatedAt { get; set; }
         public string? CreatedBy { get; set; }  // AuditId
+        public string Email { get; internal set; }
     }
 
     // Simple DTO for dropdown lists

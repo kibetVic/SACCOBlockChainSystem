@@ -1,0 +1,946 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.SupplierViewModel
+@{
+    ViewData["Title"] = "Supplier Management";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var companyName = ViewBag.CompanyName as string ?? "AMTECH SACCO";
+}
+
+<div class="container-fluid">
+    <!-- Success/Error Messages -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- FORM CARD -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h4><i class="fas fa-truck"></i> Supplier Management</h4>
+        </div>
+        <div class="card-body">
+            <form id="supplierForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="SupplierId" name="SupplierId" />
+                <input type="hidden" id="CompanyCode" name="CompanyCode" value="@Model.UserCompanyCode" />
+
+                <div class="row">
+                    <!-- LEFT SIDE - Form Fields -->
+                    <div class="col-md-8">
+                        <!-- Basic Information Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Supplier Code</label>
+                                <input type="text" id="SupplierCode" class="form-control" />
+                                <small class="text-muted">Auto-generated, can be edited</small>
+                                <span id="supplierCodeError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="required">Supplier Name *</label>
+                                <input type="text" id="SupplierName" class="form-control" />
+                                <span id="supplierNameError" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Contact Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Contact Person</label>
+                                <input type="text" id="ContactPerson" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="required">Phone Number *</label>
+                                <input type="tel" id="PhoneNo" class="form-control" placeholder="0712345678" />
+                                <span id="phoneError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Email</label>
+                                <input type="email" id="Email" class="form-control" placeholder="supplier@example.com" />
+                                <span id="emailError" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Address Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label>Physical Address</label>
+                                <input type="text" id="PhysicalAddress" class="form-control" />
+                            </div>
+                            <div class="col-md-3">
+                                <label>City</label>
+                                <input type="text" id="City" class="form-control" />
+                            </div>
+                            <div class="col-md-3">
+                                <label>County</label>
+                                <input type="text" id="County" class="form-control" />
+                            </div>
+                        </div>
+
+                        <!-- Tax Info Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>PIN Number</label>
+                                <input type="text" id="PinNo" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>VAT Number</label>
+                                <input type="text" id="VatNo" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Country</label>
+                                <input type="text" id="Country" class="form-control" value="Kenya" />
+                            </div>
+                        </div>
+
+                        <!-- Bank Details Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Bank Name</label>
+                                <input type="text" id="BankName" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Bank Account No</label>
+                                <input type="text" id="BankAccountNo" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Bank Account Name</label>
+                                <input type="text" id="BankAccountName" class="form-control" />
+                            </div>
+                        </div>
+
+                        <!-- GL Account Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label>GL Account</label>
+                                <select id="GlAccountNo" class="form-control">
+                                    <option value="">-- Select GL Account --</option>
+                                    @if (Model.GlAccounts != null && Model.GlAccounts.Any())
+                                    {
+                                        foreach (var gl in Model.GlAccounts)
+                                        {
+                                            <option value="@gl.AccNo" data-glname="@gl.Glaccname" data-glcode="@gl.Glcode">
+                                                @gl.Glcode - @gl.Glaccname
+                                            </option>
+                                        }
+                                    }
+                                </select>
+                                <span id="glAccountError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-3">
+                                <label>GL Account Name</label>
+                                <input type="text" id="GlAccountName" class="form-control" readonly />
+                            </div>
+                            <div class="col-md-3">
+                                <label>Opening Balance (KES)</label>
+                                <input type="number" id="OpeningBalance" class="form-control" step="0.01" min="0" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT SIDE - Settings -->
+                    <div class="col-md-4">
+                        <div class="card bg-light mb-3">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="mb-0"><i class="fas fa-check-square"></i> Supplier Settings</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label>Status</label>
+                                    <select id="IsActive" class="form-control">
+                                        <option value="true">Active</option>
+                                        <option value="false">Inactive</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Postal Address</label>
+                                    <input type="text" id="PostalAddress" class="form-control" placeholder="P.O. Box 12345" />
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Bank Branch</label>
+                                    <input type="text" id="BankBranch" class="form-control" />
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Remarks</label>
+                                    <textarea id="Remarks" class="form-control" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BUTTONS -->
+                <div class="mt-4 d-flex gap-2">
+                    <button type="button" class="btn btn-primary" id="btnSave">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                    <button type="button" class="btn btn-warning" id="btnUpdate" style="display:none;">
+                        <i class="fas fa-edit"></i> Update
+                    </button>
+                    <button type="button" class="btn btn-danger" id="btnDelete" style="display:none;">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                    <button type="button" class="btn btn-dark" id="btnNew">
+                        <i class="fas fa-plus"></i> New
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EXISTING SUPPLIERS TABLE -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5><i class="fas fa-list"></i> Existing Suppliers</h5>
+        </div>
+        <div class="card-body">
+            <!-- Search Bar -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="supplierSearchInput" class="form-control" placeholder="Search by Supplier Name, Code, Phone, Email..." autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select id="statusFilter" class="form-select">
+                        <option value="all">All Status</option>
+                        <option value="active">Active Only</option>
+                        <option value="inactive">Inactive Only</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select id="sortBy" class="form-select">
+                        <option value="name">Sort by Name</option>
+                        <option value="code">Sort by Code</option>
+                        <option value="balance">Sort by Balance</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="suppliersTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Supplier Code</th>
+                            <th>Supplier Name</th>
+                            <th>Contact Person</th>
+                            <th>Phone</th>
+                            <th>Email</th>
+                            <th>GL Account</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                            <th style="width: 100px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="suppliersTableBody">
+                        @{
+                            var counter = 1;
+                        }
+                        @if (Model.Suppliers != null && Model.Suppliers.Any())
+                        {
+                            foreach (var supplier in Model.Suppliers.OrderBy(s => s.SupplierName))
+                            {
+                                var statusText = supplier.IsActive == true ? "Active" : "Inactive";
+                                var statusClass = supplier.IsActive == true ? "bg-success" : "bg-secondary";
+
+                                <tr data-id="@supplier.Id"
+                                    data-suppliercode="@supplier.SupplierCode"
+                                    data-suppliername="@supplier.SupplierName"
+                                    data-contactperson="@supplier.ContactPerson"
+                                    data-phoneno="@supplier.PhoneNo"
+                                    data-email="@supplier.Email"
+                                    data-physicaladdress="@supplier.PhysicalAddress"
+                                    data-postaladdress="@supplier.PostalAddress"
+                                    data-city="@supplier.City"
+                                    data-county="@supplier.County"
+                                    data-country="@supplier.Country"
+                                    data-pinno="@supplier.PinNo"
+                                    data-vatno="@supplier.VatNo"
+                                    data-bankname="@supplier.BankName"
+                                    data-bankaccountno="@supplier.BankAccountNo"
+                                    data-bankaccountname="@supplier.BankAccountName"
+                                    data-bankbranch="@supplier.BankBranch"
+                                    data-glaccountno="@supplier.GlAccountNo"
+                                    data-glaccountname="@supplier.GlAccountName"
+                                    data-openingbalance="@supplier.OpeningBalance"
+                                    data-currentbalance="@supplier.CurrentBalance"
+                                    data-remarks="@supplier.Remarks"
+                                    data-isactive="@supplier.IsActive"
+                                    data-status-text="@statusText">
+                                    <td class="row-number">@counter</td>
+                                    <td class="supplier-name">@supplier.SupplierCode</td>
+                                    <td class="supplier-name">@supplier.SupplierName</td>
+                                    <td class="supplier-contact">@(supplier.ContactPerson ?? "N/A")</td>
+                                    <td class="supplier-phone">@(supplier.PhoneNo ?? "N/A")</td>
+                                    <td class="supplier-email">@(supplier.Email ?? "N/A")</td>
+                                    <td class="supplier-glaccount">
+                                        @if (!string.IsNullOrEmpty(supplier.GlAccountNo))
+                                        {
+                                            <span class="badge bg-info">@supplier.GlAccountNo</span>
+                                            <small class="d-block text-muted">@supplier.GlAccountName</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">N/A</span>
+                                        }
+                                    </td>
+                                    <td class="supplier-balance text-end fw-bold">
+                                        KES @(supplier.CurrentBalance?.ToString("N0") ?? "0")
+                                    </td>
+                                    <td class="supplier-status">
+                                        <span class="badge @statusClass status-badge">@statusText</span>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-info select-btn w-100" data-id="@supplier.Id">
+                                            <i class="fas fa-edit"></i> Select
+                                        </button>
+                                    </td>
+                                </tr>
+                                counter++;
+                            }
+                        }
+                        else
+                        {
+                            <tr id="noSuppliersRow">
+                                <td colspan="11" class="text-center text-muted py-4">
+                                    <i class="fas fa-info-circle"></i> No suppliers found. Click "New" to register one.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Statistics Summary -->
+            <div class="row mt-4">
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="totalSuppliersCount">@Model.TotalSuppliers</h3>
+                            <p class="text-muted mb-0">Total Suppliers</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="activeSuppliersCount">@Model.ActiveSuppliers</h3>
+                            <p class="text-muted mb-0">Active Suppliers</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="inactiveSuppliersCount">@Model.InactiveSuppliers</h3>
+                            <p class="text-muted mb-0">Inactive Suppliers</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="blockchainSuppliersCount">@Model.BlockchainVerifiedCount</h3>
+                            <p class="text-muted mb-0">On Blockchain</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete supplier <strong id="deleteSupplierName"></strong>?</p>
+                <p class="text-danger">This action cannot be undone. The supplier will be permanently removed.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; text-align:center; padding-top:20%;">
+    <div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="text-light mt-2">Processing...</div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: red;
+    }
+
+    .table-primary {
+        background-color: #cfe2ff !important;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .alert {
+        animation: slideDown 0.5s ease;
+    }
+
+    @@keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+
+    .highlight {
+        background-color: #ffeb3b;
+        padding: 0 2px;
+        border-radius: 3px;
+    }
+
+    .input-validation-error {
+        border-color: #dc3545 !important;
+        background-color: #fff0f0 !important;
+    }
+
+    .text-danger {
+        font-size: 0.875rem;
+    }
+</style>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let currentSupplierId = null;
+        let deleteSupplierId = null;
+        let deleteSupplierName = null;
+
+        $(document).ready(function() {
+            // Generate initial supplier code
+            generateSupplierCode();
+
+            // GL Account selection change - auto populate GL Account Name
+            $('#GlAccountNo').on('change', function() {
+                const selectedOption = $(this).find('option:selected');
+                const glName = selectedOption.data('glname') || '';
+                $('#GlAccountName').val(glName);
+            });
+
+            // Search and filter events
+            $('#supplierSearchInput').on('keyup', performSearch);
+            $('#statusFilter').on('change', performSearch);
+            $('#sortBy').on('change', function() {
+                sortSuppliers();
+                performSearch();
+            });
+            $('#clearSearchBtn').on('click', clearAllFilters);
+
+            // Button events
+            $('#btnSave').on('click', saveSupplier);
+            $('#btnUpdate').on('click', updateSupplier);
+            $('#btnDelete').on('click', function() {
+                if (currentSupplierId) {
+                    const name = $('#SupplierName').val() || 'this supplier';
+                    deleteSupplier(currentSupplierId, name);
+                }
+            });
+            $('#btnNew').on('click', resetForm);
+            $('#confirmDeleteBtn').on('click', confirmDelete);
+
+            // Select button click - load supplier data
+            $(document).on('click', '.select-btn', function() {
+                const id = $(this).data('id');
+                if (id) {
+                    loadSupplierForEdit(id);
+                }
+            });
+        });
+
+        function generateSupplierCode() {
+            const now = new Date();
+            const year = now.getFullYear().toString().slice(-2);
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+
+            const code = `SUP${year}${month}${day}${hours}${minutes}${seconds}`;
+            $('#SupplierCode').val(code);
+        }
+
+        function loadSupplierForEdit(id) {
+            showLoading(true);
+
+            $.ajax({
+                url: `/Supplier/GetSupplier/${id}`,
+                type: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success && response.supplier) {
+                        const s = response.supplier;
+                        currentSupplierId = s.id;
+
+                        // Set all form fields
+                        $('#SupplierId').val(s.id);
+                        $('#SupplierCode').val(s.supplierCode);
+                        $('#SupplierName').val(s.supplierName || '');
+                        $('#ContactPerson').val(s.contactPerson || '');
+                        $('#PhoneNo').val(s.phoneNo || '');
+                        $('#Email').val(s.email || '');
+                        $('#PhysicalAddress').val(s.physicalAddress || '');
+                        $('#PostalAddress').val(s.postalAddress || '');
+                        $('#City').val(s.city || '');
+                        $('#County').val(s.county || '');
+                        $('#Country').val(s.country || 'Kenya');
+                        $('#PinNo').val(s.pinNo || '');
+                        $('#VatNo').val(s.vatNo || '');
+                        $('#BankName').val(s.bankName || '');
+                        $('#BankAccountNo').val(s.bankAccountNo || '');
+                        $('#BankAccountName').val(s.bankAccountName || '');
+                        $('#BankBranch').val(s.bankBranch || '');
+
+                        // Set GL Account
+                        if (s.glAccountNo) {
+                            $('#GlAccountNo').val(s.glAccountNo);
+                            // Trigger change to load GL Account Name
+                            $('#GlAccountNo').trigger('change');
+                        } else {
+                            $('#GlAccountNo').val('');
+                            $('#GlAccountName').val('');
+                        }
+
+                        $('#OpeningBalance').val(s.openingBalance || 0);
+                        $('#Remarks').val(s.remarks || '');
+                        $('#IsActive').val(s.isActive ? 'true' : 'false');
+
+                        // Show update/delete buttons, hide save
+                        $('#btnSave').hide();
+                        $('#btnUpdate').show();
+                        $('#btnDelete').show();
+
+                        // Highlight selected row
+                        $('.select-btn').closest('tr').removeClass('table-primary');
+                        $(`.select-btn[data-id="${s.id}"]`).closest('tr').addClass('table-primary');
+
+                        showNotification('Supplier loaded for editing', 'success');
+                    } else {
+                        showNotification(response.message || 'Supplier not found.', 'error');
+                        resetForm();
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    console.error('Error:', xhr.responseText);
+                    showNotification('Error loading supplier data', 'error');
+                    resetForm();
+                }
+            });
+        }
+
+        function resetForm() {
+            currentSupplierId = null;
+            $('#SupplierId').val('');
+            $('#SupplierCode').val('');
+            $('#SupplierName').val('');
+            $('#ContactPerson').val('');
+            $('#PhoneNo').val('');
+            $('#Email').val('');
+            $('#PhysicalAddress').val('');
+            $('#PostalAddress').val('');
+            $('#City').val('');
+            $('#County').val('');
+            $('#Country').val('Kenya');
+            $('#PinNo').val('');
+            $('#VatNo').val('');
+            $('#BankName').val('');
+            $('#BankAccountNo').val('');
+            $('#BankAccountName').val('');
+            $('#BankBranch').val('');
+            $('#GlAccountNo').val('');
+            $('#GlAccountName').val('');
+            $('#OpeningBalance').val('');
+            $('#Remarks').val('');
+            $('#IsActive').val('true');
+
+            // Clear validation errors
+            $('.text-danger').text('');
+            $('.input-validation-error').removeClass('input-validation-error');
+            $('.select-btn').closest('tr').removeClass('table-primary');
+
+            // Show save button, hide update/delete
+            $('#btnSave').show();
+            $('#btnUpdate').hide();
+            $('#btnDelete').hide();
+
+            // Generate new supplier code
+            generateSupplierCode();
+        }
+
+        function validateForm() {
+            let isValid = true;
+            $('.text-danger').text('');
+            $('.input-validation-error').removeClass('input-validation-error');
+
+            // Validate Supplier Name
+            if (!$('#SupplierName').val().trim()) {
+                $('#supplierNameError').text('Supplier Name is required');
+                $('#SupplierName').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            // Validate Phone Number
+            const phone = $('#PhoneNo').val().trim();
+            if (!phone) {
+                $('#phoneError').text('Phone Number is required');
+                $('#PhoneNo').addClass('input-validation-error');
+                isValid = false;
+            } else if (!/^[0-9]{10,12}$/.test(phone.replace(/\D/g, ''))) {
+                $('#phoneError').text('Please enter a valid phone number (10-12 digits)');
+                $('#PhoneNo').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            // Validate Email (optional but if provided must be valid)
+            const email = $('#Email').val().trim();
+            if (email && !/^[^\s@@]+@@[^\s@@]+\.[^\s@@]+$/.test(email)) {
+                $('#emailError').text('Please enter a valid email address');
+                $('#Email').addClass('input-validation-error');
+                isValid = false;
+            }
+
+            return isValid;
+        }
+
+        function getFormData() {
+            return {
+                SupplierCode: $('#SupplierCode').val().trim(),
+                SupplierName: $('#SupplierName').val().trim(),
+                ContactPerson: $('#ContactPerson').val().trim(),
+                PhoneNo: $('#PhoneNo').val().trim(),
+                Email: $('#Email').val().trim(),
+                PhysicalAddress: $('#PhysicalAddress').val().trim(),
+                PostalAddress: $('#PostalAddress').val().trim(),
+                City: $('#City').val().trim(),
+                County: $('#County').val().trim(),
+                Country: $('#Country').val().trim(),
+                PinNo: $('#PinNo').val().trim(),
+                VatNo: $('#VatNo').val().trim(),
+                BankName: $('#BankName').val().trim(),
+                BankAccountNo: $('#BankAccountNo').val().trim(),
+                BankAccountName: $('#BankAccountName').val().trim(),
+                BankBranch: $('#BankBranch').val().trim(),
+                GlAccountNo: $('#GlAccountNo').val(),
+                GlAccountName: $('#GlAccountName').val().trim(),
+                OpeningBalance: parseFloat($('#OpeningBalance').val()) || 0,
+                Remarks: $('#Remarks').val().trim(),
+                IsActive: $('#IsActive').val() === 'true',
+                CompanyCode: $('#CompanyCode').val()
+            };
+        }
+
+        function saveSupplier() {
+            if (!validateForm()) return;
+
+            const formData = getFormData();
+
+            // Validate GL Account if selected
+            if (formData.GlAccountNo) {
+                const glName = $('#GlAccountNo option:selected').data('glname');
+                if (glName) {
+                    formData.GlAccountName = glName;
+                }
+            }
+
+            showLoading(true);
+
+            $.ajax({
+                url: '/Supplier/Create',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    console.error('Error:', xhr.responseText);
+                    let errorMsg = 'Error creating supplier';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error');
+                }
+            });
+        }
+
+        function updateSupplier() {
+            if (!validateForm()) return;
+            if (!currentSupplierId) {
+                showNotification('Supplier not selected. Please select a supplier to update.', 'error');
+                return;
+            }
+
+            const formData = getFormData();
+            formData.Id = currentSupplierId;
+
+            // Validate GL Account if selected
+            if (formData.GlAccountNo) {
+                const glName = $('#GlAccountNo option:selected').data('glname');
+                if (glName) {
+                    formData.GlAccountName = glName;
+                }
+            }
+
+            showLoading(true);
+
+            $.ajax({
+                url: '/Supplier/Update',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    console.error('Error:', xhr.responseText);
+                    let errorMsg = 'Error updating supplier';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error');
+                }
+            });
+        }
+
+        function deleteSupplier(id, name) {
+            deleteSupplierId = id;
+            deleteSupplierName = name;
+            $('#deleteSupplierName').text(name);
+            const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            modal.show();
+        }
+
+        function confirmDelete() {
+            if (!deleteSupplierId) return;
+
+            showLoading(true);
+
+            $.ajax({
+                url: `/Supplier/Delete/${deleteSupplierId}`,
+                type: 'DELETE',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    showLoading(false);
+                    $('#deleteModal').modal('hide');
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification(response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    showLoading(false);
+                    $('#deleteModal').modal('hide');
+                    let errorMsg = 'Error deleting supplier';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification(errorMsg, 'error');
+                }
+            });
+        }
+
+        function performSearch() {
+            const searchTerm = $('#supplierSearchInput').val().toLowerCase().trim();
+            const statusFilter = $('#statusFilter').val();
+            let visibleCount = 0;
+
+            $('#suppliersTableBody tr').each(function() {
+                const row = $(this);
+                if (row.attr('id') === 'noSuppliersRow') {
+                    row.toggle(visibleCount === 0);
+                    return;
+                }
+
+                const name = row.find('.supplier-name').text().toLowerCase();
+                const code = row.find('td:eq(1)').text().toLowerCase();
+                const contact = row.find('.supplier-contact').text().toLowerCase();
+                const phone = row.find('.supplier-phone').text().toLowerCase();
+                const email = row.find('.supplier-email').text().toLowerCase();
+                const isActive = row.data('isactive') === true || row.data('isactive') === 'true';
+
+                let matchesSearch = true;
+                if (searchTerm) {
+                    matchesSearch = name.includes(searchTerm) ||
+                                   code.includes(searchTerm) ||
+                                   contact.includes(searchTerm) ||
+                                   phone.includes(searchTerm) ||
+                                   email.includes(searchTerm);
+                }
+
+                let matchesStatus = true;
+                if (statusFilter === 'active') {
+                    matchesStatus = isActive;
+                } else if (statusFilter === 'inactive') {
+                    matchesStatus = !isActive;
+                }
+
+                if (matchesSearch && matchesStatus) {
+                    row.show();
+                    visibleCount++;
+                } else {
+                    row.hide();
+                }
+            });
+
+            // Show/hide no results row
+            $('#noSuppliersRow').toggle(visibleCount === 0);
+        }
+
+        function sortSuppliers() {
+            const sortBy = $('#sortBy').val();
+            const tbody = $('#suppliersTableBody');
+            const rows = tbody.find('tr:visible').not('#noSuppliersRow').get();
+
+            rows.sort(function(a, b) {
+                let aVal, bVal;
+                switch(sortBy) {
+                    case 'name':
+                        aVal = $(a).find('.supplier-name').text().toLowerCase();
+                        bVal = $(b).find('.supplier-name').text().toLowerCase();
+                        break;
+                    case 'code':
+                        aVal = $(a).find('td:eq(1)').text().toLowerCase();
+                        bVal = $(b).find('td:eq(1)').text().toLowerCase();
+                        break;
+                    case 'balance':
+                        aVal = parseFloat($(a).find('.supplier-balance').text().replace(/[^0-9.-]/g, '')) || 0;
+                        bVal = parseFloat($(b).find('.supplier-balance').text().replace(/[^0-9.-]/g, '')) || 0;
+                        return bVal - aVal;
+                    default:
+                        aVal = $(a).find('.supplier-name').text().toLowerCase();
+                        bVal = $(b).find('.supplier-name').text().toLowerCase();
+                }
+                return aVal.localeCompare(bVal);
+            });
+
+            $.each(rows, function(index, row) {
+                tbody.append(row);
+                $(row).find('.row-number').text(index + 1);
+            });
+        }
+
+        function clearAllFilters() {
+            $('#supplierSearchInput').val('');
+            $('#statusFilter').val('all');
+            $('#sortBy').val('name');
+            performSearch();
+            $('#supplierSearchInput').focus();
+        }
+
+        function showNotification(message, type) {
+            const icon = type === 'error' ? 'exclamation-triangle' :
+                        type === 'success' ? 'check-circle' : 'info';
+            const alertClass = type === 'error' ? 'danger' : type;
+
+            const alertDiv = $(`
+                <div class="alert alert-${alertClass} alert-dismissible fade show position-fixed top-0 end-0 m-3"
+                     style="z-index: 9999; min-width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" role="alert">
+                    <i class="fas fa-${icon} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `);
+            $('body').append(alertDiv);
+
+            // Auto dismiss after 5 seconds
+            setTimeout(() => {
+                alertDiv.fadeOut('slow', function() {
+                    $(this).remove();
+                });
+            }, 5000);
+        }
+
+        function showLoading(show) {
+            if (show) {
+                $('#loadingOverlay').fadeIn(200);
+            } else {
+                $('#loadingOverlay').fadeOut(200);
+            }
+        }
+    </script>
+}

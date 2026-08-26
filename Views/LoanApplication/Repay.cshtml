@@ -1,0 +1,606 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.LoanRepaymentViewModel
+@{
+    ViewData["Title"] = "Loan Repayment";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    // Serialize schedule data safely to JSON
+    var scheduleJson = System.Text.Json.JsonSerializer.Serialize(Model.RepaymentSchedule);
+    var totalOutstanding = Model.TotalOutstanding;
+    var penaltyAmount = Model.PenaltyAmount;
+    var monthlyInstallment = Model.MonthlyInstallment;
+    var fullBalance = totalOutstanding + penaltyAmount;
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Loan Repayment - @Model.LoanNo</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Loan Summary</h6>
+                    <hr />
+                    <div class="row mb-2">
+                        <div class="col-6">Loan Number:</div>
+                        <div class="col-6 text-end fw-bold">@Model.LoanNo</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Member Name:</div>
+                        <div class="col-6 text-end">@Model.MemberName</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Original Amount:</div>
+                        <div class="col-6 text-end">@Model.LoanAmount.ToString("N0") KES</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Monthly Installment:</div>
+                        <div class="col-6 text-end">@Model.MonthlyInstallment.ToString("N0") KES</div>
+                    </div>
+                    <hr />
+
+                    @if (Model.HasPenalty)
+                    {
+                        <div class="row mb-2">
+                            <div class="col-6">Days Overdue:</div>
+                            <div class="col-6 text-end text-danger">@Model.DaysOverdue days</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">Penalty Amount:</div>
+                            <div class="col-6 text-end text-danger fw-bold">@Model.PenaltyAmount.ToString("N0") KES</div>
+                        </div>
+                        <div class="alert alert-warning py-1 mb-2">
+                            <small>@Model.PenaltyMessage</small>
+                        </div>
+                    }
+
+                    <div class="row mb-2">
+                        <div class="col-6">Outstanding Principal:</div>
+                        <div class="col-6 text-end text-danger fw-bold">@Model.OutstandingBalance.ToString("N0") KES</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Outstanding Interest:</div>
+                        <div class="col-6 text-end text-warning fw-bold">@Model.OutstandingInterest.ToString("N0") KES</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Total Outstanding:</div>
+                        <div class="col-6 text-end text-primary fw-bold fs-5">@Model.TotalOutstanding.ToString("N0") KES</div>
+                    </div>
+                    @if (Model.NextPaymentDate.HasValue)
+                    {
+                        <div class="row mb-2">
+                            <div class="col-6">Next Due Date:</div>
+                            <div class="col-6 text-end">
+                                @Model.NextPaymentDate.Value.ToString("dd MMM yyyy")
+                                @if (Model.NextPaymentDate.Value < DateTime.Now)
+                                {
+                                    <span class="badge bg-danger ms-1">Overdue</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-body bg-light">
+                    <h6 class="card-title text-success">
+                        <i class="fa fa-graduation-cap"></i> Early Settlement Benefit
+                    </h6>
+                    <hr />
+                    <div class="small">
+                        <p class="mb-1">You can pay off your loan early and save on future interest!</p>
+                        <ul class="mb-0">
+                            <li>Pay any amount - even more than your monthly installment</li>
+                            <li>Clear the full loan in one payment</li>
+                            <li>Interest is calculated per installment - no penalty for early repayment</li>
+                            <li>Overpayments will be credited to your savings account</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Make a Payment</h6>
+                    <hr />
+
+                    <form method="post" asp-action="Repay" asp-route-loanNo="@Model.LoanNo" id="repaymentForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="LoanNo" />
+                        <input type="hidden" asp-for="TotalOutstanding" id="hiddenTotalOutstanding" />
+                        <input type="hidden" asp-for="OutstandingBalance" />
+                        <input type="hidden" asp-for="OutstandingInterest" />
+                        <input type="hidden" asp-for="PenaltyAmount" />
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label asp-for="PaymentAmount" class="form-label fw-bold">Payment Amount (KES)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input asp-for="PaymentAmount" class="form-control form-control-lg" type="number"
+                                           step="1" min="1" id="paymentAmount"
+                                           max="@fullBalance"
+                                           value="@Model.PaymentAmount.ToString("F0")" />
+                                </div>
+                                <span asp-validation-for="PaymentAmount" class="text-danger"></span>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setPaymentAmount(@monthlyInstallment)">
+                                        <i class="fa fa-calendar"></i> Monthly (@monthlyInstallment.ToString("N0") KES)
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-success" onclick="setPaymentAmount(@fullBalance)">
+                                        <i class="fa fa-check-circle"></i> Full Balance (@fullBalance.ToString("N0") KES)
+                                    </button>
+                                </div>
+                                <small class="text-muted">Enter any amount - minimum 1 KES, maximum your total outstanding balance</small>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Payment Method</label>
+                                <div class="row">
+                                    @foreach (var method in Model.PaymentMethods)
+                                    {
+                                        <div class="col-md-3 mb-2">
+                                            <div class="card payment-method @(method.Code == "MPESA" ? "border-success selected" : "")"
+                                                 data-method="@method.Code">
+                                                <div class="card-body text-center py-2">
+                                                    <i class="fa @method.Icon" style="font-size: 24px;"></i>
+                                                    <div class="form-check mt-1">
+                                                        <input type="radio" name="PaymentMethod" value="@method.Code"
+                                                               class="form-check-input" id="method_@method.Code"
+                                                               @(method.Code == "MPESA" ? "checked" : "") />
+                                                        <label class="form-check-label small" for="method_@method.Code">
+                                                            @method.Name
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                <span asp-validation-for="PaymentMethod" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div id="mpesaSection" class="row mb-3">
+                            <div class="col-12">
+                                <label asp-for="MpesaPhoneNumber" class="form-label">M-Pesa Phone Number</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">+254</span>
+                                    <input asp-for="MpesaPhoneNumber" class="form-control" placeholder="712345678" />
+                                </div>
+                                <span asp-validation-for="MpesaPhoneNumber" class="text-danger"></span>
+                                <small class="text-muted">Enter the phone number registered with M-Pesa</small>
+                            </div>
+                        </div>
+
+                        <div id="chequeSection" class="row mb-3" style="display: none;">
+                            <div class="col-12">
+                                <label asp-for="ChequeNumber" class="form-label">Cheque Number</label>
+                                <input asp-for="ChequeNumber" class="form-control" placeholder="e.g., 000123" />
+                                <span asp-validation-for="ChequeNumber" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label asp-for="ReferenceNumber" class="form-label">Reference Number (Optional)</label>
+                                <input asp-for="ReferenceNumber" class="form-control" placeholder="Transaction reference" />
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label asp-for="Remarks" class="form-label">Remarks (Optional)</label>
+                                <textarea asp-for="Remarks" class="form-control" rows="2" placeholder="Additional notes"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info" id="paymentSummary">
+                            <strong>Payment Summary:</strong>
+                            <div id="summaryText">Enter amount to see breakdown</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100" id="submitBtn">
+                            <i class="fa fa-money-bill-wave"></i> Process Payment
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.RepaymentSchedule != null && Model.RepaymentSchedule.Any())
+    {
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">Repayment Schedule</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Due Date</th>
+                                        <th>Principal</th>
+                                        <th>Interest</th>
+                                        <th>Total</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var schedule in Model.RepaymentSchedule)
+                                    {
+                                        <tr class="@(schedule.Status == "Overdue" ? "table-danger" : schedule.Status == "Paid" ? "table-success" : "")">
+                                            <td>@schedule.InstallmentNo</td>
+                                            <td>@schedule.DueDate.ToString("dd MMM yyyy")</td>
+                                            <td>@schedule.PrincipalAmount.ToString("N0")</td>
+                                            <td>@schedule.InterestAmount.ToString("N0")</td>
+                                            <td>@schedule.TotalAmount.ToString("N0")</td>
+                                            <td>
+                                                @if (schedule.Status == "Paid")
+                                                {
+                                                    <span class="badge bg-success">Paid</span>
+                                                }
+                                                else if (schedule.Status == "Partial")
+                                                {
+                                                    <span class="badge bg-warning">Partial</span>
+                                                }
+                                                else if (schedule.DueDate < DateTime.Now)
+                                                {
+                                                    <span class="badge bg-danger">Overdue</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Pending</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr class="fw-bold bg-light">
+                                        <td colspan="2" class="text-end">Totals:</td>
+                                        <td>@Model.RepaymentSchedule.Sum(s => s.PrincipalAmount).ToString("N0")</td>
+                                        <td>@Model.RepaymentSchedule.Sum(s => s.InterestAmount).ToString("N0")</td>
+                                        <td>@Model.RepaymentSchedule.Sum(s => s.TotalAmount).ToString("N0")</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Store data for JavaScript
+        var scheduleData = @Html.Raw(scheduleJson);
+        var totalOutstanding = @totalOutstanding;
+        var penaltyAmount = @penaltyAmount;
+        var monthlyInstallment = @monthlyInstallment;
+        var fullBalance = @fullBalance;
+
+        function setPaymentAmount(amount) {
+            // Round to nearest integer
+            var roundedAmount = Math.round(amount);
+            document.getElementById('paymentAmount').value = roundedAmount;
+            calculatePaymentSummary();
+
+            // Trigger change event for any listeners
+            var event = new Event('input', { bubbles: true });
+            document.getElementById('paymentAmount').dispatchEvent(event);
+        }
+
+        function calculatePaymentSummary() {
+            let amount = parseFloat(document.getElementById('paymentAmount').value) || 0;
+            let summaryDiv = document.getElementById('summaryText');
+
+            if (amount <= 0) {
+                summaryDiv.innerHTML = 'Enter amount to see breakdown';
+                return;
+            }
+
+            // Get maximum allowed (total outstanding + penalty if any)
+            let maxAmount = fullBalance;
+
+            if (amount > maxAmount) {
+                document.getElementById('paymentAmount').value = maxAmount;
+                amount = maxAmount;
+            }
+
+            let remainingAmount = amount;
+            let totalPrincipal = 0;
+            let totalInterest = 0;
+            let totalPenalty = 0;
+            let installmentsCovered = 0;
+            let allInstallmentsPaid = true;
+            let isFullBalancePayment = (amount >= fullBalance - 0.01);
+
+            // Process each pending installment
+            for (var i = 0; i < scheduleData.length; i++) {
+                var schedule = scheduleData[i];
+                // Skip paid installments
+                if (schedule.status === 'Paid') continue;
+
+                var installmentPrincipal = schedule.principalAmount || 0;
+                var installmentInterest = schedule.interestAmount || 0;
+                var installmentTotal = installmentPrincipal + installmentInterest;
+
+                // Check if this installment has penalty
+                var penalty = 0;
+                if (i === 0 && penaltyAmount > 0) {
+                    penalty = penaltyAmount;
+                }
+
+                var totalDue = installmentTotal + penalty;
+
+                if (remainingAmount <= 0) break;
+
+                // Calculate how much of this installment can be paid
+                var amountForThisInstallment = Math.min(remainingAmount, totalDue);
+
+                // Allocate: Penalty first, then Interest, then Principal
+                var penaltyPaid = Math.min(amountForThisInstallment, penalty);
+                var afterPenalty = amountForThisInstallment - penaltyPaid;
+
+                var interestPaid = Math.min(afterPenalty, installmentInterest);
+                var afterInterest = afterPenalty - interestPaid;
+
+                var principalPaid = Math.min(afterInterest, installmentPrincipal);
+
+                // Round to 2 decimal places
+                penaltyPaid = Math.round(penaltyPaid * 100) / 100;
+                interestPaid = Math.round(interestPaid * 100) / 100;
+                principalPaid = Math.round(principalPaid * 100) / 100;
+
+                totalPenalty += penaltyPaid;
+                totalInterest += interestPaid;
+                totalPrincipal += principalPaid;
+                remainingAmount -= amountForThisInstallment;
+                installmentsCovered++;
+
+                // Check if this installment is fully paid
+                if (installmentTotal > 0 && amountForThisInstallment < installmentTotal) {
+                    allInstallmentsPaid = false;
+                }
+            }
+
+            // Calculate new balance
+            let newBalance = fullBalance - amount;
+            if (newBalance < 0) newBalance = 0;
+
+            // Build the summary HTML
+            let summaryHtml = '<div class="payment-breakdown">';
+            summaryHtml += '<div class="row"><div class="col-6"><strong>Payment Amount:</strong></div>';
+            summaryHtml += '<div class="col-6 text-end"><strong>' + Math.round(amount).toLocaleString() + ' KES</strong></div></div>';
+
+            if (isFullBalancePayment) {
+                summaryHtml += '<div class="alert alert-success mt-2 mb-0"><i class="fa fa-check-circle"></i> <strong>FULL BALANCE PAYMENT</strong> - This payment will clear the entire loan balance!</div>';
+            }
+
+            summaryHtml += '<hr class="my-1" />';
+
+            if (totalPrincipal > 0) {
+                summaryHtml += '<div class="row"><div class="col-6">Principal Paid:</div>';
+                summaryHtml += '<div class="col-6 text-end text-danger">' + Math.round(totalPrincipal).toLocaleString() + ' KES</div></div>';
+            }
+
+            if (totalInterest > 0) {
+                summaryHtml += '<div class="row"><div class="col-6">Interest Paid:</div>';
+                summaryHtml += '<div class="col-6 text-end text-warning">' + Math.round(totalInterest).toLocaleString() + ' KES</div></div>';
+            }
+
+            if (totalPenalty > 0) {
+                summaryHtml += '<div class="row"><div class="col-6">Penalty Paid:</div>';
+                summaryHtml += '<div class="col-6 text-end text-danger">' + Math.round(totalPenalty).toLocaleString() + ' KES</div></div>';
+            }
+
+            summaryHtml += '<hr class="my-1" />';
+            summaryHtml += '<div class="row"><div class="col-6"><strong>Installments Covered:</strong></div>';
+            summaryHtml += '<div class="col-6 text-end"><strong>' + installmentsCovered + '</strong></div></div>';
+
+            summaryHtml += '<div class="row"><div class="col-6"><strong>Remaining Balance:</strong></div>';
+
+            if (newBalance <= 0) {
+                summaryHtml += '<div class="col-6 text-end text-success fw-bold">0 KES - FULLY PAID!</div></div>';
+                summaryHtml += '<div class="alert alert-success mt-2 mb-0"><i class="fa fa-trophy"></i> Congratulations! Your loan is now fully settled!</div>';
+            } else {
+                summaryHtml += '<div class="col-6 text-end text-primary fw-bold">' + Math.round(newBalance).toLocaleString() + ' KES</div></div>';
+            }
+
+            if (remainingAmount > 0 && newBalance > 0) {
+                summaryHtml += '<div class="alert alert-warning mt-2 mb-0"><i class="fa fa-exclamation-triangle"></i> Overpayment of ' +
+                               Math.round(remainingAmount).toLocaleString() + ' KES will be credited to your deposit account.</div>';
+            }
+
+            summaryHtml += '</div>';
+            summaryDiv.innerHTML = summaryHtml;
+        }
+
+        // Payment method toggle
+        document.querySelectorAll('input[name="PaymentMethod"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                let mpesaSection = document.getElementById('mpesaSection');
+                let chequeSection = document.getElementById('chequeSection');
+
+                if (this.value === 'MPESA') {
+                    mpesaSection.style.display = 'flex';
+                    chequeSection.style.display = 'none';
+                } else if (this.value === 'CHEQUE') {
+                    mpesaSection.style.display = 'none';
+                    chequeSection.style.display = 'flex';
+                } else {
+                    mpesaSection.style.display = 'none';
+                    chequeSection.style.display = 'none';
+                }
+
+                document.querySelectorAll('.payment-method').forEach(el => {
+                    el.classList.remove('border-success', 'selected');
+                });
+                let parentCard = this.closest('.payment-method');
+                if (parentCard) {
+                    parentCard.classList.add('border-success', 'selected');
+                }
+            });
+        });
+
+        // Payment amount input handler
+        document.getElementById('paymentAmount').addEventListener('input', function() {
+            let val = parseFloat(this.value) || 0;
+            let max = fullBalance;
+            if (val > max) {
+                this.value = max;
+                val = max;
+            }
+            calculatePaymentSummary();
+        });
+
+        // Form submission handler
+        document.getElementById('repaymentForm').addEventListener('submit', function(e) {
+            let selectedMethod = document.querySelector('input[name="PaymentMethod"]:checked');
+            let amount = parseFloat(document.getElementById('paymentAmount').value) || 0;
+
+            if (!selectedMethod) {
+                e.preventDefault();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Selection Required',
+                    text: 'Please select a payment method'
+                });
+                return false;
+            }
+
+            if (amount <= 0) {
+                e.preventDefault();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid Amount',
+                    text: 'Please enter a valid payment amount'
+                });
+                return false;
+            }
+
+            let maxAmount = fullBalance;
+            if (amount > maxAmount) {
+                e.preventDefault();
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Amount Exceeds Balance',
+                    text: 'You cannot pay more than your outstanding balance'
+                });
+                return false;
+            }
+
+            if (selectedMethod.value === 'MPESA') {
+                let phone = document.getElementById('MpesaPhoneNumber').value;
+                let cleanPhone = phone.replace(/\D/g, '');
+                if (!cleanPhone || cleanPhone.length !== 9) {
+                    e.preventDefault();
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid Phone Number',
+                        text: 'Please enter a valid 9-digit M-Pesa phone number'
+                    });
+                    return false;
+                }
+            }
+
+            if (selectedMethod.value === 'CHEQUE') {
+                let chequeNo = document.getElementById('ChequeNumber').value;
+                if (!chequeNo || chequeNo.trim() === '') {
+                    e.preventDefault();
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Cheque Number Required',
+                        text: 'Please enter the cheque number'
+                    });
+                    return false;
+                }
+            }
+
+            // Confirm payment
+            let confirmText = 'Are you sure you want to process this payment?';
+            if (amount >= fullBalance) {
+                confirmText = 'This payment will fully settle your loan. Are you sure you want to proceed?';
+            }
+
+            Swal.fire({
+                title: 'Confirm Payment',
+                text: confirmText,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#198754',
+                cancelButtonColor: '#dc3545',
+                confirmButtonText: 'Yes, Process Payment',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('submitBtn').disabled = true;
+                    document.getElementById('submitBtn').innerHTML = '<i class="fa fa-spinner fa-spin"></i> Processing...';
+                    document.getElementById('repaymentForm').submit();
+                }
+            });
+
+            e.preventDefault();
+            return false;
+        });
+
+        // Initialize on page load
+        $(document).ready(function() {
+            // Initial calculation
+            calculatePaymentSummary();
+
+            // If there's a value already set, trigger calculation
+            var initialAmount = document.getElementById('paymentAmount').value;
+            if (initialAmount && parseFloat(initialAmount) > 0) {
+                calculatePaymentSummary();
+            }
+        });
+    </script>
+
+    <style>
+        .payment-method {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #dee2e6;
+        }
+
+            .payment-method:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+
+            .payment-method.selected {
+                border: 2px solid #198754 !important;
+                background-color: #f8f9fa;
+            }
+
+        .btn-sm {
+            margin-right: 5px;
+        }
+
+        .payment-breakdown .row {
+            padding: 2px 0;
+        }
+
+        .payment-breakdown hr {
+            margin: 4px 0;
+        }
+    </style>
+}

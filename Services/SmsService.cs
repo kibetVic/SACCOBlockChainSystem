@@ -158,12 +158,47 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-        public async Task<SmsResponseDTO> SendTemplateSmsAsync(
-            string templateCode,
-            string phoneNumber,
-            string recipientName,
-            Dictionary<string, string> parameters,
-            string reference = null)
+        //public async Task<SmsResponseDTO> SendTemplateSmsAsync(
+        //    string templateCode,
+        //    string phoneNumber,
+        //    string recipientName,
+        //    Dictionary<string, string> parameters,
+        //    string reference = null)
+        //{
+        //    var companyCode = _companyContextService.GetCurrentCompanyCode();
+        //    var template = await GetTemplateByCodeAsync(templateCode, companyCode);
+
+        //    if (template == null)
+        //    {
+        //        throw new InvalidOperationException($"SMS template '{templateCode}' not found");
+        //    }
+
+        //    if (!template.IsActive)
+        //    {
+        //        throw new InvalidOperationException($"SMS template '{templateCode}' is inactive");
+        //    }
+
+        //    // Replace placeholders in template
+        //    var message = template.TemplateContent;
+        //    foreach (var param in parameters)
+        //    {
+        //        message = message.Replace($"{{{{{param.Key}}}}}", param.Value);
+        //    }
+
+        //    var request = new SendSmsRequestDTO
+        //    {
+        //        PhoneNumber = phoneNumber,
+        //        RecipientName = recipientName,
+        //        Message = message,
+        //        MessageType = template.TemplateName,
+        //        Reference = reference
+        //    };
+
+        //    return await SendSmsAsync(request);
+        //}
+
+
+        public async Task<SmsResponseDTO> SendTemplateSmsAsync( string templateCode, string phoneNumber, string recipientName, Dictionary<string, string> parameters, string reference = null)
         {
             var companyCode = _companyContextService.GetCurrentCompanyCode();
             var template = await GetTemplateByCodeAsync(templateCode, companyCode);
@@ -180,6 +215,21 @@ namespace SACCOBlockChainSystem.Services
 
             // Replace placeholders in template
             var message = template.TemplateContent;
+
+            // Add AGM data to parameters if available
+            if (template.AGMDate.HasValue)
+            {
+                parameters["AGMDate"] = template.AGMDate.Value.ToString("dddd, MMMM dd, yyyy");
+            }
+            if (template.AGMTime.HasValue)
+            {
+                parameters["AGMTime"] = template.AGMTime.Value.ToString(@"hh\:mm tt");
+            }
+            if (!string.IsNullOrEmpty(template.AGMVenue))
+            {
+                parameters["AGMVenue"] = template.AGMVenue;
+            }
+
             foreach (var param in parameters)
             {
                 message = message.Replace($"{{{{{param.Key}}}}}", param.Value);
@@ -324,7 +374,11 @@ namespace SACCOBlockChainSystem.Services
                 IsActive = dto.IsActive,
                 CompanyCode = companyCode,
                 CreatedBy = createdBy,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTime.Now,
+                //AGM
+                AGMDate = dto.AGMDate,
+                AGMTime = dto.AGMTime,
+                AGMVenue = dto.AGMVenue
             };
 
             _context.SmsTemplates.Add(template);
@@ -349,6 +403,10 @@ namespace SACCOBlockChainSystem.Services
             template.IsActive = dto.IsActive;
             template.ModifiedBy = modifiedBy;
             template.ModifiedAt = DateTime.Now;
+            // AGM fields
+            template.AGMDate = dto.AGMDate;
+            template.AGMTime = dto.AGMTime;
+            template.AGMVenue = dto.AGMVenue;
 
             await _context.SaveChangesAsync();
 
@@ -385,7 +443,7 @@ namespace SACCOBlockChainSystem.Services
                 .FirstOrDefaultAsync(t => t.TemplateCode == templateCode && t.CompanyCode == companyCode);
         }
 
-        // Services/SmsService.cs - Update these methods
+
 
         public async Task<SmsSetting> GetSmsSettingsAsync(string companyCode)
         {
@@ -394,11 +452,11 @@ namespace SACCOBlockChainSystem.Services
 
             if (settings == null)
             {
-                // Get company name from SaccoParram
-                var company = await _context.SaccoParram
-                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
+                // Get company name from Companies table (not SaccoParram)
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
 
-                var companyName = company?.SaccoName ?? "JUHUDI SACCO";
+                var companyName = company?.CompanyName ?? "SACCO";
 
                 // Clean company name for sender ID (max 11 chars, uppercase, no spaces)
                 var senderId = CleanSenderId(companyName);

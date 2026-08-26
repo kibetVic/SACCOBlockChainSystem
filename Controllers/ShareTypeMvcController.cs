@@ -52,7 +52,7 @@ namespace SACCOBlockChainSystem.Controllers
                 // Get company name
                 var companyName = User.FindFirst("CompanyName")?.Value ??
                                  HttpContext.Session.GetString("CompanyName") ??
-                                 "JUHUDI SACCO";
+                                 "AMTECH SACCO";
 
                 // Convert share types to ViewModel for the table
                 var shareTypeViewModels = shareTypes.Select(st => new ShareTypeViewModel
@@ -64,6 +64,7 @@ namespace SACCOBlockChainSystem.Controllers
                     MaxAmount = st.MaxAmount ?? 0,
                     LoanToShareRatio = st.LoanToShareRatio.HasValue ? (decimal)st.LoanToShareRatio.Value : 0m,
                     IsMainShares = st.IsMainShares,
+                    Issharecapital = st.Issharecapital,
                     Withdrawable = st.Withdrawable,
                     UsedToOffset = st.UsedToOffset,
                     UsedToGuarantee = st.UsedToGuarantee,
@@ -333,7 +334,7 @@ namespace SACCOBlockChainSystem.Controllers
                     MinAmount = st.MinAmount,
                     MaxAmount = st.MaxAmount ?? 0,
                     LoanToShareRatio = st.LoanToShareRatio.HasValue ? (decimal)st.LoanToShareRatio.Value : 0m,
-                   // Ppacc = st.Ppacc,
+                    // Ppacc = st.Ppacc,
                     IsMainShares = st.IsMainShares,
                     Withdrawable = st.Withdrawable,
                     UsedToOffset = st.UsedToOffset,
@@ -342,7 +343,7 @@ namespace SACCOBlockChainSystem.Controllers
                 }).ToList();
 
                 ViewBag.ShareTypes = shareTypeViewModels;
-                ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "JUHUDI SACCO";
+                ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "AMTECH SACCO";
 
                 return View(updateDto);
             }
@@ -379,6 +380,7 @@ namespace SACCOBlockChainSystem.Controllers
                         MaxAmount = st.MaxAmount ?? 0,
                         LoanToShareRatio = st.LoanToShareRatio.HasValue ? (decimal)st.LoanToShareRatio.Value : 0m,
                         IsMainShares = st.IsMainShares,
+                        Issharecapital = st.Issharecapital,
                         Withdrawable = st.Withdrawable,
                         UsedToOffset = st.UsedToOffset,
                         UsedToGuarantee = st.UsedToGuarantee,
@@ -386,7 +388,7 @@ namespace SACCOBlockChainSystem.Controllers
                     }).ToList();
 
                     ViewBag.ShareTypes = shareTypeViewModels;
-                    ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "JUHUDI SACCO";
+                    ViewBag.CompanyName = User.FindFirst("CompanyName")?.Value ?? "AMTECH SACCO";
 
                     return View(updateDto);
                 }
@@ -499,8 +501,9 @@ namespace SACCOBlockChainSystem.Controllers
                         shareType.MinAmount,
                         MaxAmount = shareType.MaxAmount ?? 0,
                         LoanToShareRatio = shareType.LoanToShareRatio ?? 0,
-                       //shareType.Ppacc,
+                        //shareType.Ppacc,
                         shareType.IsMainShares,
+                        shareType.Issharecapital,
                         shareType.Withdrawable,
                         shareType.UsedToOffset,
                         shareType.UsedToGuarantee

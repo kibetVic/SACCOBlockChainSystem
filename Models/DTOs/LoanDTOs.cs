@@ -19,7 +19,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal PrincipalAmount { get; set; }
 
         [Required]
-        [Range(1, 360, ErrorMessage = "Repayment period must be between 1 and 360 months")]
+        [Range(1, 10000, ErrorMessage = "Repayment period must be between 1 and 10000 months")]
         public int RepayPeriod { get; set; } 
 
         [Required]
@@ -63,17 +63,17 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [Range(0, double.MaxValue)]
         public decimal RecommendedAmount { get; set; }
 
-        [Range(0, 100)]
+        [Range(0, 1000000)]
         public decimal RecommendedInterestRate { get; set; }
 
-        [Range(1, 360)]
+        [Range(1, 10000)]
         public int RecommendedPeriod { get; set; }
 
         [Required]
         public string AppraisalDecision { get; set; } = null!;
 
         [Required]
-        [StringLength(1000)]
+        [StringLength(10000)]
         public string AppraisalNotes { get; set; } = null!;
 
         public string? RiskFactors { get; set; }
@@ -187,6 +187,11 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal TotalDeductions { get; set; }
         public decimal NetDisbursementAmount { get; set; }
         public decimal GrossAmount { get; set; }
+        public int? EndmainId { get; set; }
+        public string? VoucherNo { get; set; }
+        public string? ChequeNo { get; set; }
+        public string? MinuteNo { get; set; }
+        public bool IsEndorsed { get; set; }
     }
 
     public class LoanDeductionDTO
@@ -234,34 +239,29 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
     public class LoanRepaymentDTO
     {
+        internal string? MpesaPhoneNumber;
+
         [Required]
         public string LoanNo { get; set; } = null!;
-
         [Required]
         public string MemberNo { get; set; } = null!;
-
         [Required]
         public DateTime PaymentDate { get; set; }
-
         [Required]
         [Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than 0")]
         public decimal AmountPaid { get; set; }
-
         [Required]
         public string PaymentMethod { get; set; } = null!;
-
-        [Required]
-        public string GlAccountNo { get; set; } = null!;
-
+        public decimal Amount { get; set; }
         public string? GlAccountName { get; set; }
-
         public string? ReferenceNo { get; set; }
-
         public string? Remarks { get; set; }
-
         public string? ReceivedBy { get; set; }
-
         public string CompanyCode { get; set; } = null!;
+        public string? ReferenceNumber { get; set; }
+        public string? ChequeNumber { get; set; }
+        public string? IpAddress { get; set; }
+        public bool? SendSTKConfirmation { get; set; } = false;
     }
 
     public class LoanOffsetDTO
@@ -394,7 +394,6 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal? MinimumPayment { get; set; }
     }
 
-    // Loan Dashboard DTO - Updated to use Status enum
     public class LoanDashboardDTO
     {
         public int TotalLoans { get; set; }
@@ -414,6 +413,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public List<LoanSummaryDTO> RecentLoans { get; set; } = new();
         public Dictionary<string, int> LoansByStatus { get; set; } = new();
         public Dictionary<string, decimal> LoanPortfolioByType { get; set; } = new();
+        public int ClosedLoans { get; internal set; }
+        public DateTime? NextPaymentDue { get; internal set; }
+        public decimal NextPaymentAmount { get; internal set; }
     }
 
     public class BatchGuarantorRequestDTO
@@ -553,5 +555,51 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string EarlyClosureMessage { get; set; }
         public string Recommendation { get; set; }
         public string Status { get; set; }
+    }
+
+    public class EndorsementDetailsDTO
+    {
+        public string LoanNo { get; set; } = null!;
+        public string MemberNo { get; set; } = null!;
+        public string MemberName { get; set; } = null!;
+        public string LoanTypeName { get; set; } = null!;
+        public decimal GrossAmount { get; set; }
+        public decimal NetAmount { get; set; }
+        public decimal TotalDeductions { get; set; }
+        public string Status { get; set; } = null!;
+        public DateTime EndorsementDate { get; set; }
+        public string EndorsedBy { get; set; } = null!;
+        public string? Remarks { get; set; }
+        public string? PhoneNo { get; set; }
+        public string MinuteNo { get; set; } = null!;
+        public string VoucherNo { get; set; } = null!;
+        public string ChequeNo { get; set; } = null!;
+        public string SourceAccountNo { get; set; } = null!;
+        public List<EndorsementDeductionDetailDTO> Deductions { get; set; } = new();
+        public List<EndorsementGLTransactionDTO> GLTransactions { get; set; } = new();
+    }
+
+    public class EndorsementDeductionDetailDTO
+    {
+        public string DeductionCode { get; set; } = null!;
+        public string DeductionName { get; set; } = null!;
+        public decimal Amount { get; set; }
+        public string GlAccountNo { get; set; } = null!;
+        public string GlAccountName { get; set; } = null!;
+        public string? Description { get; set; }
+        public bool IsPercentage { get; set; }
+        public decimal? PercentageValue { get; set; }
+    }
+
+    public class EndorsementGLTransactionDTO
+    {
+        public long Id { get; set; }
+        public decimal Amount { get; set; }
+        public string DrAccNo { get; set; } = null!;
+        public string CrAccNo { get; set; } = null!;
+        public string DrAccountName { get; set; } = null!;
+        public string CrAccountName { get; set; } = null!;
+        public string Description { get; set; } = null!;
+        public string DocumentNo { get; set; } = null!;
     }
 }

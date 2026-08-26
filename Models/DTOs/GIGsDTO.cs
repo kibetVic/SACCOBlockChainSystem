@@ -66,4 +66,58 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public DateTime? ModifiedAt { get; set; }
         public string? BlockchainTxId { get; set; }
     }
+
+    // DTO for a single member within a CIG
+    public class MemberPerCIGDTO
+    {
+        public string MemberNo { get; set; } = null!;
+        public string FullName { get; set; } = null!;
+        public string? IdNo { get; set; }
+        public string? PhoneNo { get; set; }
+        public string? Email { get; set; }
+        public string? Status { get; set; }
+        public DateTime? JoinedDate { get; set; }
+        public string? Surname { get; set; }
+        public string? OtherNames { get; set; }
+        public string? Gender { get; set; }
+        public string? Employer { get; set; }
+        public string? Department { get; set; }
+        public string? Rank { get; set; }
+        public decimal? ShareCapital { get; set; }
+        public bool? IsActive { get; set; }
+    }
+
+    // DTO for a CIG with its members
+    public class CIGReportDTO
+    {
+        public string CIGCode { get; set; } = null!;
+        public string CIGName { get; set; } = null!;
+        public string? ContactPhone { get; set; }
+        public string? ContactEmail { get; set; }
+        public string? Chairperson { get; set; }
+        public DateTime? RegistrationDate { get; set; }
+        public string? Status { get; set; }
+        public int TotalMembers { get; set; }
+        public List<MemberPerCIGDTO> Members { get; set; } = new List<MemberPerCIGDTO>();
+    }
+
+    // Main report view model
+    public class MembersPerCIGReportViewModel
+    {
+        public string CompanyName { get; set; } = "SACCO BlockChain System";
+        public string CompanyCode { get; set; } = null!;
+        public DateTime ReportDate { get; set; } = DateTime.Now;
+        public string PrintedBy { get; set; } = "System";
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public int TotalCIGs { get; set; }
+        public int TotalMembers { get; set; }
+        public int ActiveMembers { get; set; }
+        public int InactiveMembers { get; set; }
+        public List<CIGReportDTO> CIGs { get; set; } = new List<CIGReportDTO>();
+
+        // For filtering
+        public string? SearchTerm { get; set; }
+        public string? StatusFilter { get; set; }
+    }
 }

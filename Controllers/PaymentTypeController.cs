@@ -65,7 +65,7 @@ namespace SACCOBlockChainSystem.Controllers
         public async Task<IActionResult> Index()
         {
             var companyCode = User.FindFirst("CompanyCode")?.Value ?? "DEFAULT";
-            var companyName = User.FindFirst("CompanyName")?.Value ?? "JUHUDI SACCO";
+            var companyName = User.FindFirst("CompanyName")?.Value ?? "AMTECH SACCO";
 
             // Get GL Accounts for dropdown
             var glAccounts = await _context.GlSetup

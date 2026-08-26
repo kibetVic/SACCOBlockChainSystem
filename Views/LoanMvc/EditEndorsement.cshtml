@@ -1,0 +1,842 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.LoanEndorsementDTO
+@{
+    ViewData["Title"] = "Edit Endorsement";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var loan = ViewBag.Loan as SACCOBlockChainSystem.Models.Loan;
+    var grossAmount = ViewBag.GrossAmount as decimal? ?? 0;
+    var allGlAccounts = ViewBag.AllGlAccounts as IEnumerable<dynamic> ?? new List<dynamic>();
+    var registrationFee = ViewBag.RegistrationFee as decimal? ?? 0;
+    var isEdit = ViewBag.IsEdit as bool? ?? true;
+    var banks = ViewBag.Banks as IEnumerable<dynamic> ?? new List<dynamic>();
+
+    // CHECK FOR UPFRONT INTEREST
+    var isUpfrontInterest = loan?.InterestUpront ?? false;
+    var upfrontInterestAmount = ViewBag.UpfrontInterestAmount as decimal? ?? 0;
+    var interestRate = loan?.Interest ?? 0;
+    var repayPeriod = loan?.RepayPeriod ?? 12;
+    var repayMethod = loan?.RepayMethod ?? "AMT";
+
+    int deductionIndex = 0;
+}
+
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center">
+                <a asp-action="PendingEndorsement" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i> Back to List
+                </a>
+                <h2 class="page-title mb-0">
+                    <i class="bi bi-pencil-square me-2"></i>Edit Endorsement
+                </h2>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Endorsement Details
+                    </h5>
+                    <small class="text-muted">Loan: @loan?.LoanNo | Member: @loan?.MemberNo</small>
+                </div>
+                <div class="card-body">
+                    <!-- Loan Information Summary -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <small class="text-muted">Loan Number</small>
+                                <h5 class="mb-0">@loan?.LoanNo</h5>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <small class="text-muted">Member</small>
+                                <h5 class="mb-0">@loan?.MemberNo</h5>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <small class="text-muted">Minute No</small>
+                                <h5 class="mb-0">@Model.MinuteNo</h5>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <small class="text-muted">Gross Amount</small>
+                                <h5 class="mb-0 text-primary">KES @grossAmount.ToString("N0")</h5>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Decision Status -->
+                    <div class="row mt-4">
+                        <div class="col-md-12">
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <i class="bi bi-check-circle me-2"></i>Endorsement Decision
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="acceptCheckbox" @(Model.IsAccepted ? "checked" : "")>
+                                                <label class="form-check-label fw-bold text-success" for="acceptCheckbox">
+                                                    <i class="bi bi-check-circle-fill me-1"></i> Accept Endorsement
+                                                </label>
+                                                <small class="text-muted d-block mt-1">
+                                                    Approve the loan for disbursement
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="rejectCheckbox" @(!Model.IsAccepted ? "checked" : "")>
+                                                <label class="form-check-label fw-bold text-danger" for="rejectCheckbox">
+                                                    <i class="bi bi-x-circle-fill me-1"></i> Reject Endorsement
+                                                </label>
+                                                <small class="text-muted d-block mt-1">
+                                                    Reject the loan - No deductions or GL transactions will be created
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <input type="hidden" asp-for="IsAccepted" id="IsAcceptedHidden" value="@Model.IsAccepted.ToString().ToLower()" />
+
+                                    <!-- Rejection Reason -->
+                                    <div id="rejectionReasonDiv" style="display: @(!Model.IsAccepted ? "block" : "none");" class="mt-3 p-3 border rounded bg-light">
+                                        <label asp-for="Remarks" class="form-label fw-bold text-danger">Rejection Reason *</label>
+                                        <textarea asp-for="Remarks" class="form-control" rows="3"
+                                                  placeholder="Please provide a detailed reason for rejecting this loan endorsement...">@Model.Remarks</textarea>
+                                        <small class="text-muted mt-1 d-block">
+                                            <i class="bi bi-exclamation-triangle"></i> This reason will be recorded in the audit trail and blockchain
+                                        </small>
+                                    </div>
+
+                                    <div id="rejectionWarningDiv" style="display: @(!Model.IsAccepted ? "block" : "none");" class="mt-3 alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                        <strong>Warning:</strong> When you reject this endorsement:
+                                        <ul class="mt-2 mb-0">
+                                            <li>No deductions or GL transactions will be created</li>
+                                            <li>No cheque will be generated</li>
+                                            <li>The loan will be marked as <strong>Rejected</strong></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form asp-action="EditEndorsement" method="post" id="endorsementForm" onsubmit="return window.validateForm()">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="LoanNo" />
+                        <input type="hidden" asp-for="CompanyCode" />
+                        <input type="hidden" asp-for="EndorsedBy" />
+                        <input type="hidden" asp-for="EndorsementDate" value="@DateTime.Now" />
+                        <input type="hidden" asp-for="SourceAccountNo" id="sourceAccountNo" />
+                        <input type="hidden" asp-for="GrossAmount" id="grossAmountHidden" value="@grossAmount" />
+                        <input type="hidden" asp-for="MinuteNo" />
+                        <input type="hidden" asp-for="VoucherNo" />
+                        <input type="hidden" asp-for="ChequeNo" />
+                        <input type="hidden" asp-for="EndmainId" />
+
+                        <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+                        <div id="deductionsWrapper">
+                            <h6 class="text-uppercase text-muted mb-3">Deductions/Charges</h6>
+                            <p class="text-muted mb-3">
+                                <i class="bi bi-info-circle"></i>
+                                For each deduction, select the income account where the money will go.
+                            </p>
+
+                            <div class="table-responsive">
+                                <table class="table table-bordered" id="deductionsTable">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 15%">Deduction Type</th>
+                                            <th style="width: 30%">Income Account (Destination)</th>
+                                            <th style="width: 15%">Amount (KES)</th>
+                                            <th style="width: 15%">Percentage (%)</th>
+                                            <th style="width: 20%">Description</th>
+                                            <th style="width: 5%"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @{
+                                            deductionIndex = 0;
+                                        }
+
+                                        <!-- ============================================================ -->
+                                        <!-- UPFRONT INTEREST DEDUCTION (AUTOMATIC) -->
+                                        <!-- ============================================================ -->
+                                        @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                                        {
+                                            var interestIndex = deductionIndex++;
+                                            var displayInterestRate = interestRate;
+                                            <tr class="deduction-row table-info" data-index="@interestIndex" data-upfront-interest="true">
+                                                <td class="align-middle">
+                                                    <input type="hidden" name="Deductions[@interestIndex].DeductionCode" value="UPFRONT_INTEREST" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].DeductionName" value="Upfront Interest" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].IsMandatory" value="true" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].IsPercentage" id="IsPercentage_@interestIndex" value="false" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].PercentageValue" id="PercentageValue_@interestIndex" value="@displayInterestRate" />
+                                                    <input type="hidden" name="Deductions[@interestIndex].Amount" value="@upfrontInterestAmount" />
+                                                    <strong>Upfront Interest</strong>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <select name="Deductions[@interestIndex].GlAccountNo"
+                                                            class="form-select form-select-sm deduction-account"
+                                                            data-index="@interestIndex"
+                                                            data-upfront-interest="true"
+                                                            onchange="updateGlAccountName(@interestIndex, this.value)">
+                                                        @foreach (var account in allGlAccounts)
+                                                        {
+                                                            var isSelected = account.AccountNo == (ViewBag.InterestIncomeAccount as string ?? "");
+                                                            <option value="@account.AccountNo"
+                                                                    data-account-name="@account.AccountName"
+                                                                    selected="@(isSelected ? "selected" : null)">
+                                                                @account.DisplayText
+                                                            </option>
+                                                        }
+                                                    </select>
+                                                    <input type="hidden" name="Deductions[@interestIndex].GlAccountName" id="GlAccountName_@interestIndex" value="" />
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="text"
+                                                           class="form-control text-end fw-bold"
+                                                           value="@upfrontInterestAmount.ToString("N0")"
+                                                           readonly />
+                                                </td>
+                                                <td class="align-middle">
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="number"
+                                                               class="form-control deduction-percentage"
+                                                               id="PercentageInput_@interestIndex"
+                                                               value="@displayInterestRate"
+                                                               min="0"
+                                                               max="1000"
+                                                               step="0.01"
+                                                               placeholder="%"
+                                                               disabled />
+                                                        <button type="button"
+                                                                class="btn btn-outline-secondary"
+                                                                disabled
+                                                                title="Percentage mode is fixed for upfront interest">
+                                                            <i class="bi bi-percent"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="text"
+                                                           name="Deductions[@interestIndex].Description"
+                                                           class="form-control form-control-sm"
+                                                           value="Upfront interest for @repayPeriod months at @displayInterestRate% p.a."
+                                                           readonly />
+                                                </td>
+                                                <td class="align-middle text-center">
+                                                    <span class="text-muted"><i class="bi bi-lock"></i></span>
+                                                </td>
+                                            </tr>
+                                        }
+
+                                        @for (int i = 0; i < Model.Deductions.Count; i++)
+                                        {
+                                            var deduction = Model.Deductions[i];
+                                            var isRegFee = deduction.DeductionCode == "REG_FEE";
+                                            var isUpfrontInterestDeduction = deduction.DeductionCode == "UPFRONT_INTEREST";
+                                            // Skip if this is the upfront interest (we already added it above)
+                                            if (isUpfrontInterestDeduction) continue;
+
+                                            var currentIndex = deductionIndex++;
+
+                                            <tr class="deduction-row" data-index="@currentIndex" @(isRegFee ? "data-reg-fee='true'" : "")>
+                                                <td class="align-middle">
+                                                    <input type="hidden" name="Deductions[@currentIndex].DeductionCode" value="@deduction.DeductionCode" />
+                                                    <input type="hidden" name="Deductions[@currentIndex].DeductionName" value="@deduction.DeductionName" />
+                                                    <input type="hidden" name="Deductions[@currentIndex].IsMandatory" value="@deduction.IsMandatory.ToString().ToLower()" />
+                                                    <input type="hidden" name="Deductions[@currentIndex].IsPercentage" id="IsPercentage_@currentIndex" value="@deduction.IsPercentage.ToString().ToLower()" />
+                                                    <input type="hidden" name="Deductions[@currentIndex].PercentageValue" id="PercentageValue_@currentIndex" value="@deduction.PercentageValue" />
+                                                    <strong>@deduction.DeductionName</strong>
+                                                    @if (isRegFee)
+                                                    {
+                                                        <span class="badge bg-info ms-1">From Loan Type</span>
+                                                    }
+                                                    @if (deduction.IsMandatory)
+                                                    {
+                                                        <span class="badge bg-danger ms-1">Mandatory</span>
+                                                    }
+                                                </td>
+                                                <td class="align-middle">
+                                                    <select name="Deductions[@currentIndex].GlAccountNo"
+                                                            class="form-select form-select-sm deduction-account"
+                                                            data-index="@currentIndex"
+                                                            onchange="updateGlAccountName(@currentIndex, this.value)">
+                                                        <option value="">-- Select Income Account --</option>
+                                                        @foreach (var account in allGlAccounts)
+                                                        {
+                                                            <option value="@account.AccountNo"
+                                                                    data-account-name="@account.AccountName"
+                                                                    selected="@(deduction.GlAccountNo == account.AccountNo ? "selected" : null)">
+                                                                @account.DisplayText
+                                                            </option>
+                                                        }
+                                                    </select>
+                                                    <input type="hidden" name="Deductions[@currentIndex].GlAccountName" id="GlAccountName_@currentIndex" value="@deduction.GlAccountName" />
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="number"
+                                                           name="Deductions[@currentIndex].Amount"
+                                                           class="form-control deduction-amount"
+                                                           id="Amount_@currentIndex"
+                                                           value="@deduction.Amount"
+                                                           min="0"
+                                                           step="any"
+                                                           placeholder="Enter amount"
+                                                           onchange="updateTotals()"
+                                                           oninput="updateTotals()" />
+                                                </td>
+                                                <td class="align-middle">
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="number"
+                                                               class="form-control deduction-percentage"
+                                                               id="PercentageInput_@currentIndex"
+                                                               value="@(deduction.IsPercentage? deduction.PercentageValue: 0)"
+                                                               min="0"
+                                                               max="100"
+                                                               step="0.01"
+                                                               placeholder="%"
+                                                               @(deduction.IsPercentage ? "" : "disabled")
+                                                               onchange="calculatePercentageAmount(@currentIndex)" />
+                                                        <button type="button"
+                                                                class="btn btn-outline-secondary toggle-percentage"
+                                                                data-index="@currentIndex"
+                                                                onclick="togglePercentageMode(@currentIndex)"
+                                                                title="Toggle between fixed amount and percentage">
+                                                            <i class="bi bi-percent"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="text"
+                                                           name="Deductions[@currentIndex].Description"
+                                                           class="form-control form-control-sm"
+                                                           value="@deduction.Description" />
+                                                </td>
+                                                <td class="align-middle text-center">
+                                                    @if (!deduction.IsMandatory && !isRegFee)
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-danger remove-deduction" data-index="@currentIndex" title="Remove">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted"><i class="bi bi-lock"></i></span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="addCustomDeductionBtn">
+                                    <i class="bi bi-plus-circle"></i> Add Custom Deduction
+                                </button>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-md-6 mb-4">
+                                    <label asp-for="Remarks" class="form-label fw-bold">Remarks</label>
+                                    <textarea asp-for="Remarks" class="form-control" rows="5"
+                                              placeholder="Enter any remarks about the endorsement">@Model.Remarks</textarea>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6 class="card-title fw-bold">Endorsement Summary</h6>
+                                            <table class="table table-borderless mb-0">
+                                                <tr>
+                                                    <td><strong>Gross Amount:</strong></td>
+                                                    <td class="text-end">KES <span id="grossAmountDisplay">@grossAmount.ToString("N2")</span></td>
+                                                </tr>
+                                                @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                                                {
+                                                    <tr>
+                                                        <td><strong>Upfront Interest:</strong></td>
+                                                        <td class="text-end text-info">
+                                                            KES <span id="upfrontInterestDisplay">@upfrontInterestAmount.ToString("N2")</span>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                                <tr>
+                                                    <td><strong>Total Deductions:</strong></td>
+                                                    <td class="text-end text-danger">KES <span id="totalDeductions">0.00</span></td>
+                                                </tr>
+                                                <tr class="border-top">
+                                                    <td><strong>Net Amount:</strong></td>
+                                                    <td class="text-end fw-bold text-primary">KES <span id="netAmount">0.00</span></td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a asp-action="PendingEndorsement" class="btn btn-secondary">
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">
+                                <i class="bi bi-save me-2"></i>Update Endorsement
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle me-2"></i>Instructions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-success small">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        <strong>GL Account Explanation:</strong>
+                        <ul class="mt-2 mb-0">
+                            <li><strong>Income Account:</strong> Where fees go TO - DEBIT entry</li>
+                        </ul>
+                    </div>
+                    <div class="alert alert-warning small">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Important:</strong>
+                        <ul class="mt-2 mb-0">
+                            <li>For each deduction with amount > 0, select an income account</li>
+                            <li>Net amount cannot be negative</li>
+                            <li>All deductions with amount > 0 require an income account</li>
+                            @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                            {
+                                <li class="text-info"><strong>Upfront Interest:</strong> @interestRate% p.a. for @repayPeriod months = KES @upfrontInterestAmount.ToString("N0")</li>
+                            }
+                        </ul>
+                    </div>
+                    <div class="alert alert-info small">
+                        <i class="bi bi-clock-history me-2"></i>
+                        <strong>Changes will be:</strong>
+                        <ul class="mt-2 mb-0">
+                            <li>Recorded in audit trail</li>
+                            <li>Logged on blockchain</li>
+                            <li>Update GL transactions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        var grossAmount = @grossAmount;
+        var upfrontInterestAmount = @upfrontInterestAmount;
+        var deductionCounter = @(deductionIndex);
+
+        // Function to update GL Account Name
+        function updateGlAccountName(index, accountNo) {
+            var accountName = '';
+            var selectElement = document.querySelector(`select[name="Deductions[${index}].GlAccountNo"]`);
+            if (selectElement && selectElement.selectedIndex > 0) {
+                var selectedOption = selectElement.options[selectElement.selectedIndex];
+                accountName = selectedOption.getAttribute('data-account-name') || selectedOption.textContent.split(' - ')[1] || '';
+            }
+            var hiddenField = document.getElementById(`GlAccountName_${index}`);
+            if (hiddenField) {
+                hiddenField.value = accountName;
+            }
+        }
+
+        // Function to toggle percentage mode
+        function togglePercentageMode(index) {
+            var isPercentageField = document.getElementById(`IsPercentage_${index}`);
+            var percentageInput = document.getElementById(`PercentageInput_${index}`);
+            var amountInput = document.getElementById(`Amount_${index}`);
+            var percentageValueField = document.getElementById(`PercentageValue_${index}`);
+
+            if (isPercentageField && isPercentageField.value === 'true') {
+                isPercentageField.value = 'false';
+                percentageInput.disabled = true;
+                percentageInput.value = '';
+                percentageValueField.value = '';
+                amountInput.disabled = false;
+                amountInput.value = 0;
+                amountInput.dispatchEvent(new Event('change'));
+            } else {
+                isPercentageField.value = 'true';
+                percentageInput.disabled = false;
+                amountInput.disabled = true;
+                amountInput.value = 0;
+                if (percentageInput.value && parseFloat(percentageInput.value) > 0) {
+                    calculatePercentageAmount(index);
+                } else {
+                    updateTotals();
+                }
+            }
+        }
+
+        // Function to calculate percentage amount
+        function calculatePercentageAmount(index) {
+            var isPercentageField = document.getElementById(`IsPercentage_${index}`);
+            if (isPercentageField && isPercentageField.value === 'true') {
+                var percentageInput = document.getElementById(`PercentageInput_${index}`);
+                var amountInput = document.getElementById(`Amount_${index}`);
+                var percentageValueField = document.getElementById(`PercentageValue_${index}`);
+
+                var percentage = parseFloat(percentageInput.value) || 0;
+                if (percentage > 100) percentage = 100;
+                if (percentage < 0) percentage = 0;
+
+                var calculatedAmount = (grossAmount * percentage) / 100;
+                amountInput.value = calculatedAmount.toFixed(2);
+                percentageValueField.value = percentage;
+                amountInput.dispatchEvent(new Event('change'));
+                updateTotals();
+            }
+        }
+
+        // Function to add custom deduction
+        function addCustomDeduction() {
+            var newIndex = deductionCounter++;
+            var tbody = document.querySelector('#deductionsTable tbody');
+            var newRow = document.createElement('tr');
+            newRow.className = 'deduction-row';
+            newRow.setAttribute('data-index', newIndex);
+
+            newRow.innerHTML = `
+                <td class="align-middle">
+                    <input type="hidden" name="Deductions[${newIndex}].DeductionCode" value="CUSTOM" />
+                    <input type="hidden" name="Deductions[${newIndex}].DeductionName" id="DeductionName_${newIndex}" value="Custom Deduction" />
+                    <input type="hidden" name="Deductions[${newIndex}].IsMandatory" value="false" />
+                    <input type="hidden" name="Deductions[${newIndex}].IsPercentage" id="IsPercentage_${newIndex}" value="false" />
+                    <input type="hidden" name="Deductions[${newIndex}].PercentageValue" id="PercentageValue_${newIndex}" value="0" />
+                    <input type="text" class="form-control form-control-sm" value="Custom Deduction"
+                           onchange="updateDeductionName(${newIndex}, this.value)" />
+                </td>
+                <td class="align-middle">
+                    <select name="Deductions[${newIndex}].GlAccountNo"
+                            class="form-select form-select-sm deduction-account"
+                            data-index="${newIndex}"
+                            onchange="updateGlAccountName(${newIndex}, this.value)">
+                        <option value="">-- Select Income Account --</option>
+                        ${getAccountOptions()}
+                    </select>
+                    <input type="hidden" name="Deductions[${newIndex}].GlAccountName" id="GlAccountName_${newIndex}" value="" />
+                </td>
+                <td class="align-middle">
+                    <input type="number"
+                           name="Deductions[${newIndex}].Amount"
+                           class="form-control deduction-amount"
+                           id="Amount_${newIndex}"
+                           value="0"
+                           min="0"
+                           step="any"
+                           placeholder="Enter amount"
+                           onchange="updateTotals()"
+                           oninput="updateTotals()" />
+                </td>
+                <td class="align-middle">
+                    <div class="input-group input-group-sm">
+                        <input type="number"
+                               class="form-control deduction-percentage"
+                               id="PercentageInput_${newIndex}"
+                               value="0"
+                               min="0"
+                               max="100"
+                               step="0.01"
+                               placeholder="%"
+                               disabled
+                               onchange="calculatePercentageAmount(${newIndex})" />
+                        <button type="button"
+                                class="btn btn-outline-secondary toggle-percentage"
+                                data-index="${newIndex}"
+                                onclick="togglePercentageMode(${newIndex})"
+                                title="Toggle between fixed amount and percentage">
+                            <i class="bi bi-percent"></i>
+                        </button>
+                    </div>
+                </td>
+                <td class="align-middle">
+                    <input type="text"
+                           name="Deductions[${newIndex}].Description"
+                           class="form-control form-control-sm"
+                           value="" />
+                </td>
+                <td class="align-middle text-center">
+                    <button type="button" class="btn btn-sm btn-danger remove-deduction" data-index="${newIndex}" title="Remove">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            `;
+
+            tbody.appendChild(newRow);
+            updateTotals();
+        }
+
+        // Function to get account options
+        function getAccountOptions() {
+            var options = '<option value="">-- Select Income Account --</option>';
+            @foreach (var account in allGlAccounts)
+            {
+                        @:options += `<option value="@account.AccountNo" data-account-name="@account.AccountName">@(account.DisplayText?.ToString()?.Replace("'", "\\'") ?? "")</option>`;
+            }
+            return options;
+        }
+
+        // Function to update deduction name
+        function updateDeductionName(index, newName) {
+            var nameInput = document.querySelector(`input[name="Deductions[${index}].DeductionName"]`);
+            if (nameInput) {
+                nameInput.value = newName;
+            }
+        }
+
+        // Function to update totals - INCLUDING UPFRONT INTEREST
+        function updateTotals() {
+            var totalDeductions = 0;
+
+            // Add upfront interest to total deductions
+            if (upfrontInterestAmount > 0) {
+                totalDeductions += upfrontInterestAmount;
+            }
+
+            var amountInputs = document.querySelectorAll('.deduction-amount');
+            amountInputs.forEach(function(input) {
+                var amount = parseFloat(input.value) || 0;
+                if (amount < 0) amount = 0;
+                totalDeductions += amount;
+            });
+
+            var netAmount = grossAmount - totalDeductions;
+
+            document.getElementById('totalDeductions').textContent = totalDeductions.toFixed(2);
+            document.getElementById('netAmount').textContent = netAmount.toFixed(2);
+
+            var submitBtn = document.getElementById('submitBtn');
+            if (netAmount < 0) {
+                document.getElementById('netAmount').style.color = 'red';
+                submitBtn.disabled = true;
+                submitBtn.title = 'Net amount cannot be negative';
+            } else {
+                document.getElementById('netAmount').style.color = '#0d6efd';
+                submitBtn.disabled = false;
+                submitBtn.removeAttribute('title');
+            }
+        }
+
+        // Remove deduction row
+        function removeDeduction(btn) {
+            var row = btn.closest('tr');
+            if (row) {
+                row.remove();
+                updateTotals();
+                reindexRows();
+            }
+        }
+
+        // Reindex rows
+        function reindexRows() {
+            var rows = document.querySelectorAll('#deductionsTable tbody tr');
+            rows.forEach(function(row, newIndex) {
+                row.setAttribute('data-index', newIndex);
+                var inputs = row.querySelectorAll('input, select');
+                inputs.forEach(function(input) {
+                    var name = input.getAttribute('name');
+                    var id = input.getAttribute('id');
+                    if (name) {
+                        var newName = name.replace(/Deductions\[\d+\]/, `Deductions[${newIndex}]`);
+                        input.setAttribute('name', newName);
+                    }
+                    if (id) {
+                        var newId = id.replace(/_\d+$/, `_${newIndex}`);
+                        input.setAttribute('id', newId);
+                    }
+                });
+            });
+        }
+
+        // Validate form
+        function validateForm() {
+            var acceptCheckbox = document.getElementById('acceptCheckbox');
+            var rejectCheckbox = document.getElementById('rejectCheckbox');
+            var isValid = true;
+            var errorMessage = '';
+
+            if (acceptCheckbox && acceptCheckbox.checked) {
+                var deductionRows = document.querySelectorAll('#deductionsTable tbody tr');
+
+                for (var i = 0; i < deductionRows.length; i++) {
+                    var amountInput = deductionRows[i].querySelector('.deduction-amount');
+                    var glSelect = deductionRows[i].querySelector('.deduction-account');
+
+                    var amount = parseFloat(amountInput?.value) || 0;
+                    var glAccount = glSelect?.value || '';
+
+                    if (amount > 0 && !glAccount) {
+                        isValid = false;
+                        errorMessage = 'Please select an income account for all deductions with amounts greater than 0';
+                        break;
+                    }
+                }
+
+                if (isValid) {
+                    var netAmountSpan = document.getElementById('netAmount');
+                    var netAmountText = netAmountSpan ? netAmountSpan.textContent : '0';
+                    var netAmount = parseFloat(netAmountText) || 0;
+
+                    if (netAmount < 0) {
+                        isValid = false;
+                        errorMessage = 'Net amount cannot be negative. Please reduce deductions.';
+                    }
+                }
+            } else if (rejectCheckbox && rejectCheckbox.checked) {
+                var rejectionReason = document.querySelector('textarea[name="Remarks"]');
+                if (!rejectionReason || !rejectionReason.value || rejectionReason.value.trim() === '') {
+                    isValid = false;
+                    errorMessage = 'Please provide a reason for rejecting the endorsement.';
+                }
+            }
+
+            if (!isValid && errorMessage) {
+                alert(errorMessage);
+                return false;
+            }
+
+            return true;
+        }
+
+        // Two Checkboxes Logic
+        document.addEventListener('DOMContentLoaded', function() {
+            var acceptCheckbox = document.getElementById('acceptCheckbox');
+            var rejectCheckbox = document.getElementById('rejectCheckbox');
+            var hiddenField = document.getElementById('IsAcceptedHidden');
+            var rejectionReasonDiv = document.getElementById('rejectionReasonDiv');
+            var rejectionWarningDiv = document.getElementById('rejectionWarningDiv');
+            var remarksTextarea = document.querySelector('textarea[name="Remarks"]');
+            var deductionsWrapper = document.getElementById('deductionsWrapper');
+
+            function setAcceptState() {
+                acceptCheckbox.checked = true;
+                rejectCheckbox.checked = false;
+                if (hiddenField) hiddenField.value = 'true';
+                if (rejectionReasonDiv) rejectionReasonDiv.style.display = 'none';
+                if (rejectionWarningDiv) rejectionWarningDiv.style.display = 'none';
+                if (remarksTextarea) remarksTextarea.value = '';
+                if (deductionsWrapper) deductionsWrapper.style.display = '';
+                updateTotals();
+            }
+
+            function setRejectState() {
+                acceptCheckbox.checked = false;
+                rejectCheckbox.checked = true;
+                if (hiddenField) hiddenField.value = 'false';
+                if (rejectionReasonDiv) rejectionReasonDiv.style.display = 'block';
+                if (rejectionWarningDiv) rejectionWarningDiv.style.display = 'block';
+                if (deductionsWrapper) deductionsWrapper.style.display = 'none';
+                var amountInputs = document.querySelectorAll('.deduction-amount');
+                amountInputs.forEach(function(input) {
+                    input.value = 0;
+                });
+                updateTotals();
+            }
+
+            if (acceptCheckbox) {
+                acceptCheckbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        setAcceptState();
+                    } else if (!rejectCheckbox.checked) {
+                        setAcceptState();
+                    }
+                });
+            }
+
+            if (rejectCheckbox) {
+                rejectCheckbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        setRejectState();
+                    } else if (!acceptCheckbox.checked) {
+                        setAcceptState();
+                    }
+                });
+            }
+
+            // Initialize
+            if (acceptCheckbox && acceptCheckbox.checked) {
+                setAcceptState();
+            } else if (rejectCheckbox && rejectCheckbox.checked) {
+                setRejectState();
+            } else {
+                setAcceptState();
+            }
+
+            // Add custom deduction button
+            var addBtn = document.getElementById('addCustomDeductionBtn');
+            if (addBtn) {
+                addBtn.addEventListener('click', addCustomDeduction);
+            }
+
+            // Remove deduction button handlers
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.remove-deduction')) {
+                    var btn = e.target.closest('.remove-deduction');
+                    removeDeduction(btn);
+                }
+            });
+
+            // Amount input handlers
+            var amountInputs = document.querySelectorAll('.deduction-amount');
+            amountInputs.forEach(function(input) {
+                input.addEventListener('input', updateTotals);
+                input.addEventListener('change', updateTotals);
+            });
+
+            // GL Account handlers
+            var glSelects = document.querySelectorAll('.deduction-account');
+            glSelects.forEach(function(select) {
+                var index = select.getAttribute('data-index');
+                if (select.value) {
+                    updateGlAccountName(index, select.value);
+                }
+            });
+
+            // Initial totals
+            updateTotals();
+        });
+
+        window.validateForm = validateForm;
+        window.updateTotals = updateTotals;
+        window.togglePercentageMode = togglePercentageMode;
+        window.calculatePercentageAmount = calculatePercentageAmount;
+        window.updateGlAccountName = updateGlAccountName;
+    </script>
+}

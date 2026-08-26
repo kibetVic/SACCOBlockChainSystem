@@ -7,6 +7,57 @@ using System.Text.Json;
 
 namespace SACCOBlockChainSystem.Services
 {
+    public interface IBlockchainService
+    {
+        Task<string> GenerateTransactionHash(object data);
+        Task<Block> CreateBlock(List<BlockchainTransaction> transactions, string previousHash);
+        //Task<BlockchainTransaction> CreateTransaction(string type, string memberNo, string companyCode,
+        //    decimal amount, string offChainRefId, object data);
+        Task<bool> VerifyTransaction(string transactionId);
+        Task<List<BlockchainTransaction>> GetMemberTransactions(string memberNo, string currentCompanyCode);
+        Task<BlockchainTransaction> AddToBlockchain(BlockchainTransaction transaction);
+        Task<int> ProcessPendingTransactionsAsync();
+        Task<BlockchainTransaction?> GetTransactionAsync(string transactionId);
+        //Task<BlockchainTransaction> CreateAndAddTransactionAsync(string type, string memberNo, string companyCode,
+        //    decimal amount, string offChainRefId, object data);
+        Task<BlockchainStatus> GetBlockchainStatus();
+        Task<Block> CreateGenesisBlock();
+        Task<int> GetBlockchainHeight();
+        Task<Block?> GetBlockByHash(string blockHash);
+        Task<List<Block>> GetAllBlocks();
+        Task<bool> ValidateBlockchain();
+        Task<Block> GetBlockAsync(string blockHash);
+        Task<bool> VerifyTransactionAsync(string transactionId);
+        Task<List<Block>> GetAllBlocksAsync();
+        Task<bool> VerifyBlockchainAsync();
+        Task<BlockchainTransaction> CreateAndAddTransactionAsync(
+            string transactionType,
+            string memberNo,
+            string companyCode,
+            decimal amount,
+            string reference,
+            object data);
+
+        Task<BlockchainTransaction> CreateTransaction(
+            string transactionType,
+            string memberNo,
+            string companyCode,
+            decimal amount,
+            string reference,
+            object data);
+
+        Task<List<BlockchainTransaction>> GetMemberTransactions(string memberNo);
+
+
+        // New company-specific methods
+        Task<BlockchainStatus> GetBlockchainStatusByCompanyAsync(string companyCode);
+        Task<List<Block>> GetBlocksByCompanyAsync(string companyCode);
+        Task<List<BlockchainTransaction>> GetTransactionsByCompanyAsync(string companyCode);
+        Task<bool> VerifyBlockchainByCompanyAsync(string companyCode);
+        Task<int> GetPendingTransactionsCountByCompanyAsync(string companyCode);
+        Task<decimal> GetTotalVolumeByCompanyAsync(string companyCode);
+    }
+
     public class BlockchainService : IBlockchainService
     {
         private readonly ApplicationDbContext _context;
@@ -313,10 +364,6 @@ namespace SACCOBlockChainSystem.Services
                 throw;
             }
         }
-
-
-
-        // Verify blockchain integrity - CORRECTED VERSION
         public async Task<bool> VerifyBlockchainAsync()
         {
             try
@@ -680,53 +727,6 @@ namespace SACCOBlockChainSystem.Services
                 throw;
             }
         }
-
-        // Mine block with Proof of Work
-        //private async Task MineBlockAsync(Block block)
-        //{
-        //    var difficulty = 2; // Reduced difficulty for faster testing
-        //    var target = new string('0', difficulty);
-
-        //    _logger.LogInformation($"Starting mining for block with difficulty {difficulty}");
-
-        //    var startTime = DateTime.UtcNow;
-        //    long hashAttempts = 0;
-
-        //    while (true)
-        //    {
-        //        // Create block data string
-        //        var blockData = $"{block.PreviousHash}{block.Timestamp:yyyy-MM-dd HH:mm:ss.fff}{block.MerkleRoot}{block.Nonce}";
-
-        //        // Calculate hash
-        //        var hash = ComputeSHA256Hash(blockData);
-        //        hashAttempts++;
-
-        //        // Check if hash meets difficulty requirement
-        //        if (hash.Substring(0, difficulty) == target)
-        //        {
-        //            block.BlockHash = hash;
-        //            var miningTime = (DateTime.UtcNow - startTime).TotalSeconds;
-
-        //            _logger.LogInformation($"Block mined successfully!");
-        //            _logger.LogInformation($"Hash: {hash}");
-        //            _logger.LogInformation($"Nonce: {block.Nonce}");
-        //            _logger.LogInformation($"Hash attempts: {hashAttempts}");
-        //            _logger.LogInformation($"Mining time: {miningTime:F2} seconds");
-        //            break;
-        //        }
-
-        //        // Increment nonce
-        //        block.Nonce++;
-
-        //        // Small delay to prevent CPU overuse
-        //        if (block.Nonce % 10000 == 0)
-        //        {
-        //            await Task.Delay(1);
-        //        }
-        //    }
-        //}
-
-        // Calculate Merkle root
         private string CalculateMerkleRoot(List<string> transactionHashes)
         {
             if (transactionHashes == null || !transactionHashes.Any())
@@ -834,62 +834,6 @@ namespace SACCOBlockChainSystem.Services
                 .ToListAsync();
         }
 
-        // Validate blockchain integrity
-        //public async Task<bool> ValidateBlockchain()
-        //{
-        //    try
-        //    {
-        //        var blocks = await _context.Blocks
-        //            .OrderBy(b => b.BlockId)
-        //            .ToListAsync();
-
-        //        if (!blocks.Any())
-        //        {
-        //            _logger.LogInformation("Blockchain is empty");
-        //            return true;
-        //        }
-
-        //        // Check genesis block
-        //        var genesis = blocks.First();
-        //        if (genesis.PreviousHash != "0")
-        //        {
-        //            _logger.LogError("Invalid genesis block");
-        //            return false;
-        //        }
-
-        //        // Validate each block
-        //        for (int i = 1; i < blocks.Count; i++)
-        //        {
-        //            var currentBlock = blocks[i];
-        //            var previousBlock = blocks[i - 1];
-
-        //            // Check previous hash
-        //            if (currentBlock.PreviousHash != previousBlock.BlockHash)
-        //            {
-        //                _logger.LogError($"Block {currentBlock.BlockId} has invalid previous hash");
-        //                return false;
-        //            }
-
-        //            // Recalculate block hash
-        //            var blockData = $"{currentBlock.PreviousHash}{currentBlock.Timestamp:yyyy-MM-dd HH:mm:ss.fff}{currentBlock.MerkleRoot}{currentBlock.Nonce}";
-        //            var calculatedHash = ComputeSHA256Hash(blockData);
-
-        //            if (calculatedHash != currentBlock.BlockHash)
-        //            {
-        //                _logger.LogError($"Block {currentBlock.BlockId} has invalid hash");
-        //                return false;
-        //            }
-        //        }
-
-        //        _logger.LogInformation("Blockchain validation passed");
-        //        return true;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error validating blockchain");
-        //        return false;
-        //    }
-        //}
 
         public async Task<Block> GetBlockAsync(string blockHash)
         {
@@ -980,76 +924,6 @@ namespace SACCOBlockChainSystem.Services
                 throw;
             }
         }
-
-
-
-
-        //public async Task<bool> VerifyBlockchainAsync()
-        //{
-        //    try
-        //    {
-        //        // Get all blocks in order
-        //        var blocks = await _context.Blocks
-        //            .OrderBy(b => b.BlockId)
-        //            .Include(b => b.Transactions)
-        //            .ToListAsync();
-
-        //        if (!blocks.Any())
-        //        {
-        //            _logger.LogInformation("Blockchain is empty - no blocks to verify");
-        //            return true; // Empty blockchain is valid
-        //        }
-
-        //        // Check first block (genesis)
-        //        var genesisBlock = blocks.First();
-        //        if (genesisBlock.PreviousHash != "0")
-        //        {
-        //            _logger.LogError($"Genesis block {genesisBlock.BlockHash} has invalid previous hash: {genesisBlock.PreviousHash}");
-        //            return false;
-        //        }
-
-        //        // Verify chain links
-        //        for (int i = 1; i < blocks.Count; i++)
-        //        {
-        //            var currentBlock = blocks[i];
-        //            var previousBlock = blocks[i - 1];
-
-        //            // Check previous hash link
-        //            if (currentBlock.PreviousHash != previousBlock.BlockHash)
-        //            {
-        //                _logger.LogError($"Block #{currentBlock.BlockId} has incorrect previous hash. Expected: {previousBlock.BlockHash}, Actual: {currentBlock.PreviousHash}");
-        //                return false;
-        //            }
-
-        //            // Verify block hash integrity
-        //            var calculatedHash = CalculateBlockHash(currentBlock);
-        //            if (calculatedHash != currentBlock.BlockHash)
-        //            {
-        //                _logger.LogError($"Block #{currentBlock.BlockId} hash mismatch. Calculated: {calculatedHash}, Stored: {currentBlock.BlockHash}");
-        //                return false;
-        //            }
-        //        }
-
-        //        // Check if all blocks are confirmed
-        //        var unconfirmedBlocks = blocks.Where(b => !b.Confirmed).ToList();
-        //        if (unconfirmedBlocks.Any())
-        //        {
-        //            _logger.LogWarning($"Found {unconfirmedBlocks.Count} unconfirmed blocks");
-        //            // For demo purposes, we'll return true anyway
-        //            // In production, you might want stricter validation
-        //        }
-
-        //        _logger.LogInformation($"Blockchain verification successful: {blocks.Count} blocks verified");
-        //        return true;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error verifying blockchain");
-        //        return false;
-        //    }
-        //}
-
-        // You'll need this helper method for VerifyBlockchainAsync
         private string CalculateBlockHash(Block block)
         {
             // Combine block data for hashing
@@ -1066,7 +940,6 @@ namespace SACCOBlockChainSystem.Services
         }
 
 
-        // Services/BlockchainService.cs - Add these methods
 
         #region Company-Specific Methods
 

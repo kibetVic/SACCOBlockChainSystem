@@ -1,0 +1,67 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.DisbursementConfirmationViewModel
+@{
+    ViewData["Title"] = "Withdrawal Successful";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fa fa-check-circle text-success" style="font-size: 80px;"></i>
+                    </div>
+                    <h2 class="text-success">Withdrawal Successful!</h2>
+                    <p class="lead">Your loan has been successfully disbursed.</p>
+
+                    <div class="alert alert-info mt-4">
+                        <h3>@Model.NetAmount.ToString("N0") KES</h3>
+                        <small>Net amount disbursed</small>
+                        @if (Model.ProcessingFee > 0)
+                        {
+                            <hr />
+                            <small>Processing fee: @Model.ProcessingFee.ToString("N0") KES</small>
+                        }
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <small class="text-muted">Loan Number</small>
+                                    <h5>@Model.LoanNo</h5>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <small class="text-muted">Disbursement Date</small>
+                                    <h5>@Model.DisbursementDate.ToString("dd MMM yyyy HH:mm")</h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.ChequeNo))
+                    {
+                        <div class="alert alert-warning mt-3">
+                            <i class="fa fa-file-alt"></i> Cheque Number: <strong>@Model.ChequeNo</strong>
+                        </div>
+                    }
+
+                    <div class="mt-4">
+                        <a href="@Url.Action("MyLoans")" class="btn btn-primary btn-lg">
+                            <i class="fa fa-folder-open"></i> View My Loans
+                        </a>
+                    </div>
+
+                    <div class="alert alert-success mt-4">
+                        <i class="fa fa-info-circle"></i> Your first repayment is due 30 days from today.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

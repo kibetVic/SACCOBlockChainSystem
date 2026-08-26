@@ -1,39 +1,784 @@
 ﻿@{
     ViewData["Title"] = "Transaction Inquiry";
     Layout = "~/Views/Shared/_Layout.cshtml";
+    var hasResults = Model != null && Model.MemberNo != null;
+}
+
+<!-- Error Messages -->
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
 }
 
 <div class="card">
-    <div class="card-header">
+    <div class="card-header bg-primary text-white">
         <h3 class="card-title">
             <i class="bi bi-receipt"></i> Transaction History Inquiry
         </h3>
         <div class="card-tools">
-            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+            <button type="button" class="btn btn-tool text-white" data-card-widget="collapse">
                 <i class="bi bi-dash"></i>
             </button>
         </div>
     </div>
     <div class="card-body">
-        <form asp-action="TransactionInquiry" method="post">
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label for="memberNo" class="control-label">Member Number</label>
-                        <input type="text" id="memberNo" name="memberNo" class="form-control"
-                               placeholder="Enter Member Number" required />
-                        <span class="text-muted">Enter the member number to view transaction history</span>
-                    </div>
+        <!-- Member Search Section -->
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <label class="fw-bold">Search Member</label>
+                <div class="input-group">
+                    <input type="text" id="searchInput" class="form-control form-control-lg"
+                           placeholder="Search by Member Number, Name, ID Number, or Phone Number..." />
+                    <button type="button" class="btn btn-primary" onclick="searchMembers()">
+                        <i class="bi bi-search"></i> Search
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="clearSearch()">
+                        <i class="bi bi-x-lg"></i> Clear
+                    </button>
                 </div>
-                <div class="col-md-3">
-                    <div class="form-group">
-                        <label>&nbsp;</label>
-                        <button type="submit" class="btn btn-primary form-control">
-                            <i class="bi bi-search"></i> Search
+                <small class="text-muted">Enter at least 3 characters to search</small>
+            </div>
+        </div>
+
+        <!-- Search Results -->
+        <div id="searchResults" style="display: none;" class="mb-3">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Select</th>
+                            <th>Member No</th>
+                            <th>Full Name</th>
+                            <th>ID Number</th>
+                            <th>Phone Number</th>
+                        </tr>
+                    </thead>
+                    <tbody id="searchResultsBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="searchLoading" style="display: none;" class="text-center p-3">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Searching for members...</p>
+        </div>
+
+        <!-- Selected Member Display -->
+        <div id="selectedMemberCard" style="display: @(hasResults ? "block" : "none");" class="mb-3">
+            <div class="alert alert-success">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-check-circle-fill"></i>
+                        <strong>Selected Member:</strong>
+                        <span id="selectedMemberName">@(hasResults ? Model.MemberName : "")</span>
+                        <br />
+                        <small>
+                            <span id="selectedMemberNoDisplay">@(hasResults ? Model.MemberNo : "")</span> |
+                            ID: <span id="selectedMemberIdNo">@(hasResults ? (Model.MemberIdNo ?? "N/A") : "N/A")</span> |
+                            Phone: <span id="selectedMemberPhone">@(hasResults ? (Model.MemberPhone ?? "N/A") : "N/A")</span>
+                        </small>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-primary me-1" onclick="inquireTransactions()">
+                            <i class="bi bi-search"></i> Inquire Transactions
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearSelectedMember()">
+                            <i class="bi bi-arrow-left"></i> Change
                         </button>
                     </div>
                 </div>
             </div>
-        </form>
+        </div>
+
+        <input type="hidden" id="selectedMemberNo" name="memberNo" value="@(hasResults ? Model.MemberNo : "")" />
     </div>
 </div>
+
+<!-- Results Section -->
+<div id="transactionResultsContainer">
+    @if (hasResults)
+    {
+        <div id="transactionResults">
+            @await Html.PartialAsync("_TransactionInquiryResults", Model as SACCOBlockChainSystem.Models.DTOs.TransactionInquiryResponseDTO)
+        </div>
+    }
+    else
+    {
+        <div id="transactionResults" style="display: none;"></div>
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let selectedMemberData = null;
+        let isMemberSelected = @(hasResults ? "true" : "false");
+        let isLoading = false;
+
+        $(document).ready(function() {
+            // Initialize DataTable if results exist
+            @if (hasResults)
+            {
+                <text>
+                try {
+                    if ($.fn.DataTable.isDataTable('#transactionsTable')) {
+                        $('#transactionsTable').DataTable().destroy();
+                    }
+                    $('#transactionsTable').DataTable({
+                        "order": [[0, "desc"]],
+                        "pageLength": 25,
+                        "responsive": true,
+                        "language": {
+                            "search": "Search Transactions:"
+                        }
+                    });
+                } catch (e) {
+                    console.log('DataTable initialization error:', e);
+                }
+                </text>
+            }
+
+            // Auto-search when typing (debounced)
+            let searchTimeout;
+            $('#searchInput').on('input', function() {
+                clearTimeout(searchTimeout);
+                const searchTerm = $(this).val().trim();
+                if (searchTerm.length >= 3) {
+                    searchTimeout = setTimeout(function() {
+                        searchMembers();
+                    }, 500);
+                } else if (searchTerm.length === 0) {
+                    clearSearch();
+                }
+            });
+
+            // Search input enter key
+            $('#searchInput').on('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchMembers();
+                }
+            });
+
+            // If member is pre-selected (from URL or model), load data
+            @if (hasResults)
+            {
+                <text>
+                // Data is already loaded from server
+                console.log('Pre-loaded member data available');
+                </text>
+            }
+            else
+            {
+                <text>
+                // Check if memberNo is in URL query string
+                const urlParams = new URLSearchParams(window.location.search);
+                const memberNoParam = urlParams.get('memberNo');
+                if (memberNoParam) {
+                    $('#selectedMemberNo').val(memberNoParam);
+                    selectMember(memberNoParam);
+                }
+                </text>
+            }
+        });
+
+        async function searchMembers() {
+            const searchTerm = $('#searchInput').val().trim();
+            if (searchTerm.length < 3) {
+                Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
+                return;
+            }
+
+            $('#searchLoading').show();
+            $('#searchResults').hide();
+            $('#searchResultsBody').html('');
+
+            try {
+                const response = await fetch(`/api/Member/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    $('#searchResultsBody').html(`<tr><td colspan="7" class="text-center text-danger">Error: ${errorData.message || 'Error searching members'}</td></tr>`);
+                    $('#searchResults').show();
+                    $('#searchLoading').hide();
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Search results:', data);
+
+                if (data.success && data.data && data.data.length > 0) {
+                    displaySearchResults(data.data);
+                } else {
+                    $('#searchResultsBody').html('<tr><td colspan="7" class="text-center text-warning">No members found matching your search</td></tr>');
+                    $('#searchResults').show();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                $('#searchResultsBody').html(`<tr><td colspan="7" class="text-center text-danger">Error searching members: ${error.message}</td></tr>`);
+                $('#searchResults').show();
+            } finally {
+                $('#searchLoading').hide();
+            }
+        }
+
+        function displaySearchResults(members) {
+            const tbody = $('#searchResultsBody');
+            tbody.empty();
+
+            members.forEach(member => {
+                const fullName = (member.surname || '') + ' ' + (member.otherNames || '');
+                const phone = member.phoneNo || 'N/A';
+
+                const row = `
+                    <tr>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-success" onclick="selectMember('${member.memberNo}')">
+                                <i class="bi bi-check-lg"></i> Select
+                            </button>
+                        </td>
+                        <td><strong>${escapeHtml(member.memberNo)}</strong></td>
+                        <td>${escapeHtml(fullName.trim() || member.memberNo)}</td>
+                        <td>${escapeHtml(member.idno || 'N/A')}</td>
+                        <td>${escapeHtml(phone)}</td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            $('#searchResults').show();
+        }
+
+        async function selectMember(memberNo) {
+            if (isLoading) return;
+            isLoading = true;
+
+            try {
+                // First, get member details
+                const response = await fetch(`/api/Member/${memberNo}`);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    Swal.fire('Error', `Failed to fetch member details: ${response.status}`, 'error');
+                    isLoading = false;
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Member data:', data);
+
+                if (data.success && data.data) {
+                    selectedMemberData = data.data;
+                    isMemberSelected = true;
+
+                    $('#selectedMemberNo').val(memberNo);
+
+                    const fullName = (selectedMemberData.surname || '') + ' ' + (selectedMemberData.otherNames || '');
+                    $('#selectedMemberName').html(`<strong>${escapeHtml(fullName.trim() || memberNo)}</strong>`);
+                    $('#selectedMemberNoDisplay').html(memberNo);
+                    $('#selectedMemberIdNo').html(selectedMemberData.idno || 'N/A');
+                    $('#selectedMemberPhone').html(selectedMemberData.phoneNo || 'N/A');
+
+                    $('#selectedMemberCard').show();
+                    $('#searchResults').hide();
+                    $('#searchInput').val('');
+
+                    Swal.fire('Success', 'Member selected successfully!', 'success');
+
+                    // LOAD TRANSACTION DATA VIA AJAX
+                    await loadTransactionDataAjax(memberNo);
+                } else {
+                    Swal.fire('Error', data.message || 'Failed to load member details', 'error');
+                }
+            } catch (error) {
+                console.error('Error selecting member:', error);
+                Swal.fire('Error', 'Error selecting member: ' + error.message, 'error');
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        async function loadTransactionDataAjax(memberNo) {
+            if (!memberNo) {
+                Swal.fire('Error', 'Please select a member first', 'error');
+                return;
+            }
+
+            // Show loading
+            $('#transactionResults').html(`
+                <div class="text-center p-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading transaction history...</p>
+                </div>
+            `).show();
+
+            try {
+                // Fetch transaction data via API
+                const response = await fetch(`/api/Inquiry/transaction/${encodeURIComponent(memberNo)}`);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    $('#transactionResults').html(`
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            Failed to load transaction history: ${response.status}
+                        </div>
+                    `);
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Transaction data from API:', data);
+
+                if (data.success && data.data) {
+                    displayTransactionResults(data.data);
+                } else {
+                    $('#transactionResults').html(`
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            ${data.message || 'No transaction history found for this member'}
+                        </div>
+                    `);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                $('#transactionResults').html(`
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        Error loading transaction history: ${error.message}
+                    </div>
+                `);
+            }
+        }
+
+        function displayTransactionResults(data) {
+            // Build HTML for transaction results
+            let html = buildTransactionResultsHtml(data);
+            $('#transactionResults').html(html).show();
+
+            // Initialize DataTable
+            try {
+                if ($.fn.DataTable.isDataTable('#transactionsTable')) {
+                    $('#transactionsTable').DataTable().destroy();
+                }
+                $('#transactionsTable').DataTable({
+                    "order": [[0, "desc"]],
+                    "pageLength": 25,
+                    "responsive": true,
+                    "language": {
+                        "search": "Search Transactions:"
+                    }
+                });
+            } catch (e) {
+                console.log('DataTable initialization error:', e);
+            }
+        }
+
+        function buildTransactionResultsHtml(data) {
+            // Calculate totals
+            let totalDeposits = 0;
+            let totalWithdrawals = 0;
+            let totalTransactions = data.transactions ? data.transactions.length : 0;
+
+            if (data.transactions && data.transactions.length > 0) {
+                data.transactions.forEach(trans => {
+                    if (trans.transactionType === 'Share Purchase' || trans.transactionType === 'Share Contribution' || trans.transactionType === 'DEPOSIT') {
+                        totalDeposits += parseFloat(trans.debit || trans.amount || 0);
+                    } else if (trans.transactionType === 'Loan Repayment' || trans.transactionType === 'WITHDRAWAL') {
+                        totalWithdrawals += parseFloat(trans.credit || trans.amount || 0);
+                    }
+                });
+            }
+
+            let html = `
+                <!-- Member Information Card -->
+                <div class="card mt-3">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="card-title mb-0">
+                            <i class="bi bi-person-badge"></i> Member Information
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="info-box bg-light">
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Member Number</span>
+                                        <span class="info-box-number">${escapeHtml(data.memberNo || 'N/A')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="info-box bg-light">
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Member Name</span>
+                                        <span class="info-box-number">${escapeHtml(data.memberName || 'N/A')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="info-box bg-light">
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Inquiry Date</span>
+                                        <span class="info-box-number">${new Date().toLocaleString()}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Statistics -->
+                <div class="row mt-3">
+                    <div class="col-md-3">
+                        <div class="small-box bg-info">
+                            <div class="inner">
+                                <h3>${totalTransactions}</h3>
+                                <p>Total Transactions</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-receipt"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-success">
+                            <div class="inner">
+                                <h3>${formatCurrency(totalDeposits)}</h3>
+                                <p>Total Deposits</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-arrow-down-circle"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-danger">
+                            <div class="inner">
+                                <h3>${formatCurrency(totalWithdrawals)}</h3>
+                                <p>Total Withdrawals</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-arrow-up-circle"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-warning">
+                            <div class="inner">
+                                <h3>${formatCurrency(totalDeposits - totalWithdrawals)}</h3>
+                                <p>Net Position</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-cash-stack"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            // Transactions Table
+            if (data.transactions && data.transactions.length > 0) {
+                html += `
+                    <div class="card mt-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-table"></i> Transaction History (${data.transactions.length} transactions)
+                                <span class="badge bg-light text-dark ms-2">LIFO - Most Recent First</span>
+                            </h5>
+                            <div class="card-tools">
+                                <button type="button" class="btn btn-tool text-white" data-card-widget="collapse">
+                                    <i class="bi bi-dash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover" id="transactionsTable">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Transaction Type</th>
+                                            <th>Description</th>
+                                            <th class="text-end">Debit (Deposits)</th>
+                                            <th class="text-end">Credit (Withdrawals)</th>
+                                            <th class="text-end">Balance</th>
+                                            <th>Reference</th>
+                                            <th>Blockchain Tx</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+
+                // Sort by date descending (LIFO - most recent first)
+                const sortedTransactions = [...data.transactions].sort((a, b) => new Date(b.transactionDate) - new Date(a.transactionDate));
+
+                sortedTransactions.forEach(trans => {
+                    const transType = trans.transactionType || 'Unknown';
+                    let badgeClass = 'bg-secondary';
+                    if (transType === 'Share Purchase' || transType === 'Share Contribution' || transType === 'DEPOSIT') {
+                        badgeClass = 'bg-success';
+                    } else if (transType === 'Loan Repayment' || transType === 'WITHDRAWAL') {
+                        badgeClass = 'bg-warning';
+                    }
+
+                    const debit = trans.debit || trans.amount || 0;
+                    const credit = trans.credit || 0;
+                    const balance = trans.balance || 0;
+                    const date = trans.transactionDate || trans.date || new Date();
+                    const blockchainTx = trans.blockchainTxId || trans.BlockchainTxId || 'N/A';
+
+                    html += `
+                        <tr>
+                            <td>${formatDate(date)}</td>
+                            <td>
+                                <span class="badge ${badgeClass}">${escapeHtml(transType)}</span>
+                            </td>
+                            <td>${escapeHtml(trans.description || 'N/A')}</td>
+                            <td class="text-end text-success">${debit > 0 ? formatCurrency(debit) : '-'}</td>
+                            <td class="text-end text-danger">${credit > 0 ? formatCurrency(credit) : '-'}</td>
+                            <td class="text-end">${formatCurrency(balance)}</td>
+                            <td>${escapeHtml(trans.reference || trans.receiptNo || 'N/A')}</td>
+                            <td><code>${blockchainTx !== 'N/A' ? blockchainTx.substring(0, 8) + '...' : 'N/A'}</code></td>
+                        </tr>`;
+                });
+
+                html += `
+                                    </tbody>
+                                    <tfoot class="table-dark fw-bold">
+                                        <tr>
+                                            <th colspan="3" class="text-end">TOTALS:</th>
+                                            <th class="text-end">${formatCurrency(totalDeposits)}</th>
+                                            <th class="text-end">${formatCurrency(totalWithdrawals)}</th>
+                                            <th class="text-end">${formatCurrency(totalDeposits - totalWithdrawals)}</th>
+                                            <th colspan="2"></th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+            } else {
+                html += `
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle"></i> No transactions found for this member.
+                    </div>`;
+            }
+
+            // Footer
+            html += `
+                <div class="row mt-3">
+                    <div class="col-md-12 text-muted">
+                        <small>Inquiry performed on ${new Date(data.inquiryTimestamp || Date.now()).toLocaleString()} by ${escapeHtml(data.inquiredBy || 'System')}</small>
+                    </div>
+                </div>`;
+
+            html += `</div>`;
+            return html;
+        }
+
+        async function inquireTransactions() {
+            const memberNo = $('#selectedMemberNo').val();
+            if (!memberNo) {
+                Swal.fire('Error', 'Please select a member first', 'error');
+                return;
+            }
+
+            await loadTransactionDataAjax(memberNo);
+        }
+
+        function clearSelectedMember() {
+            selectedMemberData = null;
+            isMemberSelected = false;
+
+            $('#selectedMemberNo').val('');
+            $('#selectedMemberCard').hide();
+            $('#transactionResults').hide();
+            $('#transactionResults').html('');
+        }
+
+        function clearSearch() {
+            $('#searchInput').val('');
+            $('#searchResults').hide();
+            $('#searchResultsBody').empty();
+            clearSelectedMember();
+        }
+
+        function formatCurrency(amount) {
+            if (!amount || isNaN(amount)) return 'Ksh 0.00';
+            return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount);
+        }
+
+        function formatDate(dateValue) {
+            if (!dateValue) return 'N/A';
+            try {
+                if (typeof dateValue === 'string') {
+                    const parsed = new Date(dateValue);
+                    if (!isNaN(parsed.getTime())) {
+                        return parsed.toLocaleDateString('en-US', { 
+                            year: 'numeric', 
+                            month: 'short', 
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    }
+                    return dateValue;
+                }
+                if (dateValue instanceof Date) {
+                    return dateValue.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+                return 'N/A';
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+
+    <style>
+        .small-box {
+            border-radius: 0.25rem;
+            box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+            display: block;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+            .small-box .inner {
+                padding: 10px;
+            }
+
+            .small-box h3 {
+                font-size: 2.2rem;
+                font-weight: bold;
+                margin: 0 0 10px 0;
+                white-space: nowrap;
+                padding: 0;
+            }
+
+            .small-box .icon {
+                color: rgba(0,0,0,0.15);
+                position: absolute;
+                right: 10px;
+                top: 5px;
+                z-index: 0;
+                font-size: 5rem;
+            }
+
+        .info-box {
+            display: flex;
+            min-height: 90px;
+            background: #fff;
+            width: 100%;
+            box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+            border-radius: 0.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .info-box-content {
+            padding: 1rem;
+            flex: 1;
+        }
+
+        .info-box-text {
+            display: block;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .info-box-number {
+            display: block;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .bg-info {
+            background-color: #17a2b8 !important;
+            color: white;
+        }
+
+        .bg-success {
+            background-color: #28a745 !important;
+            color: white;
+        }
+
+        .bg-warning {
+            background-color: #ffc107 !important;
+            color: #1f2d3d;
+        }
+
+        .bg-danger {
+            background-color: #dc3545 !important;
+            color: white;
+        }
+
+        .bg-secondary {
+            background-color: #6c757d !important;
+            color: white;
+        }
+
+        .bg-light {
+            background-color: #f8f9fa !important;
+            color: #1f2d3d;
+        }
+
+        .bg-primary {
+            background-color: #007bff !important;
+            color: white;
+        }
+
+        .btn-tool {
+            background: transparent;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            font-size: 1.25rem;
+            line-height: 1;
+            border-radius: 0.25rem;
+            opacity: 0.8;
+        }
+
+            .btn-tool:hover {
+                opacity: 1;
+            }
+
+        .table-borderless td {
+            padding: 0.3rem 0;
+        }
+
+        .table-borderless tr {
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+            .table-borderless tr:last-child {
+                border-bottom: none;
+            }
+
+        .modal-xl {
+            max-width: 1200px;
+        }
+    </style>
+}

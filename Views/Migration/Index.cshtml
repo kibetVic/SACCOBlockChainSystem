@@ -1,0 +1,215 @@
+﻿@model SACCOBlockChainSystem.Services.MigrationSummary
+
+@{
+    ViewData["Title"] = "Migration Dashboard";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0">
+                        <i class="fas fa-migrate me-2"></i>Wallet & Transaction Migration
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Important:</strong> This will regenerate all wallets using the new ECDSA P-256 standard,
+                        re-sign all existing transactions, and fix chain links. This operation cannot be undone.
+                        <br />
+                        <span class="text-danger">Make sure to backup your database before proceeding!</span>
+                    </div>
+
+                    @if (TempData["SuccessMessage"] != null)
+                    {
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>@TempData["SuccessMessage"]
+                            @if (TempData["MigrationDetails"] != null)
+                            {
+                                <br />
+                        
+                                <small>@TempData["MigrationDetails"]</small>
+                            }
+                        </div>
+                    }
+
+                    @if (TempData["ErrorMessage"] != null)
+                    {
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i>@TempData["ErrorMessage"]
+                            @if (TempData["MigrationErrors"] != null)
+                            {
+                                <pre class="mt-2 bg-light p-2" style="font-size:12px; white-space:pre-wrap;">@TempData["MigrationErrors"]</pre>
+                            }
+                        </div>
+                    }
+
+                    <!-- Summary Cards -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center">
+                                    <h5 class="mb-0">@Model.TotalMembers</h5>
+                                    <small>Total Members</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <h5 class="mb-0">@Model.MembersWithWallets</h5>
+                                    <small>Members with Wallets</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body text-center">
+                                    <h5 class="mb-0">@Model.MembersWithoutWallets</h5>
+                                    <small>Members without Wallets</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h5 class="mb-0">@Model.TotalTransactions</h5>
+                                    <small>Total Transactions</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Transaction Stats -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5>@Model.TransactionsWithSignatures</h5>
+                                    <small class="text-success"><i class="fas fa-check"></i> With Signatures</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5>@Model.TransactionsWithoutSignatures</h5>
+                                    <small class="text-danger"><i class="fas fa-times"></i> Without Signatures</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5 class="@(Model.ValidChains > 0 ? "text-success" : "text-danger")">@Model.ValidChains / @(Model.ValidChains + Model.BrokenChains)</h5>
+                                    <small>Valid Chains</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Migration Actions -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-arrow-right me-2"></i>Full Migration</h5>
+                </div>
+                <div class="card-body">
+                    <p>Migrate all members' wallets and transactions at once.</p>
+                    <form asp-action="MigrateAll" method="post">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-warning btn-lg w-100" onclick="return confirm('Are you sure you want to migrate ALL wallets and transactions? This cannot be undone!');">
+                            <i class="fas fa-migrate me-2"></i>Migrate All
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-user me-2"></i>Single Member Migration</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="MigrateMember" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="input-group mb-3">
+                            <input type="text" name="memberNo" class="form-control" placeholder="Enter Member Number" required />
+                            <button type="submit" class="btn btn-primary">Migrate</button>
+                        </div>
+                    </form>
+                    <hr />
+                    <form asp-action="RegenerateWallet" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="input-group">
+                            <input type="text" name="memberNo" class="form-control" placeholder="Regenerate Wallet Only" />
+                            <button type="submit" class="btn btn-outline-warning">Regenerate Wallet</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-tools me-2"></i>Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="@Url.Action("Status", "Migration")" class="btn btn-outline-info" target="_blank">
+                            <i class="fas fa-chart-bar me-2"></i>Check Status (JSON)
+                        </a>
+                        <a href="@Url.Action("Index", "Verification")" class="btn btn-outline-primary">
+                            <i class="fas fa-shield-alt me-2"></i>Verify Transactions
+                        </a>
+                        <a href="@Url.Action("MemberChain", "Verification", new { memberNo = "" })" class="btn btn-outline-success">
+                            <i class="fas fa-link me-2"></i>View Chain
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Auto-refresh status every 30 seconds
+        $(document).ready(function() {
+            setInterval(function() {
+                $.get('@Url.Action("Status", "Migration")', function(data) {
+                    if (data.success) {
+                        // Update stats without page refresh
+                        // You can implement live updates here
+                    }
+                });
+            }, 30000);
+        });
+
+        function confirmMigration() {
+            return confirm(
+                '⚠️ WARNING: This will migrate ALL wallets and transactions.\n\n' +
+                'This operation:\n' +
+                '1. Regenerates ALL wallets with new ECDSA P-256 keys\n' +
+                '2. Re-signs ALL transactions\n' +
+                '3. Fixes ALL chain links\n\n' +
+                'This CANNOT be undone!\n\n' +
+                'Make sure you have a database backup before proceeding.\n\n' +
+                'Are you sure you want to continue?'
+            );
+        }
+    </script>
+}

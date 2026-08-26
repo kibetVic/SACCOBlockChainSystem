@@ -1,0 +1,1214 @@
+﻿@using SACCOBlockChainSystem.Models.DTOs
+@model dynamic
+@{
+    ViewData["Title"] = "My Contributions";
+    var recentContributions = Model.RecentContributions as List<ContributionResponseDTO>;
+    var shareTypes = Model.ShareTypes as List<ShareTypeDTO>;
+    var companyCode = ViewBag.CompanyCode as string;
+    var memberName = ViewBag.MemberName as string;
+    var memberNo = ViewBag.MemberNo as string;
+    var currentShareBalance = ViewBag.CurrentShareBalance as decimal? ?? 0;
+}
+
+<div class="container-fluid">
+    <!-- Welcome Banner -->
+    <div class="alert alert-info mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="timeBasedGreeting"></span>, @memberName!
+                </h5>
+            </div>
+            <div>
+                <span class="badge bg-success" id="timeBadge"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success/Error Messages -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- FORM CARD - Add Contribution -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h4><i class="fas fa-hand-holding-usd"></i> Make a Contribution</h4>
+        </div>
+        <div class="card-body">
+            <form id="contributionForm" method="post" asp-action="MemberContribute">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="CompanyCode" name="CompanyCode" value="@companyCode" />
+                <input type="hidden" name="CreatedBy" value="@memberNo" />
+                <input type="hidden" id="printReceiptHidden" name="printReceipt" value="true" />
+                <input type="hidden" id="MemberNo" name="MemberNo" value="@memberNo" />
+
+                <!-- Member Info Card (Display Only) -->
+                <div class="alert alert-success mb-3">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-check-circle fa-2x me-3"></i>
+                        <div>
+                            <strong>Contributing as:</strong> <small>Names: @memberName | Member No: @memberNo | Current Share Balance: @currentShareBalance.ToString("N2")</small>
+                        </div>
+
+                        @* <div>
+                            <strong>Contributing as:</strong><br />
+                            <span class="fs-5">@memberName</span><br />
+                            <small>Member Number: @memberNo</small>
+                        </div> *@
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-10">
+                        <!-- Transaction Details -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="required">Deposit Date (Actual Payment Date) *</label>
+                                <input type="date" id="DepositedDate" name="DepositedDate" class="form-control"
+                                       value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                                <span id="depositedDateError" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="required">Contribution Date *</label>
+                                <input type="date" id="TransactionDate" name="TransactionDate" class="form-control"
+                                       value="@DateTime.Now.ToString("yyyy-MM-dd")" required />
+                                <span id="transDateError" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="required">Share Type *</label>
+                                <select id="SharesCode" name="SharesCode" class="form-control" required>
+                                    <option value="">Select Share Type</option>
+                                    @if (shareTypes != null)
+                                    {
+                                        foreach (var shareType in shareTypes)
+                                        {
+                                            <option value="@shareType.SharesCode"
+                                                    data-min="@shareType.MinAmount"
+                                                    data-max="@shareType.MaxAmount"
+                                                    data-name="@shareType.SharesType">
+                                                @shareType.SharesType
+                                            </option>
+                                        }
+                                    }
+                                </select>
+                                <div id="shareTypeInfo" class="small text-muted mt-1"></div>
+                                <span id="sharesCodeError" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="required">Amount (KES) *</label>
+                                <input type="number" id="Amount" name="Amount" step="0.01" class="form-control"
+                                       required placeholder="Enter amount" />
+                                <div id="amountValidation" class="text-danger mt-1"></div>
+                                <span id="amountError" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="required">Payment Method *</label>
+                                <select id="PaymentMethod" name="PaymentMethod" class="form-control" required>
+                                    <option value="">Select Payment Method</option>
+                                    <option value="MPESA">M-Pesa</option>
+                                    <option value="BANK_TRANSFER">Bank Transfer</option>
+                                    <option value="CASH">Cash (Branch Deposit)</option>
+                                </select>
+                                <span id="paymentMethodError" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label>Reference Number</label>
+                                <input type="text" id="ReferenceNo" name="ReferenceNo" class="form-control"
+                                       placeholder="Cheque No, M-Pesa Code, etc." />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="required">Remarks *</label>
+                                <textarea id="Remarks" name="Remarks" class="form-control" rows="2" required
+                                          placeholder="e.g., 'Savings', 'Deposits', 'Share Capital', 'Registration fees'..."></textarea>
+                                <span id="remarksError" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Contribution Status Display -->
+                        <div id="contributionStatus" style="display: none;" class="mb-3">
+                            <div class="alert alert-info">
+                                <div id="contributionStatusContent"></div>
+                            </div>
+                        </div>
+
+                        <div id="limitReachedWarning" style="display: none;" class="mb-3">
+                            <div class="alert alert-danger">
+                                <i class="fas fa-ban"></i>
+                                <strong>LIMIT REACHED!</strong>
+                                <div id="limitReachedContent"></div>
+                            </div>
+                        </div>
+
+                        <!-- M-Pesa Payment Section -->
+                        <div id="mpesaPaymentSection" style="display: none;" class="mb-3">
+                            <div class="card border-primary">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0"><i class="fas fa-mobile-alt"></i> M-Pesa Payment</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-12 mb-3">
+                                            <div class="form-check">
+                                                <input type="radio" class="form-check-input" id="useRegisteredPhone" name="phoneOption" value="registered" checked>
+                                                <label class="form-check-label" for="useRegisteredPhone">
+                                                    Use my registered phone number: <strong id="registeredPhoneDisplay">Loading...</strong>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mt-2">
+                                                <input type="radio" class="form-check-input" id="useOtherPhone" name="phoneOption" value="other">
+                                                <label class="form-check-label" for="useOtherPhone">
+                                                    Use a different phone number
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-12 mb-3" id="otherPhoneInput" style="display: none;">
+                                            <label>Enter Phone Number</label>
+                                            <input type="tel" id="mpesaPhoneNumber" class="form-control"
+                                                   placeholder="e.g., 0712345678 or 254712345678" />
+                                            <small class="text-muted">Format: 0712345678 or 254712345678</small>
+                                            <span id="mpesaPhoneError" class="text-danger"></span>
+                                        </div>
+                                        <div class="col-md-12">
+                                            <button type="button" id="initiateMpesaPayment" class="btn btn-success">
+                                                <i class="fas fa-paper-plane"></i> Pay via M-Pesa
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- M-Pesa Payment Status Section -->
+                        <div id="mpesaPaymentStatus" style="display: none;" class="mb-3">
+                            <div class="card border-warning">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="mb-0"><i class="fas fa-spinner fa-spin"></i> Payment Processing</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="mpesaStatusContent">
+                                        <p>STK push sent to your phone. Please check your phone and enter your PIN to complete payment.</p>
+                                        <div class="progress mb-3">
+                                            <div id="paymentProgress" class="progress-bar progress-bar-striped progress-bar-animated"
+                                                 role="progressbar" style="width: 0%"></div>
+                                        </div>
+                                        <p id="statusMessage">Waiting for payment confirmation...</p>
+                                    </div>
+                                    <div id="mpesaSuccessContent" style="display: none;">
+                                        <div class="alert alert-success">
+                                            <i class="fas fa-check-circle"></i> <strong>Payment Successful!</strong>
+                                            <p id="successMessage"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bank Transfer Section -->
+                        <div id="bankTransferSection" style="display: none;" class="mb-3">
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0"><i class="fas fa-university"></i> Bank Transfer Details</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle"></i> Please provide your bank account details for verification
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label>Bank Name *</label>
+                                            <select id="bankName" class="form-control">
+                                                <option value="">Select Bank</option>
+                                                <option value="KCB Bank">KCB Bank</option>
+                                                <option value="Equity Bank">Equity Bank</option>
+                                                <option value="Cooperative Bank">Cooperative Bank</option>
+                                                <option value="Stanbic Bank">Stanbic Bank</option>
+                                                <option value="ABSA Bank">ABSA Bank</option>
+                                                <option value="NCBA Bank">NCBA Bank</option>
+                                                <option value="Other">Other (please specify)</option>
+                                            </select>
+                                            <input type="text" id="otherBankName" class="form-control mt-2" style="display: none;"
+                                                   placeholder="Enter bank name" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label>Account Number *</label>
+                                            <input type="text" id="accountNumber" class="form-control" placeholder="Enter your account number" />
+                                            <span id="accountNumberError" class="text-danger"></span>
+                                        </div>
+                                        <div class="col-md-12 mb-3">
+                                            <label>Account Name (Optional)</label>
+                                            <input type="text" id="accountName" class="form-control" placeholder="Enter account holder name" />
+                                        </div>
+                                        <div class="col-md-12">
+                                            <button type="button" id="initiateBankTransfer" class="btn btn-info">
+                                                <i class="fas fa-arrow-right"></i> Proceed with Bank Transfer
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bank Transfer Instructions Section -->
+                        <div id="bankTransferInstructions" style="display: none;" class="mb-3">
+                            <div class="card border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0"><i class="fas fa-file-invoice"></i> Payment Instructions</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="instructionsContent"></div>
+                                    <div class="mt-3">
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="confirmPaymentMade">
+                                            <label class="form-check-label" for="confirmPaymentMade">
+                                                I have made the payment as instructed above
+                                            </label>
+                                        </div>
+                                        <button type="button" id="confirmBankTransferBtn" class="btn btn-success mt-3" disabled>
+                                            <i class="fas fa-check-circle"></i> Confirm Payment Made
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cash Payment Section -->
+                        <div id="cashPaymentSection" style="display: none;" class="mb-3">
+                            <div class="card border-secondary">
+                                <div class="card-header bg-secondary text-white">
+                                    <h6 class="mb-0"><i class="fas fa-money-bill-wave"></i> Cash Payment</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle"></i> Please visit any of our branches to deposit cash.
+                                        After deposit, click "Confirm Cash Payment" to record your contribution.
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-12 mb-3">
+                                            <label>Branch Name (Optional)</label>
+                                            <input type="text" id="branchName" class="form-control" placeholder="e.g., Nairobi Main Branch" />
+                                        </div>
+                                        <div class="col-md-12 mb-3">
+                                            <label>Deposit Slip Number (Optional)</label>
+                                            <input type="text" id="depositSlipNo" class="form-control" placeholder="Enter deposit slip number" />
+                                        </div>
+                                        <div class="col-md-12">
+                                            <button type="button" id="confirmCashPaymentBtn" class="btn btn-secondary">
+                                                <i class="fas fa-check-circle"></i> Confirm Cash Payment
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT SIDE - Options -->
+                    <div class="col-md-2">
+                        <div class="card bg-light mb-3">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="mb-0"><i class="fas fa-cog"></i> Options</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="printReceipt" checked />
+                                        <label class="form-check-label" for="printReceipt">
+                                            <i class="fas fa-print"></i> Print receipt
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Regular Submit Button (for Cash) -->
+                <div class="mt-4 d-flex gap-2" id="submitButtons">
+                    <button type="submit" class="btn btn-success btn-lg" id="submitBtn" style="display: none;">
+                        <i class="fas fa-save"></i> Save Contribution
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-lg" onclick="resetForm()">
+                        <i class="fas fa-redo"></i> Reset
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MY CONTRIBUTIONS TABLE -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5><i class="fas fa-history"></i> My Contribution History</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-bordered table-hover" id="contributionsTable">
+                    <thead class="table-light sticky-top" style="position: sticky; top: 0; z-index: 1;">
+                        <tr>
+                            <th style="width: 50px;">#</th>
+                            <th style="width: 100px;">Date</th>
+                            <th style="width: 120px;">Receipt No</th>
+                            <th style="width: 150px;">Share Type</th>
+                            <th style="width: 120px;" class="text-end">Amount</th>
+                            <th style="width: 150px;">Remarks</th>
+                            <th style="width: 80px;">Receipt</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contributionsTableBody">
+                        @if (recentContributions != null && recentContributions.Any())
+                        {
+                            var counter = 1;
+                            foreach (var contribution in recentContributions)
+                            {
+                                <tr data-id="@contribution.Id"
+                                    data-date="@contribution.TransactionDate.ToString("yyyy-MM-dd")"
+                                    data-receiptno="@contribution.ReceiptNo"
+                                    data-sharetype="@contribution.ShareTypeName"
+                                    data-amount="@contribution.Amount">
+                                    <td class="row-number">@counter</td>
+                                    <td>@contribution.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                    <td><span class="badge bg-primary">@contribution.ReceiptNo</span></td>
+                                    <td class="share-type-cell">@contribution.ShareTypeName</td>
+                                    <td class="text-end amount-cell">@contribution.Amount.ToString("N0")</td>
+                                    <td>@(contribution.Remarks ?? "")</td>
+                                    <td>
+                                        <a asp-action="PrintReceipt" asp-route-receiptNo="@contribution.ReceiptNo"
+                                           target="_blank" class="btn btn-sm btn-info" title="Print Receipt">
+                                            <i class="fas fa-print"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                counter++;
+                            }
+                        }
+                        else
+                        {
+                            <tr id="noDataRow">
+                                <td colspan="7" class="text-center py-4">
+                                    <i class="fas fa-info-circle fa-2x text-muted mb-3"></i>
+                                    <p class="text-muted">No contributions found. Make your first contribution above!</p>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Statistics Summary -->
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="totalContributionsCount">@(recentContributions?.Count ?? 0)</h3>
+                            <p class="text-muted mb-0">Total Contributions</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="totalAmountSum">@(recentContributions?.Sum(c => c.Amount).ToString("N0") ?? "0")</h3>
+                            <p class="text-muted mb-0">Total Amount (KES)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="blockchainCount">@(recentContributions?.Count(c => !string.IsNullOrEmpty(c.BlockchainTxId)) ?? 0)</h3>
+                            <p class="text-muted mb-0">On Blockchain</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; text-align:center; padding-top:20%;">
+    <div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="text-light mt-2">Processing...</div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: red;
+    }
+
+    .sticky-top {
+        background: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .table-responsive::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .alert {
+        animation: slideDown 0.5s ease;
+    }
+
+    @@keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+</style>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let currentMemberTotal = 0;
+        let currentShareTypeMax = 0;
+        let currentShareTypeMin = 0;
+        let currentShareTypeName = '';
+        let isAmountValid = false;
+        const memberNo = '@memberNo';
+
+        // Payment variables
+        let mpesaCheckoutRequestId = null;
+        let currentTransactionId = null;
+        let paymentStatusInterval = null;
+        let currentBankTransferData = null;
+
+        $(document).ready(function() {
+            const today = new Date().toISOString().split('T')[0];
+            $('#TransactionDate').val(today);
+            $('#DepositedDate').val(today);
+
+            // Share type change event
+            $('#SharesCode').on('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                currentShareTypeMin = parseFloat(selectedOption.getAttribute('data-min')) || 0;
+                currentShareTypeMax = parseFloat(selectedOption.getAttribute('data-max')) || 0;
+                currentShareTypeName = selectedOption.getAttribute('data-name') || '';
+
+                let infoText = `<i class="fas fa-chart-line"></i> Minimum amount: ${formatCurrency(currentShareTypeMin)}`;
+                if (currentShareTypeMax > 0) {
+                    infoText += `, Maximum total limit: ${formatCurrency(currentShareTypeMax)}`;
+                } else {
+                    infoText += `, Maximum total limit: Unlimited`;
+                }
+                $('#shareTypeInfo').html(infoText);
+
+                if (memberNo) {
+                    getMemberCurrentTotal(memberNo);
+                }
+                validateAmount();
+            });
+
+            // Amount input event
+            $('#Amount').on('input', function() {
+                validateAmount();
+            });
+
+            // Remarks input event
+            $('#Remarks').on('input', function() {
+                updateSubmitButtonState();
+            });
+
+            // Payment Method Change Handler
+            $('#PaymentMethod').on('change', function() {
+                const method = $(this).val();
+
+                // Hide all payment sections
+                $('#mpesaPaymentSection').hide();
+                $('#bankTransferSection').hide();
+                $('#cashPaymentSection').hide();
+                $('#mpesaPaymentStatus').hide();
+                $('#bankTransferInstructions').hide();
+
+                // Reset validation states
+                $('#mpesaPhoneError').text('');
+                $('#accountNumberError').text('');
+
+                // Hide regular submit button
+                $('#submitBtn').hide();
+
+                // Show selected payment section
+                if (method === 'MPESA') {
+                    $('#mpesaPaymentSection').show();
+                    loadMemberPhoneNumber();
+                } else if (method === 'BANK_TRANSFER') {
+                    $('#bankTransferSection').show();
+                } else if (method === 'CASH') {
+                    $('#cashPaymentSection').show();
+                    $('#submitBtn').show();
+                }
+
+                updateSubmitButtonState();
+            });
+
+            // Phone option toggle
+            $('input[name="phoneOption"]').on('change', function() {
+                if ($(this).val() === 'other') {
+                    $('#otherPhoneInput').show();
+                } else {
+                    $('#otherPhoneInput').hide();
+                    $('#mpesaPhoneNumber').val('');
+                    $('#mpesaPhoneError').text('');
+                }
+            });
+
+            // Bank selection - show other bank input
+            $('#bankName').on('change', function() {
+                if ($(this).val() === 'Other') {
+                    $('#otherBankName').show();
+                } else {
+                    $('#otherBankName').hide();
+                }
+            });
+
+            // Confirm payment made checkbox for bank transfer
+            $('#confirmPaymentMade').on('change', function() {
+                $('#confirmBankTransferBtn').prop('disabled', !$(this).is(':checked'));
+            });
+
+            // Initiate M-Pesa Payment
+            $('#initiateMpesaPayment').on('click', async function() {
+                const amount = parseFloat($('#Amount').val());
+                const shareTypeCode = $('#SharesCode').val();
+                const remarks = $('#Remarks').val();
+
+                if (!amount || amount <= 0) {
+                    Swal.fire('Error', 'Please enter a valid amount', 'error');
+                    return;
+                }
+
+                if (!shareTypeCode) {
+                    Swal.fire('Error', 'Please select a share type', 'error');
+                    return;
+                }
+
+                let phoneNumber = '';
+                const phoneOption = $('input[name="phoneOption"]:checked').val();
+
+                if (phoneOption === 'registered') {
+                    const registeredPhone = $('#registeredPhoneDisplay').text().split('<')[0].trim();
+                    phoneNumber = registeredPhone;
+                } else {
+                    phoneNumber = $('#mpesaPhoneNumber').val().trim();
+                    if (!phoneNumber) {
+                        $('#mpesaPhoneError').text('Please enter a phone number');
+                        return;
+                    }
+                    $('#mpesaPhoneError').text('');
+                }
+
+                // Disable button and show loading
+                const btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending STK Push...');
+
+                try {
+                    const response = await fetch('/api/C2B/InitiateMpesaPayment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            amount: amount,
+                            phoneNumber: phoneNumber,
+                            shareTypeCode: shareTypeCode,
+                            remarks: remarks,
+                            useRegisteredPhone: phoneOption === 'registered'
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        mpesaCheckoutRequestId = data.checkoutRequestId;
+                        currentTransactionId = data.transactionId;
+
+                        // Show payment status section
+                        $('#mpesaPaymentSection').hide();
+                        $('#mpesaPaymentStatus').show();
+
+                        // Start polling for payment status
+                        startPaymentStatusPolling();
+
+                        Swal.fire({
+                            title: 'STK Push Sent!',
+                            text: 'Please check your phone and enter your PIN to complete the payment.',
+                            icon: 'success',
+                            timer: 5000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                        btn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Pay via M-Pesa');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'Failed to initiate payment', 'error');
+                    btn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Pay via M-Pesa');
+                }
+            });
+
+            // Initiate Bank Transfer
+            $('#initiateBankTransfer').on('click', async function() {
+                const amount = parseFloat($('#Amount').val());
+                const shareTypeCode = $('#SharesCode').val();
+                const remarks = $('#Remarks').val();
+
+                if (!amount || amount <= 0) {
+                    Swal.fire('Error', 'Please enter a valid amount', 'error');
+                    return;
+                }
+
+                if (!shareTypeCode) {
+                    Swal.fire('Error', 'Please select a share type', 'error');
+                    return;
+                }
+
+                let bankName = $('#bankName').val();
+                if (bankName === 'Other') {
+                    bankName = $('#otherBankName').val().trim();
+                    if (!bankName) {
+                        $('#accountNumberError').text('Please enter your bank name');
+                        return;
+                    }
+                }
+
+                if (!bankName) {
+                    $('#accountNumberError').text('Please select your bank');
+                    return;
+                }
+
+                const accountNumber = $('#accountNumber').val().trim();
+                if (!accountNumber) {
+                    $('#accountNumberError').text('Please enter your account number');
+                    return;
+                }
+                $('#accountNumberError').text('');
+
+                const accountName = $('#accountName').val().trim();
+
+                const btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Processing...');
+
+                try {
+                    const response = await fetch('/api/C2B/InitiateBankTransfer', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            amount: amount,
+                            bankName: bankName,
+                            accountNumber: accountNumber,
+                            accountName: accountName,
+                            shareTypeCode: shareTypeCode,
+                            remarks: remarks
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        currentBankTransferData = {
+                            transactionId: data.transactionId,
+                            amount: data.amount,
+                            bankName: bankName,
+                            accountNumber: accountNumber,
+                            shareTypeCode: shareTypeCode,
+                            remarks: remarks
+                        };
+
+                        // Display instructions
+                        let instructionsHtml = '<div class="alert alert-warning">';
+                        instructionsHtml += `<h6><i class="fas fa-info-circle"></i> Payment Details:</h6>`;
+                        instructionsHtml += `<p><strong>Amount to Transfer:</strong> ${formatCurrency(data.amount)}</p>`;
+                        instructionsHtml += `<p><strong>Bank:</strong> ${bankName}</p>`;
+                        instructionsHtml += `<p><strong>Account Number:</strong> ${accountNumber}</p>`;
+                        if (accountName) {
+                            instructionsHtml += `<p><strong>Account Name:</strong> ${accountName}</p>`;
+                        }
+                        instructionsHtml += `</div>`;
+                        instructionsHtml += `<div class="alert alert-info">`;
+                        instructionsHtml += `<h6><i class="fas fa-list-ol"></i> Instructions:</h6>`;
+                        instructionsHtml += `<ol>`;
+                        instructionsHtml += `<li>Log into your ${bankName} online banking or visit any ${bankName} branch</li>`;
+                        instructionsHtml += `<li>Transfer <strong>${formatCurrency(data.amount)}</strong> to the account number: <strong>${accountNumber}</strong></li>`;
+                        if (accountName) {
+                            instructionsHtml += `<li>Account Name: <strong>${accountName}</strong></li>`;
+                        }
+                        instructionsHtml += `<li>Use the reference: <strong>CONTRIB_${memberNo}_${new Date().getTime()}</strong></li>`;
+                        instructionsHtml += `<li>After transfer, check the checkbox below and click "Confirm Payment Made"</li>`;
+                        instructionsHtml += `</ol>`;
+                        instructionsHtml += `</div>`;
+
+                        $('#instructionsContent').html(instructionsHtml);
+
+                        $('#bankTransferSection').hide();
+                        $('#bankTransferInstructions').show();
+
+                        Swal.fire({
+                            title: 'Bank Transfer Initiated',
+                            text: 'Please complete the transfer using the instructions provided.',
+                            icon: 'info',
+                            confirmButtonText: 'OK'
+                        });
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'Failed to initiate bank transfer', 'error');
+                } finally {
+                    btn.prop('disabled', false).html('<i class="fas fa-arrow-right"></i> Proceed with Bank Transfer');
+                }
+            });
+
+            // Confirm Bank Transfer
+            $('#confirmBankTransferBtn').on('click', async function() {
+                if (!currentBankTransferData) return;
+
+                const referenceNumber = prompt('Please enter the transaction reference number from your bank transfer:', '');
+                if (!referenceNumber) {
+                    Swal.fire('Info', 'Reference number is required to confirm payment', 'info');
+                    return;
+                }
+
+                const btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Confirming...');
+
+                try {
+                    const response = await fetch('/api/C2B/ConfirmBankTransfer', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            transactionId: currentBankTransferData.transactionId,
+                            referenceNumber: referenceNumber,
+                            bankName: currentBankTransferData.bankName,
+                            accountNumber: currentBankTransferData.accountNumber,
+                            shareTypeCode: currentBankTransferData.shareTypeCode,
+                            remarks: currentBankTransferData.remarks
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        Swal.fire({
+                            title: 'Success!',
+                            text: `Contribution saved successfully! Receipt No: ${data.receiptNo}`,
+                            icon: 'success',
+                            confirmButtonText: 'OK'
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                        btn.prop('disabled', false).html('<i class="fas fa-check-circle"></i> Confirm Payment Made');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'Failed to confirm payment', 'error');
+                    btn.prop('disabled', false).html('<i class="fas fa-check-circle"></i> Confirm Payment Made');
+                }
+            });
+
+            // Confirm Cash Payment - regular form submit
+            $('#confirmCashPaymentBtn').on('click', function() {
+                const branchName = $('#branchName').val();
+                const depositSlipNo = $('#depositSlipNo').val();
+
+                let remarks = $('#Remarks').val();
+                if (branchName) remarks += ` - Branch: ${branchName}`;
+                if (depositSlipNo) remarks += ` - Slip: ${depositSlipNo}`;
+                $('#Remarks').val(remarks);
+
+                $('#contributionForm').submit();
+            });
+
+            // Form submit for cash payments
+            $('#contributionForm').on('submit', function(e) {
+                const paymentMethod = $('#PaymentMethod').val();
+                if (paymentMethod !== 'CASH') {
+                    e.preventDefault();
+                    return false;
+                }
+                return true;
+            });
+        });
+
+        async function getMemberCurrentTotal(memberNo) {
+            const shareTypeCode = $('#SharesCode').val();
+            if (!shareTypeCode || !memberNo) return;
+
+            try {
+                const response = await fetch(`/api/Contribution/member/${memberNo}/sharetype/${shareTypeCode}/total`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        currentMemberTotal = data.currentTotal || 0;
+                        updateContributionStatus();
+                        validateAmount();
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                currentMemberTotal = 0;
+            }
+        }
+
+        function updateContributionStatus() {
+            const statusDiv = $('#contributionStatus');
+            const statusContent = $('#contributionStatusContent');
+            const warningDiv = $('#limitReachedWarning');
+            const limitReachedContent = $('#limitReachedContent');
+
+            if (currentShareTypeMax > 0) {
+                const remaining = currentShareTypeMax - currentMemberTotal;
+                if (remaining <= 0) {
+                    limitReachedContent.html(`
+                        Maximum ${currentShareTypeName} limit of ${formatCurrency(currentShareTypeMax)} has been reached.<br>
+                        Current total: ${formatCurrency(currentMemberTotal)}<br>
+                        <strong>No further contributions allowed for this share type.</strong>
+                    `);
+                    warningDiv.show();
+                    statusDiv.hide();
+                    $('#Amount').prop('disabled', true);
+                    isAmountValid = false;
+                } else {
+                    warningDiv.hide();
+                    statusDiv.show();
+                    statusContent.html(`
+                        <div class="row">
+                            <div class="col-md-4"><strong>Current Total:</strong> ${formatCurrency(currentMemberTotal)}</div>
+                            <div class="col-md-4"><strong>Maximum Limit:</strong> ${formatCurrency(currentShareTypeMax)}</div>
+                            <div class="col-md-4"><strong>Remaining:</strong> ${formatCurrency(remaining)}</div>
+                        </div>
+                    `);
+                    $('#Amount').prop('disabled', false);
+                }
+            } else {
+                warningDiv.hide();
+                statusDiv.show();
+                statusContent.html(`
+                    <div class="row">
+                        <div class="col-md-6"><strong>Current Total:</strong> ${formatCurrency(currentMemberTotal)}</div>
+                        <div class="col-md-6"><strong>Maximum Limit:</strong> Unlimited</div>
+                    </div>
+                `);
+                $('#Amount').prop('disabled', false);
+            }
+        }
+
+        function validateAmount() {
+            const amount = parseFloat($('#Amount').val());
+            const validationDiv = $('#amountValidation');
+            const submitBtn = $('#submitBtn');
+
+            if (isNaN(amount) || amount <= 0) {
+                validationDiv.html('');
+                isAmountValid = false;
+                updateSubmitButtonState();
+                return false;
+            }
+
+            if (amount < currentShareTypeMin) {
+                validationDiv.html(`<i class="fas fa-exclamation-triangle"></i> Amount cannot be less than ${formatCurrency(currentShareTypeMin)}`);
+                isAmountValid = false;
+                updateSubmitButtonState();
+                return false;
+            }
+
+            if (currentShareTypeMax > 0 && currentMemberTotal >= currentShareTypeMax) {
+                validationDiv.html(`<i class="fas fa-ban"></i> Maximum limit already reached.`);
+                isAmountValid = false;
+                updateSubmitButtonState();
+                return false;
+            }
+
+            if (currentShareTypeMax > 0) {
+                const potentialNewTotal = currentMemberTotal + amount;
+                const remainingLimit = currentShareTypeMax - currentMemberTotal;
+                if (potentialNewTotal > currentShareTypeMax) {
+                    validationDiv.html(`<i class="fas fa-exclamation-triangle"></i> Amount exceeds remaining limit! You can only add up to ${formatCurrency(remainingLimit)}`);
+                    isAmountValid = false;
+                    updateSubmitButtonState();
+                    return false;
+                }
+            }
+
+            validationDiv.html('<i class="fas fa-check-circle text-success"></i>');
+            isAmountValid = true;
+            updateSubmitButtonState();
+            return true;
+        }
+
+        function updateSubmitButtonState() {
+            const paymentMethod = $('#PaymentMethod').val();
+            const remarks = $('#Remarks').val().trim();
+            const hasRemarks = remarks.length > 0;
+
+            if (paymentMethod === 'CASH') {
+                const canSubmit = memberNo && isAmountValid && hasRemarks;
+                $('#submitBtn').prop('disabled', !canSubmit);
+            }
+        }
+
+        async function loadMemberPhoneNumber() {
+            try {
+                const response = await fetch('/api/C2B/GetMemberPhone');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        let displayText = data.phoneNumber || 'Not registered';
+                        if (data.alternativePhone) {
+                            displayText += `<br><small>Alt: ${data.alternativePhone}</small>`;
+                        }
+                        $('#registeredPhoneDisplay').html(displayText);
+                    } else {
+                        $('#registeredPhoneDisplay').text('Not registered');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading phone number:', error);
+                $('#registeredPhoneDisplay').text('Error loading');
+            }
+        }
+
+        function startPaymentStatusPolling() {
+            let progress = 0;
+            const progressBar = $('#paymentProgress');
+            const statusMessage = $('#statusMessage');
+
+            const progressInterval = setInterval(() => {
+                if (progress < 90) {
+                    progress += 10;
+                    progressBar.css('width', progress + '%');
+                }
+            }, 3000);
+
+            paymentStatusInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/C2B/CheckPaymentStatus', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ checkoutRequestId: mpesaCheckoutRequestId })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.status === 'COMPLETED') {
+                        clearInterval(paymentStatusInterval);
+                        clearInterval(progressInterval);
+                        progressBar.css('width', '100%');
+                        statusMessage.text('Payment confirmed! Saving contribution...');
+                        await confirmMpesaPayment();
+                    } else if (data.status === 'FAILED') {
+                        clearInterval(paymentStatusInterval);
+                        clearInterval(progressInterval);
+                        statusMessage.html('<span class="text-danger">Payment failed. Please try again.</span>');
+                        $('#mpesaPaymentStatus .card-header').removeClass('bg-warning').addClass('bg-danger');
+                    }
+                } catch (error) {
+                    console.error('Error checking payment status:', error);
+                }
+            }, 3000);
+        }
+
+        async function confirmMpesaPayment() {
+            const shareTypeCode = $('#SharesCode').val();
+            const remarks = $('#Remarks').val();
+
+            try {
+                const response = await fetch('/api/C2B/ConfirmPayment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        checkoutRequestId: mpesaCheckoutRequestId,
+                        shareTypeCode: shareTypeCode,
+                        remarks: remarks
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    $('#mpesaPaymentStatus .card-header').removeClass('bg-warning').addClass('bg-success');
+                    $('#mpesaStatusContent').hide();
+                    $('#mpesaSuccessContent').show();
+                    $('#successMessage').html(`
+                        <strong>Payment Successful!</strong><br>
+                        Amount: ${formatCurrency(data.amount)}<br>
+                        Receipt No: ${data.receiptNo}<br>
+                        <a href="/ContributionMvc/PrintReceipt/${data.receiptNo}" target="_blank" class="btn btn-sm btn-primary mt-2">
+                            <i class="fas fa-print"></i> Print Receipt
+                        </a>
+                    `);
+
+                    setTimeout(() => {
+                        location.reload();
+                    }, 5000);
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error confirming payment:', error);
+                Swal.fire('Error', 'Failed to confirm payment', 'error');
+            }
+        }
+
+        function resetForm() {
+            $('#SharesCode').val('');
+            $('#shareTypeInfo').html('');
+            $('#amountValidation').html('');
+            $('#contributionStatus').hide();
+            $('#limitReachedWarning').hide();
+            $('#Amount').val('');
+            $('#Remarks').val('');
+            $('#ReferenceNo').val('');
+            $('#PaymentMethod').val('');
+            $('#mpesaPaymentSection').hide();
+            $('#bankTransferSection').hide();
+            $('#cashPaymentSection').hide();
+            $('#mpesaPaymentStatus').hide();
+            $('#bankTransferInstructions').hide();
+            $('#submitBtn').hide();
+            $('#printReceipt').prop('checked', true);
+            $('#printReceiptHidden').val('true');
+            $('#bankName').val('');
+            $('#otherBankName').hide().val('');
+            $('#accountNumber').val('');
+            $('#accountName').val('');
+            $('#branchName').val('');
+            $('#depositSlipNo').val('');
+            $('#mpesaPhoneNumber').val('');
+            $('input[name="phoneOption"][value="registered"]').prop('checked', true);
+            $('#otherPhoneInput').hide();
+
+            const today = new Date().toISOString().split('T')[0];
+            $('#TransactionDate').val(today);
+            $('#DepositedDate').val(today);
+
+            currentShareTypeMax = 0;
+            currentShareTypeMin = 0;
+            isAmountValid = false;
+            currentMemberTotal = 0;
+
+            $('#submitBtn').prop('disabled', true);
+
+            if (paymentStatusInterval) {
+                clearInterval(paymentStatusInterval);
+            }
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount);
+        }
+
+
+            // Time-based greeting function
+        function updateTimeBasedGreeting() {
+            const now = new Date();
+            const hour = now.getHours();
+            const greetingElement = document.getElementById('timeBasedGreeting');
+            const badgeElement = document.getElementById('timeBadge');
+
+            let greeting = '';
+            let badgeText = '';
+            let badgeClass = '';
+            let icon = '';
+
+            if (hour >= 5 && hour < 12) {
+                greeting = 'Good Morning';
+                badgeText = '🌅 Morning';
+                badgeClass = 'bg-warning text-dark';
+                icon = '🌅';
+            } else if (hour >= 12 && hour < 17) {
+                greeting = 'Good Afternoon';
+                badgeText = '☀️ Afternoon';
+                badgeClass = 'bg-warning text-dark';
+                icon = '☀️';
+            } else if (hour >= 17 && hour < 21) {
+                greeting = 'Good Evening';
+                badgeText = '🌆 Evening';
+                badgeClass = 'bg-secondary';
+                icon = '🌆';
+            } else {
+                greeting = 'Good Night';
+                badgeText = '🌙 Night';
+                badgeClass = 'bg-dark';
+                icon = '🌙';
+            }
+
+            if (greetingElement) {
+                greetingElement.textContent = greeting;
+            }
+
+            if (badgeElement) {
+                badgeElement.innerHTML = `${icon} ${badgeText}`;
+                badgeElement.className = `badge ${badgeClass}`;
+            }
+        }
+
+        // Call function immediately
+        updateTimeBasedGreeting();
+
+        // Optional: Update greeting every minute (in case time crosses boundary)
+        setInterval(updateTimeBasedGreeting, 60000);
+    </script>
+}

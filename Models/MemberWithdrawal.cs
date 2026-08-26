@@ -152,7 +152,7 @@ namespace SACCOBlockChainSystem.Models
         [Display(Name = "Blockchain Transaction ID")]
         public string? BlockchainTxId { get; set; }
 
-        [ForeignKey("MemberId")]
+        [ForeignKey("MemberNo")]
         public virtual Member? Member { get; set; }
 
         public virtual ICollection<WithdrawalApproval> Approvals { get; set; } = new List<WithdrawalApproval>();

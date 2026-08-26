@@ -126,6 +126,19 @@ namespace SACCOBlockChainSystem.Models
 
         public bool IsActive { get; set; } = true;
 
+        // AGM Specific Fields
+        [Display(Name = "AGM Date")]
+        [DataType(DataType.Date)]
+        public DateTime? AGMDate { get; set; }
+
+        [Display(Name = "AGM Time")]
+        [DataType(DataType.Time)]
+        public TimeSpan? AGMTime { get; set; }
+
+        [StringLength(200)]
+        [Display(Name = "AGM Venue")]
+        public string? AGMVenue { get; set; }
+
         // Audit Fields
         [StringLength(100)]
         [Display(Name = "Created By")]
@@ -167,7 +180,7 @@ namespace SACCOBlockChainSystem.Models
 
         [StringLength(50)]
         [Display(Name = "Sender ID")]
-        public string? SenderId { get; set; } // JUHUDI, SACCO, etc.
+        public string? SenderId { get; set; } // AMTECH, SACCO, etc.
 
         [StringLength(20)]
         [Display(Name = "Username")]

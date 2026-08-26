@@ -1,27 +1,55 @@
 ﻿using System;
 using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 
 namespace SACCOBlockChainSystem.Models.ViewModels
 {
     public class NextOfKinReportViewModel
     {
-        // Company Information
-        public string CompanyName { get; set; }
+        public string CompanyName { get; set; } = string.Empty;
+        public string CompanyAddress { get; set; } = string.Empty;
+        public string CompanyPhone { get; set; } = string.Empty;
+        public string CompanyEmail { get; set; } = string.Empty;
+        public string ReportTitle { get; set; } = "NEXT OF KIN REPORT";
+        public DateTime GeneratedDate { get; set; } = DateTime.Now;
+        public string GeneratedBy { get; set; } = string.Empty;
+        public ReportSummary Summary { get; set; } = new ReportSummary();
         public string CompanyCode { get; set; }
-        public string CompanyAddress { get; set; }
-        public string CompanyPhone { get; set; }
-        public string CompanyEmail { get; set; }
+        public List<MemberNextOfKinReportDto> MembersWithNextOfKin { get; set; } = new List<MemberNextOfKinReportDto>();
+    }
 
-        // Report Information
-        public DateTime GeneratedDate { get; set; }
-        public string GeneratedBy { get; set; }
-        public string ReportTitle { get; set; }
+    public class ReportSummary
+    {
+        public int TotalMembers { get; set; }
+        public int TotalNextOfKeens { get; set; }
+        public int MembersWithCompleteBenefit { get; set; }
+        public int MembersWithInvalidBenefit { get; set; }
+        public int MembersWithNoNextOfKin { get; set; }
+    }
 
-        // All Members with their Next of Kin
-        public List<MemberWithNextOfKinDTO> MembersWithNextOfKin { get; set; }
+    public class MemberNextOfKinReportDto
+    {
+        public string MemberNo { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string IdNumber { get; set; } = string.Empty;
+        public string PhoneNo { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public int TotalNextOfKeens { get; set; }
+        public decimal TotalBenefitPercentage { get; set; }
+        public bool HasValidBenefit => TotalBenefitPercentage <= 100;
+        public List<NextOfKinDetailDto> NextOfKeens { get; set; } = new List<NextOfKinDetailDto>();
+    }
 
-        // Summary Statistics
-        public ReportSummaryDTO Summary { get; set; }
+    public class NextOfKinDetailDto
+    {
+        public string FullName { get; set; } = string.Empty;
+        public string Relationship { get; set; } = string.Empty;
+        public string PhoneNo { get; set; } = string.Empty;
+        public decimal? BenefitPercentage { get; set; }
+        public bool IsPrimary { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public string PhysicalAddress { get; set; } = string.Empty;
     }
 
     public class MemberWithNextOfKinDTO

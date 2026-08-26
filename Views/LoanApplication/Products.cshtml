@@ -1,0 +1,101 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.LoanProductDTO>
+@{
+    ViewData["Title"] = "Loan Products";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Loan Products</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        @foreach (var product in Model)
+        {
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100 @(product.IsMobileLoan ? "border-success" : "")">
+                    <div class="card-header @(product.IsMobileLoan ? "bg-success text-white" : "bg-primary text-white")">
+                        <h5 class="mb-0">
+                            @product.LoanName
+                            @if (product.IsMobileLoan)
+                            {
+                                <span class="badge bg-light text-success float-end">Mobile Loan</span>
+                            }
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">@product.Description</p>
+
+                        @if (product.SelfGuarantee)
+                        {
+                            <div class="alert alert-info small p-1 mb-2">
+                                <i class="fa fa-user-check"></i> Self-guarantee using your shares
+                            </div>
+                        }
+
+                        <hr />
+
+                        <div class="row mb-2">
+                            <div class="col-6">Min Amount:</div>
+                            <div class="col-6 text-end fw-bold">@product.MinAmount.ToString("N0")</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">Max Amount:</div>
+                            <div class="col-6 text-end fw-bold">@product.MaxAmount.ToString("N0")</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">Interest Rate:</div>
+                            <div class="col-6 text-end fw-bold">@product.InterestRate% p.a</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">Repayment Method:</div>
+                            <div class="col-6 text-end fw-bold">@product.RepayMethod</div>
+                        </div>
+                        @if (product.ProcessingFee > 0)
+                        {
+                            <div class="row mb-2">
+                                <div class="col-6">Processing Fee:</div>
+                                <div class="col-6 text-end text-warning fw-bold">@product.ProcessingFee.ToString("N0")</div>
+                            </div>
+                        }
+
+                        <hr />
+
+                        @if (product.IsEligible)
+                        {
+                            <div class="alert alert-success mb-2">
+                                <i class="fa fa-check-circle"></i> You qualify for up to @product.EligibleAmount.ToString("N0")
+                                <br />
+                                <small>Est. monthly: @product.EstimatedMonthlyInstallment.ToString("N0")</small>
+                                @if (product.ProcessingFee > 0)
+                                {
+                                    <br />
+                                    <small>Net after fee: @((product.EligibleAmount - product.ProcessingFee).ToString("N0"))</small>
+                                }
+                            </div>
+                            <!-- FIXED: This should work for ALL loan types including mobile -->
+                            <a href="@Url.Action("Apply", new { loanCode = product.LoanCode })" class="btn btn-@(product.IsMobileLoan ? "success" : "primary") w-100">
+                                @if (product.IsMobileLoan)
+                                {
+                                    <i class="fa fa-mobile-alt"></i>
+                                }
+                                Apply Now
+                            </a>
+                        }
+                        else
+                        {
+                            <div class="alert alert-danger mb-2">
+                                <i class="fa fa-exclamation-circle"></i> @product.EligibilityMessage
+                            </div>
+                            <button class="btn btn-secondary w-100" disabled>Not Eligible</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>

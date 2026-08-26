@@ -1,0 +1,269 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.EndorsementDetailsDTO
+@{
+    ViewData["Title"] = "Endorsement Details";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center">
+                <a asp-action="PendingEndorsement" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i> Back to List
+                </a>
+                <h2 class="page-title mb-0">
+                    <i class="bi bi-eye me-2"></i>Endorsement Details
+                </h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Loan Information -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle me-2"></i>Loan Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <small class="text-muted">Loan No</small>
+                            <p><strong>@Model.LoanNo</strong></p>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Member No</small>
+                            <p><strong>@Model.MemberNo</strong></p>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Member Name</small>
+                            <p><strong>@Model.MemberName</strong></p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <small class="text-muted">Phone No</small>
+                            <p><strong>@Model.PhoneNo</strong></p>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Loan Type</small>
+                            <p><strong>@Model.LoanTypeName</strong></p>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Minute No</small>
+                            <p><strong>@Model.MinuteNo</strong></p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <small class="text-muted">Voucher No</small>
+                            <p><strong>@Model.VoucherNo</strong></p>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Cheque No</small>
+                            <p><strong>@Model.ChequeNo</strong></p>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Source Account</small>
+                            <p><strong>@Model.SourceAccountNo</strong></p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <small class="text-muted">Endorsement Date</small>
+                            <p><strong>@Model.EndorsementDate.ToString("dd/MM/yyyy HH:mm")</strong></p>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted">Endorsed By</small>
+                            <p><strong>@Model.EndorsedBy</strong></p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <small class="text-muted">Status</small>
+                            <p>
+                                <span class="badge @(Model.Status == "Endorsed" ? "bg-success" : "bg-danger")">
+                                    @Model.Status
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.Remarks))
+                    {
+                        <div class="row">
+                            <div class="col-12">
+                                <small class="text-muted">Remarks</small>
+                                <p><strong>@Model.Remarks</strong></p>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Deductions Summary -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-calculator me-2"></i>Financial Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="bg-light p-3 rounded text-center">
+                                <small class="text-muted">Gross Amount</small>
+                                <h4 class="text-primary mb-0">KES @Model.GrossAmount.ToString("N0")</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="bg-light p-3 rounded text-center">
+                                <small class="text-muted">Total Deductions</small>
+                                <h4 class="text-danger mb-0">KES @Model.TotalDeductions.ToString("N0")</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="bg-light p-3 rounded text-center">
+                                <small class="text-muted">Net Amount</small>
+                                <h4 class="text-success mb-0">KES @Model.NetAmount.ToString("N0")</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deductions Detail -->
+            @if (Model.Deductions.Any())
+            {
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-list-ul me-2"></i>Deductions Detail
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Deduction Type</th>
+                                        <th>Amount (KES)</th>
+                                        <th>GL Account</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var deduction in Model.Deductions)
+                                    {
+                                        <tr>
+                                            <td>@(Model.Deductions.IndexOf(deduction) + 1)</td>
+                                            <td>
+                                                @deduction.DeductionName
+                                                @if (deduction.IsPercentage)
+                                                {
+                                                    <span class="badge bg-info ms-1">@deduction.PercentageValue?.ToString("F2")%</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">KES @deduction.Amount.ToString("N0")</td>
+                                            <td>
+                                                <small>
+                                                    <strong>@deduction.GlAccountNo</strong><br />
+                                                    <span class="text-muted">@deduction.GlAccountName</span>
+                                                </small>
+                                            </td>
+                                            <td><small>@deduction.Description</small></td>
+                                        </tr>
+                                    }
+                                    <tr class="table-secondary">
+                                        <td colspan="2" class="text-end fw-bold">Total:</td>
+                                        <td class="text-end fw-bold">KES @Model.TotalDeductions.ToString("N0")</td>
+                                        <td colspan="2"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- GL Transactions -->
+            @if (Model.GLTransactions.Any())
+            {
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-journal me-2"></i>GL Transactions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Description</th>
+                                        <th>Debit Account</th>
+                                        <th>Credit Account</th>
+                                        <th>Amount (KES)</th>
+                                        <th>Document No</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var gl in Model.GLTransactions)
+                                    {
+                                        <tr>
+                                            <td>@(Model.GLTransactions.IndexOf(gl) + 1)</td>
+                                            <td><small>@gl.Description</small></td>
+                                            <td><small>@gl.DrAccountName<br /><span class="text-muted">@gl.DrAccNo</span></small></td>
+                                            <td><small>@gl.CrAccountName<br /><span class="text-muted">@gl.CrAccNo</span></small></td>
+                                            <td class="text-end">KES @gl.Amount.ToString("N0")</td>
+                                            <td><small>@gl.DocumentNo</small></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-gear me-2"></i>Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a asp-action="PendingEndorsement" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left me-2"></i>Back to List
+                        </a>
+                        @if (Model.Status == "Endorsed")
+                        {
+                            <a asp-action="EditEndorsement" asp-route-loanNo="@Model.LoanNo" class="btn btn-primary">
+                                <i class="bi bi-pencil me-2"></i>Edit Endorsement
+                            </a>
+                        }
+                        <a asp-action="PrintAppraisalReport" asp-route-loanNo="@Model.LoanNo" class="btn btn-info text-white">
+                            <i class="bi bi-printer me-2"></i>Print Report
+                        </a>
+                    </div>
+                    <hr />
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Note:</strong>
+                        <ul class="mt-2 mb-0">
+                            <li>This endorsement has been recorded on the blockchain</li>
+                            <li>GL transactions have been posted</li>
+                            <li>Changes can be made by editing the endorsement</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

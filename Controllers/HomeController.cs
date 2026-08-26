@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿//using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -6,9 +8,11 @@ using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.ViewModels;
 using SACCOBlockChainSystem.Services;
+using SACCOBlockChainSystem.ViewModels;
 using System.Diagnostics;
 using System.Globalization;
 using System.Security.Claims;
+using MemberViewModel = SACCOBlockChainSystem.Models.MemberViewModel;
 
 namespace SACCOBlockChainSystem.Controllers
 {
@@ -20,280 +24,477 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly ILogger<HomeController> _logger;
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _webHostEnvironment;
+        private readonly IDashboardCacheService _dashboardCacheService;
+        private readonly IWebHostEnvironment _env;
+        private WalletService _walletService;
 
         public HomeController(
             IDashboardService dashboardService,
             IBlockchainService blockchainService,
             ILogger<HomeController> logger,
-            ApplicationDbContext context,
-            IWebHostEnvironment webHostEnvironment)
+            IWebHostEnvironment env,
+            ApplicationDbContext context,WalletService walletService,
+            IWebHostEnvironment webHostEnvironment, IDashboardCacheService dashboardCacheService)
         {
             _dashboardService = dashboardService;
             _blockchainService = blockchainService;
             _logger = logger;
+            _env = env;
             _context = context;
+            _walletService = walletService;
             _webHostEnvironment = webHostEnvironment;
+            _dashboardCacheService = dashboardCacheService;
         }
 
+        public async Task<IActionResult> AccountSetup()
+        {
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            if (userRole.ToUpper() != "MEMBER")
+            {
+                return RedirectToAction("Index", "Home");
+            }
+            var wp = new WalletPinSetup();
+            var mno = User.FindFirst("MemberNo")?.Value;
+            var companyCode = User.FindFirst("CompanyCode")?.Value;
+            ViewBag.MemberNo = mno;
+            var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == mno && m.CompanyCode == companyCode);
+            if (!string.IsNullOrEmpty(member.Pin))
+            {
+                ViewBag.Reset = true;
+            }
+            else
+            {
+                ViewBag.Reset = false;
+            }
+             return View(wp);
+        }
+
+       
+        private async Task<List<string>> GetCompanyCodesInSameCountyAsync(string companyCode)
+        {
+            var company = await _context.Companies
+                .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+
+            if (company == null || string.IsNullOrEmpty(company.County))
+                return new List<string> { companyCode };
+
+            return await _context.Companies
+                .Where(c => c.County == company.County)
+                .Select(c => c.CompanyCode)
+                .ToListAsync();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AccountSetup(WalletPinSetup model)
+        {
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            if (userRole.ToUpper() != "MEMBER")
+            {
+                return RedirectToAction("Index", "Home");
+            }
+            ViewBag.MemberNo = User.FindFirst("MemberNo")?.Value;
+            if (!ModelState.IsValid)
+            {
+                TempData["ErrorMessage"] = "Invalid try again.";
+                return View(model);
+            }
+            var userCompanyCode = User.FindFirst("CompanyCode")?.Value;
+            var memberNo = User.FindFirst("MemberNo")?.Value;
+            var member = await _context.Members.FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == userCompanyCode);
+            if(member == null)
+            {
+                TempData["ErrorMessage"] = "Your account is not active. Please contact administrator.";
+
+                return View(model);
+            }
+            if(model.ConfirmPin != model.Pin)
+            {
+                TempData["ErrorMessage"] = "Confirmation and pin do not match";
+
+                return View(model);
+            }
+            if (!string.IsNullOrEmpty(member.Pin))
+            {
+                if (string.IsNullOrEmpty(model.UserPin))
+                {
+                    TempData["ErrorMessage"] = "Old pin is required";
+
+                    return View(model);
+                }
+                if(EncryptionHelper.Encrypt(member.Pin) != model.UserPin)
+                {
+                    TempData["ErrorMessage"] = "Old pin is invalid. Try again.";
+
+                    return View(model);
+                }
+            }
+            member.Pin = EncryptionHelper.Encrypt(model.Pin);
+            //_context.Members.Update(member);
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "Pin set successfully. Proceed.";
+            return RedirectToAction("Index", "Home");
+            //return View(model);
+
+
+        }
+        [Authorize]
         public async Task<IActionResult> Index(string? companyCode)
         {
             try
             {
-                // Get the logged-in user's role and company code from claims
                 var userRole = User.FindFirstValue(ClaimTypes.Role);
                 var isSuperAdmin = userRole == "Super Admin" || userRole == "SuperAdmin";
-                var userCompanyCode = User.FindFirst("CompanyCode")?.Value ??
-                                      User.FindFirst("SaccoCode")?.Value ??
-                                      User.FindFirst("Company")?.Value;
+                var isCountyAdmin = userRole == "County Admin" || userRole == "CountyAdmin";
+                var userCompanyCode = User.FindFirst("CompanyCode")?.Value;
 
-                // Determine the effective company code for filtering
-                string effectiveCompanyCode = null;
-
-                if (isSuperAdmin)
+                // County Admin Logic
+                if (isCountyAdmin && !string.IsNullOrEmpty(userCompanyCode))
                 {
-                    // Super Admin: Use selected company code if provided, otherwise null (show all)
-                    effectiveCompanyCode = string.IsNullOrEmpty(companyCode) ? null : companyCode;
-                    ViewBag.ShowCompanyFilter = true;
-                }
-                else
-                {
-                    // Non-SuperAdmin: Always limited to their own company
-                    effectiveCompanyCode = userCompanyCode;
-                    companyCode = userCompanyCode; // Override any passed company code
-                    ViewBag.ShowCompanyFilter = false;
-                }
+                    // Step 1: Get the user's company
+                    var userCompany = await _context.Companies
+                        .FirstOrDefaultAsync(c => c.CompanyCode == userCompanyCode);
 
-                var userCompanyName = User.FindFirst("CompanyName")?.Value ??
-                                      User.FindFirst("SaccoName")?.Value;
-
-                DashboardVM dashboard = await GetUniversalDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
-
-                var cutoffDate = DateTime.Now.AddMonths(-6);
-
-                // Build member query with role-based filtering
-                var membersQuery = _context.Members.AsQueryable();
-
-                // Apply filtering based on role and effective company code
-                if (!isSuperAdmin && !string.IsNullOrEmpty(effectiveCompanyCode))
-                {
-                    // Non-SuperAdmin: Filter by their company
-                    membersQuery = membersQuery.Where(m => m.CompanyCode == effectiveCompanyCode);
-                    dashboard.SelectedCompanyCode = effectiveCompanyCode;
-                    dashboard.SelectedCompanyName = userCompanyName ?? effectiveCompanyCode;
-                }
-                else if (isSuperAdmin && !string.IsNullOrEmpty(effectiveCompanyCode))
-                {
-                    // SuperAdmin: Filter by selected company
-                    membersQuery = membersQuery.Where(m => m.CompanyCode == effectiveCompanyCode);
-                    dashboard.SelectedCompanyCode = effectiveCompanyCode;
-                    dashboard.SelectedCompanyName = effectiveCompanyCode;
-                }
-                else if (isSuperAdmin && string.IsNullOrEmpty(effectiveCompanyCode))
-                {
-                    // SuperAdmin: No company filter - show ALL companies
-                    dashboard.SelectedCompanyName = "All Companies";
-                    dashboard.SelectedCompanyCode = "ALL";
-                    // Don't apply any company filter to membersQuery
-                }
-
-                // Get all members (filtered appropriately)
-                var members = await membersQuery
-                    .Where(m => m.Dob.HasValue || m.Status.HasValue)
-                    .Select(m => new
+                    if (userCompany != null && !string.IsNullOrEmpty(userCompany.County))
                     {
-                        m.MemberNo,
-                        m.Sex,
-                        m.Dob,
-                        m.Status,
-                        m.EffectDate,
-                        m.Withdrawn,
-                        m.Dormant,
-                        m.CompanyCode
-                    })
-                    .ToListAsync();
+                        // Step 2: Get all companies in the same county
+                        var countyCompanies = await _context.Companies
+                            .Where(c => c.County != null && c.County == userCompany.County)
+                            .Select(c => c.CompanyCode)
+                            .ToListAsync();
 
-                // ==========================
-                // MEMBER STATISTICS
-                // ==========================
-                dashboard.TotalWomen = members.Count(m =>
-                    !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "FEMALE");
+                        // Step 3: Get dashboard data for ALL companies in this county
+                        // FIXED: Use a different variable name (countyDashboard) to avoid conflict
+                        var countyDashboard = await _dashboardCacheService.GetDashboardDataForCompaniesAsync(
+                            countyCompanies,
+                            isCountyAdmin);
 
-                dashboard.TotalMen = members.Count(m =>
-                    !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "MALE");
+                        // Step 4: Populate company list for the dropdown
+                        countyDashboard.Companies = await _context.Companies
+                            .Where(c => countyCompanies.Contains(c.CompanyCode))
+                            .Select(c => new CompanyInfo { Code = c.CompanyCode, Name = c.CompanyName ?? c.CompanyCode })
+                            .OrderBy(c => c.Name)
+                            .ToListAsync();
 
-                dashboard.TotalOthers = members.Count(m =>
-                    string.IsNullOrEmpty(m.Sex) ||
-                    (m.Sex.ToUpper() != "MALE" && m.Sex.ToUpper() != "FEMALE"));
+                        countyDashboard.SelectedCompanyCode = "ALL";
+                        countyDashboard.SelectedCompanyName = $"County: {userCompany.County} ({countyDashboard.Companies.Count} companies)";
+                        countyDashboard.UserGroup = GetUserGroup();
+                        countyDashboard.UserRoles = User.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
+                        countyDashboard.IsCountyView = true;
+                        countyDashboard.CountyName = userCompany.County;
 
-                dashboard.TotalMembers = members.Count;
+                        return View(countyDashboard);
+                    }
+                    else
+                    {
+                        // Fallback: If user's company has no county, just show their company
+                        _logger.LogWarning($"County Admin {userCompanyCode} has no county assigned. Falling back to single company view.");
+                    }
+                }
 
-                // ACTIVE & DORMANT MEMBERS
-                var activeMemberNos = await GetActiveMemberNumbersAsync(cutoffDate, effectiveCompanyCode, isSuperAdmin);
-                var activeFromStatus = members.Where(m => m.Status == 1).Select(m => m.MemberNo).ToHashSet();
-
-                var allActiveMembers = new HashSet<string>(activeMemberNos);
-                allActiveMembers.UnionWith(activeFromStatus);
-
-                dashboard.ActiveMembers = allActiveMembers.Count;
-                dashboard.DormantMembers = dashboard.TotalMembers - dashboard.ActiveMembers;
-
-                // ACTIVE/DORMANT BY GENDER
-                dashboard.ActiveWomen = members.Count(m =>
-                    !string.IsNullOrEmpty(m.Sex) &&
-                    m.Sex.ToUpper() == "FEMALE" &&
-                    allActiveMembers.Contains(m.MemberNo));
-
-                dashboard.DormantWomen = dashboard.TotalWomen - dashboard.ActiveWomen;
-
-                dashboard.ActiveMen = members.Count(m =>
-                    !string.IsNullOrEmpty(m.Sex) &&
-                    m.Sex.ToUpper() == "MALE" &&
-                    allActiveMembers.Contains(m.MemberNo));
-
-                dashboard.DormantMen = dashboard.TotalMen - dashboard.ActiveMen;
-
-                // YOUTH CALCULATION (<= 35 years)
-                var membersWithAge = members.Where(m => m.Dob.HasValue).ToList();
-
-                dashboard.YouthTotal = membersWithAge.Count(m =>
+                // Handle Member role - redirect to MemberIndex
+                if (userRole?.ToUpper() == "MEMBER")
                 {
-                    var age = CalculateAgeSafe(m.Dob.Value);
-                    return age <= 35;
-                });
+                    var uid = User.FindFirst("UserId")?.Value;
 
-                dashboard.YouthMale = membersWithAge.Count(m =>
+                    var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.MemberId == int.Parse(uid) && w.CompanyCode == userCompanyCode);
+                    var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == int.Parse(uid) && m.CompanyCode == userCompanyCode);
+
+                    if (wallet == null)
+                    {
+                        if (member != null)
+                            wallet = await _walletService.RegisterMemberAsync(member);
+                    }
+
+                    var wg = await _context.WalletConfigurations.AsNoTracking().FirstOrDefaultAsync(w => w.CompanyCode == wallet.CompanyCode);
+                    if (wg != null && wg.EnableWallets == true)
+                    {
+                        if (wg.RequireTransactionPin == true)
+                        {
+                            if (string.IsNullOrEmpty(member.Pin))
+                            {
+                                return RedirectToAction("AccountSetup", "Home");
+                            }
+                        }
+                    }
+
+                    // ============================================================
+                    // GET FINANCIAL SUMMARY DATA
+                    // ============================================================
+
+                    // 1. Get total contributions from Contrib table
+                    var totalContributions = await _context.Contribs
+                        .AsNoTracking()
+                        .Where(c => c.MemberNo == member.MemberNo && c.CompanyCode == member.CompanyCode && c.Posted == "Y")
+                        .SumAsync(c => c.Amount ?? 0);
+
+                    // 2. Get total share capital from ContribShares table
+                    var totalShareCapital = await _context.ContribShares
+                        .AsNoTracking()
+                        .Where(cs => cs.MemberNo == member.MemberNo && cs.CompanyCode == member.CompanyCode)
+                        .SumAsync(cs => cs.ShareCapitalAmount ?? 0);
+
+                    // 3. Get total deposits from ContribShares table
+                    var totalDeposits = await _context.ContribShares
+                        .AsNoTracking()
+                        .Where(cs => cs.MemberNo == member.MemberNo && cs.CompanyCode == member.CompanyCode)
+                        .SumAsync(cs => cs.DepositsAmount ?? 0);
+
+                    // ============================================================
+                    // DETERMINE IF MEMBER IS ACTIVE (3 CONSECUTIVE MONTHS OF DEPOSITS)
+                    // ============================================================
+                    // Get member's deposit dates from ContribShares
+                    var memberDepositDates = await _context.ContribShares
+                        .Where(cs => cs.MemberNo == member.MemberNo
+                                     && cs.CompanyCode == member.CompanyCode
+                                     && cs.DepositsAmount.HasValue
+                                     && cs.DepositsAmount.Value > 0)
+                        .Select(cs => cs.ContrDate /*?? cs.DepositedDate ?? cs.ReceiptDate ?? cs.AuditTime*/)
+                        .ToListAsync();
+
+                    // Filter out null dates
+                    var validDates = memberDepositDates
+                        .Where(d => d.HasValue && d.Value != DateTime.MinValue)
+                        .Select(d => d.Value)
+                        .ToList();
+
+                    bool isActive = IsMemberActive(validDates);
+
+                    // 4. Get loan summary
+                    var activeLoan = await _context.Loans
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(l => l.MemberNo == member.MemberNo && l.CompanyCode == member.CompanyCode && l.Status != (int)Status.Closed && l.Status != (int)Status.Rejected);
+
+                    var loanBalance = 0m;
+                    var loanAmount = 0m;
+                    var loanRepaid = 0m;
+                    var totalInterest = 0m;
+
+                    if (activeLoan != null)
+                    {
+                        // Get loan balance from Loanbal table
+                        var loanbal = await _context.Loanbal
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(lb => lb.LoanNo == activeLoan.LoanNo && lb.MemberNo == member.MemberNo);
+
+                        if (loanbal != null)
+                        {
+                            loanBalance = loanbal.Balance;
+                            totalInterest = loanbal.IntrOwed;
+                        }
+
+                        loanAmount = activeLoan.LoanAmt ?? 0;
+
+                        // Calculate total repaid from Repay table
+                        loanRepaid = await _context.Repay
+                            .AsNoTracking()
+                            .Where(r => r.LoanNo == activeLoan.LoanNo && r.MemberNo == member.MemberNo)
+                            .SumAsync(r => r.Amount ?? 0);
+                    }
+
+                    // 5. Get all loans (active and closed)
+                    var allLoans = await _context.Loans
+                        .AsNoTracking()
+                        .Where(l => l.MemberNo == member.MemberNo && l.CompanyCode == member.CompanyCode)
+                        .ToListAsync();
+
+                    var totalLoanAmount = allLoans.Sum(l => l.LoanAmt ?? 0);
+                    var activeLoansCount = allLoans.Count(l => l.Status != (int)Status.Closed && l.Status != (int)Status.Rejected);
+                    var completedLoansCount = allLoans.Count(l => l.Status == (int)Status.Closed);
+
+                    // 6. Get recent transactions (same as before)
+                    var blockchainTransactions = await _context.BlockchainTransactions
+                        .AsNoTracking()
+                        .Where(t => t.CompanyCode == member.CompanyCode && t.MemberNo == member.MemberNo)
+                        .Select(t => new MemberTransactionViewModel
+                        {
+                            TransactionId = t.TransactionId,
+                            TransactionType = t.TransactionType,
+                            Amount = t.Amount,
+                            Status = t.Status,
+                            CreatedAt = t.Timestamp,
+                            ReceiptNo = t.OffChainReferenceId,
+                            Source = "Blockchain"
+                        })
+                        .ToListAsync();
+
+                    var contributions = await _context.Contribs
+                        .AsNoTracking()
+                        .Where(c => c.MemberNo == member.MemberNo && c.CompanyCode == member.CompanyCode && c.Posted == "Y")
+                        .OrderByDescending(c => c.AuditDateTime)
+                        .Select(c => new MemberTransactionViewModel
+                        {
+                            TransactionId = c.TransactionNo,
+                            TransactionType = "Contribution",
+                            Amount = c.Amount ?? 0,
+                            Status = "COMPLETED",
+                            CreatedAt = c.AuditDateTime ?? DateTime.Now,
+                            ReceiptNo = c.ReceiptNo,
+                            Source = "Contrib"
+                        })
+                        .ToListAsync();
+
+                    var shareContributions = await _context.ContribShares
+                        .AsNoTracking()
+                        .Where(cs => cs.MemberNo == member.MemberNo && cs.CompanyCode == member.CompanyCode)
+                        .OrderByDescending(cs => cs.AuditDateTime)
+                        .Select(cs => new MemberTransactionViewModel
+                        {
+                            TransactionId = cs.TransactionNo,
+                            TransactionType = "Share Contribution",
+                            Amount = (cs.ShareCapitalAmount ?? 0) + (cs.DepositsAmount ?? 0),
+                            Status = "COMPLETED",
+                            CreatedAt = cs.AuditDateTime ?? DateTime.Now,
+                            ReceiptNo = cs.ReceiptNo,
+                            Source = "ContribShares"
+                        })
+                        .ToListAsync();
+
+                    var loanRepayments = await _context.Repay
+                        .AsNoTracking()
+                        .Where(r => r.MemberNo == member.MemberNo && r.CompanyCode == member.CompanyCode)
+                        .OrderByDescending(r => r.AuditDateTime)
+                        .Select(r => new MemberTransactionViewModel
+                        {
+                            TransactionId = r.TransactionNo,
+                            TransactionType = "Loan Repayment",
+                            Amount = r.Amount ?? 0,
+                            Status = "COMPLETED",
+                            CreatedAt = r.AuditDateTime ?? r.AuditTime ?? DateTime.Now,
+                            ReceiptNo = r.ReceiptNo,
+                            Source = "Repay"
+                        })
+                        .ToListAsync();
+
+                    // Combine all transactions for recent list
+                    var allTransactions = new List<MemberTransactionViewModel>();
+                    allTransactions.AddRange(blockchainTransactions);
+                    allTransactions.AddRange(contributions);
+                    allTransactions.AddRange(shareContributions);
+                    allTransactions.AddRange(loanRepayments);
+
+                    var latestTransactions = allTransactions
+                        .OrderByDescending(t => t.CreatedAt)
+                        .Take(5)
+                        .ToList();
+
+                    var memberView = new MemberViewModel
+                    {
+                        Member = member,
+                        Wallets = new List<Wallet> { wallet },
+                        MemberTransactions = latestTransactions,
+                        UserCompanyCode = member.CompanyCode,
+                        TotalBlockchainTransactions = blockchainTransactions.Count + contributions.Count + shareContributions.Count + loanRepayments.Count,
+
+                        // Add financial summary properties
+                        TotalContributions = totalContributions,
+                        TotalShareCapital = totalShareCapital,
+                        TotalDeposits = totalDeposits,
+                        CurrentLoanBalance = loanBalance,
+                        CurrentLoanAmount = loanAmount,
+                        TotalLoanRepaid = loanRepaid,
+                        TotalLoanInterest = totalInterest,
+                        TotalAllLoans = totalLoanAmount,
+                        ActiveLoansCount = activeLoansCount,
+                        CompletedLoansCount = completedLoansCount,
+                        HasActiveLoan = activeLoan != null
+                    };
+
+                    return View("MemberIndex", memberView);
+                }
+
+                // Determine effective company code
+                string effectiveCompanyCode = null;
+                if (!isSuperAdmin)
                 {
-                    var age = CalculateAgeSafe(m.Dob.Value);
-                    return age <= 35 && !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "MALE";
-                });
-
-                dashboard.YouthFemale = membersWithAge.Count(m =>
+                    effectiveCompanyCode = userCompanyCode;
+                    companyCode = userCompanyCode;
+                }
+                else if (!string.IsNullOrEmpty(companyCode))
                 {
-                    var age = CalculateAgeSafe(m.Dob.Value);
-                    return age <= 35 && !string.IsNullOrEmpty(m.Sex) && m.Sex.ToUpper() == "FEMALE";
-                });
+                    effectiveCompanyCode = companyCode;
+                }
 
-                // ==========================
-                // FINANCIAL DATA FROM TABLES
-                // ==========================
+                // ✅ Get cached dashboard data - includes ALL calculations now!
+                var dashboard = await _dashboardCacheService.GetDashboardDataAsync(effectiveCompanyCode, isSuperAdmin);
 
-                // Get Member Contributions from ContribShares table
-                var contributionsData = await GetContributionsDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalContributions = contributionsData.Total;
-                dashboard.WomenContributions = contributionsData.Women;
-                dashboard.MenContributions = contributionsData.Men;
-                dashboard.OthersContributions = contributionsData.Others;
-
-                // Get Share Capital from Shares table
-                var shareCapitalData = await GetShareCapitalDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalShareCapital = shareCapitalData.Total;
-                dashboard.WomenShareCapital = shareCapitalData.Women;
-                dashboard.MenShareCapital = shareCapitalData.Men;
-                dashboard.OthersShareCapital = shareCapitalData.Others;
-
-                // Get Non-Withdrawable Deposits from ContribShares (DepositsAmount)
-                var depositsData = await GetDepositsDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalDeposits = depositsData.Total;
-                dashboard.WomenDeposits = depositsData.Women;
-                dashboard.MenDeposits = depositsData.Men;
-                dashboard.OthersDeposits = depositsData.Others;
-
-                // Get Registration Fees from Members table (RegFee)
-                var registrationData = await GetRegistrationFeesDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalRegistrationFees = registrationData.Total;
-                dashboard.WomenRegistrationFees = registrationData.Women;
-                dashboard.MenRegistrationFees = registrationData.Men;
-                dashboard.OthersRegistrationFees = registrationData.Others;
-
-                // Get Loans Taken from Loans table
-                var loansTakenData = await GetLoansTakenDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalLoansTaken = loansTakenData.Total;
-                dashboard.WomenLoansTaken = loansTakenData.Women;
-                dashboard.MenLoansTaken = loansTakenData.Men;
-                dashboard.OthersLoansTaken = loansTakenData.Others;
-
-                // Get Loan Balances from Loans table (outstanding)
-                var loanBalancesData = await GetLoanBalancesDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalLoanBalances = loanBalancesData.Total;
-                dashboard.WomenLoanBalances = loanBalancesData.Women;
-                dashboard.MenLoanBalances = loanBalancesData.Men;
-                dashboard.OthersLoanBalances = loanBalancesData.Others;
-
-                // Get Loans Paid from Loanbals table (Cleared)
-                var loansPaidData = await GetLoansPaidDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalLoansPaid = loansPaidData.Total;
-                dashboard.WomenLoansPaid = loansPaidData.Women;
-                dashboard.MenLoansPaid = loansPaidData.Men;
-                dashboard.OthersLoansPaid = loansPaidData.Others;
-
-                // Get Total Loanees from Loans table (distinct members with loans)
-                var loaneesData = await GetLoaneesDataAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalLoanees = loaneesData.Total;
-                dashboard.WomenLoanees = loaneesData.Women;
-                dashboard.MenLoanees = loaneesData.Men;
-                dashboard.OthersLoanees = loaneesData.Others;
-
-                dashboard.RepaymentRate = await CalculateRepaymentRateAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.PARPercent = await CalculatePARPercentAsync(effectiveCompanyCode, isSuperAdmin);
-                //dashboard.AmountPastDueRate = await CalculatePenaltyInterestRateAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.AmountPastDueRate = await CalculateAmountPastDueRateAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.AmountPastDueRate = dashboard.PARPercent;
-                dashboard.OutstandingLoanPortfolio = await CalculateOutstandingLoanPortfolioAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.ArrearsBalance = await CalculateArrearsBalanceAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.TotalArrears = dashboard.ArrearsBalance;
-                dashboard.WomenParticipationRate = await CalculateWomenParticipationRateAsync(effectiveCompanyCode, isSuperAdmin);
-                dashboard.LoanPortfolioHealth = GetLoanPortfolioHealth(dashboard.PARPercent);
-
-                // Get grants data - SuperAdmin sees all, others see filtered
-                dashboard.InclusionGrantTotal = await GetGrantTotalAsync("inclusion grant", effectiveCompanyCode, isSuperAdmin);
-                dashboard.MatchingGrantTotal = await GetGrantTotalAsync("matching grant", effectiveCompanyCode, isSuperAdmin);
-
-                // Load chart data
-                dashboard.MonthlyTransactions = await GetMonthlyTransactionsDataAsync(6, effectiveCompanyCode, isSuperAdmin);
-                dashboard.MemberGrowth = await GetMemberGrowthDataAsync(12, effectiveCompanyCode, isSuperAdmin);
-
-                // Get companies for filter dropdown (only for Super Admin)
                 if (isSuperAdmin)
                 {
                     dashboard.Companies = await _context.Companies
                         .Where(c => c.Project == true)
-                        .Select(c => new CompanyInfo
-                        {
-                            Code = c.CompanyCode,
-                            Name = c.CompanyName ?? c.CompanyCode
-                        })
+                        .Select(c => new CompanyInfo { Code = c.CompanyCode, Name = c.CompanyName ?? c.CompanyCode })
                         .OrderBy(c => c.Name)
                         .ToListAsync();
-                }
-                else
-                {
-                    dashboard.Companies = new List<CompanyInfo>();
+
+                    // Add company count to ViewBag for layout
+                    ViewBag.CompanyCount = dashboard.Companies.Count;
                 }
 
-                // Get user info
+                // Set UI properties
+                dashboard.SelectedCompanyCode = effectiveCompanyCode ?? (isSuperAdmin ? "ALL" : userCompanyCode);
+                dashboard.SelectedCompanyName = isSuperAdmin && string.IsNullOrEmpty(effectiveCompanyCode)
+                    ? "All Companies"
+                    : dashboard.SelectedCompanyName;
                 dashboard.UserGroup = GetUserGroup();
-                dashboard.UserRoles = User.Claims
-                    .Where(c => c.Type == ClaimTypes.Role)
-                    .Select(c => c.Value)
-                    .ToList();
-
-                ViewData["Title"] = $"{dashboard.UserGroup} Dashboard";
-                ViewData["Subtitle"] = $"SACCO Blockchain System - {dashboard.SelectedCompanyName}";
+                dashboard.UserRoles = User.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
 
                 return View(dashboard);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error loading dashboard: {Message}", ex.Message);
-                _logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
-
-                if (_webHostEnvironment.IsDevelopment())
-                {
-                    return Content($"Error: {ex.Message}\n\nStack Trace: {ex.StackTrace}");
-                }
-
+                _logger.LogError(ex, "Error loading dashboard");
                 return View("Error");
             }
+        }
+
+        /// <summary>
+        /// Determines if a member is active based on having 3 consecutive months of deposits
+        /// Once active, always active (even if later deposits stop)
+        /// </summary>
+        private bool IsMemberActive(List<DateTime> depositDates)
+        {
+            if (depositDates == null || depositDates.Count < 3)
+                return false;
+
+            // Sort dates ascending
+            var sortedDates = depositDates.OrderBy(d => d).ToList();
+
+            // Group by year-month to check consecutive months
+            var monthGroups = sortedDates
+                .Select(d => new { Year = d.Year, Month = d.Month })
+                .Distinct()
+                .OrderBy(m => m.Year).ThenBy(m => m.Month)
+                .ToList();
+
+            // Check for 3 consecutive months
+            int consecutiveCount = 1;
+            for (int i = 1; i < monthGroups.Count; i++)
+            {
+                var current = monthGroups[i];
+                var previous = monthGroups[i - 1];
+
+                // Check if months are consecutive
+                bool isConsecutive = false;
+
+                // Same year, next month
+                if (current.Year == previous.Year && current.Month == previous.Month + 1)
+                    isConsecutive = true;
+                // Year boundary (Dec to Jan)
+                else if (current.Year == previous.Year + 1 && current.Month == 1 && previous.Month == 12)
+                    isConsecutive = true;
+
+                if (isConsecutive)
+                {
+                    consecutiveCount++;
+                    if (consecutiveCount >= 3)
+                        return true; // Once active, always active!
+                }
+                else
+                {
+                    consecutiveCount = 1; // Reset if not consecutive
+                }
+            }
+
+            return false;
         }
 
 
@@ -434,13 +635,14 @@ namespace SACCOBlockChainSystem.Controllers
             return (total, womenContributions, menContributions, othersContributions);
         }
 
-        // SHARE CAPITAL - From ContribShares table (ShareCapitalAmount)
+        // SHARE CAPITAL - From ContribShares table filtered by Sharetype where Issharecapital = 1 (true)
         private async Task<(decimal Total, decimal Women, decimal Men, decimal Others)> GetShareCapitalDataAsync(string? companyCode, bool isSuperAdmin)
         {
             try
             {
                 var membersQuery = _context.Members.AsQueryable();
 
+                // Apply company filter to members
                 if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
                 {
                     membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
@@ -449,6 +651,7 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     membersQuery = membersQuery.Where(m => m.CompanyCode == companyCode);
                 }
+                // If SuperAdmin and no companyCode, include ALL members
 
                 var members = await membersQuery
                     .Select(m => new { MemberNo = m.MemberNo.Trim(), m.Sex })
@@ -475,85 +678,66 @@ namespace SACCOBlockChainSystem.Controllers
                 decimal menShares = 0;
                 decimal othersShares = 0;
 
+                // ============================================================
+                // FIXED: Join with Sharetype and filter by Issharecapital = 1
+                // This ensures ONLY true share capital is included
+                // ============================================================
+                var shareCapitalQuery = from cs in _context.ContribShares
+                                        join st in _context.Sharetypes
+                                            on new { cs.Sharescode, cs.CompanyCode }
+                                            equals new { Sharescode = st.SharesCode, st.CompanyCode }
+                                        where cs.ShareCapitalAmount.HasValue
+                                            && cs.ShareCapitalAmount.Value > 0
+                                            && st.Issharecapital  // ✅ ONLY TRUE SHARE CAPITAL
+                                        select new
+                                        {
+                                            cs.MemberNo,
+                                            cs.ShareCapitalAmount,
+                                            cs.CompanyCode,
+                                            Sex = st.SharesType // Not used for gender, just for debugging
+                                        };
+
                 if (targetCompanyCode != null)
                 {
-                    var allShares = await _context.ContribShares
-                        .Where(s => s.CompanyCode == targetCompanyCode
-                            && s.ShareCapitalAmount.HasValue
-                            && s.ShareCapitalAmount.Value > 0
-                            && s.MemberNo != null)
-                        .Select(s => new { MemberNo = s.MemberNo.Trim(), s.ShareCapitalAmount })
-                        .ToListAsync();
-
-                    var genderDict = members
-                        .GroupBy(m => m.MemberNo)
-                        .ToDictionary(g => g.Key, g => g.First().Sex, StringComparer.OrdinalIgnoreCase);
-
-                    foreach (var share in allShares)
-                    {
-                        if (!genderDict.TryGetValue(share.MemberNo, out var gender)) continue;
-
-                        var amount = share.ShareCapitalAmount ?? 0;
-                        var normalizedGender = NormalizeGender(gender);
-
-                        if (normalizedGender == "FEMALE")
-                            womenShares += amount;
-                        else if (normalizedGender == "MALE")
-                            menShares += amount;
-                        else
-                            othersShares += amount;
-                    }
-
-                    totalShareCapital = womenShares + menShares + othersShares;
+                    shareCapitalQuery = shareCapitalQuery.Where(x => x.CompanyCode == targetCompanyCode);
                 }
-                else
+
+                var shareCapitalData = await shareCapitalQuery.ToListAsync();
+
+                // Build gender lookup
+                var genderDict = members
+                    .GroupBy(m => m.MemberNo)
+                    .ToDictionary(g => g.Key, g => g.First().Sex, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var item in shareCapitalData)
                 {
-                    var allShares = await _context.ContribShares
-                        .Where(s => s.ShareCapitalAmount.HasValue
-                            && s.ShareCapitalAmount.Value > 0
-                            && s.MemberNo != null)
-                        .Select(s => new { MemberNo = s.MemberNo.Trim(), s.ShareCapitalAmount })
-                        .ToListAsync();
+                    if (!genderDict.TryGetValue(item.MemberNo, out var gender)) continue;
 
-                    var allMembers = await _context.Members
-                        .Select(m => new { MemberNo = m.MemberNo.Trim(), m.Sex })
-                        .ToListAsync();
+                    var amount = item.ShareCapitalAmount ?? 0;
+                    var normalizedGender = NormalizeGender(gender);
 
-                    var genderDict = allMembers
-                        .GroupBy(m => m.MemberNo)
-                        .ToDictionary(g => g.Key, g => g.First().Sex, StringComparer.OrdinalIgnoreCase);
-
-                    foreach (var share in allShares)
-                    {
-                        if (!genderDict.TryGetValue(share.MemberNo, out var gender)) continue;
-
-                        var amount = share.ShareCapitalAmount ?? 0;
-                        var normalizedGender = NormalizeGender(gender);
-
-                        if (normalizedGender == "FEMALE")
-                            womenShares += amount;
-                        else if (normalizedGender == "MALE")
-                            menShares += amount;
-                        else
-                            othersShares += amount;
-                    }
-
-                    totalShareCapital = womenShares + menShares + othersShares;
+                    if (normalizedGender == "FEMALE")
+                        womenShares += amount;
+                    else if (normalizedGender == "MALE")
+                        menShares += amount;
+                    else
+                        othersShares += amount;
                 }
 
-                _logger.LogInformation($"Share Capital Summary - Total: {totalShareCapital:C}, Women: {womenShares:C}, Men: {menShares:C}, Others: {othersShares:C}");
+                totalShareCapital = womenShares + menShares + othersShares;
+
+                _logger.LogInformation($"Share Capital Summary (filtered by Issharecapital=1) - Total: {totalShareCapital:C}, Women: {womenShares:C}, Men: {menShares:C}, Others: {othersShares:C}");
                 _logger.LogInformation($"Company filter: {(targetCompanyCode ?? "ALL COMPANIES")}");
 
                 return (totalShareCapital, womenShares, menShares, othersShares);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error calculating share capital from ContribShare");
+                _logger.LogError(ex, "Error calculating share capital from ContribShare with Issharecapital filter");
                 return (0, 0, 0, 0);
             }
         }
 
-        // NON-WITHDRAWABLE DEPOSITS - From ContribShare table (DepositsAmount)
         private async Task<(decimal Total, decimal Women, decimal Men, decimal Others)> GetDepositsDataAsync(string? companyCode, bool isSuperAdmin)
         {
             try
@@ -1046,24 +1230,18 @@ namespace SACCOBlockChainSystem.Controllers
         {
             try
             {
-                var query = _context.Journals
+                var query = _context.Gltransactions
                     .Where(j =>
-                        j.NARATION != null &&
-                        j.TRANSTYPE == "CR" &&
-                        j.NARATION.ToLower().Contains(keyword));
+                        j.TransDescript != null &&
+                        j.TransDescript.ToLower().Contains(keyword.ToLower())); // ✅ Check for keyword in description
 
                 // Apply company filter based on role
-                if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+                if (!string.IsNullOrEmpty(companyCode))
                 {
                     query = query.Where(j => j.CompanyCode == companyCode);
                 }
-                else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-                {
-                    query = query.Where(j => j.CompanyCode == companyCode);
-                }
-                // If SuperAdmin and no companyCode, include ALL grants
 
-                return await query.SumAsync(j => (decimal?)j.AMOUNT) ?? 0;
+                return await query.SumAsync(j => (decimal?)j.Amount) ?? 0;
             }
             catch (Exception ex)
             {
@@ -1074,74 +1252,59 @@ namespace SACCOBlockChainSystem.Controllers
 
         #endregion
 
-        // Calculate Repayment Rate (Current Month)
+        // Calculate Repayment Rate (Current Month) - Standard MFI Formula
+        // Repayment Rate = Amount Received (this month) / (Amount Due this month + Arrears from previous months)
         private async Task<decimal> CalculateRepaymentRateAsync(string? companyCode, bool isSuperAdmin)
         {
             try
             {
-                var currentMonth = DateTime.Now.Month;
-                var currentYear = DateTime.Now.Year;
+                var currentDate = DateTime.Now;
+                var startOfCurrentMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
+                var endOfCurrentMonth = startOfCurrentMonth.AddMonths(1).AddDays(-1);
 
-                // Get active loans that should be making payments this month
-                var activeLoansQuery = _context.Loans
-                    .Where(l => l.ApplicDate <= DateTime.Now) // Loan was taken before or on today
-                    .Where(l => l.LoanAmt > 0 && l.RepayPeriod > 0);
+                // Get all active loans with balances
+                var activeLoansQuery = from lb in _context.Loanbal
+                                       join l in _context.Loans on lb.LoanNo equals l.LoanNo
+                                       where lb.Balance > 0
+                                       select new { lb.LoanNo, lb.Balance, l.CompanyCode, l.RepayPeriod, l.LoanAmt };
 
-                // Apply company filter based on role
-                if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
+                if (!string.IsNullOrEmpty(companyCode))
                 {
-                    activeLoansQuery = activeLoansQuery.Where(l => l.CompanyCode == companyCode);
+                    activeLoansQuery = activeLoansQuery.Where(x => x.CompanyCode == companyCode);
                 }
-                else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-                {
-                    activeLoansQuery = activeLoansQuery.Where(l => l.CompanyCode == companyCode);
-                }
-                // If SuperAdmin and no companyCode, include ALL loans
 
                 var activeLoans = await activeLoansQuery.ToListAsync();
 
-                // Calculate expected payments for current month (only for loans that are still active)
-                decimal expectedPayments = 0;
-                foreach (var loan in activeLoans)
+                if (!activeLoans.Any())
                 {
-                    // Calculate how many months the loan has been active
-                    var monthsSinceStart = ((DateTime.Now.Year - loan.ApplicDate.Year) * 12) +
-                                           (DateTime.Now.Month - loan.ApplicDate.Month);
-
-                    var totalRepayPeriod = loan.RepayPeriod ?? 1;
-
-                    // Only include if still within repayment period
-                    if (monthsSinceStart < totalRepayPeriod)
-                    {
-                        var monthlyPayment = (loan.LoanAmt ?? 0) / totalRepayPeriod;
-                        expectedPayments += monthlyPayment;
-                    }
+                    return 0;
                 }
 
-                // Get actual payments for current month
-                var repayQuery = from r in _context.Repay
-                                 join l in _context.Loans on r.LoanNo equals l.LoanNo
-                                 where r.DateReceived.HasValue &&
-                                       r.DateReceived.Value.Month == currentMonth &&
-                                       r.DateReceived.Value.Year == currentYear
-                                 select new { r.Amount, l.CompanyCode };
+                var loanNos = activeLoans.Select(l => l.LoanNo).ToList();
 
-                // Apply company filter based on role
-                if (!isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-                {
-                    repayQuery = repayQuery.Where(x => x.CompanyCode == companyCode);
-                }
-                else if (isSuperAdmin && !string.IsNullOrEmpty(companyCode))
-                {
-                    repayQuery = repayQuery.Where(x => x.CompanyCode == companyCode);
-                }
-                // If SuperAdmin and no companyCode, include ALL repayments
+                // Calculate Total Amount Due (Outstanding Balance)
+                decimal totalAmountDue = activeLoans.Sum(l => l.Balance);
 
-                var actualPayments = await repayQuery.SumAsync(x => x.Amount ?? 0);
+                // Calculate Amount Received this month
+                var repaymentsQuery = from r in _context.Repay
+                                      where loanNos.Contains(r.LoanNo)
+                                            && r.DateReceived.HasValue
+                                            && r.DateReceived >= startOfCurrentMonth
+                                            && r.DateReceived <= endOfCurrentMonth
+                                      select r.Amount;
 
-                // Repayment rate should never exceed 100%
-                var rate = expectedPayments > 0 ? (actualPayments / expectedPayments) * 100 : 0;
-                return Math.Min(rate, 100); // Cap at 100%
+                decimal totalAmountReceived = await repaymentsQuery.SumAsync(r => r ?? 0);
+
+                // Repayment Rate = Amount Received this month / Total Outstanding Balance
+                decimal repaymentRate = totalAmountDue > 0
+                    ? (totalAmountReceived / totalAmountDue) * 100
+                    : 0;
+
+                repaymentRate = Math.Min(repaymentRate, 100);
+
+                _logger.LogInformation($"Repayment Rate - Received: {totalAmountReceived:C}, Outstanding: {totalAmountDue:C}, Rate: {repaymentRate:F1}%");
+
+                return repaymentRate;
             }
             catch (Exception ex)
             {
@@ -1345,6 +1508,187 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+        // Calculate PAR > 60 Days (Portfolio at Risk) using LoanBal and Aging Analysis logic
+        private async Task<decimal> CalculatePAR60PercentAsync(string? companyCode, bool isSuperAdmin)
+        {
+            try
+            {
+                var asAtDate = DateTime.Now.Date;
+                var asAtDateEnd = asAtDate.AddDays(1).AddSeconds(-1);
+
+                // Get all active/disbursed loans with member and loan type data
+                var loansQuery = from loan in _context.Loans
+                                 join member in _context.Members
+                                     on loan.MemberNo equals member.MemberNo
+                                 join loantype in _context.Loantypes
+                                     on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                 from lt in loanTypeJoin.DefaultIfEmpty()
+                                 where (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
+                                     && loan.AuditTime <= asAtDateEnd
+                                 select new
+                                 {
+                                     loan.MemberNo,
+                                     loan.LoanNo,
+                                     loan.LoanCode,
+                                     loan.ApplicDate,
+                                     loan.AuditTime,
+                                     loan.RepayPeriod,
+                                     loan.LoanAmt,
+                                     loan.Aamount,
+                                     loan.Interest,
+                                     loan.CompanyCode,
+                                     loan.Status,
+                                     LoanName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown"),
+                                     LoanTypeRepayPeriod = lt != null ? lt.RepayPeriod : (int?)null,
+                                     InterestRateFromType = lt != null ? lt.Interest : null
+                                 };
+
+                // Apply company filter
+                if (!string.IsNullOrEmpty(companyCode))
+                {
+                    loansQuery = loansQuery.Where(l => l.CompanyCode == companyCode);
+                }
+
+                var loans = await loansQuery.ToListAsync();
+
+                if (!loans.Any())
+                {
+                    // Fallback: Get loans with positive balance from Loanbal
+                    var loanbalQuery = from lb in _context.Loanbal
+                                       join loan in _context.Loans on lb.LoanNo equals loan.LoanNo
+                                       join member in _context.Members on loan.MemberNo equals member.MemberNo
+                                       join loantype in _context.Loantypes on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                       from lt in loanTypeJoin.DefaultIfEmpty()
+                                       where lb.Balance > 0
+                                       select new
+                                       {
+                                           loan.MemberNo,
+                                           loan.LoanNo,
+                                           loan.LoanCode,
+                                           loan.ApplicDate,
+                                           loan.AuditTime,
+                                           loan.RepayPeriod,
+                                           loan.LoanAmt,
+                                           loan.Aamount,
+                                           loan.Interest,
+                                           loan.CompanyCode,
+                                           loan.Status,
+                                           LoanName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown"),
+                                           LoanTypeRepayPeriod = lt != null ? lt.RepayPeriod : (int?)null,
+                                           InterestRateFromType = lt != null ? lt.Interest : null
+                                       };
+
+                    if (!string.IsNullOrEmpty(companyCode))
+                    {
+                        loanbalQuery = loanbalQuery.Where(l => l.CompanyCode == companyCode);
+                    }
+
+                    loans = await loanbalQuery.ToListAsync();
+                }
+
+                if (!loans.Any())
+                {
+                    return 0;
+                }
+
+                var loanNos = loans.Select(l => l.LoanNo).ToList();
+
+                // Get loan balances from Loanbal table (ONE QUERY)
+                var loanBalances = await _context.Loanbal
+                    .Where(lb => loanNos.Contains(lb.LoanNo))
+                    .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
+
+                // Get the latest LastDate from Loanbal for each loan (ONE QUERY)
+                var latestRepayments = await _context.Loanbal
+                    .Where(r => loanNos.Contains(r.LoanNo) && r.LastDate <= asAtDateEnd)
+                    .GroupBy(r => r.LoanNo)
+                    .Select(g => new
+                    {
+                        LoanNo = g.Key,
+                        LastPaymentDate = g.Max(r => r.LastDate),
+                        TotalBalance = g.Sum(r => r.Balance)
+                    })
+                    .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+                decimal totalOutstandingBalance = 0;
+                decimal overdueAmount60Days = 0;  // For PAR > 60 days
+
+                foreach (var loan in loans)
+                {
+                    // Get current balance from Loanbal
+                    decimal currentBalance = 0;
+                    if (loanBalances.ContainsKey(loan.LoanNo))
+                    {
+                        currentBalance = loanBalances[loan.LoanNo];
+                    }
+                    else
+                    {
+                        currentBalance = loan.Aamount ?? loan.LoanAmt ?? 0;
+                    }
+
+                    // Skip if loan is fully paid
+                    if (currentBalance <= 0) continue;
+
+                    totalOutstandingBalance += currentBalance;
+
+                    // Get last payment date from Loanbal.LastDate
+                    DateTime? lastPaymentDate = null;
+                    if (latestRepayments.ContainsKey(loan.LoanNo))
+                    {
+                        lastPaymentDate = latestRepayments[loan.LoanNo].LastPaymentDate;
+                    }
+
+                    // Calculate Days In Arrears
+                    int daysInArrears = 0;
+
+                    if (lastPaymentDate.HasValue)
+                    {
+                        // Calculate next due date = last payment date + 1 month
+                        var calculatedNextDueDate = lastPaymentDate.Value.AddMonths(1);
+
+                        if (asAtDate > calculatedNextDueDate)
+                        {
+                            daysInArrears = (asAtDate - calculatedNextDueDate).Days;
+                        }
+                    }
+                    else
+                    {
+                        // No payments made yet - check if first payment is due
+                        DateTime firstDueDate = loan.AuditTime.AddMonths(1);
+                        if (asAtDate > firstDueDate)
+                        {
+                            daysInArrears = (asAtDate - firstDueDate).Days;
+                        }
+                    }
+
+                    // Ensure days in arrears is not negative
+                    if (daysInArrears < 0) daysInArrears = 0;
+
+                    // PAR > 60 DAYS - Only add loans with days in arrears > 60
+                    if (daysInArrears > 60)  // CHANGED FROM 30 TO 60
+                    {
+                        overdueAmount60Days += currentBalance;
+                    }
+                }
+
+                // Calculate PAR percentage for >60 days
+                decimal parPercentage60 = totalOutstandingBalance > 0
+                    ? (overdueAmount60Days / totalOutstandingBalance) * 100
+                    : 0;
+
+                _logger.LogInformation($"=== PAR > 60 DAYS CALCULATION ===");
+                _logger.LogInformation($"Total Outstanding Balance: {totalOutstandingBalance:C}");
+                _logger.LogInformation($"Overdue >60 Days Balance: {overdueAmount60Days:C}");
+                _logger.LogInformation($"PAR >60 Days: {parPercentage60:F1}%");
+
+                return parPercentage60;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calculating PAR >60 days percentage");
+                return 0;
+            }
+        }
         // Calculate Outstanding Loan Portfolio
         private async Task<decimal> CalculateOutstandingLoanPortfolioAsync(string? companyCode, bool isSuperAdmin)
         {
@@ -1616,7 +1960,7 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
         /// <summary>
-        /// Calculates the Amount Past Due Rate - Penalty amount as percentage of overdue balance
+        /// Calculates the Amount Past Due Rate - (Total Arrears > 30 Days / Outstanding Loan Portfolio) × 100
         /// </summary>
         private async Task<decimal> CalculateAmountPastDueRateAsync(string? companyCode, bool isSuperAdmin)
         {
@@ -1662,19 +2006,8 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 var loanNos = loans.Select(l => l.LoanNo).ToList();
-                var loanCodes = loans.Select(l => l.LoanCode).Distinct().ToList();
 
-                // Get penalty configurations from Penalty table
-                var penaltyConfigs = new Dictionary<string, Penalties>();
-                if (loanCodes.Any())
-                {
-                    var penalties = await _context.Penalties
-                        .Where(p => loanCodes.Contains(p.LoanCode) && p.Penalty == 1)
-                        .ToListAsync();
-                    penaltyConfigs = penalties.ToDictionary(p => p.LoanCode, p => p);
-                }
-
-                // Get loan balances
+                // Get loan balances (Outstanding Loan Portfolio)
                 var loanBalances = await _context.Loanbal
                     .Where(lb => loanNos.Contains(lb.LoanNo))
                     .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
@@ -1690,17 +2023,20 @@ namespace SACCOBlockChainSystem.Controllers
                     })
                     .ToDictionaryAsync(g => g.LoanNo, g => g);
 
-                decimal totalPenaltyAmount = 0;
-                decimal totalOverdueBalance = 0;
+                decimal totalOutstandingPortfolio = 0;
+                decimal totalArrearsBalance = 0;
 
                 foreach (var loan in loans)
                 {
-                    // Get current balance
+                    // Get current balance (Outstanding Loan Portfolio)
                     decimal currentBalance = loanBalances.ContainsKey(loan.LoanNo)
                         ? loanBalances[loan.LoanNo]
                         : (loan.Aamount ?? loan.LoanAmt ?? 0);
 
                     if (currentBalance <= 0) continue;
+
+                    // Add to total outstanding portfolio
+                    totalOutstandingPortfolio += currentBalance;
 
                     // Get last payment date
                     DateTime? lastPaymentDate = latestRepayments.ContainsKey(loan.LoanNo)
@@ -1710,41 +2046,23 @@ namespace SACCOBlockChainSystem.Controllers
                     // Calculate days in arrears
                     int daysInArrears = CalculateDaysInArrearsForPenalty(asAtDate, lastPaymentDate, loan.AuditTime);
 
-                    // Only consider loans with arrears > 30 days
+                    // If days in arrears > 30, add to total arrears balance
                     if (daysInArrears > 30)
                     {
-                        totalOverdueBalance += currentBalance;
-
-                        // Calculate penalty amount if loan type attracts penalty
-                        if (loan.AttractsPenalty && penaltyConfigs.ContainsKey(loan.LoanCode))
-                        {
-                            var penaltyConfig = penaltyConfigs[loan.LoanCode];
-                            decimal penaltyAmount = CalculatePenaltyAmount(
-                                currentBalance,
-                                daysInArrears,
-                                penaltyConfig.Value,
-                                penaltyConfig.Mode,
-                                penaltyConfig.Rate
-                            );
-
-                            totalPenaltyAmount += penaltyAmount;
-
-                            _logger.LogDebug($"Loan {loan.LoanNo}: Balance={currentBalance:C}, Days={daysInArrears}, Penalty={penaltyAmount:C}");
-                        }
+                        totalArrearsBalance += currentBalance;
                     }
                 }
 
-                // AMOUNT PAST DUE RATE = (Total Penalty Amount / Total Overdue Balance) × 100
-                // This shows what percentage of the overdue balance is penalty
-                decimal amountPastDueRate = totalOverdueBalance > 0
-                    ? (totalPenaltyAmount / totalOverdueBalance) * 100
+                // AMOUNT PAST DUE RATE = (Total Arrears > 30 Days / Outstanding Loan Portfolio) × 100
+                decimal amountPastDueRate = totalOutstandingPortfolio > 0
+                    ? (totalArrearsBalance / totalOutstandingPortfolio) * 100
                     : 0;
 
                 amountPastDueRate = Math.Round(amountPastDueRate, 1);
 
                 _logger.LogInformation($"=== AMOUNT PAST DUE RATE ===");
-                _logger.LogInformation($"Total Penalty Amount: {totalPenaltyAmount:C}");
-                _logger.LogInformation($"Total Overdue Balance: {totalOverdueBalance:C}");
+                _logger.LogInformation($"Total Arrears (>30 days): {totalArrearsBalance:C}");
+                _logger.LogInformation($"Outstanding Loan Portfolio: {totalOutstandingPortfolio:C}");
                 _logger.LogInformation($"Amount Past Due Rate: {amountPastDueRate}%");
 
                 return amountPastDueRate;
@@ -1757,7 +2075,7 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
         /// <summary>
-        /// Calculate penalty amount for a specific loan
+        /// Calculate penalty amount for a specific loan (kept for reference, not used in AmountPastDueRate)
         /// </summary>
         private decimal CalculatePenaltyAmount(decimal balance, int daysInArrears, decimal penaltyValue, string penaltyMode, string penaltyRateType)
         {
@@ -2192,8 +2510,25 @@ namespace SACCOBlockChainSystem.Controllers
                 stats.TransactionsToday = await transactionsQuery.CountAsync();
                 stats.NewMembersToday = await membersQuery
                     .CountAsync(m => m.EffectDate.HasValue && m.EffectDate.Value.Date == today);
-                stats.AverageDeposit = await depositsQuery.AverageAsync(t => t.Amount);
-                stats.AverageLoan = await loansQuery.AverageAsync(l => l.LoanAmt ?? 0);
+
+                // ============================================================
+                // FIXED: AverageDeposit - handles empty sequence with DefaultIfEmpty
+                // ============================================================
+                var avgDeposit = await depositsQuery
+                    .Select(t => (decimal?)t.Amount)
+                    .DefaultIfEmpty()
+                    .AverageAsync();
+                stats.AverageDeposit = avgDeposit ?? 0;
+
+                // ============================================================
+                // FIXED: AverageLoan - handles empty sequence with DefaultIfEmpty
+                // ============================================================
+                var avgLoan = await loansQuery
+                    .Select(l => (decimal?)l.LoanAmt)
+                    .DefaultIfEmpty()
+                    .AverageAsync();
+                stats.AverageLoan = avgLoan ?? 0;
+
                 stats.BlockchainUptime = 99.9m;
 
                 var totalLoans = await loansQuery.CountAsync();
@@ -2207,6 +2542,7 @@ namespace SACCOBlockChainSystem.Controllers
 
             return stats;
         }
+
         private async Task<List<MonthlyTransactionData>> GetMonthlyTransactionsDataAsync(int months, string? companyCode, bool isSuperAdmin)
         {
             var data = new List<MonthlyTransactionData>();
@@ -2897,12 +3233,28 @@ namespace SACCOBlockChainSystem.Controllers
         {
             var errorViewModel = new ErrorViewModel
             {
-                RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier
+                RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier,
+                ShowErrorDetails = _env.IsDevelopment() // Use injected environment
             };
+
+            // Get the last exception from the current context
+            var exception = HttpContext.Features.Get<IExceptionHandlerFeature>();
+            if (exception != null)
+            {
+                errorViewModel.ErrorMessage = exception.Error.Message;
+                errorViewModel.StackTrace = exception.Error.StackTrace;
+                errorViewModel.ExceptionType = exception.Error.GetType().FullName;
+
+                // Try to get HTTP status code if available
+                var statusCode = HttpContext.Response.StatusCode;
+                errorViewModel.StatusCode = statusCode;
+            }
 
             return View(errorViewModel);
         }
     }
+
+    internal record NewRecord(string LoanNo, string MemberNo, decimal? LoanAmt, decimal? Item, int? RepayPeriod, DateTime ApplicDate, DateTime AuditTime, string CompanyCode, int? LoanTypeRepayPeriod);
 }
 
 

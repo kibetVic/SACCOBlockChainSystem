@@ -424,6 +424,9 @@
             <button onclick="window.print()" class="btn btn-primary">
                 <i class="fas fa-print"></i> Print / Save as PDF
             </button>
+            <a asp-controller="LoanMvc" asp-action="PendingEndorsement" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i> Go to Endorsement
+            </a>
             <button onclick="goBack()" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Back
             </button>
@@ -612,7 +615,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         function goBack() {
-            window.location.href = '@Url.Action("AllLoans", "LoanMvc")';
+            window.location.href = '@Url.Action("PendingEndorsement", "LoanMvc")';
         }
 
         // Auto-open print dialog when page loads (only if autoPrint flag is true)

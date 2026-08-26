@@ -5,6 +5,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
 {
     public class MemberDTO
     {
+        public int Id { get; set; }
         public string MemberNo { get; set; } = null!;
         public string Surname { get; set; } = null!;
         public string OtherNames { get; set; } = null!;
@@ -30,8 +31,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? GroupCig { get; set; }
 
         // Membership Details
-        public string? MembershipType { get; set; } // Individual / Corporate
-        public string? RegistrationType { get; set; } // Board Member / Ordinary Member
+        public string? MembershipType { get; set; }  
+        public string? RegistrationType { get; set; }
         public string Status { get; set; } = null!;
         public DateTime? DateJoined { get; set; }
 
@@ -44,6 +45,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         // Status Flags
         public bool IsActive { get; set; }
         public bool IsDormant { get; set; }
+        public string? IdFrontImage { get; set; } 
+        public string? IdBackImage { get; set; }
 
         // Additional Fields
         public DateTime? LastTransactionDate { get; set; }
@@ -116,8 +119,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [Display(Name = "Initial Shares")]
         [Range(0, double.MaxValue, ErrorMessage = "Initial shares must be a positive number")]
         public decimal InitialShares { get; set; } = 0;
-
-        // System Fields
+        public string? Photo { get; set; }
+        public string? IdFrontImage { get; set; }
+        public string? IdBackImage { get; set; }
         public string? CreatedBy { get; set; }
         public string? MaritalStatus { get; set; }
         public string? Status { get; set; }
@@ -140,6 +144,10 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? RegistrationType { get; set; }
         public bool IsActive { get; set; }
         public string? Employer { get; internal set; }
+        public string? WalletAddress { get; internal set; }
+        public string? Photo { get; set; }
+        public string? IdFrontImage { get; set; }
+        public string? IdBackImage { get; set; }
     }
 
     public class MemberUpdateDTO
@@ -164,6 +172,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? MembershipType { get; set; }
         public string? RegistrationType { get; set; }
         public string? MaritalStatus { get; set; }
+        public string? Photo { get; set; }
+        public string? IdFrontImage { get; set; }
+        public string? IdBackImage { get; set; }
         public string? GroupCig { get; set; }
         public string? UpdatedBy { get; set; }
         public string? CreatedBy { get; set; }
@@ -191,6 +202,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public DateTime? LastTransactionDate { get; set; }
         public bool IsActive { get; set; }
         public bool IsDormant { get; set; }
+        public string? Photo { get; set; }
+        public string? IdFrontImage { get; set; }
+        public string? IdBackImage { get; set; }
     }
 
     public class MemberTransactionSummary
@@ -251,5 +265,15 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? MembershipType { get; set; }
         public string? RegistrationType { get; set; }
         public decimal InitialShares { get; set; }
+    }
+
+    public class GuarantorAcceptDTO
+    {
+        public int GuarantorId { get; set; }
+        public string LoanNo { get; set; } = null!;
+        public string GuarantorMemberNo { get; set; } = null!;
+        public decimal GuaranteeAmount { get; set; }
+        public string? Remarks { get; set; }
+        public string? InvitationToken { get; set; }
     }
 }

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication;
+﻿using iText.Signatures.Validation.Lotl;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -20,13 +21,127 @@ namespace SACCOBlockChainSystem.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<AccountController> _logger;
-        private readonly IUserService _userService; // Make sure this exists
+        private readonly IUserService _userService;
+        private readonly IOtpService _otpService;
+        private readonly IUserSessionService _sessionService;
 
-        public AccountController(ApplicationDbContext context, IUserService userService, ILogger<AccountController> logger)
+        public AccountController(ApplicationDbContext context, IUserService userService, ILogger<AccountController> logger, IOtpService otpService, IUserSessionService sessionService)
         {
             _context = context;
-            _userService = userService; // This should be set
+            _userService = userService; 
             _logger = logger;
+            _otpService = otpService;
+            _sessionService = sessionService;
+        }
+
+        private async Task<IActionResult> setMemberSession(string? username)
+        {
+            var user = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == username);
+            // throw new NotImplementedException();
+            var claims = new List<Claim>
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                         new Claim(ClaimTypes.Name, user.MemberNo),
+                        new Claim(ClaimTypes.Name, user?.UserName ?? ""),
+                        new Claim("FullName", user?.UserName ?? string.Empty),
+                        new Claim("Email", user?.Email ?? string.Empty),
+                        new Claim("CompanyName", user?.Employer ?? "SACCO Member"),
+                        new Claim("Employer", user?.Employer ?? "SACCO Member"),
+                        new Claim("UserId", user?.Id.ToString()),
+                        new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                        new Claim("MemberNo", user.MemberNo),
+                        new Claim("CompanyName", user?.Employer ?? ""),
+                        new Claim("UserLoginId", user?.MemberNo ?? string.Empty)
+                    };
+
+            claims.Add(new Claim("UserGroup", "Member"));
+            claims.Add(new Claim(ClaimTypes.Role, "Member"));
+
+            // Add additional user info claims
+            //if (!string.IsNullOrEmpty(user.Department))
+            //{
+            //    claims.Add(new Claim("Department", user.Department));
+            //}
+
+            if (!string.IsNullOrEmpty(user.MemberNo))
+            {
+                claims.Add(new Claim("MemberNo", user.MemberNo));
+            }
+
+            //CompanyCode claim
+            if (!string.IsNullOrEmpty(user.CompanyCode))
+            {
+                claims.Add(new Claim("CompanyCode", user.CompanyCode));
+            }
+
+            // Branch code Claims
+            //if (!string.IsNullOrEmpty(user.Branchcode))
+            //{
+            //    claims.Add(new Claim("BranchCode", user.Branchcode));
+            //}
+
+            var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+            var authProperties = new AuthenticationProperties
+            {
+                IsPersistent = false,
+                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(2),
+                RedirectUri = "/Home/Index"
+            };
+
+            await HttpContext.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                new ClaimsPrincipal(claimsIdentity),
+                authProperties);
+
+            HttpContext.Session.SetString("MemberNo", user.MemberNo);
+            HttpContext.Session.SetString("MemberName", $"{user.Surname} {user.OtherNames}");
+            HttpContext.Session.SetString("CompanyName", user?.Employer ?? "SACCO Member");
+
+            _logger.LogInformation($"User {user.UserName} (Company: {user.Employer} - {user.CompanyCode}) logged in successfully.");
+
+            //if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            //{
+            //    return Redirect(returnUrl);
+            //}
+            TempData["ErrorMessage"] = null; TempData["SuccessMessage"] = null;
+            return RedirectToAction("Index", "Home");
+        }
+
+        [HttpGet]
+        public IActionResult VerifyMember(string? user = null,bool requestpin=false)
+        {
+            if(user == null)
+            {
+                return NotFound();
+            }
+            ViewBag.RequestPin = requestpin;
+            
+            user = EncryptionHelper.Decrypt(user);
+            var member = _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == user);
+            if(member == null)
+            {
+                return NotFound();
+            }
+            var model = new VerifyCodeVm
+            {
+                Username = user
+            };
+
+            return View(model);
+            ///return View();
+        }
+
+        [HttpGet]
+        public IActionResult MemberLogin(string? returnUrl = null)
+        {
+            if (User.Identity.IsAuthenticated)
+            {
+                return RedirectToAction("MemberIndex", "Home");
+            }
+
+            ViewData["ReturnUrl"] = returnUrl;
+            return View();
         }
 
 
@@ -36,7 +151,7 @@ namespace SACCOBlockChainSystem.Controllers
         {
             if (User.Identity.IsAuthenticated)
             {
-                return RedirectToAction("Index", "Blockchain");
+                return RedirectToAction("Index", "Home");
             }
 
             ViewData["ReturnUrl"] = returnUrl;
@@ -55,131 +170,184 @@ namespace SACCOBlockChainSystem.Controllers
 
             try
             {
-                // Hash the password for comparison
-                var hashedPassword = HashPassword(model.Password);
-
-                // Find user by Username and password
-                var user = await _context.UserAccounts1
-                    .FirstOrDefaultAsync(u => u.UserName == model.Username && u.Password == hashedPassword);
-
-                if (user == null)
+                if(model.MemberLogin == "false")
                 {
-                    // Update failed attempts for the username
-                    var failedUser = await _context.UserAccounts1
-                        .FirstOrDefaultAsync(u => u.UserName == model.Username);
+                    var hashedPassword = HashPassword(model.Password);
 
-                    if (failedUser != null)
+                    // Find user by Username and password
+                    var user = await _context.UserAccounts1
+                        .FirstOrDefaultAsync(u => u.UserName == model.Username && u.Password == hashedPassword);
+
+                    if (user == null)
                     {
-                        failedUser.FailedAttempts = (failedUser.FailedAttempts ?? 0) + 1;
+                        // Update failed attempts for the username
+                        var failedUser = await _context.UserAccounts1
+                            .FirstOrDefaultAsync(u => u.UserName == model.Username);
 
-                        // Lock account after 5 failed attempts
-                        if (failedUser.FailedAttempts >= 5)
+                        if (failedUser != null)
                         {
-                            failedUser.IsLocked = true;
-                            _logger.LogWarning($"Account locked for username: {model.Username}");
+                            failedUser.FailedAttempts = (failedUser.FailedAttempts ?? 0) + 1;
+
+                            // Lock account after 5 failed attempts
+                            if (failedUser.FailedAttempts >= 5)
+                            {
+                                failedUser.IsLocked = true;
+                                _logger.LogWarning($"Account locked for username: {model.Username}");
+                            }
+
+                            await _context.SaveChangesAsync();
                         }
 
-                        await _context.SaveChangesAsync();
+                        ModelState.AddModelError(string.Empty, "Invalid username or password.");
+                        return View(model);
                     }
 
-                    ModelState.AddModelError(string.Empty, "Invalid username or password.");
-                    return View(model);
+                    // Check if account is locked
+                    if (user.IsLocked == true)
+                    {
+                        ModelState.AddModelError(string.Empty, "Account is locked. Please contact administrator.");
+                        return View(model);
+                    }
+
+                    // Check if account is active
+                    if (user.Status?.ToLower() != "active" && user.Userstatus?.ToLower() != "active")
+                    {
+                        ModelState.AddModelError(string.Empty, "Account is not active. Please contact administrator.");
+                        return View(model);
+                    }
+
+                    // check if account is approved
+                    if (user.ApprovalStatus?.ToLower() != "approved")
+                    {
+                        ModelState.AddModelError(string.Empty, "Account is not approved. Please contact administrator.");
+                        return View(model);
+                    }
+
+                    // Check if user has a company code
+                    if (string.IsNullOrEmpty(user.CompanyCode))
+                    {
+                        ModelState.AddModelError(string.Empty, "User account is not associated with any company. Please contact administrator.");
+                        return View(model);
+                    }
+
+                    // Get company name for the user's company code
+                    var company = await _context.Companies
+                        .FirstOrDefaultAsync(c => c.CompanyCode == user.CompanyCode);
+
+                    var companyName = company?.CompanyName ?? "Unknown Company";
+
+                    // Reset failed attempts on successful login
+                    user.FailedAttempts = 0;
+                    await _context.SaveChangesAsync();
+
+                    var claims = new List<Claim>
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+                        new Claim(ClaimTypes.Name, user.UserName),
+                        new Claim("FullName", user.UserName ?? string.Empty),
+                        new Claim("Email", user.Email ?? string.Empty),
+                        new Claim("UserId", user.UserId.ToString()),
+                        new Claim("CompanyCode", user.CompanyCode ?? "000"),
+                        new Claim("CompanyName", companyName),
+                        new Claim("UserLoginId", user.UserLoginId ?? string.Empty)
+                    };
+
+                    // Add UserGroup as a separate claim - THIS IS IMPORTANT
+                    if (!string.IsNullOrEmpty(user.UserGroup))
+                    {
+                        claims.Add(new Claim("UserGroup", user.UserGroup));
+                        claims.Add(new Claim(ClaimTypes.Role, user.UserGroup));
+                    }
+
+                    // Add additional user info claims
+                    if (!string.IsNullOrEmpty(user.Department))
+                    {
+                        claims.Add(new Claim("Department", user.Department));
+                    }
+
+                    if (!string.IsNullOrEmpty(user.MemberNo))
+                    {
+                        claims.Add(new Claim("MemberNo", user.MemberNo));
+                    }
+
+                    //CompanyCode claim
+                    if (!string.IsNullOrEmpty(user.CompanyCode))
+                    {
+                        claims.Add(new Claim("CompanyCode", user.CompanyCode));
+                    }
+
+                    // Branch code Claims
+                    if (!string.IsNullOrEmpty(user.Branchcode))
+                    {
+                        claims.Add(new Claim("BranchCode", user.Branchcode));
+                    }
+
+                    var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+                    var authProperties = new AuthenticationProperties
+                    {
+                        IsPersistent = model.RememberMe,
+                        ExpiresUtc = model.RememberMe ? DateTimeOffset.UtcNow.AddDays(30) : DateTimeOffset.UtcNow.AddHours(2),
+                        RedirectUri = returnUrl ?? "/MembersMVC/Index"
+                    };
+
+                    await HttpContext.SignInAsync(
+                        CookieAuthenticationDefaults.AuthenticationScheme,
+                        new ClaimsPrincipal(claimsIdentity),
+                        authProperties);
+
+                    // ============================================================
+                    // ✅ CREATE USER SESSION RECORD
+                    // ============================================================
+                    var userSession = await _sessionService.CreateSessionAsync(
+                        userId: user.UserId.ToString(),
+                        userName: user.UserName,
+                        companyCode: user.CompanyCode,
+                        companyName: companyName,
+                        userGroup: user.UserGroup ?? "Member"
+                    );
+
+                    // Store session ID in session for later use
+                    if (userSession != null)
+                    {
+                        HttpContext.Session.SetString("CurrentSessionId", userSession.SessionId.ToString());
+                        _logger.LogInformation($"User session created with ID: {userSession.SessionId}");
+                    }
+
+                    _logger.LogInformation($"User {user.UserName} (Company: {companyName} - {user.CompanyCode}) logged in successfully.");
+
+
+                    // comment this if you what otp for login
+                    if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                    {
+                        return Redirect(returnUrl);
+                    }
+                    return RedirectToAction("Index", "Home");
+
+                    //// Redirect to OTP verification after successful login
+                    //return RedirectToAction("LoginOTPVerification", new { returnUrl = returnUrl });
                 }
-
-                // Check if account is locked
-                if (user.IsLocked == true)
+                else
                 {
-                    ModelState.AddModelError(string.Empty, "Account is locked. Please contact administrator.");
-                    return View(model);
+                    var user = await _context.Members
+                        .FirstOrDefaultAsync(u => u.Idno == model.Username || u.MemberNo == model.Username);
+                    if(user == null)
+                    {
+                        ModelState.AddModelError(string.Empty, "Invalid username or member.");
+                        return View(model);
+                    }
+                    if (!string.IsNullOrEmpty(user.Pin))
+                    {
+                        HttpContext.Session.SetString($"PinSetFor_{model.Username}", "false");
+                        return Redirect("/Account/VerifyMember?requestpin=true&user=" + EncryptionHelper.Encrypt(user.MemberNo));
+                    }
+                    else
+                    {
+                        return await SendCode(user);
+                    }
                 }
+                // Hash the password for comparison
 
-                // Check if account is active
-                if (user.Status?.ToLower() != "active" && user.Userstatus?.ToLower() != "active")
-                {
-                    ModelState.AddModelError(string.Empty, "Account is not active. Please contact administrator.");
-                    return View(model);
-                }
-
-                // Check if user has a company code
-                if (string.IsNullOrEmpty(user.CompanyCode))
-                {
-                    ModelState.AddModelError(string.Empty, "User account is not associated with any company. Please contact administrator.");
-                    return View(model);
-                }
-
-                // Get company name for the user's company code
-                var company = await _context.Companies
-                    .FirstOrDefaultAsync(c => c.CompanyCode == user.CompanyCode);
-
-                var companyName = company?.CompanyName ?? "Unknown Company";
-
-                // Reset failed attempts on successful login
-                user.FailedAttempts = 0;
-                await _context.SaveChangesAsync();
-
-                var claims = new List<Claim>
-                {
-                    new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                    new Claim(ClaimTypes.Name, user.UserName),
-                    new Claim("FullName", user.UserName ?? string.Empty),
-                    new Claim("Email", user.Email ?? string.Empty),
-                    new Claim("UserId", user.UserId.ToString()),
-                    new Claim("CompanyCode", user.CompanyCode ?? "000"),
-                    new Claim("CompanyName", companyName),
-                    new Claim("UserLoginId", user.UserLoginId ?? string.Empty)
-                };
-
-                // Add UserGroup as a separate claim - THIS IS IMPORTANT
-                if (!string.IsNullOrEmpty(user.UserGroup))
-                {
-                    claims.Add(new Claim("UserGroup", user.UserGroup));
-                    claims.Add(new Claim(ClaimTypes.Role, user.UserGroup));
-                }
-
-                // Add additional user info claims
-                if (!string.IsNullOrEmpty(user.Department))
-                {
-                    claims.Add(new Claim("Department", user.Department));
-                }
-
-                if (!string.IsNullOrEmpty(user.MemberNo))
-                {
-                    claims.Add(new Claim("MemberNo", user.MemberNo));
-                }
-
-                //CompanyCode claim
-                if (!string.IsNullOrEmpty(user.CompanyCode))
-                {
-                    claims.Add(new Claim("CompanyCode", user.CompanyCode));
-                }
-
-                // Branch code Claims
-                if (!string.IsNullOrEmpty(user.Branchcode))
-                {
-                    claims.Add(new Claim("BranchCode", user.Branchcode));
-                }
-
-                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-
-                var authProperties = new AuthenticationProperties
-                {
-                    IsPersistent = model.RememberMe,
-                    ExpiresUtc = model.RememberMe ? DateTimeOffset.UtcNow.AddDays(30) : DateTimeOffset.UtcNow.AddHours(2),
-                    RedirectUri = returnUrl ?? "/Home/Index"
-                };
-
-                await HttpContext.SignInAsync(
-                    CookieAuthenticationDefaults.AuthenticationScheme,
-                    new ClaimsPrincipal(claimsIdentity),
-                    authProperties);
-
-                _logger.LogInformation($"User {user.UserName} (Company: {companyName} - {user.CompanyCode}) logged in successfully.");
-
-                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
-                {
-                    return Redirect(returnUrl);
-                }
-                return RedirectToAction("Index", "Home");
             }
             catch (Exception ex)
             {
@@ -187,6 +355,52 @@ namespace SACCOBlockChainSystem.Controllers
                 ModelState.AddModelError(string.Empty, "An error occurred during login. Please try again.");
                 return View(model);
             }
+        }
+
+        private async Task<RedirectToActionResult> SendCode(Member user)
+        {
+            if (user.Status?.ToString() != "1" )
+            {
+                TempData["ErrorMessage"] = "Your account is not active. Please contact administrator.";
+                return RedirectToAction("MemberLogin");
+            }
+
+            // Generate 6-digit verification code
+            var verificationCode = GenerateVerificationCode();
+
+            // Store code with expiration (10 minutes from now)
+            var codeExpiry = DateTime.Now.AddMinutes(10);
+
+            // Store in TempData or Session (TempData is short-lived, use Session for better persistence)
+            HttpContext.Session.SetString($"ResetCode_{user.MemberNo}", verificationCode);
+            HttpContext.Session.SetString($"ResetCodeExpiry_{user.MemberNo}", codeExpiry.ToString("O"));
+
+            // Store username for next steps
+            TempData["ResetUsername"] = user.MemberNo;
+
+            var emailService = HttpContext.RequestServices.GetService<IEmailService>();
+                if (emailService != null)
+                {
+                    var emailSent = await emailService.SendVerificationCodeAsync(user.Email, user.UserName, verificationCode);
+
+                    if (emailSent)
+                    {
+                        TempData["SuccessMessage"] = $"Verification code sent to {MaskEmail(user.Email)}. Please check your email.";
+                        return RedirectToAction("VerifyMember", new { requestpin=false,user = EncryptionHelper.Encrypt(user.MemberNo) });
+                    }
+                    else
+                    {
+                        TempData["ErrorMessage"] = "Failed to send verification email. Please try again later.";
+                        return RedirectToAction("MemberLogin");
+                    }
+                }
+                else
+                {
+                    // For development/testing - show code on screen
+                    _logger.LogWarning($"Email service not configured. Verification code for {user.MemberNo}: {verificationCode}");
+                    TempData["SuccessMessage"] = $"[DEV MODE] Verification code: {verificationCode}";
+                    return RedirectToAction("VerifyMember", new { requestpin=false,user = EncryptionHelper.Encrypt(user.MemberNo) });
+                }
         }
 
         // GET: /Account/Signup
@@ -345,11 +559,11 @@ namespace SACCOBlockChainSystem.Controllers
                 "Teller",
                 "Administrator",         
                 "System Admin",          
-                "LoanOfficer",
+                "Loan Officer",
                 "Auditor",
                 "Book Keeper",
                 "Finance Officer",
-                "BoardMember",
+                "Board Member",
                 "Staff"
             };
         }
@@ -361,7 +575,7 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 "Administrator",
                 "System Admin",
-                "Super Admin"  // Include if applicable
+                "Super Admin"  
             };
             return systemRoles.Contains(userGroup);
         }
@@ -445,17 +659,39 @@ namespace SACCOBlockChainSystem.Controllers
             return View(profile);
         }
 
-
         // GET: /Account/Logout
         [HttpGet]
         public async Task<IActionResult> Logout()
         {
-            var userName = User.Identity?.Name;
-            var companyName = User.FindFirstValue("CompanyName");
+            try
+            {
+                var userName = User.Identity?.Name;
+                var companyName = User.FindFirstValue("CompanyName");
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
-            return RedirectToAction("Login", "Account");
+                // ============================================================
+                // ✅ UPDATE SESSION LOGOUT TIME
+                // ============================================================
+                var sessionIdStr = HttpContext.Session.GetString("CurrentSessionId");
+                if (!string.IsNullOrEmpty(sessionIdStr) && long.TryParse(sessionIdStr, out long sessionId))
+                {
+                    await _sessionService.UpdateSessionLogoutAsync(sessionId, "Manual");
+                    _logger.LogInformation($"Session {sessionId} logged out for user {userName}");
+                }
+
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                HttpContext.Session.Clear();
+
+                _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
+                return RedirectToAction("Login", "Account");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during logout");
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                HttpContext.Session.Clear();
+                return RedirectToAction("Login", "Account");
+            }
         }
 
         // POST: /Account/Logout - For form submissions
@@ -463,13 +699,57 @@ namespace SACCOBlockChainSystem.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> LogoutPost()
         {
-            var userName = User.Identity?.Name;
-            var companyName = User.FindFirstValue("CompanyName");
+            try
+            {
+                var userName = User.Identity?.Name;
+                var companyName = User.FindFirstValue("CompanyName");
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
-            return RedirectToAction("Login", "Account");
+                var sessionIdStr = HttpContext.Session.GetString("CurrentSessionId");
+                if (!string.IsNullOrEmpty(sessionIdStr) && long.TryParse(sessionIdStr, out long sessionId))
+                {
+                    await _sessionService.UpdateSessionLogoutAsync(sessionId, "Manual");
+                }
+
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                HttpContext.Session.Clear();
+
+                _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
+                return RedirectToAction("Login", "Account");
+            }
+            catch
+            {
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                HttpContext.Session.Clear();
+                return RedirectToAction("Login", "Account");
+            }
         }
+
+
+        //// GET: /Account/Logout
+        //[HttpGet]
+        //public async Task<IActionResult> Logout()
+        //{
+        //    var userName = User.Identity?.Name;
+        //    var companyName = User.FindFirstValue("CompanyName");
+
+        //    await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        //    _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
+        //    return RedirectToAction("Login", "Account");
+        //}
+
+        //// POST: /Account/Logout - For form submissions
+        //[HttpPost]
+        //[ValidateAntiForgeryToken]
+        //public async Task<IActionResult> LogoutPost()
+        //{
+        //    var userName = User.Identity?.Name;
+        //    var companyName = User.FindFirstValue("CompanyName");
+
+        //    await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        //    _logger.LogInformation($"User {userName} (Company: {companyName}) logged out.");
+        //    return RedirectToAction("Login", "Account");
+        //}
 
 
         [HttpGet]
@@ -644,7 +924,7 @@ namespace SACCOBlockChainSystem.Controllers
                     new ClaimsPrincipal(claimsIdentity));
 
                 _logger.LogInformation($"User {updatedUser.UserName} switched from {user.CompanyCode} to company: {newCompany.CompanyName} ({companyCode})");
-                TempData["SuccessMessage"] = $"Successfully switched to company: {newCompany.CompanyName}";
+                //TempData["SuccessMessage"] = $"Successfully switched to company: {newCompany.CompanyName}";
 
                 return RedirectToAction("Index", "Home");
             }
@@ -778,6 +1058,33 @@ namespace SACCOBlockChainSystem.Controllers
                 return View(new UserManagementViewModel { Users = new List<SACCOBlockChainSystem.Models.ViewModels.UserListDTO>() });
             }
         }
+
+        [HttpGet]
+        [Authorize]
+        public async Task<IActionResult> UserGroups(string searchTerm)
+        {
+            try
+            {
+                ViewBag.SearchTerm = searchTerm;
+
+                var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
+                var currentUserCompanyCode = User.FindFirstValue("CompanyCode");
+
+                List<SACCOBlockChainSystem.Models.DTOs.UserListDTO> users;
+
+                var groups = await _context.UserGroups.AsNoTracking().ToListAsync();
+                
+
+                return View();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading user management page");
+                TempData["ErrorMessage"] = "Error loading users list";
+                return View(new UserManagementViewModel { Users = new List<SACCOBlockChainSystem.Models.ViewModels.UserListDTO>() });
+            }
+        }
+
 
         public async Task<IActionResult> Index(string searchTerm)
         {
@@ -1029,9 +1336,9 @@ namespace SACCOBlockChainSystem.Controllers
                     SubCounty = subCountyName,
                     Ward = wardName,
                     DateCreated = DateTime.Now,
-                    Status = "Active", // Set to Active since admin creates
-                    Userstatus = "Active",
-                    ApprovalStatus = "Approved",
+                    Status = "Pending", // Set to Active since admin creates
+                    Userstatus = "Pending",
+                    ApprovalStatus = "Pending",
                     FailedAttempts = 0,
                     IsLocked = false,
                     PasswordStatus = "Active",
@@ -1547,7 +1854,6 @@ namespace SACCOBlockChainSystem.Controllers
             return View(model);
         }
 
-        // POST: /Account/VerifyCode
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> VerifyCode(VerifyCodeVm model)
@@ -1603,6 +1909,99 @@ namespace SACCOBlockChainSystem.Controllers
                 return View(model);
             }
         }
+
+
+        // POST: /Account/VerifyMember
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> VerifyMember(VerifyCodeVm model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            try
+            {
+                ViewBag.RequestPin = false;
+                var reqpin = HttpContext.Session.GetString($"PinSetFor_{model.Username}");
+                if(string.IsNullOrEmpty(reqpin) || reqpin == "false")
+                {
+                    if(model.SetPin.ToLower() == "true")
+                    {
+                        var member = await _context.Members.AsNoTracking().FirstOrDefaultAsync(m => m.MemberNo == model.Username);
+                        if(member != null)
+                        {
+                            if(EncryptionHelper.Decrypt(member.Pin) == model.Code)
+                            {
+                                HttpContext.Session.SetString($"PinSetFor_{model.Username}", "true");
+                                return await SendCode(member);
+                            }
+                            else
+                            {
+                                TempData["ErrorMessage"] = "Invalid pin for verification.";
+                                return Redirect("/Account/VerifyMember?requestpin=true&user=" + EncryptionHelper.Encrypt(member.MemberNo));
+                                //ViewBag.RequestPin = true;
+                                //return View(model);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        //ViewBag.RequestPin = true;
+                        //return View(model);
+                    }
+                    //HttpContext.Session.SetString($"PinSetFor_{model.Username}", "true");
+                        
+                }
+                // Retrieve stored code and expiry
+                var storedCode = HttpContext.Session.GetString($"ResetCode_{model.Username}");
+                var expiryStr = HttpContext.Session.GetString($"ResetCodeExpiry_{model.Username}");
+
+                if (string.IsNullOrEmpty(storedCode) || string.IsNullOrEmpty(expiryStr))
+                {
+                    TempData["ErrorMessage"] = "No verification code found. Please request a new code.";
+                    return RedirectToAction("MemberLogin");
+                }
+
+                // Check if code has expired
+                if (DateTime.TryParse(expiryStr, out var expiry) && expiry < DateTime.Now)
+                {
+                    // Clear expired code
+                    HttpContext.Session.Remove($"ResetCode_{model.Username}");
+                    HttpContext.Session.Remove($"ResetCodeExpiry_{model.Username}");
+                    TempData["ErrorMessage"] = "Verification code has expired. Please request a new code.";
+                    return RedirectToAction("MemberLogin");
+                }
+
+                // Verify code
+                if (storedCode != model.Code)
+                {
+                    ModelState.AddModelError("Code", "Invalid verification code. Please try again.");
+                    return View(model);
+                }
+
+                // Code is valid - clear it from session
+                HttpContext.Session.Remove($"ResetCode_{model.Username}");
+                HttpContext.Session.Remove($"PinSetFor_{model.Username}");
+                HttpContext.Session.Remove($"ResetCodeExpiry_{model.Username}");
+
+                // Store that user is verified for password reset
+                HttpContext.Session.SetString($"VerifiedForReset_{model.Username}", "true");
+
+                TempData["SuccessMessage"] = "Code verified successfully. Please enter your new password.";
+                return await setMemberSession(model.Username);
+                //return RedirectToAction("ResetPassword", new { username = model.Username });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in VerifyCode");
+                TempData["ErrorMessage"] = "An error occurred. Please try again.";
+                return View(model);
+            }
+        }
+
+        
 
         // GET: /Account/ResetPassword
         [HttpGet]
@@ -1722,8 +2121,246 @@ namespace SACCOBlockChainSystem.Controllers
 
 
         // ============= SUPER ADMIN APPROVAL METHODS =============
+        // ============================================================
+        // POST: /Account/ApproveUser - FIXED (Without Blockchain)
+        // ============================================================
+        [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ApproveUser(int userId)
+        {
+            try
+            {
+                var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
+                var currentUserGroup = User.FindFirstValue("UserGroup");
 
+                // Only Super Admin can approve
+                bool isSuperAdmin = currentUserRole == "Super Admin" ||
+                                    currentUserGroup == "Super Admin" ||
+                                    currentUserRole == "SuperAdmin";
+
+                if (!isSuperAdmin)
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Access denied. Only Super Administrators can approve users."
+                    });
+                }
+
+                var user = await _context.UserAccounts1.FindAsync(userId);
+                if (user == null)
+                {
+                    return Json(new { success = false, message = "User not found" });
+                }
+
+                // Check if user is already approved
+                if (user.Status == "Active" && user.ApprovalStatus == "Approved")
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"User '{user.UserName}' is already approved."
+                    });
+                }
+
+                // Update status to Active
+                user.Status = "Active";
+                user.Userstatus = "Active";
+                user.ApprovalStatus = "Approved";
+                user.IsLocked = false;
+                user.FailedAttempts = 0;
+
+                // ✅ Save changes WITHOUT blockchain transaction
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation($"User {user.UserName} (ID: {user.UserId}) approved by {User.Identity?.Name}");
+
+                // Return success with user details
+                return Json(new
+                {
+                    success = true,
+                    message = $"✅ User '{user.UserName}' has been approved successfully! They can now log in.",
+                    userName = user.UserName,
+                    userId = user.UserId
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error approving user {userId}");
+                return Json(new
+                {
+                    success = false,
+                    message = $"Error approving user: {ex.Message}"
+                });
+            }
+        }
+
+        // ============================================================
+        // POST: /Account/RejectUser - FIXED (Without Blockchain)
+        // ============================================================
+        [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RejectUser(int userId, string reason)
+        {
+            try
+            {
+                var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
+                var currentUserGroup = User.FindFirstValue("UserGroup");
+
+                bool isSuperAdmin = currentUserRole == "Super Admin" ||
+                                    currentUserGroup == "Super Admin" ||
+                                    currentUserRole == "SuperAdmin";
+
+                if (!isSuperAdmin)
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Access denied. Only Super Administrators can reject users."
+                    });
+                }
+
+                var user = await _context.UserAccounts1.FindAsync(userId);
+                if (user == null)
+                {
+                    return Json(new { success = false, message = "User not found" });
+                }
+
+                // Check if user is already rejected
+                if (user.Status == "Rejected")
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"User '{user.UserName}' is already rejected."
+                    });
+                }
+
+                // Update status to Rejected
+                user.Status = "Rejected";
+                user.Userstatus = "Rejected";
+                user.ApprovalStatus = "Rejected";
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation($"User {user.UserName} (ID: {user.UserId}) rejected by {User.Identity?.Name}. Reason: {reason}");
+
+                return Json(new
+                {
+                    success = true,
+                    message = $"❌ User '{user.UserName}' has been rejected.",
+                    userName = user.UserName,
+                    userId = user.UserId
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error rejecting user {userId}");
+                return Json(new
+                {
+                    success = false,
+                    message = $"Error rejecting user: {ex.Message}"
+                });
+            }
+        }
+
+        // ============================================================
+        // POST: /Account/BulkApproveUsers - FIXED (Without Blockchain)
+        // ============================================================
+        [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BulkApproveUsers([FromBody] List<int> userIds)
+        {
+            try
+            {
+                var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
+                var currentUserGroup = User.FindFirstValue("UserGroup");
+
+                bool isSuperAdmin = currentUserRole == "Super Admin" ||
+                                    currentUserGroup == "Super Admin" ||
+                                    currentUserRole == "SuperAdmin";
+
+                if (!isSuperAdmin)
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Access denied. Only Super Administrators can approve users."
+                    });
+                }
+
+                if (userIds == null || !userIds.Any())
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "No users selected for approval."
+                    });
+                }
+
+                var users = await _context.UserAccounts1
+                    .Where(u => userIds.Contains(u.UserId))
+                    .ToListAsync();
+
+                if (!users.Any())
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "No valid users found."
+                    });
+                }
+
+                int approvedCount = 0;
+                var approvedUsers = new List<string>();
+
+                foreach (var user in users)
+                {
+                    // Skip if already approved
+                    if (user.Status == "Active" && user.ApprovalStatus == "Approved")
+                        continue;
+
+                    user.Status = "Active";
+                    user.Userstatus = "Active";
+                    user.ApprovalStatus = "Approved";
+                    user.IsLocked = false;
+                    user.FailedAttempts = 0;
+                    approvedCount++;
+                    approvedUsers.Add(user.UserName ?? user.UserLoginId);
+                }
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation($"{approvedCount} users bulk approved by {User.Identity?.Name}");
+
+                return Json(new
+                {
+                    success = true,
+                    message = $"✅ Successfully approved {approvedCount} user(s): {string.Join(", ", approvedUsers)}",
+                    approvedCount = approvedCount,
+                    approvedUsers = approvedUsers
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in bulk user approval");
+                return Json(new
+                {
+                    success = false,
+                    message = $"Error in bulk approval: {ex.Message}"
+                });
+            }
+        }
+
+
+
+
+        // ============================================================
         // GET: /Account/PendingApprovals
+        // ============================================================
         [HttpGet]
         [Authorize]
         public async Task<IActionResult> PendingApprovals(string searchTerm)
@@ -1734,7 +2371,9 @@ namespace SACCOBlockChainSystem.Controllers
                 var currentUserGroup = User.FindFirstValue("UserGroup");
 
                 // Only Super Admin can access this
-                bool isSuperAdmin = currentUserRole == "Super Admin" || currentUserGroup == "Super Admin";
+                bool isSuperAdmin = currentUserRole == "Super Admin" ||
+                                    currentUserGroup == "Super Admin" ||
+                                    currentUserRole == "SuperAdmin";
 
                 if (!isSuperAdmin)
                 {
@@ -1762,8 +2401,8 @@ namespace SACCOBlockChainSystem.Controllers
                     .Select(u => new PendingUserDTO
                     {
                         UserId = u.UserId,
-                        UserName = u.UserName,
-                        UserLoginId = u.UserLoginId,
+                        UserName = u.UserName ?? "Unknown",
+                        UserLoginId = u.UserLoginId ?? "",
                         Email = u.Email ?? "",
                         Phone = u.Phone ?? "",
                         Department = u.Department ?? "",
@@ -1787,151 +2426,6 @@ namespace SACCOBlockChainSystem.Controllers
                 _logger.LogError(ex, "Error loading pending approvals");
                 TempData["ErrorMessage"] = "Error loading pending approvals";
                 return View(new List<PendingUserDTO>());
-            }
-        }
-
-        // POST: /Account/ApproveUser
-        [HttpPost]
-        [Authorize]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ApproveUser(int userId)
-        {
-            try
-            {
-                var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
-                var currentUserGroup = User.FindFirstValue("UserGroup");
-
-                // Only Super Admin can approve
-                bool isSuperAdmin = currentUserRole == "Super Admin" || currentUserGroup == "Super Admin";
-
-                if (!isSuperAdmin)
-                {
-                    return Json(new { success = false, message = "Access denied. Only Super Administrators can approve users." });
-                }
-
-                var user = await _context.UserAccounts1.FindAsync(userId);
-                if (user == null)
-                {
-                    return Json(new { success = false, message = "User not found" });
-                }
-
-                // Update status to Active
-                user.Status = "Active";
-                user.Userstatus = "Active";
-                user.ApprovalStatus = "Approved";
-                user.IsLocked = false;
-                user.FailedAttempts = 0;
-
-                // Record approval in blockchain
-                var blockchainData = new
-                {
-                    Action = "USER_APPROVED",
-                    UserId = user.UserId,
-                    UserName = user.UserName,
-                    UserGroup = user.UserGroup,
-                    CompanyCode = user.CompanyCode,
-                    ApprovedBy = User.Identity?.Name,
-                    ApprovedAt = DateTime.Now
-                };
-
-                var blockchainTx = new BlockchainTransaction
-                {
-                    TransactionId = Guid.NewGuid().ToString(),
-                    TransactionType = "USER_APPROVED",
-                    MemberNo = user.MemberNo,
-                    CompanyCode = user.CompanyCode,
-                    Amount = 0,
-                    Timestamp = DateTime.Now,
-                    DataHash = await HashBlockchainDataAsync(blockchainData),
-                    PayloadJson = JsonSerializer.Serialize(blockchainData),
-                    OffChainReferenceId = user.UserId.ToString(),
-                    Status = "CONFIRMED",
-                    CreatedAt = DateTime.Now
-                };
-
-                _context.BlockchainTransactions.Add(blockchainTx);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation($"User {user.UserName} (ID: {user.UserId}) approved by {User.Identity?.Name}");
-
-                return Json(new { success = true, message = $"User '{user.UserName}' has been approved successfully." });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error approving user {userId}");
-                return Json(new { success = false, message = $"Error approving user: {ex.Message}" });
-            }
-        }
-
-        // POST: /Account/RejectUser
-        [HttpPost]
-        [Authorize]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RejectUser(int userId, string reason)
-        {
-            try
-            {
-                var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
-                var currentUserGroup = User.FindFirstValue("UserGroup");
-
-                // Only Super Admin can reject
-                bool isSuperAdmin = currentUserRole == "Super Admin" || currentUserGroup == "Super Admin";
-
-                if (!isSuperAdmin)
-                {
-                    return Json(new { success = false, message = "Access denied. Only Super Administrators can reject users." });
-                }
-
-                var user = await _context.UserAccounts1.FindAsync(userId);
-                if (user == null)
-                {
-                    return Json(new { success = false, message = "User not found" });
-                }
-
-                // Update status to Rejected
-                user.Status = "Rejected";
-                user.Userstatus = "Rejected";
-                user.ApprovalStatus = "Rejected";
-
-                // Record rejection in blockchain
-                var blockchainData = new
-                {
-                    Action = "USER_REJECTED",
-                    UserId = user.UserId,
-                    UserName = user.UserName,
-                    UserGroup = user.UserGroup,
-                    CompanyCode = user.CompanyCode,
-                    Reason = reason,
-                    RejectedBy = User.Identity?.Name,
-                    RejectedAt = DateTime.Now
-                };
-
-                var blockchainTx = new BlockchainTransaction
-                {
-                    TransactionId = Guid.NewGuid().ToString(),
-                    TransactionType = "USER_REJECTED",
-                    MemberNo = user.MemberNo,
-                    CompanyCode = user.CompanyCode,
-                    Amount = 0,
-                    Timestamp = DateTime.Now,
-                    DataHash = await HashBlockchainDataAsync(blockchainData),
-                    PayloadJson = JsonSerializer.Serialize(blockchainData),
-                    OffChainReferenceId = user.UserId.ToString(),
-                    Status = "CONFIRMED",
-                    CreatedAt = DateTime.Now
-                };
-
-                _context.BlockchainTransactions.Add(blockchainTx);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation($"User {user.UserName} (ID: {user.UserId}) rejected by {User.Identity?.Name}. Reason: {reason}");
-
-                return Json(new { success = true, message = $"User '{user.UserName}' has been rejected." });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error rejecting user {userId}");
-                return Json(new { success = false, message = $"Error rejecting user: {ex.Message}" });
             }
         }
 
@@ -2146,5 +2640,525 @@ namespace SACCOBlockChainSystem.Controllers
             var hashedBytes = await Task.Run(() => sha256.ComputeHash(Encoding.UTF8.GetBytes(json)));
             return Convert.ToBase64String(hashedBytes);
         }
+
+
+
+        // ============================================================
+        // LOGIN OTP VERIFICATION - Auto-verification on OTP entry
+        // ============================================================
+
+        [HttpGet]
+        [Authorize]
+        public async Task<IActionResult> LoginOTPVerification(string returnUrl = null)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var userName = User.Identity?.Name;
+            var email = User.FindFirstValue("Email");
+
+            _logger.LogInformation($"LoginOTPVerification GET: UserId={userId}, ReturnUrl={returnUrl}");
+
+            // Check if user already has a valid OTP
+            if (_otpService.HasValidOtp(userId))
+            {
+                _logger.LogInformation($"User {userId} already has valid OTP.");
+
+                HttpContext.Session.SetString($"LoginOtpValidated_{userId}", "true");
+                HttpContext.Session.SetString($"LoginOtpValidatedAt_{userId}", DateTime.UtcNow.ToString("O"));
+
+                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                {
+                    return Redirect(returnUrl);
+                }
+                return RedirectToAction("Index", "Home");
+            }
+
+            // Clear any existing OTP for this user
+            _otpService.ClearOtp(userId);
+
+            // Generate new OTP
+            var otp = _otpService.GenerateOtp(userId);
+            var generatedOtpExpiry = _otpService.GetOtpExpiry(userId);
+
+            _logger.LogInformation($"Generated new Login OTP for user {userId}. OTP: {otp}");
+
+            // Send OTP via email
+            var emailService = HttpContext.RequestServices.GetService<IEmailService>();
+            string emailSentMessage = null;
+
+            if (emailService != null)
+            {
+                var user = await _context.UserAccounts1.FirstOrDefaultAsync(u => u.UserId.ToString() == userId);
+                if (user != null && !string.IsNullOrEmpty(user.Email))
+                {
+                    string maskedEmail = MaskEmail(user.Email);
+                    var emailSent = await emailService.SendOtpAsync(user.Email, user.UserName, otp, 5);
+
+                    if (emailSent)
+                    {
+                        _logger.LogInformation($"Login OTP sent to {user.Email} for user {user.UserName}");
+                        emailSentMessage = $"✅ OTP has been sent to {maskedEmail}";
+                        TempData["EmailSentMessage"] = emailSentMessage;
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"Failed to send Login OTP email to {user.Email}");
+                        emailSentMessage = "⚠️ Failed to send OTP email. Please try again or contact support.";
+                        TempData["ErrorMessage"] = emailSentMessage;
+                    }
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = "No email address associated with this account. Please contact administrator.";
+                }
+            }
+            else
+            {
+                // For development/testing - show code on screen
+                _logger.LogWarning($"Email service not configured. Login OTP for {userId}: {otp}");
+                TempData["EmailSentMessage"] = $"[DEV MODE] Login OTP: {otp}";
+            }
+
+            var remainingSeconds = _otpService.GetRemainingSeconds(userId);
+            if (remainingSeconds <= 0)
+            {
+                remainingSeconds = 300;
+            }
+
+            var model = new OtpVerificationViewModel
+            {
+                ReturnUrl = returnUrl,
+                UserId = userId,
+                UserName = userName,
+                Email = email,
+                OtpExpiry = generatedOtpExpiry,
+                IsOtpValid = false,
+                RemainingSeconds = remainingSeconds
+            };
+
+            return View(model);
+        }
+
+        [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ValidateLoginOtp(OtpVerificationViewModel model)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            _logger.LogInformation($"=== ValidateLoginOtp START ===");
+            _logger.LogInformation($"UserId: {userId}");
+            _logger.LogInformation($"Otp: {model.Otp}");
+            _logger.LogInformation($"IsAjaxRequest: {Request.Headers["X-Requested-With"] == "XMLHttpRequest"}");
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                _logger.LogWarning("ValidateLoginOtp: UserId is null or empty");
+                TempData["ErrorMessage"] = "User not authenticated. Please login again.";
+
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = "User not authenticated" });
+                }
+                return RedirectToAction("Login", "Account");
+            }
+
+            // Validate the OTP
+            bool isValid = _otpService.ValidateOtp(userId, model.Otp);
+
+            _logger.LogInformation($"ValidateLoginOtp: Validation result = {isValid} for user {userId}");
+
+            if (isValid)
+            {
+                // Store OTP validation in session
+                HttpContext.Session.SetString($"LoginOtpValidated_{userId}", "true");
+                HttpContext.Session.SetString($"LoginOtpValidatedAt_{userId}", DateTime.UtcNow.ToString("O"));
+
+                _logger.LogInformation($"ValidateLoginOtp: OTP validated successfully for user {userId}");
+                TempData["SuccessMessage"] = "OTP validated successfully. Welcome!";
+
+                // Clear the OTP after successful validation
+                _otpService.ClearOtp(userId);
+
+                // Determine redirect URL
+                string redirectUrl;
+                if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
+                {
+                    redirectUrl = model.ReturnUrl;
+                }
+                else
+                {
+                    redirectUrl = Url.Action("Index", "Home");
+                }
+
+                // For AJAX requests, return JSON with redirect URL
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new
+                    {
+                        success = true,
+                        redirectUrl = redirectUrl,
+                        message = "OTP validated successfully!"
+                    });
+                }
+
+                // For normal form submissions, redirect directly
+                return Redirect(redirectUrl);
+            }
+
+            // OTP validation failed
+            _logger.LogWarning($"ValidateLoginOtp: OTP validation failed for user {userId}");
+
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "Invalid OTP. Please try again.",
+                    remainingSeconds = _otpService.GetRemainingSeconds(userId)
+                });
+            }
+
+            ModelState.AddModelError("Otp", "Invalid OTP. Please try again.");
+            model.RemainingSeconds = _otpService.GetRemainingSeconds(userId);
+            model.OtpExpiry = _otpService.GetOtpExpiry(userId);
+
+            return View("LoginOTPVerification", model);
+        }
+
+        [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResendLoginOtp(string userId)
+        {
+            try
+            {
+                _logger.LogInformation($"ResendLoginOtp: UserId={userId}");
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Json(new { success = false, message = "User ID is required." });
+                }
+
+                var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (userId != currentUserId)
+                {
+                    _logger.LogWarning($"ResendLoginOtp: Unauthorized access. UserId={userId}, CurrentUserId={currentUserId}");
+                    return Json(new { success = false, message = "Unauthorized access." });
+                }
+
+                // Clear existing OTP
+                _otpService.ClearOtp(userId);
+
+                // Generate new OTP
+                var otp = _otpService.GenerateOtp(userId);
+                var resendOtpExpiry = _otpService.GetOtpExpiry(userId);
+
+                _logger.LogInformation($"ResendLoginOtp: New OTP generated for user {userId}. OTP: {otp}, Expiry: {resendOtpExpiry:HH:mm:ss}");
+
+                // Send OTP via email
+                var emailService = HttpContext.RequestServices.GetService<IEmailService>();
+                var user = await _context.UserAccounts1.FirstOrDefaultAsync(u => u.UserId.ToString() == userId);
+
+                if (user == null)
+                {
+                    return Json(new { success = false, message = "User not found." });
+                }
+
+                if (string.IsNullOrEmpty(user.Email))
+                {
+                    return Json(new { success = false, message = "No email address associated with this account." });
+                }
+
+                var emailSent = await emailService.SendOtpAsync(user.Email, user.UserName, otp, 5);
+
+                if (emailSent)
+                {
+                    var remainingSeconds = _otpService.GetRemainingSeconds(userId);
+                    _logger.LogInformation($"ResendLoginOtp: RemainingSeconds={remainingSeconds}");
+
+                    return Json(new
+                    {
+                        success = true,
+                        message = "New OTP has been sent to your email.",
+                        expiry = resendOtpExpiry,
+                        remainingSeconds = remainingSeconds
+                    });
+                }
+                else
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Failed to send OTP. Please try again or contact administrator."
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error resending Login OTP for user {userId}");
+                return Json(new { success = false, message = "An error occurred. Please try again." });
+            }
+        }
+
+
+        // AccountController.cs - Updated OtpVerification GET
+
+        [HttpGet]
+        [Authorize]
+        public async Task<IActionResult> OtpVerification(string returnUrl = null)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var userName = User.Identity?.Name;
+
+            _logger.LogInformation($"OtpVerification GET: UserId={userId}, ReturnUrl={returnUrl}");
+
+            // ============================================================
+            // ✅ ALWAYS GENERATE A NEW OTP - No auto-validation
+            // ============================================================
+
+            // Clear any existing OTP for this user
+            _otpService.ClearOtp(userId);
+
+            // Generate new OTP
+            var otp = _otpService.GenerateOtp(userId);
+            var generatedOtpExpiry = _otpService.GetOtpExpiry(userId);
+
+            _logger.LogInformation($"Generated new OTP for user {userId}. OTP: {otp}");
+
+            // Send OTP via email
+            var emailService = HttpContext.RequestServices.GetService<IEmailService>();
+            string emailSentMessage = null;
+
+            if (emailService != null)
+            {
+                var user = await _context.UserAccounts1.FirstOrDefaultAsync(u => u.UserId.ToString() == userId);
+                if (user != null && !string.IsNullOrEmpty(user.Email))
+                {
+                    string maskedEmail = MaskEmail(user.Email);
+                    var emailSent = await emailService.SendOtpAsync(user.Email, user.UserName, otp, 5);
+
+                    if (emailSent)
+                    {
+                        _logger.LogInformation($"OTP sent to {user.Email} for user {user.UserName}");
+                        emailSentMessage = $"✅ OTP has been sent to {maskedEmail}";
+                        TempData["EmailSentMessage"] = emailSentMessage;
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"Failed to send OTP email to {user.Email}");
+                        emailSentMessage = "⚠️ Failed to send OTP email. Please try again or contact support.";
+                        TempData["ErrorMessage"] = emailSentMessage;
+                    }
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = "No email address associated with this account. Please contact administrator.";
+                }
+            }
+            else
+            {
+                // For development/testing - show code on screen
+                _logger.LogWarning($"Email service not configured. Verification code for {userId}: {otp}");
+                TempData["EmailSentMessage"] = $"[DEV MODE] OTP: {otp}";
+            }
+
+            var remainingSeconds = _otpService.GetRemainingSeconds(userId);
+            if (remainingSeconds <= 0)
+            {
+                remainingSeconds = 300;
+            }
+
+            // ============================================================
+            // ✅ CLEAR ALL PREVIOUS VALIDATION FLAGS
+            // ============================================================
+            HttpContext.Session.Remove($"OtpValidated_{userId}");
+            HttpContext.Session.Remove($"OtpValidatedAt_{userId}");
+            HttpContext.Session.Remove($"OtpPageAccess_{userId}");
+
+            var model = new OtpVerificationViewModel
+            {
+                ReturnUrl = returnUrl,
+                UserId = userId,
+                UserName = userName,
+                OtpExpiry = generatedOtpExpiry,
+                IsOtpValid = false,
+                RemainingSeconds = remainingSeconds,
+                RequireOtp = true
+            };
+
+            return View(model);
+        }
+
+        // AccountController.cs - Updated ValidateOtp
+
+        [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public IActionResult ValidateOtp(OtpVerificationViewModel model)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            _logger.LogInformation($"=== ValidateOtp START ===");
+            _logger.LogInformation($"UserId: {userId}");
+            _logger.LogInformation($"Otp: {model.Otp}");
+
+            // Check if user is authenticated
+            if (string.IsNullOrEmpty(userId))
+            {
+                _logger.LogWarning("ValidateOtp: UserId is null or empty");
+                TempData["ErrorMessage"] = "User not authenticated. Please login again.";
+                return RedirectToAction("Login", "Account");
+            }
+
+            // Validate model state
+            if (!ModelState.IsValid)
+            {
+                _logger.LogWarning($"ValidateOtp: ModelState invalid for user {userId}");
+                model.RemainingSeconds = _otpService.GetRemainingSeconds(userId);
+                model.OtpExpiry = _otpService.GetOtpExpiry(userId);
+                return View("OtpVerification", model);
+            }
+
+            // Check if OTP is empty
+            if (string.IsNullOrEmpty(model.Otp))
+            {
+                ModelState.AddModelError("Otp", "OTP is required.");
+                model.RemainingSeconds = _otpService.GetRemainingSeconds(userId);
+                model.OtpExpiry = _otpService.GetOtpExpiry(userId);
+                return View("OtpVerification", model);
+            }
+
+            // Check expiry first
+            var remainingSeconds = _otpService.GetRemainingSeconds(userId);
+            if (remainingSeconds <= 0)
+            {
+                _logger.LogWarning($"ValidateOtp: OTP has expired for user {userId}");
+                ModelState.AddModelError("Otp", "OTP has expired. Please click 'Resend OTP' to get a new one.");
+                model.RemainingSeconds = 0;
+                model.OtpExpiry = _otpService.GetOtpExpiry(userId);
+                return View("OtpVerification", model);
+            }
+
+            // Validate OTP
+            bool isValid = _otpService.ValidateOtp(userId, model.Otp);
+
+            _logger.LogInformation($"ValidateOtp: Validation result = {isValid} for user {userId}");
+
+            if (isValid)
+            {
+                // ============================================================
+                // ✅ CREATE A ONE-TIME ACCESS TOKEN
+                // ============================================================
+                var accessToken = Guid.NewGuid().ToString();
+
+                // Store the token in session
+                HttpContext.Session.SetString($"OtpValidated_{userId}", "true");
+                HttpContext.Session.SetString($"OtpValidatedAt_{userId}", DateTime.UtcNow.ToString("O"));
+                HttpContext.Session.SetString($"OtpPageAccess_{userId}", accessToken);
+
+                _logger.LogInformation($"ValidateOtp: OTP validated successfully for user {userId}");
+
+                TempData["SuccessMessage"] = "OTP validated successfully. Access granted.";
+
+                // ============================================================
+                // ✅ REDIRECT WITH TOKEN IN URL
+                // ============================================================
+                if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
+                {
+                    var separator = model.ReturnUrl.Contains("?") ? "&" : "?";
+                    var redirectUrl = $"{model.ReturnUrl}{separator}otpAccess={accessToken}";
+                    return Redirect(redirectUrl);
+                }
+
+                return RedirectToAction("PendingDisbursement", "LoanMvc", new { otpAccess = accessToken });
+            }
+
+            // OTP validation failed
+            _logger.LogWarning($"ValidateOtp: OTP validation failed for user {userId}");
+
+            ModelState.AddModelError("Otp", "Invalid OTP. Please try again.");
+
+            model.RemainingSeconds = _otpService.GetRemainingSeconds(userId);
+            model.OtpExpiry = _otpService.GetOtpExpiry(userId);
+
+            return View("OtpVerification", model);
+        }
+
+
+        [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResendOtp(string userId)
+        {
+            try
+            {
+                _logger.LogInformation($"ResendOtp: UserId={userId}");
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Json(new { success = false, message = "User ID is required." });
+                }
+
+                var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (userId != currentUserId)
+                {
+                    _logger.LogWarning($"ResendOtp: Unauthorized access. UserId={userId}, CurrentUserId={currentUserId}");
+                    return Json(new { success = false, message = "Unauthorized access." });
+                }
+
+                // Clear existing OTP
+                _otpService.ClearOtp(userId);
+
+                // Generate new OTP
+                var otp = _otpService.GenerateOtp(userId);
+                var resendOtpExpiry = _otpService.GetOtpExpiry(userId);
+
+                _logger.LogInformation($"ResendOtp: New OTP generated for user {userId}. OTP: {otp}, Expiry: {resendOtpExpiry:HH:mm:ss}");
+
+                // Send OTP via email
+                var emailService = HttpContext.RequestServices.GetService<IEmailService>();
+                var user = await _context.UserAccounts1.FirstOrDefaultAsync(u => u.UserId.ToString() == userId);
+
+                if (user == null)
+                {
+                    return Json(new { success = false, message = "User not found." });
+                }
+
+                if (string.IsNullOrEmpty(user.Email))
+                {
+                    return Json(new { success = false, message = "No email address associated with this account." });
+                }
+
+                var emailSent = await emailService.SendOtpAsync(user.Email, user.UserName, otp, 5);
+
+                if (emailSent)
+                {
+                    var remainingSeconds = _otpService.GetRemainingSeconds(userId);
+                    _logger.LogInformation($"ResendOtp: RemainingSeconds={remainingSeconds}");
+
+                    return Json(new
+                    {
+                        success = true,
+                        message = "New OTP has been sent to your email.",
+                        expiry = resendOtpExpiry,
+                        remainingSeconds = remainingSeconds
+                    });
+                }
+                else
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Failed to send OTP. Please try again or contact administrator."
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error resending OTP for user {userId}");
+                return Json(new { success = false, message = "An error occurred. Please try again." });
+            }
+        }
+
     }
 }

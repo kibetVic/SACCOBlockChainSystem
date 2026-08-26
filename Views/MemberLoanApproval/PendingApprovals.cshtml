@@ -1,0 +1,207 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.PendingLoanApprovalDTO>
+@{
+    ViewData["Title"] = "Pending Loan Approvals";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">
+                    <i class="fa fa-clock text-warning"></i> Pending Loan Approvals
+                </h4>
+                <div class="text-muted small">
+                    @Model.Count loan(s) waiting for approval
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fa fa-check-circle"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fa fa-exclamation-circle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (!Model.Any())
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card text-center">
+                    <div class="card-body py-5">
+                        <i class="fa fa-check-circle text-success" style="font-size: 64px;"></i>
+                        <h4 class="mt-3">No Pending Approvals</h4>
+                        <p class="text-muted">All member loans have been reviewed and processed.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="pendingApprovalsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Loan No</th>
+                                        <th>Member</th>
+                                        <th>ID No</th>
+                                        <th>Loan Type</th>
+                                        <th>Amount (KES)</th>
+                                        <th>Applied</th>
+                                        <th>Monthly</th>
+                                        <th>Capacity</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var loan in Model)
+                                    {
+                                        // FIXED: Convert to double for percentage calculation
+                                        double capacityRatio = (double)loan.CapacityRatio;
+                                        var capacityClass = capacityRatio >= 0.3 ? "text-success" : (capacityRatio >= 0.15 ? "text-warning" : "text-danger");
+                                        var statusBadge = loan.HasGuarantors ? "bg-success" : "bg-warning";
+                                        var guarantorText = loan.HasGuarantors ? "Guarantors Provided" : "No Guarantors";
+                                        var isSelfGuarantee = loan.IsSelfGuarantee;
+
+                                        <tr>
+                                            <td>
+                                                <strong>@loan.LoanNo</strong>
+                                                @if (loan.IsMobileLoan)
+                                                {
+                                                    <span class="badge bg-info">Mobile</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <strong>@loan.MemberName</strong>
+                                                <br />
+                                                <small class="text-muted">@loan.MemberNo</small>
+                                            </td>
+                                            <td>@loan.IdNo</td>
+                                            <td>
+                                                @loan.LoanType
+                                                @if (isSelfGuarantee)
+                                                {
+                                                    <span class="badge bg-primary">Self-Guarantee</span>
+                                                }
+                                            </td>
+                                            <td class="text-end fw-bold">@loan.LoanAmount.ToString("N0")</td>
+                                            <td>@loan.ApplicationDate.ToString("dd MMM yyyy")</td>
+                                            <td class="text-end">@loan.MonthlyInstallment.ToString("N0")</td>
+                                            <td>
+                                                <span class="@capacityClass fw-bold">
+                                                    @(capacityRatio > 0 ? (capacityRatio * 100).ToString("F0") + "%" : "N/A")
+                                                </span>
+                                                <br />
+                                                <small class="text-muted">@loan.RepaymentCapacity.ToString("N0")/mo</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge @statusBadge">@guarantorText</span>
+                                                @if (loan.ExistingLoansCount > 0)
+                                                {
+                                                    <br />
+                                                    <span class="badge bg-secondary">@loan.ExistingLoansCount existing loan(s)</span>
+                                                }
+                                                @if (loan.TotalDeposits > 0)
+                                                {
+                                                    <br />
+                                                    <span class="badge bg-info">Deposits: @loan.TotalDeposits.ToString("N0")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("PendingApprovalDetails", new { loanNo = loan.LoanNo })"
+                                                   class="btn btn-sm btn-info mb-1 w-100">
+                                                    <i class="fa fa-eye"></i> Review
+                                                </a>
+                                                <div class="d-flex gap-1">
+                                                    <form method="post" action="@Url.Action("ApproveLoan")" style="flex:1;">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="loanNo" value="@loan.LoanNo" />
+                                                        <button type="submit" class="btn btn-sm btn-success w-100"
+                                                                onclick="return confirm('Approve this loan?');">
+                                                            <i class="fa fa-check"></i> Approve
+                                                        </button>
+                                                    </form>
+                                                    <form method="post" action="@Url.Action("RejectLoan")" style="flex:1;">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="loanNo" value="@loan.LoanNo" />
+                                                        <button type="submit" class="btn btn-sm btn-danger w-100"
+                                                                onclick="return confirm('Reject this loan?');">
+                                                            <i class="fa fa-times"></i> Reject
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <h5 class="text-primary">@Model.Count</h5>
+                                <small>Pending Approval</small>
+                            </div>
+                            <div class="col-md-3">
+                                <h5 class="text-success">@Model.Count(l => l.HasGuarantors)</h5>
+                                <small>Has Guarantors</small>
+                            </div>
+                            <div class="col-md-3">
+                                <h5 class="text-info">@Model.Count(l => l.IsSelfGuarantee)</h5>
+                                <small>Self-Guarantee</small>
+                            </div>
+                            <div class="col-md-3">
+                                <h5 class="text-warning">@Model.Sum(l => l.LoanAmount).ToString("N0")</h5>
+                                <small>Total Loan Amount (KES)</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable for better sorting/filtering
+            if ($.fn.DataTable) {
+                $('#pendingApprovalsTable').DataTable({
+                    pageLength: 10,
+                    order: [[5, 'desc']],
+                    language: {
+                        search: "Search loans:",
+                        lengthMenu: "Show _MENU_ loans per page",
+                        info: "Showing _START_ to _END_ of _TOTAL_ loans"
+                    }
+                });
+            }
+        });
+    </script>
+}

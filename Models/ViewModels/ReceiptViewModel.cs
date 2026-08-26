@@ -3,7 +3,8 @@ namespace SACCOBlockChainSystem.Models.ViewModels
 {
     public class ReceiptViewModel
     {
-        public string ReceiptNo { get; set; } = null!;
+        public string? ReceiptNo { get; set; }
+        public string? TransactionReceiptNo { get; set; }
         public string MemberNo { get; set; } = null!;
         public string MemberName { get; set; } = null!;
         public string? MemberPhone { get; set; }
@@ -23,5 +24,19 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public string CompanyEmail { get; set; } = null!;
         public string CreatedBy { get; set; } = null!;
         public DateTime PrintedAt { get; set; }
+        public bool IsBulkReceipt { get; set; } = false;
+        public int TotalContributions { get; set; }
+        public List<ReceiptContributionItem> Contributions { get; set; } = new List<ReceiptContributionItem>();
+    }
+
+    public class ReceiptContributionItem
+    {
+        public string ShareTypeName { get; set; }
+        public decimal Amount { get; set; }
+        public string PaymentMethod { get; set; }
+        public string ReferenceNo { get; set; }
+        public string Remarks { get; set; }
+        public string ReceiptNo { get; set; }
+        public DateTime TransactionDate { get; set; }
     }
 }

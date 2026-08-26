@@ -1,131 +1,349 @@
-﻿@using SACCOBlockChainSystem.Models.ViewModels
-@model RepaymentReceiptViewModel
-
+﻿@model SACCOBlockChainSystem.Models.ViewModels.RepaymentReceiptViewModel
 @{
-    ViewData["Title"] = "Repayment Receipt";
     Layout = null;
+    var companyName = Model.CompanyName ?? "SACCO BlockChain System";
+    var companyAddress = Model.CompanyAddress ?? "P.O. Box 12345 - 00100, Nairobi, Kenya";
 }
 
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Repayment Receipt - @Model.ReceiptNo</title>
-
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
-
+    <title>Repayment Receipt</title>
     <style>
+        @@page {
+            size: A5 portrait;
+            margin: 0.5cm;
+        }
+
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background: #f4f6f9;
-            font-size: 13px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            margin: 0;
+            padding: 10px;
+            background: white;
+            color: #333;
         }
 
-        /* SCREEN VIEW */
         .receipt-container {
-            max-width: 650px;
-            margin: 20px auto;
-            background: #fff;
-            border: 1px solid #ddd;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 2px solid #333;
             border-radius: 8px;
-            overflow: hidden;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
-        .receipt-header {
-            background: #28a745;
-            color: #fff;
+        .header {
             text-align: center;
-            padding: 15px;
+            border-bottom: 3px double #333;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
         }
 
-        .receipt-title {
-            font-size: 22px;
+            .header .company-name {
+                font-size: 18px;
+                font-weight: bold;
+                letter-spacing: 2px;
+                color: #1a237e;
+            }
+
+            .header .company-details {
+                font-size: 9px;
+                color: #666;
+                margin-top: 3px;
+            }
+
+            .header .receipt-title {
+                font-size: 16px;
+                font-weight: bold;
+                margin-top: 8px;
+                background: #1a237e;
+                color: white;
+                padding: 5px 20px;
+                display: inline-block;
+                border-radius: 3px;
+            }
+
+        .repayment-badge {
+            background: #00695c;
+            color: white;
+            padding: 3px 15px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: bold;
+            text-align: center;
+            display: inline-block;
+            margin: 5px 0;
+        }
+
+        .settlement-badge {
+            background: #1b5e20;
+            color: white;
+            padding: 5px 20px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            text-align: center;
+            display: inline-block;
+            margin: 5px 0;
+        }
+
+        .receipt-no {
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            margin: 8px 0;
+            padding: 8px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            border: 1px solid #90caf9;
+        }
+
+            .receipt-no .label {
+                color: #1565c0;
+            }
+
+        .transaction-refs {
+            font-size: 9px;
+            text-align: center;
+            color: #555;
+            margin: 5px 0;
+            padding: 5px;
+            background: #f5f5f5;
+            border-radius: 3px;
+            word-break: break-all;
+            border: 1px dashed #ccc;
+        }
+
+        .date-time {
+            text-align: center;
+            font-size: 11px;
+            color: #555;
+            margin: 5px 0 10px 0;
             font-weight: bold;
         }
 
-        .receipt-subtitle {
+        .member-info {
+            background: #f5f5f5;
+            padding: 10px 12px;
+            margin: 10px 0;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 11px;
+        }
+
+            .member-info .row {
+                display: flex;
+                padding: 2px 0;
+            }
+
+            .member-info .label {
+                font-weight: bold;
+                color: #333;
+                width: 100px;
+                min-width: 100px;
+            }
+
+            .member-info .value {
+                color: #333;
+            }
+
+        .method-details {
+            background: #e8f5e9;
+            padding: 10px 12px;
+            margin: 10px 0;
+            border: 1px solid #a5d6a7;
+            border-radius: 5px;
+            font-size: 11px;
+        }
+
+            .method-details .row {
+                display: flex;
+                padding: 2px 0;
+            }
+
+            .method-details .label {
+                font-weight: bold;
+                color: #333;
+                width: 120px;
+                min-width: 120px;
+            }
+
+            .method-details .value {
+                color: #333;
+            }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 10px;
+        }
+
+            table tbody td {
+                padding: 5px 8px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+
+            table tbody tr:nth-child(even) {
+                background: #f9f9f9;
+            }
+
+            table .text-right {
+                text-align: right;
+            }
+
+        .total-row {
+            background: #e8f5e9 !important;
+            font-weight: bold;
             font-size: 12px;
         }
 
-        .company-details-header {
-            background: #f8f9fa;
-            text-align: center;
-            padding: 10px;
-            border-bottom: 2px solid #28a745;
-        }
+            .total-row td {
+                padding: 8px !important;
+                border-top: 2px solid #333;
+            }
 
-        .company-name {
+        .balance-row {
+            background: #e3f2fd !important;
             font-weight: bold;
-            color: #28a745;
+            font-size: 12px;
         }
 
-        .receipt-body {
-            padding: 15px;
-        }
+            .balance-row td {
+                padding: 8px !important;
+                border-top: 2px solid #333;
+            }
 
-        .info-row {
-            margin-bottom: 12px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 8px;
-        }
-
-        .info-label {
-            font-weight: 600;
-            color: #666;
-            font-size: 11px;
-        }
-
-        .info-value {
-            font-size: 13px;
-        }
-
-        .method-details {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 6px;
+        .summary {
             margin: 10px 0;
-        }
-
-        .allocation-table {
-            width: 100%;
-        }
-
-        .allocation-table td {
-            padding: 4px 0;
-        }
-
-        .receipt-footer {
-            background: #f8f9fa;
-            text-align: center;
-            padding: 10px;
+            padding: 10px 12px;
+            background: #e8f5e9;
+            border: 1px solid #a5d6a7;
+            border-radius: 5px;
             font-size: 11px;
-            border-top: 1px solid #ddd;
         }
 
-        .btn-print {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
+            .summary .row {
+                display: flex;
+                padding: 3px 0;
+            }
+
+            .summary .label {
+                font-weight: bold;
+                width: 160px;
+                min-width: 160px;
+            }
+
+            .summary .value {
+                font-weight: bold;
+                color: #1a237e;
+            }
+
+        .blockchain-tx {
+            font-size: 8px;
+            word-break: break-all;
+            background: #fafafa;
+            padding: 8px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+            font-family: monospace;
+        }
+
+            .blockchain-tx .label {
+                font-weight: bold;
+                font-family: 'Courier New', Courier, monospace;
+            }
+
+        .footer {
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 3px double #333;
+            font-size: 9px;
+            color: #666;
+        }
+
+            .footer .thank-you {
+                font-size: 12px;
+                font-weight: bold;
+                color: #1a237e;
+                margin: 5px 0;
+            }
+
+        .print-button {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+            .print-button button {
+                padding: 10px 40px;
+                background: #1a237e;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                cursor: pointer;
+                font-weight: bold;
+            }
+
+                .print-button button:hover {
+                    background: #0d47a1;
+                }
+
+            .print-button .btn-close {
+                padding: 10px 30px;
+                background: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                cursor: pointer;
+                margin-left: 10px;
+            }
+
+                .print-button .btn-close:hover {
+                    background: #5a6268;
+                }
+
+            .print-button .btn-home {
+                padding: 10px 30px;
+                background: #28a745;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                cursor: pointer;
+                margin-left: 10px;
+            }
+
+                .print-button .btn-home:hover {
+                    background: #1e7e34;
+                }
+
+        .text-danger {
+            color: #c62828 !important;
+        }
+
+        .text-success {
+            color: #1b5e20 !important;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .fw-bold {
+            font-weight: bold;
         }
 
         @@media print {
-
-            @@page {
-                size: 70mm auto;
-                margin: 5mm;
-            }
-
-            html, body {
-                width: 70mm !important;
-                font-size: 12px !important;
-                background: #fff !important;
-            }
-
-            * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
+            body {
+                padding: 0;
+                background: white;
             }
 
             .no-print {
@@ -133,152 +351,219 @@
             }
 
             .receipt-container {
-                width: 100% !important;
-                padding: 5px !important;
-            }
-            /* 🔥 FIX HEADER PRINT (BLACK BG, WHITE TEXT) */
-            .receipt-header {
-                background: #000 !important;
-                color: #fff !important;
-                border: 1px solid #000 !important;
+                border: none;
+                border-radius: 0;
+                padding: 15px;
+                box-shadow: none;
             }
 
-            .receipt-title,
-            .receipt-subtitle {
-                color: #fff !important;
-            }
+                .receipt-container .header .company-name {
+                    font-size: 16px;
+                }
 
             .receipt-no {
-                font-size: 14px !important;
-                font-weight: bold !important;
+                background: #e3f2fd !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
 
-            .info-row {
-                margin-bottom: 12px !important;
+            .header .receipt-title {
+                background: #1a237e !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
 
-            .allocation-table td {
-                padding: 6px 0 !important;
+            .member-info {
+                background: #f5f5f5 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .method-details {
+                background: #e8f5e9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .summary {
+                background: #e8f5e9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .total-row {
+                background: #e8f5e9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .balance-row {
+                background: #e3f2fd !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .repayment-badge {
+                background: #00695c !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .settlement-badge {
+                background: #1b5e20 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
         }
     </style>
 </head>
-
 <body>
-
-    <!-- Buttons -->
-    <div class="no-print text-center mb-3">
-        <button onclick="window.print()" class="btn btn-primary">
-            <i class="fas fa-print"></i> Print / Save PDF
-        </button>
-        <button onclick="goBack()" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Back
-        </button>
-    </div>
-
-    <div class="receipt-container">
-
-        <!-- HEADER -->
-        <div class="receipt-header">
-            <!-- Optional Logo -->
-            <!-- <img src="/images/logo.png" style="height:50px;" /> -->
+    <div class="receipt-container" id="receipt">
+        <!-- Header -->
+        <div class="header">
+            <div class="company-name">@companyName</div>
+            <div class="company-details">@companyAddress</div>
+            <div class="company-details">Tel: @Model.CompanyPhone | Email: @Model.CompanyEmail</div>
             <div class="receipt-title">LOAN REPAYMENT RECEIPT</div>
-            <div class="receipt-subtitle">Payment Confirmation</div>
         </div>
 
-        <!-- COMPANY -->
-        <div class="company-details-header">
-            <div class="company-name">@Model.CompanyName</div>
-            <div>@Model.CompanyAddress</div>
-            <div>Tel: @Model.CompanyPhone | Email: @Model.CompanyEmail</div>
-        </div>
-
-        <!-- BODY -->
-        <div class="receipt-body">
-
-            <!-- Receipt No -->
-            <div class="text-center mb-2">
-                <span class="badge bg-success">Receipt No: @Model.ReceiptNo</span>
-            </div>
-
-            <!-- MEMBER -->
-            <div class="info-row">
-                <div class="info-label">Member Details</div>
-                <div class="info-value">
-                   Name: @Model.MemberName<br />
-                    Member No: @Model.MemberNo<br />
-                    Phone: @Model.MemberPhone<br />
-                    Loan No: @Model.LoanNo
-                </div>
-            </div>
-
-            <!-- PAYMENT METHOD -->
-            <div class="method-details">
-                <strong>@Model.PaymentMethod</strong><br />
-                Reference: @Model.ReferenceNo
-            </div>
-
-            <!-- ALLOCATION -->
-            <div class="info-row">
-                <div class="info-label">Payment Breakdown</div>
-                <table class="allocation-table">
-                    <tr>
-                        <td>Principal</td>
-                        <td class="text-end">KES @Model.PrincipalAllocated.ToString("N2")</td>
-                    </tr>
-                    <tr>
-                        <td>Interest</td>
-                        <td class="text-end">KES @Model.InterestAllocated.ToString("N2")</td>
-                    </tr>
-                    <tr>
-                        <td>Penalty</td>
-                        <td class="text-end text-danger">KES @Model.PenaltyAllocated.ToString("N2")</td>
-                    </tr>
-                    <tr class="fw-bold border-top">
-                        <td>Total Paid</td>
-                        <td class="text-end">KES @Model.AmountPaid.ToString("N2")</td>
-                    </tr>
-                </table>
-            </div>
-
-            <!-- BALANCE -->
-            <div class="info-row">
-                <div class="info-label">Remaining Balance</div>
-                <div class="info-value">
-                    KES @Model.BalanceAfter.ToString("N2")
-                </div>
-            </div>
-
+        <!-- Repayment Badge -->
+        <div style="text-align:center;">
+            <span class="repayment-badge">💳 REPAYMENT - @Model.PaymentMethod</span>
             @if (Model.IsFullSettlement)
             {
-                <div class="text-success fw-bold text-center mt-2">
-                    <i class="fas fa-check-circle"></i> LOAN FULLY SETTLED
+                <span class="settlement-badge" style="display:block; margin-top:5px;">✅ LOAN FULLY SETTLED</span>
+            }
+        </div>
+
+        <!-- Receipt Number -->
+        <div class="receipt-no">
+            <span class="label">Receipt No:</span> @Model.ReceiptNo
+        </div>
+
+        <!-- Date -->
+        <div class="date-time">
+            Date: @Model.PaymentDate.ToString("dd/MM/yyyy HH:mm")
+        </div>
+
+        <!-- Member Information -->
+        <div class="member-info">
+            <div class="row">
+                <span class="label">Member No:</span>
+                <span class="value">@Model.MemberNo</span>
+            </div>
+            <div class="row">
+                <span class="label">Member Name:</span>
+                <span class="value">@Model.MemberName</span>
+            </div>
+            <div class="row">
+                <span class="label">ID Number:</span>
+                <span class="value">@(Model.MemberIdNo ?? "N/A")</span>
+            </div>
+            <div class="row">
+                <span class="label">Phone Number:</span>
+                <span class="value">@(Model.MemberPhone ?? "N/A")</span>
+            </div>
+            <div class="row">
+                <span class="label">Loan No:</span>
+                <span class="value"><strong>@Model.LoanNo</strong></span>
+            </div>
+        </div>
+
+        <!-- Payment Method Details -->
+        <div class="method-details">
+            <div class="row">
+                <span class="label">Payment Method:</span>
+                <span class="value"><strong>@Model.PaymentMethod</strong></span>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.ReferenceNo))
+            {
+                <div class="row">
+                    <span class="label">Reference No:</span>
+                    <span class="value">@Model.ReferenceNo</span>
                 </div>
             }
-
+            <div class="row">
+                <span class="label">Payment Number:</span>
+                <span class="value">@Model.PaymentNumber</span>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.Remarks))
+            {
+                <div class="row">
+                    <span class="label">Remarks:</span>
+                    <span class="value">@Model.Remarks</span>
+                </div>
+            }
         </div>
 
-        <!-- FOOTER -->
-        <div class="receipt-footer">
-            <div>Received by: @Model.ReceivedBy</div>
-            <div>Printed: @Model.PrintedAt.ToString("dd MMM yyyy HH:mm")</div>
-            <div>This is a system generated receipt.</div>
+        <!-- Payment Breakdown -->
+        <table>
+            <tbody>
+                <tr>
+                    <td>Principal</td>
+                    <td class="text-right">KES @Model.PrincipalAllocated.ToString("N2")</td>
+                </tr>
+                <tr>
+                    <td>Interest</td>
+                    <td class="text-right">KES @Model.InterestAllocated.ToString("N2")</td>
+                </tr>
+                <tr>
+                    <td>Penalty</td>
+                    <td class="text-right text-danger">KES @Model.PenaltyAllocated.ToString("N2")</td>
+                </tr>
+                <tr class="total-row">
+                    <td style="font-size:12px;">Total Paid</td>
+                    <td class="text-right" style="font-size:13px; color:#1a237e;">KES @Model.AmountPaid.ToString("N2")</td>
+                </tr>
+                <tr class="balance-row">
+                    <td style="font-size:12px;">Remaining Balance</td>
+                    <td class="text-right" style="font-size:13px; color:#1565c0;">KES @Model.BalanceAfter.ToString("N2")</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Summary -->
+        <div class="summary">
+            @if (Model.IsFullSettlement)
+            {
+                <div class="row" style="margin-top:5px;">
+                    <span class="value" style="color:#1b5e20; font-size:12px; text-align:center; width:100%;">
+                        ✅ This loan has been fully settled.
+                    </span>
+                </div>
+            }
         </div>
 
+        <!-- Footer -->
+        <div class="footer">
+            <div class="thank-you">Thank you for your payment!</div>
+            <div>Received By: @Model.ReceivedBy</div>
+            <div>Printed At: @Model.PrintedAt.ToString("dd/MM/yyyy HH:mm:ss")</div>
+            <div style="margin-top:5px; font-size:8px; color:#999;">
+                This is a system generated receipt. Blockchain verified.
+            </div>
+        </div>
     </div>
 
-    <!-- Floating button -->
-    <div class="btn-print no-print">
-        <button onclick="window.print()" class="btn btn-primary" style="width:60px;height:60px;">
-            <i class="fas fa-print"></i>
+    <!-- Print Button -->
+    <div class="print-button no-print">
+        <button onclick="window.print()">
+            <i class="fas fa-print"></i> Print Receipt
+        </button>
+        <button class="btn-close" onclick="window.close()">
+            <i class="fas fa-times"></i> Close
+        </button>
+        <button class="btn-home" onclick="window.location.href='@Url.Action("Repay", "LoanMvc")'">
+            <i class="fas fa-home"></i> Home
         </button>
     </div>
 
     <script>
-        function goBack() {
-            window.history.back();
-        }
+        // Auto-print when page loads (optional - uncomment to enable)
+        window.onload = function() {
+            // Uncomment to auto-print
+            // window.print();
+        };
     </script>
-
 </body>
 </html>

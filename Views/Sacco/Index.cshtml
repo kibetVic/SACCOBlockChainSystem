@@ -82,6 +82,11 @@
                             <i class="bi bi-journal"></i> GL Accounts
                         </button>
                     </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="wallet-tab" data-bs-toggle="tab" data-bs-target="#wallet" type="button" role="tab">
+                            <i class="bi bi-wallet"></i> Wallet Config
+                        </button>
+                    </li>
                 </ul>
 
                 <div class="tab-content mt-3">
@@ -206,7 +211,7 @@
                                 <label asp-for="SignificantLoanBalance" class="form-label">Significant Loan Balance</label>
                                 <div class="input-group">
                                     <span class="input-group-text">KES</span>
-                                    <input asp-for="SignificantLoanBalance" class="form-control" type="number" step="1000" />
+                                    <input asp-for="SignificantLoanBalance" class="form-control" type="number" step="5" />
                                 </div>
                                 <span asp-validation-for="SignificantLoanBalance" class="text-danger"></span>
                             </div>
@@ -287,6 +292,342 @@
                                 <small class="text-muted">Account for creditors/accounts payable</small>
                                 <span asp-validation-for="Creditors" class="text-danger"></span>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="wallet" role="tabpanel">
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Wallet Configuration Settings
+                        </div>
+                        <div class="card-body">
+
+                                <input type="hidden" asp-for="WalletConfig.Id" />
+                                <input type="hidden" asp-for="WalletConfig.CompanyCode" />
+
+                                <div class="row g-4">
+
+                                    <!-- GENERAL SETTINGS -->
+                                    <div class="col-12">
+                                        <h5 class="border-bottom pb-2">
+                                            General Settings
+                                        </h5>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.EnableWallets">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.EnableWallets">
+                                                Enable Wallets
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.AutoAssignWalletOnRegistration">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.AutoAssignWalletOnRegistration">
+                                                Auto Assign Wallet on Registration
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.AllowMemberWalletAccess">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.AllowMemberWalletAccess">
+                                                Allow Member Wallet Access
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- TRANSACTION SETTINGS -->
+                                    <div class="col-12 mt-3">
+                                        <h5 class="border-bottom pb-2">
+                                            Transaction Settings
+                                        </h5>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.AllowInternalTransfers">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.AllowInternalTransfers">
+                                                Allow Internal Transfers
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.AllowDeposits">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.AllowDeposits">
+                                                Allow Deposits
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.AllowWithdrawals">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.AllowWithdrawals">
+                                                Allow Withdrawals
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.AllowLoanDisbursementToWallet">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.AllowLoanDisbursementToWallet">
+                                                Allow Loan Disbursement To Wallet
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.AllowLoanRepaymentFromWallet">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.AllowLoanRepaymentFromWallet">
+                                                Allow Loan Repayment From Wallet
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- SECURITY -->
+                                    <div class="col-12 mt-3">
+                                        <h5 class="border-bottom pb-2">
+                                            Security Settings
+                                        </h5>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.RequireTransactionPin">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.RequireTransactionPin">
+                                                Require Transaction PIN
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.RequireOtpVerification">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.RequireOtpVerification">
+                                                Require OTP Verification
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.CustodialWallets">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.CustodialWallets">
+                                                Custodial Wallets
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.AllowWalletReset">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.AllowWalletReset">
+                                                Allow Wallet Reset
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- LIMITS -->
+                                    <div class="col-12 mt-3">
+                                        <h5 class="border-bottom pb-2">
+                                            Limits & Fees
+                                        </h5>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label"
+                                               asp-for="WalletConfig.MaxTransactionAmount">
+                                            Max Transaction Amount
+                                        </label>
+
+                                        <input class="form-control"
+                                               asp-for="WalletConfig.MaxTransactionAmount" />
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label"
+                                               asp-for="WalletConfig.DailyTransactionLimit">
+                                            Daily Transaction Limit
+                                        </label>
+
+                                        <input class="form-control"
+                                               asp-for="WalletConfig.DailyTransactionLimit" />
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label"
+                                               asp-for="WalletConfig.ApprovalThresholdAmount">
+                                            Approval Threshold Amount
+                                        </label>
+
+                                        <input class="form-control"
+                                               asp-for="WalletConfig.ApprovalThresholdAmount" />
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label"
+                                               asp-for="WalletConfig.WalletCreationFee">
+                                            Wallet Creation Fee
+                                        </label>
+
+                                        <input class="form-control"
+                                               asp-for="WalletConfig.WalletCreationFee" />
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label"
+                                               asp-for="WalletConfig.TransactionFeePercent">
+                                            Transaction Fee (%)
+                                        </label>
+
+                                        <input class="form-control"
+                                               asp-for="WalletConfig.TransactionFeePercent" />
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label"
+                                               asp-for="WalletConfig.SessionTimeoutMinutes">
+                                            Session Timeout (Minutes)
+                                        </label>
+
+                                        <input class="form-control"
+                                               asp-for="WalletConfig.SessionTimeoutMinutes" />
+                                    </div>
+
+                                    <!-- NOTIFICATIONS -->
+                                    <div class="col-12 mt-3">
+                                        <h5 class="border-bottom pb-2">
+                                            Notifications
+                                        </h5>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.EnableSmsNotifications">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.EnableSmsNotifications">
+                                                SMS Notifications
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.EnableEmailNotifications">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.EnableEmailNotifications">
+                                                Email Notifications
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.EnablePushNotifications">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.EnablePushNotifications">
+                                                Push Notifications
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- APPROVAL -->
+                                    <div class="col-12 mt-3">
+                                        <h5 class="border-bottom pb-2">
+                                            Approval Settings
+                                        </h5>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   asp-for="WalletConfig.RequireApprovalForLargeTransactions">
+
+                                            <label class="form-check-label"
+                                                   asp-for="WalletConfig.RequireApprovalForLargeTransactions">
+                                                Require Approval For Large Transactions
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                <div class="mt-4 text-end">
+                                    <button type="submit"
+                                            class="btn btn-primary px-4">
+                                        Save Configurations
+                                    </button>
+                                </div>
+
+                            
+
                         </div>
                     </div>
                 </div>
@@ -551,6 +892,32 @@
             submitBtn.prop('disabled', true);
             submitBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Saving...');
             return true;
+        });
+
+
+
+            // Debug form submission
+        $(document).ready(function() {
+            $('#saccoForm').on('submit', function(e) {
+                console.log('=== FORM SUBMISSION DEBUG ===');
+                console.log('SaccoName:', $('#SaccoName').val());
+                console.log('Telephone:', $('#Telephone').val());
+                console.log('EmailAddress:', $('#EmailAddress').val());
+                console.log('PhysicalAddress:', $('#PhysicalAddress').val());
+                console.log('Town:', $('#Town').val());
+                console.log('Address:', $('#Address').val());
+                console.log('MembershipMaturityMonths:', $('#MembershipMaturityMonths').val());
+                console.log('WithdrawalNoticeDays:', $('#WithdrawalNoticeDays').val());
+                console.log('MaxGuarantor:', $('#MaxGuarantor').val());
+                console.log('Suspense:', $('#Suspense').val());
+                console.log('RetainedEarnings:', $('#RetainedEarnings').val());
+                console.log('Creditors:', $('#Creditors').val());
+                console.log('CompanyCode:', $('#CompanyCode').val());
+                console.log('Id:', $('#Id').val());
+
+                // Don't prevent default - let the form submit normally
+                return true;
+            });
         });
     </script>
 }

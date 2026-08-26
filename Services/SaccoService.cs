@@ -1,5 +1,4 @@
-﻿// Services/SaccoService.cs
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
 using SACCOBlockChainSystem.Models.DTOs;
@@ -10,9 +9,8 @@ namespace SACCOBlockChainSystem.Services
     {
         Task<SaccoParram> GetSaccoParametersAsync(string companyCode);
         Task<SaccoParram> GetSaccoParametersByIdAsync(int id);
-        Task<List<SaccoParramListDTO>> GetAllSaccoParametersAsync();
-        Task<int> GetMaxGuarantorsAsync(string companyCode);
         Task<List<SaccoParramListDTO>> GetAllSaccoParametersAsync(string companyCode);
+        Task<int> GetMaxGuarantorsAsync(string companyCode);
         Task<SaccoParram> CreateSaccoParametersAsync(SaccoParramDTO parameters, string createdBy);
         Task<SaccoParram> UpdateSaccoParametersAsync(SaccoParramDTO parameters, string updatedBy);
         Task<bool> DeleteSaccoParametersAsync(int id);
@@ -24,78 +22,22 @@ namespace SACCOBlockChainSystem.Services
         private readonly ApplicationDbContext _context;
         private readonly IBlockchainService _blockchainService;
         private readonly ILogger<SaccoService> _logger;
-        private readonly ICompanyContextService _companyContextService;
 
         public SaccoService(
             ApplicationDbContext context,
             IBlockchainService blockchainService,
-            ILogger<SaccoService> logger,
-            ICompanyContextService companyContextService)
+            ILogger<SaccoService> logger)
         {
             _context = context;
             _blockchainService = blockchainService;
             _logger = logger;
-            _companyContextService = companyContextService;
-        }
-
-        public async Task<List<SaccoParramListDTO>> GetAllSaccoParametersAsync(string companyCode)
-        {
-            return await _context.SaccoParram
-                .Where(sp => sp.CompanyCode == companyCode) // Filter by company code
-                .OrderByDescending(sp => sp.CreatedAt)
-                .Select(sp => new SaccoParramListDTO
-                {
-                    Id = sp.Id,
-                    SaccoName = sp.SaccoName,
-                    CompanyCode = sp.CompanyCode,
-                    Telephone = sp.Telephone,
-                    EmailAddress = sp.EmailAddress,
-                    MembershipMaturityMonths = sp.MembershipMaturityMonths,
-                    WithdrawalNoticeDays = sp.WithdrawalNoticeDays,
-                    MaxGuarantor = sp.MaxGuarantor,
-                    CreatedAt = sp.CreatedAt,
-                    Suspense = sp.Suspense,
-                    RetainedEarnings = sp.RetainedEarnings,
-                    Creditors = sp.Creditors
-                })
-                .ToListAsync();
         }
 
         public async Task<SaccoParram> GetSaccoParametersAsync(string companyCode)
         {
+            // Just return what exists or null - NO AUTO-CREATE
             var parameters = await _context.SaccoParram
                 .FirstOrDefaultAsync(sp => sp.CompanyCode == companyCode);
-
-            if (parameters == null)
-            {
-                // Get company name from SaccoParram - FILTER BY COMPANY CODE
-                var company = await _context.SaccoParram
-                    .FirstOrDefaultAsync(s => s.CompanyCode == companyCode);
-
-                var companyName = company?.SaccoName ?? $"{companyCode} SACCO";
-
-                // Clean company name for sender ID
-                //var senderId = CleanSenderId(companyName);
-
-                // Create default parameters with all fields
-                parameters = new SaccoParram
-                {
-                    CompanyCode = companyCode,
-                    SaccoName = companyName,
-                    MaxGuarantor = 5,
-                    MinGuarantor = 1,
-                    MembershipMaturityMonths = 6,
-                    WithdrawalNoticeDays = 30,
-                    DividendProcessingDays = 14,
-                    DefaultCurrency = "KES",
-                    DefaultRounding = 2,
-                    CreatedAt = DateTime.Now,
-                    CreatedBy = "SYSTEM"
-                };
-
-                _context.SaccoParram.Add(parameters);
-                await _context.SaveChangesAsync();
-            }
 
             return parameters;
         }
@@ -106,9 +48,10 @@ namespace SACCOBlockChainSystem.Services
                 .FirstOrDefaultAsync(sp => sp.Id == id);
         }
 
-        public async Task<List<SaccoParramListDTO>> GetAllSaccoParametersAsync()
+        public async Task<List<SaccoParramListDTO>> GetAllSaccoParametersAsync(string companyCode)
         {
             return await _context.SaccoParram
+                .Where(sp => sp.CompanyCode == companyCode)
                 .OrderByDescending(sp => sp.CreatedAt)
                 .Select(sp => new SaccoParramListDTO
                 {
@@ -150,6 +93,10 @@ namespace SACCOBlockChainSystem.Services
 
             try
             {
+                _logger.LogInformation($"Creating SACCO parameters for company: {dto.CompanyCode}");
+                _logger.LogInformation($"DTO Data - SaccoName: {dto.SaccoName}, Telephone: {dto.Telephone}, Email: {dto.EmailAddress}");
+                _logger.LogInformation($"DTO Data - Suspense: {dto.Suspense}, RetainedEarnings: {dto.RetainedEarnings}, Creditors: {dto.Creditors}");
+
                 // Check if parameters already exist for this company
                 var existing = await _context.SaccoParram
                     .FirstOrDefaultAsync(sp => sp.CompanyCode == dto.CompanyCode);
@@ -191,12 +138,13 @@ namespace SACCOBlockChainSystem.Services
                 _context.SaccoParram.Add(parameters);
                 await _context.SaveChangesAsync();
 
+                _logger.LogInformation($"SACCO parameters created successfully with ID: {parameters.Id}");
+
                 // Record on blockchain
                 await RecordOnBlockchainAsync(parameters, "CREATE", createdBy);
 
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"SACCO parameters created for company {dto.CompanyCode}");
                 return parameters;
             }
             catch (Exception ex)
@@ -213,6 +161,10 @@ namespace SACCOBlockChainSystem.Services
 
             try
             {
+                _logger.LogInformation($"Updating SACCO parameters with ID: {dto.Id}");
+                _logger.LogInformation($"DTO Data - SaccoName: {dto.SaccoName}, Telephone: {dto.Telephone}, Email: {dto.EmailAddress}");
+                _logger.LogInformation($"DTO Data - Suspense: {dto.Suspense}, RetainedEarnings: {dto.RetainedEarnings}, Creditors: {dto.Creditors}");
+
                 var parameters = await _context.SaccoParram
                     .FirstOrDefaultAsync(sp => sp.Id == dto.Id);
 
@@ -249,12 +201,13 @@ namespace SACCOBlockChainSystem.Services
 
                 await _context.SaveChangesAsync();
 
+                _logger.LogInformation($"SACCO parameters updated successfully for ID: {parameters.Id}");
+
                 // Record on blockchain
                 await RecordOnBlockchainAsync(parameters, "UPDATE", updatedBy);
 
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"SACCO parameters updated for company {parameters.CompanyCode}");
                 return parameters;
             }
             catch (Exception ex)
@@ -351,4 +304,3 @@ namespace SACCOBlockChainSystem.Services
         }
     }
 }
-

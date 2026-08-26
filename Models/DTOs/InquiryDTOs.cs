@@ -44,6 +44,8 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string Status { get; set; } = null!;
         public DateTime DateJoined { get; set; }
         public decimal ShareBalance { get; set; }
+        public int GuarantorLoansCount { get; set; }
+        public decimal TotalGuaranteeAmount { get; set; }
     }
 
     public class MemberSearchResponseDTO
@@ -125,6 +127,12 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public List<ShareTypeSummaryDTO> ShareTypeSummaries { get; set; } = new();
         public DateTime InquiryTimestamp { get; set; }
         public string? InquiredBy { get; set; }
+        public string? MemberIdNo { get; set; }
+        public int? MemberPhone { get; set; }
+        public decimal TotalRegFees { get; set; }
+        public decimal TotalDonations { get; set; }
+        public decimal TotalLoanAllocations { get; set; }
+        public decimal TotalPassBook { get; set; }
     }
 
     public class ShareTypeSummaryDTO
@@ -151,6 +159,10 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? ReceiptNo { get; set; }
         public string? Remarks { get; set; }
         public string? BlockchainTxId { get; set; }
+        public decimal RegFees { get; set; }
+        public decimal Donations { get; set; }
+        public decimal LoanAllocations { get; set; }
+        public decimal PassBook { get; set; }
     }
 
     // Loan Inquiry DTOs
@@ -168,6 +180,9 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public List<LoanDetailDTO> Loans { get; set; } = new();
         public DateTime InquiryTimestamp { get; set; }
         public string? InquiredBy { get; set; }
+        public string? MemberIdNo { get; set; }
+        public int? MemberPhone { get; set; }
+        public object ClosedLoansCount { get; internal set; }
     }
 
     public class LoanDetailDTO
@@ -274,5 +289,134 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public float? LoanToShareRatio { get; set; }
         public int TotalMembers { get; set; }
         public decimal TotalShares { get; set; }
+    }
+
+    // DTO for Guarantor Loans List
+    public class GuarantorLoanListResponseDTO
+    {
+        public string MemberNo { get; set; } = null!;
+        public string MemberName { get; set; } = null!;
+        public string MemberPhone { get; set; } = null!;
+        public string MemberIdNo { get; set; } = null!;
+        public decimal TotalShares { get; set; }
+        public decimal LockedForGuarantees { get; set; }
+        public decimal AvailableShares { get; set; }
+        public int TotalGuaranteedLoans { get; set; }
+        public List<GuarantorLoanDetailDTO> GuaranteedLoans { get; set; } = new();
+        public DateTime InquiryTimestamp { get; set; }
+        public string? InquiredBy { get; set; }
+    }
+
+    public class GuarantorLoanDetailDTO
+    {
+        // Loanee (Borrower) Information
+        public string LoaneeMemberNo { get; set; } = null!;
+        public string LoaneeName { get; set; } = null!;
+        public string LoaneePhone { get; set; } = null!;
+        public string LoaneeIdNo { get; set; } = null!;
+
+        // Loan Information
+        public string LoanNo { get; set; } = null!;
+        public string LoanCode { get; set; } = null!;
+        public string LoanType { get; set; } = null!;
+        public decimal PrincipalAmount { get; set; }
+        public decimal OutstandingBalance { get; set; }
+        public decimal InterestRate { get; set; }
+        public int RepaymentPeriod { get; set; }
+        public DateTime ApplicationDate { get; set; }
+        public DateTime? DisbursementDate { get; set; }
+        public DateTime? ExpectedCompletionDate { get; set; }
+        public string LoanStatus { get; set; } = null!;
+        public bool IsActive { get; set; }
+        public bool IsOverdue { get; set; }
+        public int DaysOverdue { get; set; }
+
+        // Guarantor Information (the member who guaranteed)
+        public int GuarantorId { get; set; }
+        public string GuarantorMemberNo { get; set; } = null!;
+        public decimal GuaranteeAmount { get; set; }
+        public decimal GuaranteeBalance { get; set; }
+        public decimal RemainingGuarantee { get; set; }
+        public DateTime GuaranteeDate { get; set; }
+        public string GuaranteeStatus { get; set; } = "Active";
+        public string? GuaranteeDescription { get; set; }
+        public string? CollateralType { get; set; }
+
+        // Member's Share Information (the guarantor)
+        public decimal MemberTotalShares { get; set; }
+        public decimal MemberLockedShares { get; set; }
+        public decimal MemberAvailableShares { get; set; }
+        public decimal ShareBalanceAfterThisGuarantee { get; set; }
+    }
+
+
+    public class LoanRepaymentHistoryDTO
+    {
+        // Company Information
+        public string CompanyName { get; set; } = null!;
+        public string CompanyAddress { get; set; } = null!;
+        public string CompanyPhone { get; set; } = null!;
+        public string CompanyEmail { get; set; } = null!;
+
+        // Member Information
+        public string MemberNo { get; set; } = null!;
+        public string MemberName { get; set; } = null!;
+        public string MemberIdNo { get; set; } = null!;
+        public string MemberPhone { get; set; } = null!;
+        public string MemberEmail { get; set; } = null!;
+
+        // Loan Information
+        public string LoanNo { get; set; } = null!;
+        public string LoanType { get; set; } = null!;
+        public string LoanCode { get; set; } = null!;
+        public decimal PrincipalAmount { get; set; }
+        public decimal ApprovedAmount { get; set; }
+        public decimal InterestRate { get; set; }
+        public int RepaymentPeriod { get; set; }
+        public string RepaymentMethod { get; set; } = null!;
+        public DateTime ApplicationDate { get; set; }
+        public DateTime? DisbursementDate { get; set; }
+        public string LoanStatus { get; set; } = null!;
+        public bool IsOverdue { get; set; }
+        public decimal TotalPrincipalPaid { get; set; }
+        public decimal TotalInterestPaid { get; set; }
+        public decimal TotalPenaltyPaid { get; set; }
+        public decimal TotalAmountPaid { get; set; }
+        public decimal OutstandingPrincipal { get; set; }
+        public decimal OutstandingInterest { get; set; }
+        public decimal OutstandingPenalty { get; set; }
+        public decimal TotalOutstanding { get; set; }
+        public decimal OriginalTotalAmount { get; set; }
+        public decimal PercentagePaid { get; set; }
+        public bool IsFullyPaid { get; set; }
+
+        // Repayment History
+        public List<RepaymentHistoryDetailDTO> Repayments { get; set; } = new();
+
+        // Audit
+        public DateTime InquiryTimestamp { get; set; }
+        public string InquiredBy { get; set; } = null!;
+        public string? BlockchainTxId { get; set; }
+    }
+
+    public class RepaymentHistoryDetailDTO
+    {
+        public int Id { get; set; }
+        public DateTime PaymentDate { get; set; }
+        public int PaymentNumber { get; set; }
+        public string ReceiptNo { get; set; } = null!;
+        public decimal AmountPaid { get; set; }
+        public decimal PrincipalPaid { get; set; }
+        public decimal InterestPaid { get; set; }
+        public decimal PenaltyPaid { get; set; }
+        public decimal BalanceBefore { get; set; }
+        public decimal BalanceAfter { get; set; }
+        public string PaymentMethod { get; set; } = null!;
+        public string? ReferenceNo { get; set; }
+        public string? Remarks { get; set; }
+        public string? ProcessedBy { get; set; }
+        public string Status { get; set; } = null!; // On-time, Overdue, Full Settlement
+        public int? DaysOverdue { get; set; }
+        public string? BlockchainTxId { get; set; }
     }
 }

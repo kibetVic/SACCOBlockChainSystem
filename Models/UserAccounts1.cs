@@ -8,7 +8,8 @@ public partial class UserAccounts1
 {
     [Key]
     public int UserId { get; set; }
-    //public int UserGroupId { get; set; }
+
+    public int? GroupId { get; set; }
     public string? UserName { get; set; }
 
     public string UserLoginId { get; set; } = null!;

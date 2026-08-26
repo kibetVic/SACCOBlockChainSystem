@@ -30,15 +30,19 @@ public partial class ApiTransaction
 
     public string? ResultDescription { get; set; }
 
-    public DateTime? CreatedAt { get; set; }
+    //public DateTime? CreatedAt { get; set; }
 
-    public DateTime? UpdatedAt { get; set; }
+    //public DateTime? UpdatedAt { get; set; }
 
-    public DateTime? DeletedAt { get; set; }
+    //public DateTime? DeletedAt { get; set; }
+
+    public DateTime? updated_at { get; set; }
+
+    public DateTime? created_at { get; set; }
+
+    public DateTime? deleted_at { get; set; }
 
     public string? LoanNo { get; set; }
 
     public DateTime? AuditDateTime { get; set; }
-    [StringLength(255)]
-    public string? BlockchainTxId { get; set; }
 }

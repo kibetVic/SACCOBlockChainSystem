@@ -1,19 +1,20 @@
 ﻿using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
+using SACCOBlockChainSystem.Models.DTOs;
 using SACCOBlockChainSystem.Models.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Claims;
-using SACCOBlockChainSystem.Models.DTOs;
 using System.Threading.Tasks;
 
 namespace SACCOBlockChainSystem.Controllers
@@ -22,10 +23,12 @@ namespace SACCOBlockChainSystem.Controllers
     public class LoanReportController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILogger<LoanReportController> _logger;
 
-        public LoanReportController(ApplicationDbContext context)
+        public LoanReportController(ApplicationDbContext context, ILogger<LoanReportController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         #region Loans Issued Report
@@ -56,7 +59,7 @@ namespace SACCOBlockChainSystem.Controllers
                                           where loan.CompanyCode == companyCode
                                               && loan.AuditTime >= startDate
                                               && loan.AuditTime <= endDate
-                                              && loan.Status == (int)Status.Disbursed
+                                              //&& loan.Status == (int)Status.Disbursed
                                           orderby loan.AuditTime
                                           select new
                                           {
@@ -512,7 +515,7 @@ namespace SACCOBlockChainSystem.Controllers
                                           join member in _context.Members
                                               on loan.MemberNo equals member.MemberNo
                                           where loan.CompanyCode == companyCode
-                                              && (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
+                                              //&& (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
                                               && loan.AuditTime <= endDateAdjusted
                                           select new
                                           {
@@ -1492,626 +1495,762 @@ namespace SACCOBlockChainSystem.Controllers
         [HttpGet]
         public IActionResult LoansIssuedPerProduct()
         {
-            ViewBag.StartDate = DateTime.Now.AddMonths(-1);
-            ViewBag.EndDate = DateTime.Now;
-            ViewBag.HasData = false;
-
-            var viewModel = new LoanIssuedPerProductIndexViewModel
+            try
             {
-                Groups = new List<LoanIssuedPerProductGroupViewModel>(),
-                StartDate = DateTime.Now.AddMonths(-1),
-                EndDate = DateTime.Now,
-                HasData = false,
-                CompanyName = User.FindFirstValue("CompanyName") ?? "",
-                PrintedBy = User.Identity?.Name ?? "System",
-                GeneratedOn = DateTime.Now
-            };
+                ViewBag.StartDate = DateTime.Now.AddMonths(-1);
+                ViewBag.EndDate = DateTime.Now;
+                ViewBag.HasData = false;
 
-            return View("~/Views/Reports/LoansIssuedPerProduct.cshtml", viewModel);
+                var viewModel = new LoanIssuedPerProductIndexViewModel
+                {
+                    Groups = new List<LoanIssuedPerProductGroupViewModel>(),
+                    StartDate = DateTime.Now.AddMonths(-1),
+                    EndDate = DateTime.Now,
+                    HasData = false,
+                    CompanyName = User.FindFirstValue("CompanyName") ?? "",
+                    PrintedBy = User.Identity?.Name ?? "System",
+                    GeneratedOn = DateTime.Now
+                };
+
+                return View("~/Views/Reports/LoansIssuedPerProduct.cshtml", viewModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading Loans Issued Per Product Report");
+                TempData["ErrorMessage"] = "Error loading report: " + ex.Message;
+                return RedirectToAction("Index");
+            }
         }
 
         [HttpPost]
         public async Task<IActionResult> LoansIssuedPerProduct(DateTime startDate, DateTime endDate)
         {
-            var companyCode = User.FindFirstValue("CompanyCode");
-            var companyName = User.FindFirstValue("CompanyName") ?? "";
-            var printedBy = User.Identity?.Name ?? "System";
-
-            DateTime endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
-
-            // Get loans with member and appraisal data using proper JOINs
-            var loansWithDetails = await (from loan in _context.Loans
-                                          join member in _context.Members
-                                              on loan.MemberNo equals member.MemberNo
-                                          join loantype in _context.Loantypes
-                                              on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
-                                          from lt in loanTypeJoin.DefaultIfEmpty()
-                                          where loan.CompanyCode == companyCode
-                                              && loan.AuditTime >= startDate
-                                              && loan.AuditTime <= endDateAdjusted
-                                              && loan.Status == (int)Status.Disbursed
-                                          select new
-                                          {
-                                              loan.MemberNo,
-                                              loan.LoanNo,
-                                              loan.LoanCode,
-                                              loan.ApplicDate,
-                                              loan.AuditTime,
-                                              loan.RepayPeriod,
-                                              loan.LoanAmt,
-                                              loan.Aamount,
-                                              loan.Interest,
-                                              MemberSurname = member.Surname,
-                                              MemberOtherNames = member.OtherNames,
-                                              MemberFullName = member.FullName,
-                                              LoanTypeName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown")
-                                          }).ToListAsync();
-
-            if (!loansWithDetails.Any())
+            try
             {
-                var emptyViewModel = new LoanIssuedPerProductIndexViewModel
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+
+                // Validate dates
+                if (startDate > endDate)
                 {
-                    Groups = new List<LoanIssuedPerProductGroupViewModel>(),
+                    TempData["ErrorMessage"] = "Start date cannot be greater than end date.";
+                    return RedirectToAction("LoansIssuedPerProduct");
+                }
+
+                DateTime endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
+
+                // Get loans with member and appraisal data using proper JOINs
+                var loansWithDetails = await (from loan in _context.Loans
+                                              join member in _context.Members
+                                                  on loan.MemberNo equals member.MemberNo into memberJoin
+                                              from m in memberJoin.DefaultIfEmpty()
+                                              join loantype in _context.Loantypes
+                                                  on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                              from lt in loanTypeJoin.DefaultIfEmpty()
+                                              where loan.CompanyCode == companyCode
+                                                  && loan.AuditTime >= startDate
+                                                  && loan.AuditTime <= endDateAdjusted
+                                              select new
+                                              {
+                                                  loan.MemberNo,
+                                                  loan.LoanNo,
+                                                  loan.LoanCode,
+                                                  loan.ApplicDate,
+                                                  loan.AuditTime,
+                                                  loan.RepayPeriod,
+                                                  loan.LoanAmt,
+                                                  loan.Aamount,
+                                                  loan.Interest,
+                                                  loan.Status,
+                                                  MemberSurname = m != null ? m.Surname : null,
+                                                  MemberOtherNames = m != null ? m.OtherNames : null,
+                                                  MemberFullName = m != null ? m.FullName : null,
+                                                  LoanTypeName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown")
+                                              }).ToListAsync();
+
+                if (!loansWithDetails.Any())
+                {
+                    var emptyViewModel = new LoanIssuedPerProductIndexViewModel
+                    {
+                        Groups = new List<LoanIssuedPerProductGroupViewModel>(),
+                        ValueChainGroups = new List<ValueChainSummaryViewModel>(),
+                        StartDate = startDate,
+                        EndDate = endDate,
+                        HasData = false,
+                        CompanyName = companyName,
+                        PrintedBy = printedBy,
+                        GeneratedOn = DateTime.Now,
+                        TotalLoans = 0,
+                        TotalLoanApplied = 0,
+                        TotalApprovedAmount = 0,
+                        TotalLoanTypes = 0,
+                        TotalValueChains = 0
+                    };
+
+                    ViewBag.StartDate = startDate;
+                    ViewBag.EndDate = endDate;
+                    ViewBag.HasData = false;
+                    TempData["InfoMessage"] = "No loans found for the selected date range.";
+
+                    return View("~/Views/Reports/LoansIssuedPerProduct.cshtml", emptyViewModel);
+                }
+
+                // Get appraisal dates for each loan
+                var loanNos = loansWithDetails.Select(l => l.LoanNo).ToList();
+                var appraisals = new Dictionary<string, (DateTime? AppraisDate, string AuditID)>();
+                try
+                {
+                    appraisals = await _context.Appraisal
+                        .Where(a => loanNos.Contains(a.LoanNo) && a.CompanyCode == companyCode)
+                        .Select(a => new { a.LoanNo, a.AppraisDate, a.AuditID })
+                        .ToDictionaryAsync(a => a.LoanNo, a => (a.AppraisDate, a.AuditID));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error loading appraisals, continuing without them");
+                }
+
+                // Build member names using LoanNo as key to avoid duplicates
+                var memberNames = loansWithDetails
+                    .GroupBy(l => l.LoanNo)
+                    .Select(g => g.First())
+                    .ToDictionary(
+                        l => l.LoanNo,
+                        l => !string.IsNullOrEmpty(l.MemberFullName)
+                            ? l.MemberFullName
+                            : $"{l.MemberSurname ?? ""} {l.MemberOtherNames ?? ""}".Trim()
+                    );
+
+                // Also create a dictionary for MemberNo to Name for display
+                var memberNameByMemberNo = loansWithDetails
+                    .GroupBy(l => l.MemberNo)
+                    .Select(g => g.First())
+                    .ToDictionary(
+                        l => l.MemberNo,
+                        l => !string.IsNullOrEmpty(l.MemberFullName)
+                            ? l.MemberFullName
+                            : $"{l.MemberSurname ?? ""} {l.MemberOtherNames ?? ""}".Trim()
+                    );
+
+                // Group by LoanTypeName (Loan Name from Loantype1)
+                var groupedByLoanType = loansWithDetails
+                    .GroupBy(l => l.LoanTypeName)
+                    .OrderBy(g => g.Key)
+                    .Select((g, groupIndex) => new LoanIssuedPerProductGroupViewModel
+                    {
+                        ValueChain = "",
+                        LoanType = g.Key,
+                        LoanCode = g.First().LoanCode ?? "",
+                        Loans = g.Select((l, index) => new LoanIssuedPerProductReportViewModel
+                        {
+                            No = index + 1,
+                            MemberNo = l.MemberNo,
+                            LoanNo = l.LoanNo,
+                            Name = memberNameByMemberNo.ContainsKey(l.MemberNo) ? memberNameByMemberNo[l.MemberNo] : "N/A",
+                            ApplicationDate = l.ApplicDate,
+                            AppraisalDate = appraisals.ContainsKey(l.LoanNo) ? appraisals[l.LoanNo].AppraisDate : null,
+                            EndorsementDate = l.AuditTime,
+                            DateIssued = l.AuditTime,
+                            LoanPeriodMonths = l.RepayPeriod ?? 0,
+                            LoanApplied = l.LoanAmt ?? 0,
+                            ApprovedAmount = l.Aamount ?? l.LoanAmt ?? 0,
+                            InterestRate = l.Interest,
+                            LoanType = l.LoanTypeName,
+                            LoanCode = l.LoanCode ?? ""
+                        }).ToList(),
+                        Count = g.Count(),
+                        TotalLoanApplied = g.Sum(x => x.LoanAmt ?? 0),
+                        TotalApprovedAmount = g.Sum(x => x.Aamount ?? x.LoanAmt ?? 0)
+                    })
+                    .ToList();
+
+                // Calculate overall totals
+                int totalDisbursedLoans = loansWithDetails.Count(l => l.Status == (int)Status.Disbursed);
+                int totalApprovedLoans = loansWithDetails.Count(l => l.Status == (int)Status.Approved || l.Status == (int)Status.Endorsed);
+                decimal totalDisbursedAmount = loansWithDetails.Where(l => l.Status == (int)Status.Disbursed).Sum(l => l.Aamount ?? l.LoanAmt ?? 0);
+
+                var viewModel = new LoanIssuedPerProductIndexViewModel
+                {
+                    Groups = groupedByLoanType,
                     ValueChainGroups = new List<ValueChainSummaryViewModel>(),
+                    TotalLoans = loansWithDetails.Count,
+                    TotalLoanApplied = loansWithDetails.Sum(l => l.LoanAmt ?? 0),
+                    TotalApprovedAmount = loansWithDetails.Sum(l => l.Aamount ?? l.LoanAmt ?? 0),
+                    TotalLoanTypes = groupedByLoanType.Count,
+                    TotalValueChains = 0,
                     StartDate = startDate,
                     EndDate = endDate,
-                    HasData = false,
+                    HasData = loansWithDetails.Any(),
                     CompanyName = companyName,
                     PrintedBy = printedBy,
                     GeneratedOn = DateTime.Now,
-                    TotalLoans = 0,
-                    TotalLoanApplied = 0,
-                    TotalApprovedAmount = 0,
-                    TotalLoanTypes = 0,
-                    TotalValueChains = 0
+                    TotalDisbursedLoans = totalDisbursedLoans,
+                    TotalApprovedLoans = totalApprovedLoans,
+                    TotalDisbursedAmount = totalDisbursedAmount
                 };
 
                 ViewBag.StartDate = startDate;
                 ViewBag.EndDate = endDate;
-                ViewBag.HasData = false;
+                ViewBag.HasData = loansWithDetails.Any();
 
-                return View("~/Views/Reports/LoansIssuedPerProduct.cshtml", emptyViewModel);
+                return View("~/Views/Reports/LoansIssuedPerProduct.cshtml", viewModel);
             }
-
-            // Get appraisal dates for each loan
-            var loanNos = loansWithDetails.Select(l => l.LoanNo).ToList();
-            var appraisals = await _context.Appraisal
-                .Where(a => loanNos.Contains(a.LoanNo) && a.CompanyCode == companyCode)
-                .ToDictionaryAsync(a => a.LoanNo, a => new { a.AppraisDate, a.AuditID });
-
-            // Get endorsement dates (you may need to adjust this based on your schema)
-            // For now, we'll use the AuditTime from loan as endorsement date
-
-            // Build member names
-            var memberNames = loansWithDetails.ToDictionary(
-                l => l.MemberNo,
-                l => !string.IsNullOrEmpty(l.MemberFullName)
-                    ? l.MemberFullName
-                    : $"{l.MemberSurname ?? ""} {l.MemberOtherNames ?? ""}".Trim()
-            );
-
-            // Group by LoanTypeName (Loan Name from Loantype1)
-            var groupedByLoanType = loansWithDetails
-                .GroupBy(l => l.LoanTypeName)
-                .OrderBy(g => g.Key)
-                .Select(g => new LoanIssuedPerProductGroupViewModel
-                {
-                    ValueChain = "", // Not using ValueChain
-                    LoanType = g.Key,
-                    LoanCode = g.First().LoanCode ?? "",
-                    Loans = g.Select((l, index) => new LoanIssuedPerProductReportViewModel
-                    {
-                        No = index + 1,
-                        MemberNo = l.MemberNo,
-                        LoanNo = l.LoanNo,
-                        Name = memberNames.ContainsKey(l.MemberNo) ? memberNames[l.MemberNo] : "N/A",
-                        ApplicationDate = l.ApplicDate,
-                        AppraisalDate = appraisals.ContainsKey(l.LoanNo) ? appraisals[l.LoanNo].AppraisDate : null,
-                        EndorsementDate = l.AuditTime, // Using AuditTime as endorsement date
-                        DateIssued = l.AuditTime,
-                        LoanPeriodMonths = l.RepayPeriod ?? 0,
-                        LoanApplied = l.LoanAmt ?? 0,
-                        ApprovedAmount = l.Aamount ?? l.LoanAmt ?? 0,
-                        InterestRate = l.Interest,
-                        LoanType = l.LoanTypeName,
-                        LoanCode = l.LoanCode ?? ""
-                    }).ToList(),
-                    Count = g.Count(),
-                    TotalLoanApplied = g.Sum(x => x.LoanAmt ?? 0),
-                    TotalApprovedAmount = g.Sum(x => x.Aamount ?? x.LoanAmt ?? 0)
-                })
-                .ToList();
-
-            var viewModel = new LoanIssuedPerProductIndexViewModel
+            catch (SqlException ex)
             {
-                Groups = groupedByLoanType,
-                ValueChainGroups = new List<ValueChainSummaryViewModel>(),
-                TotalLoans = loansWithDetails.Count,
-                TotalLoanApplied = loansWithDetails.Sum(l => l.LoanAmt ?? 0),
-                TotalApprovedAmount = loansWithDetails.Sum(l => l.Aamount ?? l.LoanAmt ?? 0),
-                TotalLoanTypes = groupedByLoanType.Count,
-                TotalValueChains = 0,
-                StartDate = startDate,
-                EndDate = endDate,
-                HasData = loansWithDetails.Any(),
-                CompanyName = companyName,
-                PrintedBy = printedBy,
-                GeneratedOn = DateTime.Now
-            };
-
-            ViewBag.StartDate = startDate;
-            ViewBag.EndDate = endDate;
-            ViewBag.HasData = loansWithDetails.Any();
-
-            return View("~/Views/Reports/LoansIssuedPerProduct.cshtml", viewModel);
+                _logger.LogError(ex, "SQL Error in LoansIssuedPerProduct");
+                TempData["ErrorMessage"] = "Database connection error. Please try again.";
+                return RedirectToAction("LoansIssuedPerProduct");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in LoansIssuedPerProduct");
+                TempData["ErrorMessage"] = "Error generating report: " + ex.Message;
+                return RedirectToAction("LoansIssuedPerProduct");
+            }
         }
+
         [HttpPost]
         public async Task<IActionResult> ExportLoansIssuedPerProductToExcel(DateTime startDate, DateTime endDate)
         {
-            var companyCode = User.FindFirstValue("CompanyCode");
-            var companyName = User.FindFirstValue("CompanyName") ?? "";
-            var printedBy = User.Identity?.Name ?? "System";
-            DateTime endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
-
-            // Get loans with member data
-            var loansWithMembers = await (from loan in _context.Loans
-                                          join member in _context.Members
-                                              on loan.MemberNo equals member.MemberNo
-                                          where loan.CompanyCode == companyCode
-                                              && loan.AuditTime >= startDate
-                                              && loan.AuditTime <= endDateAdjusted
-                                              && loan.Status == (int)Status.Disbursed
-                                          select new
-                                          {
-                                              loan.MemberNo,
-                                              loan.LoanNo,
-                                              loan.LoanCode,
-                                              loan.ApplicDate,
-                                              loan.AuditTime,
-                                              loan.RepayPeriod,
-                                              loan.LoanAmt,
-                                              loan.Aamount,
-                                              loan.Interest,
-                                              MemberSurname = member.Surname,
-                                              MemberOtherNames = member.OtherNames
-                                          }).ToListAsync();
-
-            if (!loansWithMembers.Any())
+            try
             {
-                TempData["Error"] = "No data found for the selected date range";
-                return RedirectToAction("LoansIssuedPerProduct");
-            }
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+                DateTime endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
 
-            // Get loan types with LoanType1 information
-            var loanCodes = loansWithMembers.Select(l => l.LoanCode).Distinct().ToList();
-            var loanTypes = await _context.Loantypes
-                .Where(lt => loanCodes.Contains(lt.LoanCode) && lt.CompanyCode == companyCode)
-                .ToDictionaryAsync(lt => lt.LoanCode, lt => lt.LoanType1 ?? (lt.LoanCode ?? "Unknown"));
+                // Get loans with member data
+                var loansWithMembers = await (from loan in _context.Loans
+                                              join member in _context.Members
+                                                  on loan.MemberNo equals member.MemberNo into memberJoin
+                                              from m in memberJoin.DefaultIfEmpty()
+                                              where loan.CompanyCode == companyCode
+                                                  && loan.AuditTime >= startDate
+                                                  && loan.AuditTime <= endDateAdjusted
+                                              select new
+                                              {
+                                                  loan.MemberNo,
+                                                  loan.LoanNo,
+                                                  loan.LoanCode,
+                                                  loan.ApplicDate,
+                                                  loan.AuditTime,
+                                                  loan.RepayPeriod,
+                                                  loan.LoanAmt,
+                                                  loan.Aamount,
+                                                  loan.Interest,
+                                                  loan.Status,
+                                                  MemberSurname = m != null ? m.Surname : null,
+                                                  MemberOtherNames = m != null ? m.OtherNames : null
+                                              }).ToListAsync();
 
-            // Build member names
-            var memberNames = loansWithMembers.ToDictionary(
-                l => l.MemberNo,
-                l => $"{l.MemberSurname ?? ""} {l.MemberOtherNames ?? ""}".Trim()
-            );
-
-            // Group by LoanType1 only
-            var groupedData = loansWithMembers
-                .GroupBy(l => new
+                if (!loansWithMembers.Any())
                 {
-                    LoanCode = l.LoanCode,
-                    LoanTypeName = loanTypes.ContainsKey(l.LoanCode) ? loanTypes[l.LoanCode] : (l.LoanCode ?? "Unknown")
-                })
-                .OrderBy(g => g.Key.LoanTypeName)
-                .Select(g => new
+                    TempData["Error"] = "No data found for the selected date range";
+                    return RedirectToAction("LoansIssuedPerProduct");
+                }
+
+                // Get loan types with LoanType1 information
+                var loanCodes = loansWithMembers.Select(l => l.LoanCode).Distinct().ToList();
+                var loanTypes = new Dictionary<string, string>();
+                try
                 {
-                    LoanType = g.Key.LoanTypeName,
-                    LoanCode = g.Key.LoanCode,
-                    Loans = g.Select((l, index) => new
+                    loanTypes = await _context.Loantypes
+                        .Where(lt => loanCodes.Contains(lt.LoanCode) && lt.CompanyCode == companyCode)
+                        .ToDictionaryAsync(lt => lt.LoanCode, lt => lt.LoanType1 ?? (lt.LoanCode ?? "Unknown"));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error loading loan types");
+                }
+
+                // Build member names using LoanNo as key
+                var memberNames = loansWithMembers
+                    .GroupBy(l => l.LoanNo)
+                    .Select(g => g.First())
+                    .ToDictionary(
+                        l => l.LoanNo,
+                        l => $"{l.MemberSurname ?? ""} {l.MemberOtherNames ?? ""}".Trim()
+                    );
+
+                // Also create a dictionary for MemberNo to Name
+                var memberNameByMemberNo = loansWithMembers
+                    .GroupBy(l => l.MemberNo)
+                    .Select(g => g.First())
+                    .ToDictionary(
+                        l => l.MemberNo,
+                        l => $"{l.MemberSurname ?? ""} {l.MemberOtherNames ?? ""}".Trim()
+                    );
+
+                // Group by LoanType1 only
+                var groupedData = loansWithMembers
+                    .GroupBy(l => new
                     {
-                        No = index + 1,
-                        l.MemberNo,
-                        l.LoanNo,
-                        Name = memberNames.ContainsKey(l.MemberNo) ? memberNames[l.MemberNo] : "N/A",
-                        l.ApplicDate,
-                        l.AuditTime,
-                        l.RepayPeriod,
-                        l.LoanAmt,
-                        l.Aamount,
-                        l.Interest
-                    }).ToList(),
-                    TotalLoanApplied = g.Sum(x => x.LoanAmt ?? 0),
-                    TotalApprovedAmount = g.Sum(x => x.Aamount ?? x.LoanAmt ?? 0),
-                    Count = g.Count()
-                })
-                .ToList();
+                        LoanCode = l.LoanCode,
+                        LoanTypeName = loanTypes.ContainsKey(l.LoanCode) ? loanTypes[l.LoanCode] : (l.LoanCode ?? "Unknown")
+                    })
+                    .OrderBy(g => g.Key.LoanTypeName)
+                    .Select(g => new
+                    {
+                        LoanType = g.Key.LoanTypeName,
+                        LoanCode = g.Key.LoanCode,
+                        Loans = g.Select((l, index) => new
+                        {
+                            No = index + 1,
+                            l.MemberNo,
+                            l.LoanNo,
+                            Name = memberNameByMemberNo.ContainsKey(l.MemberNo) ? memberNameByMemberNo[l.MemberNo] : "N/A",
+                            l.ApplicDate,
+                            l.AuditTime,
+                            l.RepayPeriod,
+                            l.LoanAmt,
+                            l.Aamount,
+                            l.Interest,
+                            l.Status
+                        }).ToList(),
+                        TotalLoanApplied = g.Sum(x => x.LoanAmt ?? 0),
+                        TotalApprovedAmount = g.Sum(x => x.Aamount ?? x.LoanAmt ?? 0),
+                        Count = g.Count()
+                    })
+                    .ToList();
 
-            using var workbook = new XLWorkbook();
+                using var workbook = new XLWorkbook();
 
-            // Summary Sheet
-            var summarySheet = workbook.Worksheets.Add("Summary by Loan Type");
-            int summaryRow = 1;
+                // Summary Sheet
+                var summarySheet = workbook.Worksheets.Add("Summary by Loan Type");
+                int summaryRow = 1;
 
-            summarySheet.Cell(summaryRow, 1).Value = companyName.ToUpper();
-            summarySheet.Range(summaryRow, 1, summaryRow, 6).Merge();
-            summarySheet.Cell(summaryRow, 1).Style.Font.SetBold().Font.SetFontSize(18);
-            summarySheet.Cell(summaryRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-            summaryRow += 2;
+                summarySheet.Cell(summaryRow, 1).Value = companyName.ToUpper();
+                summarySheet.Range(summaryRow, 1, summaryRow, 7).Merge();
+                summarySheet.Cell(summaryRow, 1).Style.Font.SetBold().Font.SetFontSize(18);
+                summarySheet.Cell(summaryRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                summaryRow += 2;
 
-            summarySheet.Cell(summaryRow, 1).Value = $"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}";
-            summarySheet.Range(summaryRow, 1, summaryRow, 6).Merge();
-            summarySheet.Cell(summaryRow, 1).Style.Font.SetItalic();
-            summaryRow += 2;
+                summarySheet.Cell(summaryRow, 1).Value = $"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}";
+                summarySheet.Range(summaryRow, 1, summaryRow, 7).Merge();
+                summarySheet.Cell(summaryRow, 1).Style.Font.SetItalic();
+                summaryRow += 2;
 
-            summarySheet.Cell(summaryRow, 1).Value = $"LOANS ISSUED PER PRODUCT";
-            summarySheet.Range(summaryRow, 1, summaryRow, 6).Merge();
-            summarySheet.Cell(summaryRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
-            summarySheet.Cell(summaryRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-            summaryRow += 2;
+                summarySheet.Cell(summaryRow, 1).Value = $"LOANS ISSUED PER PRODUCT";
+                summarySheet.Range(summaryRow, 1, summaryRow, 7).Merge();
+                summarySheet.Cell(summaryRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                summarySheet.Cell(summaryRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                summaryRow += 2;
 
-            summarySheet.Cell(summaryRow, 1).Value = $"Period: {startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy}";
-            summarySheet.Range(summaryRow, 1, summaryRow, 6).Merge();
-            summarySheet.Cell(summaryRow, 1).Style.Font.SetBold().Font.SetFontSize(12);
-            summarySheet.Cell(summaryRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-            summaryRow += 2;
+                summarySheet.Cell(summaryRow, 1).Value = $"Period: {startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy}";
+                summarySheet.Range(summaryRow, 1, summaryRow, 7).Merge();
+                summarySheet.Cell(summaryRow, 1).Style.Font.SetBold().Font.SetFontSize(12);
+                summarySheet.Cell(summaryRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                summaryRow += 2;
 
-            string[] summaryHeaders = { "Loan Type", "Loan Code", "Count", "Total Applied (KES)", "Total Approved (KES)" };
-            for (int i = 0; i < summaryHeaders.Length; i++)
-            {
-                summarySheet.Cell(summaryRow, i + 1).Value = summaryHeaders[i];
-                summarySheet.Cell(summaryRow, i + 1).Style.Font.SetBold();
-                summarySheet.Cell(summaryRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
-                summarySheet.Cell(summaryRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-            }
-            summaryRow++;
-
-            foreach (var group in groupedData)
-            {
-                summarySheet.Cell(summaryRow, 1).Value = group.LoanType;
-                summarySheet.Cell(summaryRow, 2).Value = group.LoanCode;
-                summarySheet.Cell(summaryRow, 3).Value = group.Count;
-                summarySheet.Cell(summaryRow, 3).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-                summarySheet.Cell(summaryRow, 4).Value = group.TotalLoanApplied;
-                summarySheet.Cell(summaryRow, 4).Style.NumberFormat.Format = "#,##0.00";
-                summarySheet.Cell(summaryRow, 5).Value = group.TotalApprovedAmount;
-                summarySheet.Cell(summaryRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                string[] summaryHeaders = { "Loan Type", "Loan Code", "Count", "Total Applied (KES)", "Total Approved (KES)", "Status", "Disbursed (KES)" };
+                for (int i = 0; i < summaryHeaders.Length; i++)
+                {
+                    summarySheet.Cell(summaryRow, i + 1).Value = summaryHeaders[i];
+                    summarySheet.Cell(summaryRow, i + 1).Style.Font.SetBold();
+                    summarySheet.Cell(summaryRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                    summarySheet.Cell(summaryRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                }
                 summaryRow++;
-            }
 
-            // Grand Total
-            summaryRow++;
-            summarySheet.Cell(summaryRow, 2).Value = "GRAND TOTAL:";
-            summarySheet.Cell(summaryRow, 2).Style.Font.SetBold();
-            summarySheet.Cell(summaryRow, 2).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-            summarySheet.Cell(summaryRow, 3).Value = groupedData.Sum(g => g.Count);
-            summarySheet.Cell(summaryRow, 3).Style.Font.SetBold();
-            summarySheet.Cell(summaryRow, 4).Value = groupedData.Sum(g => g.TotalLoanApplied);
-            summarySheet.Cell(summaryRow, 4).Style.Font.SetBold();
-            summarySheet.Cell(summaryRow, 4).Style.NumberFormat.Format = "#,##0.00";
-            summarySheet.Cell(summaryRow, 5).Value = groupedData.Sum(g => g.TotalApprovedAmount);
-            summarySheet.Cell(summaryRow, 5).Style.Font.SetBold();
-            summarySheet.Cell(summaryRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                foreach (var group in groupedData)
+                {
+                    int disbursedCount = group.Loans.Count(l => l.Status == (int)Status.Disbursed);
+                    decimal disbursedAmount = group.Loans.Where(l => l.Status == (int)Status.Disbursed).Sum(l => l.Aamount ?? l.LoanAmt ?? 0);
 
-            summarySheet.Columns().AdjustToContents();
+                    summarySheet.Cell(summaryRow, 1).Value = group.LoanType;
+                    summarySheet.Cell(summaryRow, 2).Value = group.LoanCode;
+                    summarySheet.Cell(summaryRow, 3).Value = group.Count;
+                    summarySheet.Cell(summaryRow, 3).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    summarySheet.Cell(summaryRow, 4).Value = group.TotalLoanApplied;
+                    summarySheet.Cell(summaryRow, 4).Style.NumberFormat.Format = "#,##0.00";
+                    summarySheet.Cell(summaryRow, 5).Value = group.TotalApprovedAmount;
+                    summarySheet.Cell(summaryRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                    summarySheet.Cell(summaryRow, 6).Value = $"{disbursedCount}/{group.Count}";
+                    summarySheet.Cell(summaryRow, 6).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    summarySheet.Cell(summaryRow, 7).Value = disbursedAmount;
+                    summarySheet.Cell(summaryRow, 7).Style.NumberFormat.Format = "#,##0.00";
+                    summaryRow++;
+                }
 
-            // Detailed Worksheet - All Loans
-            string[] detailHeaders = { "No.", "MemberNo", "LoanNo", "MemberName", "Applic Date", "Date Issued", "Period", "Loan Applied (KES)", "Approved Amt (KES)", "Interest Rate", "Loan Type" };
+                // Grand Total
+                summaryRow++;
+                summarySheet.Cell(summaryRow, 2).Value = "GRAND TOTAL:";
+                summarySheet.Cell(summaryRow, 2).Style.Font.SetBold();
+                summarySheet.Cell(summaryRow, 2).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
+                summarySheet.Cell(summaryRow, 3).Value = groupedData.Sum(g => g.Count);
+                summarySheet.Cell(summaryRow, 3).Style.Font.SetBold();
+                summarySheet.Cell(summaryRow, 4).Value = groupedData.Sum(g => g.TotalLoanApplied);
+                summarySheet.Cell(summaryRow, 4).Style.Font.SetBold();
+                summarySheet.Cell(summaryRow, 4).Style.NumberFormat.Format = "#,##0.00";
+                summarySheet.Cell(summaryRow, 5).Value = groupedData.Sum(g => g.TotalApprovedAmount);
+                summarySheet.Cell(summaryRow, 5).Style.Font.SetBold();
+                summarySheet.Cell(summaryRow, 5).Style.NumberFormat.Format = "#,##0.00";
+                summarySheet.Cell(summaryRow, 7).Value = groupedData.Sum(g => g.Loans.Where(l => l.Status == (int)Status.Disbursed).Sum(l => l.Aamount ?? l.LoanAmt ?? 0));
+                summarySheet.Cell(summaryRow, 7).Style.Font.SetBold();
+                summarySheet.Cell(summaryRow, 7).Style.NumberFormat.Format = "#,##0.00";
 
-            var detailSheet = workbook.Worksheets.Add("Detailed Loans");
-            int currentRow = 1;
+                summarySheet.Columns().AdjustToContents();
 
-            detailSheet.Cell(currentRow, 1).Value = companyName.ToUpper();
-            detailSheet.Range(currentRow, 1, currentRow, detailHeaders.Length).Merge();
-            detailSheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
-            detailSheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-            currentRow += 2;
+                // Detailed Worksheet - All Loans
+                string[] detailHeaders = { "No.", "MemberNo", "LoanNo", "MemberName", "Applic Date", "Date Issued", "Period", "Loan Applied (KES)", "Approved Amt (KES)", "Interest Rate", "Loan Type", "Status" };
 
-            detailSheet.Cell(currentRow, 1).Value = $"Period: {startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy}";
-            detailSheet.Range(currentRow, 1, currentRow, detailHeaders.Length).Merge();
-            detailSheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-            currentRow += 2;
+                var detailSheet = workbook.Worksheets.Add("Detailed Loans");
+                int currentRow = 1;
 
-            for (int i = 0; i < detailHeaders.Length; i++)
-            {
-                detailSheet.Cell(currentRow, i + 1).Value = detailHeaders[i];
-                detailSheet.Cell(currentRow, i + 1).Style.Font.SetBold();
-                detailSheet.Cell(currentRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
-                detailSheet.Cell(currentRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-                detailSheet.Cell(currentRow, i + 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-            }
-            currentRow++;
-
-            int globalSerialNo = 1;
-            foreach (var group in groupedData)
-            {
-                // Group header row
-                detailSheet.Cell(currentRow, 1).Value = $">>> {group.LoanType} ({group.LoanCode})";
+                detailSheet.Cell(currentRow, 1).Value = companyName.ToUpper();
                 detailSheet.Range(currentRow, 1, currentRow, detailHeaders.Length).Merge();
-                detailSheet.Cell(currentRow, 1).Style.Font.SetBold();
-                detailSheet.Cell(currentRow, 1).Style.Fill.SetBackgroundColor(XLColor.LightYellow);
+                detailSheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                detailSheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                detailSheet.Cell(currentRow, 1).Value = $"Period: {startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy}";
+                detailSheet.Range(currentRow, 1, currentRow, detailHeaders.Length).Merge();
+                detailSheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                for (int i = 0; i < detailHeaders.Length; i++)
+                {
+                    detailSheet.Cell(currentRow, i + 1).Value = detailHeaders[i];
+                    detailSheet.Cell(currentRow, i + 1).Style.Font.SetBold();
+                    detailSheet.Cell(currentRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                    detailSheet.Cell(currentRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    detailSheet.Cell(currentRow, i + 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                }
                 currentRow++;
 
-                foreach (var loan in group.Loans)
+                int globalSerialNo = 1;
+                foreach (var group in groupedData)
                 {
-                    detailSheet.Cell(currentRow, 1).Value = globalSerialNo++;
-                    detailSheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-                    detailSheet.Cell(currentRow, 2).Value = loan.MemberNo;
-                    detailSheet.Cell(currentRow, 3).Value = loan.LoanNo;
-                    detailSheet.Cell(currentRow, 4).Value = loan.Name;
-                    detailSheet.Cell(currentRow, 5).Value = loan.ApplicDate.ToString("dd/MM/yyyy");
-                    detailSheet.Cell(currentRow, 6).Value = loan.AuditTime.ToString("dd/MM/yyyy");
-                    detailSheet.Cell(currentRow, 7).Value = loan.RepayPeriod;
-                    detailSheet.Cell(currentRow, 7).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
-                    detailSheet.Cell(currentRow, 8).Value = loan.LoanAmt;
-                    detailSheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
-                    detailSheet.Cell(currentRow, 8).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-                    detailSheet.Cell(currentRow, 9).Value = loan.Aamount ?? loan.LoanAmt;
-                    detailSheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
-                    detailSheet.Cell(currentRow, 9).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-                    detailSheet.Cell(currentRow, 10).Value = loan.Interest > 0 ? $"{loan.Interest}%" : "";
-                    detailSheet.Cell(currentRow, 11).Value = group.LoanType;
+                    // Group header row
+                    detailSheet.Cell(currentRow, 1).Value = $">>> {group.LoanType} ({group.LoanCode})";
+                    detailSheet.Range(currentRow, 1, currentRow, detailHeaders.Length).Merge();
+                    detailSheet.Cell(currentRow, 1).Style.Font.SetBold();
+                    detailSheet.Cell(currentRow, 1).Style.Fill.SetBackgroundColor(XLColor.LightYellow);
+                    currentRow++;
 
-                    for (int i = 1; i <= detailHeaders.Length; i++)
+                    foreach (var loan in group.Loans)
                     {
-                        detailSheet.Cell(currentRow, i).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        string statusText = GetLoanStatusString(loan.Status);
+
+                        detailSheet.Cell(currentRow, 1).Value = globalSerialNo++;
+                        detailSheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        detailSheet.Cell(currentRow, 2).Value = loan.MemberNo;
+                        detailSheet.Cell(currentRow, 3).Value = loan.LoanNo;
+                        detailSheet.Cell(currentRow, 4).Value = loan.Name;
+                        detailSheet.Cell(currentRow, 5).Value = loan.ApplicDate.ToString("dd/MM/yyyy");
+                        detailSheet.Cell(currentRow, 6).Value = loan.AuditTime.ToString("dd/MM/yyyy") ?? "";
+                        detailSheet.Cell(currentRow, 7).Value = loan.RepayPeriod;
+                        detailSheet.Cell(currentRow, 7).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        detailSheet.Cell(currentRow, 8).Value = loan.LoanAmt ?? 0;
+                        detailSheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                        detailSheet.Cell(currentRow, 9).Value = loan.Aamount ?? loan.LoanAmt ?? 0;
+                        detailSheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
+                        detailSheet.Cell(currentRow, 10).Value = loan.Interest > 0 ? $"{loan.Interest}%" : "";
+                        detailSheet.Cell(currentRow, 11).Value = group.LoanType;
+                        detailSheet.Cell(currentRow, 12).Value = statusText;
+
+                        for (int i = 1; i <= detailHeaders.Length; i++)
+                        {
+                            detailSheet.Cell(currentRow, i).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        }
+                        currentRow++;
                     }
+
+                    // Subtotal row for this loan type
+                    int disbursedCount = group.Loans.Count(l => l.Status == (int)Status.Disbursed);
+                    decimal disbursedAmount = group.Loans.Where(l => l.Status == (int)Status.Disbursed).Sum(l => l.Aamount ?? l.LoanAmt ?? 0);
+
+                    detailSheet.Cell(currentRow, 7).Value = $"{group.LoanType} SUBTOTAL:";
+                    detailSheet.Cell(currentRow, 7).Style.Font.SetBold();
+                    detailSheet.Cell(currentRow, 7).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
+                    detailSheet.Cell(currentRow, 8).Value = group.TotalLoanApplied;
+                    detailSheet.Cell(currentRow, 8).Style.Font.SetBold();
+                    detailSheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                    detailSheet.Cell(currentRow, 9).Value = group.TotalApprovedAmount;
+                    detailSheet.Cell(currentRow, 9).Style.Font.SetBold();
+                    detailSheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
+                    detailSheet.Cell(currentRow, 12).Value = $"Disbursed: {disbursedCount} / {group.Count}";
                     currentRow++;
                 }
 
-                // Subtotal row for this loan type
-                detailSheet.Cell(currentRow, 7).Value = $"{group.LoanType} SUBTOTAL:";
+                // Grand Total
+                currentRow++;
+                detailSheet.Cell(currentRow, 7).Value = "GRAND TOTAL:";
                 detailSheet.Cell(currentRow, 7).Style.Font.SetBold();
                 detailSheet.Cell(currentRow, 7).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-                detailSheet.Cell(currentRow, 8).Value = group.TotalLoanApplied;
+                detailSheet.Cell(currentRow, 8).Value = groupedData.Sum(g => g.TotalLoanApplied);
                 detailSheet.Cell(currentRow, 8).Style.Font.SetBold();
                 detailSheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
-                detailSheet.Cell(currentRow, 8).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-                detailSheet.Cell(currentRow, 9).Value = group.TotalApprovedAmount;
+                detailSheet.Cell(currentRow, 9).Value = groupedData.Sum(g => g.TotalApprovedAmount);
                 detailSheet.Cell(currentRow, 9).Style.Font.SetBold();
                 detailSheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
-                detailSheet.Cell(currentRow, 9).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-                currentRow++;
+
+                detailSheet.Columns().AdjustToContents();
+
+                using var stream = new MemoryStream();
+                workbook.SaveAs(stream);
+                return File(stream.ToArray(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"LoansIssuedPerProduct_{startDate:yyyyMMdd}_{endDate:yyyyMMdd}.xlsx");
             }
-
-            // Grand Total
-            currentRow++;
-            detailSheet.Cell(currentRow, 7).Value = "GRAND TOTAL:";
-            detailSheet.Cell(currentRow, 7).Style.Font.SetBold();
-            detailSheet.Cell(currentRow, 7).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-            detailSheet.Cell(currentRow, 8).Value = groupedData.Sum(g => g.TotalLoanApplied);
-            detailSheet.Cell(currentRow, 8).Style.Font.SetBold();
-            detailSheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
-            detailSheet.Cell(currentRow, 8).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-            detailSheet.Cell(currentRow, 9).Value = groupedData.Sum(g => g.TotalApprovedAmount);
-            detailSheet.Cell(currentRow, 9).Style.Font.SetBold();
-            detailSheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
-            detailSheet.Cell(currentRow, 9).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
-
-            detailSheet.Columns().AdjustToContents();
-
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            return File(stream.ToArray(),
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                $"LoansIssuedPerProduct_{startDate:yyyyMMdd}_{endDate:yyyyMMdd}.xlsx");
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting Loans Issued Per Product to Excel");
+                TempData["ErrorMessage"] = "Error exporting to Excel: " + ex.Message;
+                return RedirectToAction("LoansIssuedPerProduct");
+            }
         }
 
         [HttpPost]
         public async Task<IActionResult> ExportLoansIssuedPerProductToPdf(DateTime startDate, DateTime endDate)
         {
-            var companyCode = User.FindFirstValue("CompanyCode");
-            var companyName = User.FindFirstValue("CompanyName") ?? "";
-            var printedBy = User.Identity?.Name ?? "System";
-            DateTime endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
-
-            // Get loans with member data
-            var loansWithMembers = await (from loan in _context.Loans
-                                          join member in _context.Members
-                                              on loan.MemberNo equals member.MemberNo
-                                          where loan.CompanyCode == companyCode
-                                              && loan.AuditTime >= startDate
-                                              && loan.AuditTime <= endDateAdjusted
-                                              && loan.Status == (int)Status.Disbursed
-                                          select new
-                                          {
-                                              loan.MemberNo,
-                                              loan.LoanNo,
-                                              loan.LoanCode,
-                                              loan.ApplicDate,
-                                              loan.AuditTime,
-                                              loan.RepayPeriod,
-                                              loan.LoanAmt,
-                                              loan.Aamount,
-                                              loan.Interest,
-                                              MemberSurname = member.Surname,
-                                              MemberOtherNames = member.OtherNames
-                                          }).ToListAsync();
-
-            if (!loansWithMembers.Any())
+            try
             {
-                TempData["Error"] = "No data found for the selected date range";
-                return RedirectToAction("LoansIssuedPerProduct");
-            }
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+                DateTime endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
 
-            // Get loan types with LoanType1 information
-            var loanCodes = loansWithMembers.Select(l => l.LoanCode).Distinct().ToList();
-            var loanTypes = await _context.Loantypes
-                .Where(lt => loanCodes.Contains(lt.LoanCode) && lt.CompanyCode == companyCode)
-                .ToDictionaryAsync(lt => lt.LoanCode, lt => lt.LoanType1 ?? (lt.LoanCode ?? "Unknown"));
+                // Get loans with member data
+                var loansWithMembers = await (from loan in _context.Loans
+                                              join member in _context.Members
+                                                  on loan.MemberNo equals member.MemberNo into memberJoin
+                                              from m in memberJoin.DefaultIfEmpty()
+                                              where loan.CompanyCode == companyCode
+                                                  && loan.AuditTime >= startDate
+                                                  && loan.AuditTime <= endDateAdjusted
+                                              select new
+                                              {
+                                                  loan.MemberNo,
+                                                  loan.LoanNo,
+                                                  loan.LoanCode,
+                                                  loan.ApplicDate,
+                                                  loan.AuditTime,
+                                                  loan.RepayPeriod,
+                                                  loan.LoanAmt,
+                                                  loan.Aamount,
+                                                  loan.Interest,
+                                                  loan.Status,
+                                                  MemberSurname = m != null ? m.Surname : null,
+                                                  MemberOtherNames = m != null ? m.OtherNames : null
+                                              }).ToListAsync();
 
-            // Build member names
-            var memberNames = loansWithMembers.ToDictionary(
-                l => l.MemberNo,
-                l => $"{l.MemberSurname ?? ""} {l.MemberOtherNames ?? ""}".Trim()
-            );
-
-            // Group by LoanType1 only
-            var groupedData = loansWithMembers
-                .GroupBy(l => new
+                if (!loansWithMembers.Any())
                 {
-                    LoanCode = l.LoanCode,
-                    LoanTypeName = loanTypes.ContainsKey(l.LoanCode) ? loanTypes[l.LoanCode] : (l.LoanCode ?? "Unknown")
-                })
-                .OrderBy(g => g.Key.LoanTypeName)
-                .Select(g => new
+                    TempData["Error"] = "No data found for the selected date range";
+                    return RedirectToAction("LoansIssuedPerProduct");
+                }
+
+                // Get loan types with LoanType1 information
+                var loanCodes = loansWithMembers.Select(l => l.LoanCode).Distinct().ToList();
+                var loanTypes = new Dictionary<string, string>();
+                try
                 {
-                    LoanType = g.Key.LoanTypeName,
-                    LoanCode = g.Key.LoanCode,
-                    Loans = g.Select((l, index) => new LoanIssuedPerProductReportViewModel
+                    loanTypes = await _context.Loantypes
+                        .Where(lt => loanCodes.Contains(lt.LoanCode) && lt.CompanyCode == companyCode)
+                        .ToDictionaryAsync(lt => lt.LoanCode, lt => lt.LoanType1 ?? (lt.LoanCode ?? "Unknown"));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error loading loan types");
+                }
+
+                // Build member names using LoanNo as key
+                var memberNames = loansWithMembers
+                    .GroupBy(l => l.LoanNo)
+                    .Select(g => g.First())
+                    .ToDictionary(
+                        l => l.LoanNo,
+                        l => $"{l.MemberSurname ?? ""} {l.MemberOtherNames ?? ""}".Trim()
+                    );
+
+                // Also create a dictionary for MemberNo to Name
+                var memberNameByMemberNo = loansWithMembers
+                    .GroupBy(l => l.MemberNo)
+                    .Select(g => g.First())
+                    .ToDictionary(
+                        l => l.MemberNo,
+                        l => $"{l.MemberSurname ?? ""} {l.MemberOtherNames ?? ""}".Trim()
+                    );
+
+                // Group by LoanType1 only
+                var groupedData = loansWithMembers
+                    .GroupBy(l => new
                     {
-                        No = index + 1,
-                        MemberNo = l.MemberNo,
-                        LoanNo = l.LoanNo,
-                        Name = memberNames.ContainsKey(l.MemberNo) ? memberNames[l.MemberNo] : "N/A",
-                        ApplicationDate = l.ApplicDate,
-                        DateIssued = l.AuditTime,
-                        LoanPeriodMonths = l.RepayPeriod ?? 0,
-                        LoanApplied = l.LoanAmt ?? 0,
-                        ApprovedAmount = l.Aamount ?? l.LoanAmt ?? 0,
-                        InterestRate = l.Interest,
+                        LoanCode = l.LoanCode,
+                        LoanTypeName = loanTypes.ContainsKey(l.LoanCode) ? loanTypes[l.LoanCode] : (l.LoanCode ?? "Unknown")
+                    })
+                    .OrderBy(g => g.Key.LoanTypeName)
+                    .Select(g => new
+                    {
                         LoanType = g.Key.LoanTypeName,
-                        LoanCode = g.Key.LoanCode
-                    }).ToList(),
-                    TotalLoanApplied = g.Sum(x => x.LoanAmt ?? 0),
-                    TotalApprovedAmount = g.Sum(x => x.Aamount ?? x.LoanAmt ?? 0),
-                    Count = g.Count()
-                })
-                .ToList();
-
-            using var stream = new MemoryStream();
-
-            QuestPDF.Fluent.Document.Create(container =>
-            {
-                container.Page(page =>
-                {
-                    page.Size(PageSizes.A4.Landscape());
-                    page.MarginTop(1.5f, Unit.Centimetre);
-                    page.MarginBottom(1.5f, Unit.Centimetre);
-                    page.MarginLeft(1.2f, Unit.Centimetre);
-                    page.MarginRight(1.2f, Unit.Centimetre);
-                    page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
-
-                    page.Header().Column(header =>
-                    {
-                        header.Item().AlignCenter().Text(companyName.ToUpper()).FontSize(16).Bold();
-                        header.Item().AlignCenter().Text($"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}").FontSize(9).Italic();
-                        header.Item().PaddingTop(0.5f, Unit.Centimetre);
-                        header.Item().AlignCenter().Text($"LOANS ISSUED PER PRODUCT").FontSize(12).Bold();
-                        header.Item().AlignCenter().Text($"Period: {startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy}").FontSize(10);
-                        header.Item().PaddingTop(0.3f, Unit.Centimetre).LineHorizontal(0.5f);
-                        header.Item().PaddingBottom(0.5f, Unit.Centimetre);
-                    });
-
-                    page.Content().Column(contentCol =>
-                    {
-                        // Summary Table by Loan Type
-                        contentCol.Item().Table(summaryTable =>
+                        LoanCode = g.Key.LoanCode,
+                        Loans = g.Select((l, index) => new LoanIssuedPerProductReportViewModel
                         {
-                            summaryTable.ColumnsDefinition(cols =>
-                            {
-                                cols.RelativeColumn(1.5f);
-                                cols.RelativeColumn(1.0f);
-                                cols.RelativeColumn(0.6f);
-                                cols.RelativeColumn(1.2f);
-                                cols.RelativeColumn(1.2f);
-                            });
+                            No = index + 1,
+                            MemberNo = l.MemberNo,
+                            LoanNo = l.LoanNo,
+                            Name = memberNameByMemberNo.ContainsKey(l.MemberNo) ? memberNameByMemberNo[l.MemberNo] : "N/A",
+                            ApplicationDate = l.ApplicDate,
+                            DateIssued = l.AuditTime,
+                            LoanPeriodMonths = l.RepayPeriod ?? 0,
+                            LoanApplied = l.LoanAmt ?? 0,
+                            ApprovedAmount = l.Aamount ?? l.LoanAmt ?? 0,
+                            InterestRate = l.Interest,
+                            LoanType = g.Key.LoanTypeName,
+                            LoanCode = g.Key.LoanCode,
+                            Status = GetLoanStatusString(l.Status)
+                        }).ToList(),
+                        TotalLoanApplied = g.Sum(x => x.LoanAmt ?? 0),
+                        TotalApprovedAmount = g.Sum(x => x.Aamount ?? x.LoanAmt ?? 0),
+                        Count = g.Count()
+                    })
+                    .ToList();
 
-                            summaryTable.Header(header =>
-                            {
-                                header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Loan Type").Bold().FontSize(8);
-                                header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Code").Bold().FontSize(8);
-                                header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Count").Bold().FontSize(8);
-                                header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Total Applied").Bold().FontSize(8);
-                                header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Total Approved").Bold().FontSize(8);
-                            });
+                using var stream = new MemoryStream();
 
-                            foreach (var group in groupedData)
-                            {
-                                summaryTable.Cell().Border(0.2f).Padding(4).Text(group.LoanType).FontSize(8);
-                                summaryTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(group.LoanCode).FontSize(8);
-                                summaryTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(group.Count.ToString()).FontSize(8);
-                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{group.TotalLoanApplied:N0}").FontSize(8);
-                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{group.TotalApprovedAmount:N0}").FontSize(8);
-                            }
+                QuestPDF.Fluent.Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(PageSizes.A4.Landscape());
+                        page.MarginTop(1.5f, Unit.Centimetre);
+                        page.MarginBottom(1.5f, Unit.Centimetre);
+                        page.MarginLeft(1.2f, Unit.Centimetre);
+                        page.MarginRight(1.2f, Unit.Centimetre);
+                        page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
 
-                            // Grand Total
-                            summaryTable.Cell().ColumnSpan(2).Border(0.2f).Background("#d0d0d0").Padding(4).AlignRight().Text("GRAND TOTAL:").Bold().FontSize(9);
-                            summaryTable.Cell().Border(0.2f).Background("#d0d0d0").Padding(4).AlignCenter().Text(groupedData.Sum(g => g.Count).ToString()).Bold().FontSize(9);
-                            summaryTable.Cell().Border(0.2f).Background("#d0d0d0").Padding(4).AlignRight().Text($"{groupedData.Sum(g => g.TotalLoanApplied):N0}").Bold().FontSize(9);
-                            summaryTable.Cell().Border(0.2f).Background("#d0d0d0").Padding(4).AlignRight().Text($"{groupedData.Sum(g => g.TotalApprovedAmount):N0}").Bold().FontSize(9);
+                        page.Header().Column(header =>
+                        {
+                            header.Item().AlignCenter().Text(companyName.ToUpper()).FontSize(16).Bold();
+                            header.Item().AlignCenter().Text($"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}").FontSize(9).Italic();
+                            header.Item().PaddingTop(0.5f, Unit.Centimetre);
+                            header.Item().AlignCenter().Text($"LOANS ISSUED PER PRODUCT").FontSize(12).Bold();
+                            header.Item().AlignCenter().Text($"Period: {startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy}").FontSize(10);
+                            header.Item().PaddingTop(0.3f, Unit.Centimetre).LineHorizontal(0.5f);
+                            header.Item().PaddingBottom(0.5f, Unit.Centimetre);
                         });
 
-                        // Detailed tables by Loan Type
-                        foreach (var group in groupedData)
+                        page.Content().Column(contentCol =>
                         {
-                            contentCol.Item().PaddingTop(1, Unit.Centimetre);
-                            contentCol.Item().Text($"{group.LoanType} ({group.LoanCode})").FontSize(11).Bold();
-
-                            contentCol.Item().Table(detailTable =>
+                            // Summary Table by Loan Type
+                            contentCol.Item().Table(summaryTable =>
                             {
-                                detailTable.ColumnsDefinition(cols =>
+                                summaryTable.ColumnsDefinition(cols =>
                                 {
-                                    cols.RelativeColumn(0.4f);
+                                    cols.RelativeColumn(1.5f);
                                     cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(0.6f);
                                     cols.RelativeColumn(1.2f);
-                                    cols.RelativeColumn(1.6f);
-                                    cols.RelativeColumn(0.9f);
-                                    cols.RelativeColumn(0.9f);
-                                    cols.RelativeColumn(0.5f);
-                                    cols.RelativeColumn(1.0f);
-                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.2f);
                                 });
 
-                                detailTable.Header(header =>
+                                summaryTable.Header(header =>
                                 {
-                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("No").Bold().FontSize(8);
-                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("MemberNo").Bold().FontSize(8);
-                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("LoanNo").Bold().FontSize(8);
-                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Name").Bold().FontSize(8);
-                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Applic Date").Bold().FontSize(8);
-                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Date Issued").Bold().FontSize(8);
-                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Period").Bold().FontSize(8);
-                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Applied (KES)").Bold().FontSize(8);
-                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Approved (KES)").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Loan Type").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Code").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Count").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Total Applied").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Total Approved").Bold().FontSize(8);
                                 });
 
-                                int seqNo = 1;
-                                foreach (var loan in group.Loans)
+                                foreach (var group in groupedData)
                                 {
-                                    detailTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text((seqNo++).ToString()).FontSize(7);
-                                    detailTable.Cell().Border(0.2f).Padding(4).Text(loan.MemberNo ?? "").FontSize(7);
-                                    detailTable.Cell().Border(0.2f).Padding(4).Text(loan.LoanNo ?? "").FontSize(7);
-                                    detailTable.Cell().Border(0.2f).Padding(4).Text(loan.Name ?? "").FontSize(7);
-                                    detailTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.ApplicationDate?.ToString("dd/MM/yyyy") ?? "").FontSize(7);
-                                    detailTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.DateIssued?.ToString("dd/MM/yyyy") ?? "").FontSize(7);
-                                    detailTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.LoanPeriodMonths.ToString()).FontSize(7);
-                                    detailTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.LoanApplied:N0}").FontSize(7);
-                                    detailTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.ApprovedAmount:N0}").FontSize(7);
+                                    summaryTable.Cell().Border(0.2f).Padding(4).Text(group.LoanType).FontSize(8);
+                                    summaryTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(group.LoanCode).FontSize(8);
+                                    summaryTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(group.Count.ToString()).FontSize(8);
+                                    summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{group.TotalLoanApplied:N0}").FontSize(8);
+                                    summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{group.TotalApprovedAmount:N0}").FontSize(8);
                                 }
 
-                                detailTable.Cell().ColumnSpan(7).Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text("TOTAL:").Bold().FontSize(8);
-                                detailTable.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{group.TotalLoanApplied:N0}").Bold().FontSize(8);
-                                detailTable.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{group.TotalApprovedAmount:N0}").Bold().FontSize(8);
+                                // Grand Total
+                                summaryTable.Cell().ColumnSpan(2).Border(0.2f).Background("#d0d0d0").Padding(4).AlignRight().Text("GRAND TOTAL:").Bold().FontSize(9);
+                                summaryTable.Cell().Border(0.2f).Background("#d0d0d0").Padding(4).AlignCenter().Text(groupedData.Sum(g => g.Count).ToString()).Bold().FontSize(9);
+                                summaryTable.Cell().Border(0.2f).Background("#d0d0d0").Padding(4).AlignRight().Text($"{groupedData.Sum(g => g.TotalLoanApplied):N0}").Bold().FontSize(9);
+                                summaryTable.Cell().Border(0.2f).Background("#d0d0d0").Padding(4).AlignRight().Text($"{groupedData.Sum(g => g.TotalApprovedAmount):N0}").Bold().FontSize(9);
                             });
-                        }
-                    });
 
-                    page.Footer()
-                        .AlignCenter()
-                        .Text(x =>
-                        {
-                            x.DefaultTextStyle(t => t.FontSize(8));
-                            x.Span("Page ");
-                            x.CurrentPageNumber();
-                            x.Span(" of ");
-                            x.TotalPages();
-                            x.Span($" | Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+                            // Detailed tables by Loan Type
+                            foreach (var group in groupedData)
+                            {
+                                contentCol.Item().PaddingTop(1, Unit.Centimetre);
+                                contentCol.Item().Text($"{group.LoanType} ({group.LoanCode})").FontSize(11).Bold();
+
+                                contentCol.Item().Table(detailTable =>
+                                {
+                                    detailTable.ColumnsDefinition(cols =>
+                                    {
+                                        cols.RelativeColumn(0.4f);
+                                        cols.RelativeColumn(1.0f);
+                                        cols.RelativeColumn(1.2f);
+                                        cols.RelativeColumn(1.6f);
+                                        cols.RelativeColumn(0.9f);
+                                        cols.RelativeColumn(0.9f);
+                                        cols.RelativeColumn(0.5f);
+                                        cols.RelativeColumn(1.0f);
+                                        cols.RelativeColumn(1.0f);
+                                    });
+
+                                    detailTable.Header(header =>
+                                    {
+                                        header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("No").Bold().FontSize(8);
+                                        header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("MemberNo").Bold().FontSize(8);
+                                        header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("LoanNo").Bold().FontSize(8);
+                                        header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Name").Bold().FontSize(8);
+                                        header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Applic Date").Bold().FontSize(8);
+                                        header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Date Issued").Bold().FontSize(8);
+                                        header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Period").Bold().FontSize(8);
+                                        header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Applied (KES)").Bold().FontSize(8);
+                                        header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Approved (KES)").Bold().FontSize(8);
+                                    });
+
+                                    int seqNo = 1;
+                                    foreach (var loan in group.Loans)
+                                    {
+                                        detailTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text((seqNo++).ToString()).FontSize(7);
+                                        detailTable.Cell().Border(0.2f).Padding(4).Text(loan.MemberNo ?? "").FontSize(7);
+                                        detailTable.Cell().Border(0.2f).Padding(4).Text(loan.LoanNo ?? "").FontSize(7);
+                                        detailTable.Cell().Border(0.2f).Padding(4).Text(loan.Name ?? "").FontSize(7);
+                                        detailTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.ApplicationDate?.ToString("dd/MM/yyyy") ?? "").FontSize(7);
+                                        detailTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.DateIssued?.ToString("dd/MM/yyyy") ?? "").FontSize(7);
+                                        detailTable.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.LoanPeriodMonths.ToString()).FontSize(7);
+                                        detailTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.LoanApplied:N0}").FontSize(7);
+                                        detailTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.ApprovedAmount:N0}").FontSize(7);
+                                    }
+
+                                    detailTable.Cell().ColumnSpan(7).Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text("TOTAL:").Bold().FontSize(8);
+                                    detailTable.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{group.TotalLoanApplied:N0}").Bold().FontSize(8);
+                                    detailTable.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{group.TotalApprovedAmount:N0}").Bold().FontSize(8);
+                                });
+                            }
                         });
-                });
-            }).GeneratePdf(stream);
 
-            var content = stream.ToArray();
-            return File(content, "application/pdf", $"LoansIssuedPerProduct_{startDate:yyyyMMdd}_{endDate:yyyyMMdd}.pdf");
+                        page.Footer()
+                            .AlignCenter()
+                            .Text(x =>
+                            {
+                                x.DefaultTextStyle(t => t.FontSize(8));
+                                x.Span("Page ");
+                                x.CurrentPageNumber();
+                                x.Span(" of ");
+                                x.TotalPages();
+                                x.Span($" | Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+                            });
+                    });
+                }).GeneratePdf(stream);
+
+                var content = stream.ToArray();
+                return File(content, "application/pdf", $"LoansIssuedPerProduct_{startDate:yyyyMMdd}_{endDate:yyyyMMdd}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting Loans Issued Per Product to PDF");
+                TempData["ErrorMessage"] = "Error exporting to PDF: " + ex.Message;
+                return RedirectToAction("LoansIssuedPerProduct");
+            }
         }
+
 
         #endregion
 
@@ -3783,74 +3922,23 @@ namespace SACCOBlockChainSystem.Controllers
 
 
         #region Loan Appraisal Report
-
         [HttpGet]
         public IActionResult LoanAppraisalReport()
         {
-            ViewBag.StartDate = DateTime.Now.AddMonths(-1);
-            ViewBag.EndDate = DateTime.Now;
-            ViewBag.HasData = false;
-
-            var viewModel = new LoanAppraisalIndexViewModel
+            try
             {
-                Appraisals = new List<LoanAppraisalReportViewModel>(),
-                StartDate = DateTime.Now.AddMonths(-1),
-                EndDate = DateTime.Now,
-                HasData = false,
-                CompanyName = User.FindFirstValue("CompanyName") ?? "",
-                PrintedBy = User.Identity?.Name ?? "System",
-                GeneratedOn = DateTime.Now,
-                TotalAmountRecommended = 0,
-                TotalAppraisals = 0,
-                ApprovedCount = 0,
-                DeclinedCount = 0
-            };
+                ViewBag.StartDate = DateTime.Now.AddMonths(-1);
+                ViewBag.EndDate = DateTime.Now;
+                ViewBag.HasData = false;
 
-            return View("~/Views/Reports/LoanAppraisalReport.cshtml", viewModel);
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> LoanAppraisalReport(DateTime startDate, DateTime endDate)
-        {
-            var companyCode = User.FindFirstValue("CompanyCode");
-            var companyName = User.FindFirstValue("CompanyName") ?? "";
-            var printedBy = User.Identity?.Name ?? "System";
-
-            // Adjust end date to include the entire day
-            var endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
-
-            // Get appraisals with member and loan data using proper JOINs
-            var appraisalsWithDetails = await (from appraisal in _context.Appraisal
-                                               join member in _context.Members
-                                                   on appraisal.MemberNo equals member.MemberNo
-                                               join loan in _context.Loans
-                                                   on appraisal.LoanNo equals loan.LoanNo
-                                               where appraisal.CompanyCode == companyCode
-                                                   && appraisal.AppraisDate >= startDate
-                                                   && appraisal.AppraisDate <= endDateAdjusted
-                                               select new
-                                               {
-                                                   appraisal.LoanNo,
-                                                   appraisal.MemberNo,
-                                                   appraisal.AmtRecommended,
-                                                   appraisal.AppraisDate,
-                                                   loan.ApplicDate,
-                                                   LoanStatus = loan.Status,  // Use loan.Status directly, not as a type
-                                                   MemberSurname = member.Surname,
-                                                   MemberOtherNames = member.OtherNames,
-                                                   MemberIdNo = member.Idno
-                                               }).ToListAsync();
-
-            if (!appraisalsWithDetails.Any())
-            {
-                var emptyViewModel = new LoanAppraisalIndexViewModel
+                var viewModel = new LoanAppraisalIndexViewModel
                 {
                     Appraisals = new List<LoanAppraisalReportViewModel>(),
-                    StartDate = startDate,
-                    EndDate = endDate,
+                    StartDate = DateTime.Now.AddMonths(-1),
+                    EndDate = DateTime.Now,
                     HasData = false,
-                    CompanyName = companyName,
-                    PrintedBy = printedBy,
+                    CompanyName = User.FindFirstValue("CompanyName") ?? "",
+                    PrintedBy = User.Identity?.Name ?? "System",
                     GeneratedOn = DateTime.Now,
                     TotalAmountRecommended = 0,
                     TotalAppraisals = 0,
@@ -3858,83 +3946,377 @@ namespace SACCOBlockChainSystem.Controllers
                     DeclinedCount = 0
                 };
 
+                return View("~/Views/Reports/LoanAppraisalReport.cshtml", viewModel);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in LoanAppraisalReport GET: {ex.Message}");
+                TempData["ErrorMessage"] = "Error loading report: " + ex.Message;
+
+                var viewModel = new LoanAppraisalIndexViewModel
+                {
+                    Appraisals = new List<LoanAppraisalReportViewModel>(),
+                    StartDate = DateTime.Now.AddMonths(-1),
+                    EndDate = DateTime.Now,
+                    HasData = false,
+                    CompanyName = User.FindFirstValue("CompanyName") ?? "",
+                    PrintedBy = User.Identity?.Name ?? "System",
+                    GeneratedOn = DateTime.Now
+                };
+
+                return View("~/Views/Reports/LoanAppraisalReport.cshtml", viewModel);
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> LoanAppraisalReport(DateTime startDate, DateTime endDate)
+        {
+            try
+            {
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+
+                // Validate dates
+                if (startDate > endDate)
+                {
+                    TempData["ErrorMessage"] = "Start date cannot be greater than end date.";
+                    return RedirectToAction("LoanAppraisalReport");
+                }
+
+                // Adjust end date to include the entire day
+                var endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
+
+                // Log the query parameters
+                Console.WriteLine($"CompanyCode: {companyCode}, StartDate: {startDate}, EndDate: {endDateAdjusted}");
+
+                // Get appraisals with member and loan data using proper JOINs
+                var appraisalsQuery = from appraisal in _context.Appraisal
+                                      join member in _context.Members
+                                          on appraisal.MemberNo equals member.MemberNo into memberJoin
+                                      from m in memberJoin.DefaultIfEmpty()
+                                      join loan in _context.Loans
+                                          on appraisal.LoanNo equals loan.LoanNo into loanJoin
+                                      from l in loanJoin.DefaultIfEmpty()
+                                      where appraisal.CompanyCode == companyCode
+                                          && appraisal.AppraisDate >= startDate
+                                          && appraisal.AppraisDate <= endDateAdjusted
+                                      select new
+                                      {
+                                          appraisal.LoanNo,
+                                          appraisal.MemberNo,
+                                          appraisal.AmtRecommended,
+                                          appraisal.AppraisDate,
+                                          ApplicDate = l != null ? l.ApplicDate : (DateTime?)null,
+                                          LoanStatus = l != null ? l.Status : (int?)null,
+                                          LoanPosted = l != null ? l.Posted : null,
+                                          MemberSurname = m != null ? m.Surname : null,
+                                          MemberOtherNames = m != null ? m.OtherNames : null,
+                                          MemberIdNo = m != null ? m.Idno : null,
+                                          MemberDob = m != null ? m.Dob : null
+                                      };
+
+                var appraisalsWithDetails = await appraisalsQuery.ToListAsync();
+
+                // Log the count of appraisals found
+                Console.WriteLine($"Found {appraisalsWithDetails.Count} appraisals");
+
+                // Create empty view model if no data
+                if (!appraisalsWithDetails.Any())
+                {
+                    var emptyViewModel = new LoanAppraisalIndexViewModel
+                    {
+                        Appraisals = new List<LoanAppraisalReportViewModel>(),
+                        StartDate = startDate,
+                        EndDate = endDate,
+                        HasData = false,
+                        CompanyName = companyName,
+                        PrintedBy = printedBy,
+                        GeneratedOn = DateTime.Now,
+                        TotalAmountRecommended = 0,
+                        TotalAppraisals = 0,
+                        ApprovedCount = 0,
+                        DeclinedCount = 0
+                    };
+
+                    ViewBag.StartDate = startDate;
+                    ViewBag.EndDate = endDate;
+                    ViewBag.HasData = false;
+                    TempData["InfoMessage"] = "No appraisals found for the selected date range.";
+
+                    return View("~/Views/Reports/LoanAppraisalReport.cshtml", emptyViewModel);
+                }
+
+                var appraisalReports = new List<LoanAppraisalReportViewModel>();
+                decimal totalAmountRecommended = 0;
+                int approvedCount = 0;
+                int declinedCount = 0;
+
+                foreach (var item in appraisalsWithDetails)
+                {
+                    try
+                    {
+                        // Build member name from Surname and OtherNames
+                        string fullName = $"{item.MemberSurname ?? ""} {item.MemberOtherNames ?? ""}".Trim();
+                        if (string.IsNullOrWhiteSpace(fullName))
+                        {
+                            fullName = item.MemberNo;
+                        }
+
+                        // Determine status (Approved or Declined based on loan status)
+                        string status = GetLoanStatusString(item.LoanStatus, item.LoanPosted);
+
+                        // Count approved and declined
+                        if (item.LoanStatus == 4 || item.LoanStatus == 5 || item.LoanStatus == 6)
+                        {
+                            approvedCount++;
+                        }
+                        else if (item.LoanStatus == 10)
+                        {
+                            declinedCount++;
+                        }
+
+                        // Log for debugging
+                        Console.WriteLine($"Appraisal {item.LoanNo}: Status={item.LoanStatus}, Posted={item.LoanPosted}, StatusString={status}");
+
+                        appraisalReports.Add(new LoanAppraisalReportViewModel
+                        {
+                            MemberNo = item.MemberNo,
+                            Names = fullName,
+                            LoanNo = item.LoanNo,
+                            IDNo = item.MemberIdNo ?? "-",
+                            AmtRecommended = item.AmtRecommended ?? 0,
+                            AppraisDate = item.AppraisDate,
+                            ApplicDate = item.ApplicDate ?? item.AppraisDate,
+                            Status = status
+                        });
+
+                        totalAmountRecommended += item.AmtRecommended ?? 0;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error processing appraisal {item.LoanNo}: {ex.Message}");
+                    }
+                }
+
+                var viewModel = new LoanAppraisalIndexViewModel
+                {
+                    Appraisals = appraisalReports.OrderByDescending(a => a.AppraisDate).ToList(),
+                    TotalAmountRecommended = totalAmountRecommended,
+                    TotalAppraisals = appraisalReports.Count,
+                    ApprovedCount = approvedCount,
+                    DeclinedCount = declinedCount,
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    HasData = appraisalReports.Any(),
+                    CompanyName = companyName,
+                    PrintedBy = printedBy,
+                    GeneratedOn = DateTime.Now
+                };
+
                 ViewBag.StartDate = startDate;
                 ViewBag.EndDate = endDate;
-                ViewBag.HasData = false;
+                ViewBag.HasData = viewModel.HasData;
+
+                return View("~/Views/Reports/LoanAppraisalReport.cshtml", viewModel);
+            }
+            catch (SqlException ex)
+            {
+                Console.WriteLine($"SQL Error in LoanAppraisalReport: {ex.Message}");
+                TempData["ErrorMessage"] = "Database connection error. Please try again.";
+
+                var emptyViewModel = new LoanAppraisalIndexViewModel
+                {
+                    Appraisals = new List<LoanAppraisalReportViewModel>(),
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    HasData = false,
+                    CompanyName = User.FindFirstValue("CompanyName") ?? "",
+                    PrintedBy = User.Identity?.Name ?? "System",
+                    GeneratedOn = DateTime.Now,
+                    TotalAmountRecommended = 0,
+                    TotalAppraisals = 0,
+                    ApprovedCount = 0,
+                    DeclinedCount = 0
+                };
 
                 return View("~/Views/Reports/LoanAppraisalReport.cshtml", emptyViewModel);
             }
-
-            var appraisalReports = new List<LoanAppraisalReportViewModel>();
-            decimal totalAmountRecommended = 0;
-            int approvedCount = 0;
-            int declinedCount = 0;
-
-            foreach (var item in appraisalsWithDetails)
+            catch (Exception ex)
             {
-                // Build member name from Surname and OtherNames
-                string fullName = $"{item.MemberSurname ?? ""} {item.MemberOtherNames ?? ""}".Trim();
-                if (string.IsNullOrWhiteSpace(fullName))
-                {
-                    fullName = item.MemberNo;
-                }
+                Console.WriteLine($"Error in LoanAppraisalReport: {ex.Message}");
+                TempData["ErrorMessage"] = "Error generating report: " + ex.Message;
 
-                // Determine status (Approved or Declined based on loan status)
-                string status = "Approved";
-                if (item.LoanStatus == (int)Status.Rejected)
+                var emptyViewModel = new LoanAppraisalIndexViewModel
                 {
-                    status = "Declined";
-                    declinedCount++;
-                }
-                else if (item.LoanStatus == (int)Status.Disbursed ||
-                         item.LoanStatus == (int)Status.Approved ||
-                         item.LoanStatus == (int)Status.Endorsed)
-                {
-                    status = "Approved";
-                    approvedCount++;
-                }
-                else
-                {
-                    // Default to the loan status string
-                    status = item.LoanStatus?.ToString() ?? "Pending";
-                }
+                    Appraisals = new List<LoanAppraisalReportViewModel>(),
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    HasData = false,
+                    CompanyName = User.FindFirstValue("CompanyName") ?? "",
+                    PrintedBy = User.Identity?.Name ?? "System",
+                    GeneratedOn = DateTime.Now,
+                    TotalAmountRecommended = 0,
+                    TotalAppraisals = 0,
+                    ApprovedCount = 0,
+                    DeclinedCount = 0
+                };
 
-                appraisalReports.Add(new LoanAppraisalReportViewModel
-                {
-                    MemberNo = item.MemberNo,
-                    Names = fullName,
-                    LoanNo = item.LoanNo,
-                    IDNo = item.MemberIdNo ?? "-",
-                    AmtRecommended = item.AmtRecommended ?? 0,
-                    AppraisDate = item.AppraisDate,
-                    ApplicDate = item.ApplicDate,
-                    Status = status
-                });
-
-                totalAmountRecommended += item.AmtRecommended ?? 0;
+                return View("~/Views/Reports/LoanAppraisalReport.cshtml", emptyViewModel);
             }
-
-            var viewModel = new LoanAppraisalIndexViewModel
-            {
-                Appraisals = appraisalReports.OrderByDescending(a => a.AppraisDate).ToList(),
-                TotalAmountRecommended = totalAmountRecommended,
-                TotalAppraisals = appraisalReports.Count,
-                ApprovedCount = approvedCount,
-                DeclinedCount = declinedCount,
-                StartDate = startDate,
-                EndDate = endDate,
-                HasData = appraisalReports.Any(),
-                CompanyName = companyName,
-                PrintedBy = printedBy,
-                GeneratedOn = DateTime.Now
-            };
-
-            ViewBag.StartDate = startDate;
-            ViewBag.EndDate = endDate;
-            ViewBag.HasData = viewModel.HasData;
-
-            return View("~/Views/Reports/LoanAppraisalReport.cshtml", viewModel);
         }
+
+        //[HttpGet]
+        //public IActionResult LoanAppraisalReport()
+        //{
+        //    ViewBag.StartDate = DateTime.Now.AddMonths(-1);
+        //    ViewBag.EndDate = DateTime.Now;
+        //    ViewBag.HasData = false;
+
+        //    var viewModel = new LoanAppraisalIndexViewModel
+        //    {
+        //        Appraisals = new List<LoanAppraisalReportViewModel>(),
+        //        StartDate = DateTime.Now.AddMonths(-1),
+        //        EndDate = DateTime.Now,
+        //        HasData = false,
+        //        CompanyName = User.FindFirstValue("CompanyName") ?? "",
+        //        PrintedBy = User.Identity?.Name ?? "System",
+        //        GeneratedOn = DateTime.Now,
+        //        TotalAmountRecommended = 0,
+        //        TotalAppraisals = 0,
+        //        ApprovedCount = 0,
+        //        DeclinedCount = 0
+        //    };
+
+        //    return View("~/Views/Reports/LoanAppraisalReport.cshtml", viewModel);
+        //}
+
+        //[HttpPost]
+        //public async Task<IActionResult> LoanAppraisalReport(DateTime startDate, DateTime endDate)
+        //{
+        //    var companyCode = User.FindFirstValue("CompanyCode");
+        //    var companyName = User.FindFirstValue("CompanyName") ?? "";
+        //    var printedBy = User.Identity?.Name ?? "System";
+
+        //    // Adjust end date to include the entire day
+        //    var endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
+
+        //    // Get appraisals with member and loan data using proper JOINs
+        //    var appraisalsWithDetails = await (from appraisal in _context.Appraisal
+        //                                       join member in _context.Members
+        //                                           on appraisal.MemberNo equals member.MemberNo
+        //                                       join loan in _context.Loans
+        //                                           on appraisal.LoanNo equals loan.LoanNo
+        //                                       where appraisal.CompanyCode == companyCode
+        //                                           && appraisal.AppraisDate >= startDate
+        //                                           && appraisal.AppraisDate <= endDateAdjusted
+        //                                       select new
+        //                                       {
+        //                                           appraisal.LoanNo,
+        //                                           appraisal.MemberNo,
+        //                                           appraisal.AmtRecommended,
+        //                                           appraisal.AppraisDate,
+        //                                           loan.ApplicDate,
+        //                                           LoanStatus = loan.Status,  // Use loan.Status directly, not as a type
+        //                                           MemberSurname = member.Surname,
+        //                                           MemberOtherNames = member.OtherNames,
+        //                                           MemberIdNo = member.Idno
+        //                                       }).ToListAsync();
+
+        //    if (!appraisalsWithDetails.Any())
+        //    {
+        //        var emptyViewModel = new LoanAppraisalIndexViewModel
+        //        {
+        //            Appraisals = new List<LoanAppraisalReportViewModel>(),
+        //            StartDate = startDate,
+        //            EndDate = endDate,
+        //            HasData = false,
+        //            CompanyName = companyName,
+        //            PrintedBy = printedBy,
+        //            GeneratedOn = DateTime.Now,
+        //            TotalAmountRecommended = 0,
+        //            TotalAppraisals = 0,
+        //            ApprovedCount = 0,
+        //            DeclinedCount = 0
+        //        };
+
+        //        ViewBag.StartDate = startDate;
+        //        ViewBag.EndDate = endDate;
+        //        ViewBag.HasData = false;
+
+        //        return View("~/Views/Reports/LoanAppraisalReport.cshtml", emptyViewModel);
+        //    }
+
+        //    var appraisalReports = new List<LoanAppraisalReportViewModel>();
+        //    decimal totalAmountRecommended = 0;
+        //    int approvedCount = 0;
+        //    int declinedCount = 0;
+
+        //    foreach (var item in appraisalsWithDetails)
+        //    {
+        //        // Build member name from Surname and OtherNames
+        //        string fullName = $"{item.MemberSurname ?? ""} {item.MemberOtherNames ?? ""}".Trim();
+        //        if (string.IsNullOrWhiteSpace(fullName))
+        //        {
+        //            fullName = item.MemberNo;
+        //        }
+
+        //        // Determine status (Approved or Declined based on loan status)
+        //        string status = "Approved";
+        //        if (item.LoanStatus == (int)Status.Rejected)
+        //        {
+        //            status = "Declined";
+        //            declinedCount++;
+        //        }
+        //        else if (item.LoanStatus == (int)Status.Disbursed ||
+        //                 item.LoanStatus == (int)Status.Approved ||
+        //                 item.LoanStatus == (int)Status.Endorsed)
+        //        {
+        //            status = "Approved";
+        //            approvedCount++;
+        //        }
+        //        else
+        //        {
+        //            // Default to the loan status string
+        //            status = item.LoanStatus?.ToString() ?? "Pending";
+        //        }
+
+        //        appraisalReports.Add(new LoanAppraisalReportViewModel
+        //        {
+        //            MemberNo = item.MemberNo,
+        //            Names = fullName,
+        //            LoanNo = item.LoanNo,
+        //            IDNo = item.MemberIdNo ?? "-",
+        //            AmtRecommended = item.AmtRecommended ?? 0,
+        //            AppraisDate = item.AppraisDate,
+        //            ApplicDate = item.ApplicDate,
+        //            Status = status
+        //        });
+
+        //        totalAmountRecommended += item.AmtRecommended ?? 0;
+        //    }
+
+        //    var viewModel = new LoanAppraisalIndexViewModel
+        //    {
+        //        Appraisals = appraisalReports.OrderByDescending(a => a.AppraisDate).ToList(),
+        //        TotalAmountRecommended = totalAmountRecommended,
+        //        TotalAppraisals = appraisalReports.Count,
+        //        ApprovedCount = approvedCount,
+        //        DeclinedCount = declinedCount,
+        //        StartDate = startDate,
+        //        EndDate = endDate,
+        //        HasData = appraisalReports.Any(),
+        //        CompanyName = companyName,
+        //        PrintedBy = printedBy,
+        //        GeneratedOn = DateTime.Now
+        //    };
+
+        //    ViewBag.StartDate = startDate;
+        //    ViewBag.EndDate = endDate;
+        //    ViewBag.HasData = viewModel.HasData;
+
+        //    return View("~/Views/Reports/LoanAppraisalReport.cshtml", viewModel);
+        //}
 
         [HttpPost]
         public async Task<IActionResult> ExportLoanAppraisalToExcel(DateTime startDate, DateTime endDate)
@@ -4217,80 +4599,20 @@ namespace SACCOBlockChainSystem.Controllers
         [HttpGet]
         public IActionResult LoanApplicationDisbursementReport()
         {
-            ViewBag.StartDate = DateTime.Now.AddMonths(-1);
-            ViewBag.EndDate = DateTime.Now;
-            ViewBag.HasData = false;
-
-            var viewModel = new LoanApplicationDisbursementIndexViewModel
+            try
             {
-                Loans = new List<LoanApplicationDisbursementReportViewModel>(),
-                StartDate = DateTime.Now.AddMonths(-1),
-                EndDate = DateTime.Now,
-                HasData = false,
-                CompanyName = User.FindFirstValue("CompanyName") ?? "",
-                PrintedBy = User.Identity?.Name ?? "System",
-                GeneratedOn = DateTime.Now,
-                TotalLoanApplications = 0,
-                ApprovedCount = 0,
-                DisbursedCount = 0,
-                ApprovedRate = 0,
-                DisbursementRate = 0,
-                TotalAppliedAmount = 0,
-                TotalAppraisedAmount = 0,
-                TotalDisbursedAmount = 0,
-                TotalLoanBalance = 0
-            };
+                ViewBag.StartDate = DateTime.Now.AddMonths(-1);
+                ViewBag.EndDate = DateTime.Now;
+                ViewBag.HasData = false;
 
-            return View("~/Views/Reports/LoanApplicationDisbursementReport.cshtml", viewModel);
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> LoanApplicationDisbursementReport(DateTime startDate, DateTime endDate)
-        {
-            var companyCode = User.FindFirstValue("CompanyCode");
-            var companyName = User.FindFirstValue("CompanyName") ?? "";
-            var printedBy = User.Identity?.Name ?? "System";
-
-            // Adjust end date to include the entire day
-            var endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
-
-            // Get loans with member and appraisal data using proper JOINs
-            var loansWithDetails = await (from loan in _context.Loans
-                                          join member in _context.Members
-                                              on loan.MemberNo equals member.MemberNo
-                                          join loantype in _context.Loantypes
-                                              on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
-                                          from lt in loanTypeJoin.DefaultIfEmpty()
-                                          where loan.CompanyCode == companyCode
-                                              && loan.ApplicDate >= startDate
-                                              && loan.ApplicDate <= endDateAdjusted
-                                          select new
-                                          {
-                                              loan.MemberNo,
-                                              loan.LoanNo,
-                                              loan.LoanCode,
-                                              loan.LoanAmt,
-                                              loan.RepayPeriod,
-                                              loan.ApplicDate,
-                                              loan.Aamount,
-                                              loan.AuditTime,
-                                              loan.Status,
-                                              MemberSurname = member.Surname,
-                                              MemberOtherNames = member.OtherNames,
-                                              MemberDob = member.Dob,
-                                              LoanTypeName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown")
-                                          }).ToListAsync();
-
-            if (!loansWithDetails.Any())
-            {
-                var emptyViewModel = new LoanApplicationDisbursementIndexViewModel
+                var viewModel = new LoanApplicationDisbursementIndexViewModel
                 {
                     Loans = new List<LoanApplicationDisbursementReportViewModel>(),
-                    StartDate = startDate,
-                    EndDate = endDate,
+                    StartDate = DateTime.Now.AddMonths(-1),
+                    EndDate = DateTime.Now,
                     HasData = false,
-                    CompanyName = companyName,
-                    PrintedBy = printedBy,
+                    CompanyName = User.FindFirstValue("CompanyName") ?? "",
+                    PrintedBy = User.Identity?.Name ?? "System",
                     GeneratedOn = DateTime.Now,
                     TotalLoanApplications = 0,
                     ApprovedCount = 0,
@@ -4303,165 +4625,357 @@ namespace SACCOBlockChainSystem.Controllers
                     TotalLoanBalance = 0
                 };
 
+                return View("~/Views/Reports/LoanApplicationDisbursementReport.cshtml", viewModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading Loan Application Disbursement Report GET");
+                TempData["ErrorMessage"] = "Error loading report: " + ex.Message;
+                return View("~/Views/Reports/LoanApplicationDisbursementReport.cshtml",
+                    new LoanApplicationDisbursementIndexViewModel { HasData = false });
+            }
+        }
+        [HttpPost]
+        public async Task<IActionResult> LoanApplicationDisbursementReport(DateTime startDate, DateTime endDate)
+        {
+            try
+            {
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+
+                // Validate dates
+                if (startDate > endDate)
+                {
+                    TempData["ErrorMessage"] = "Start date cannot be greater than end date.";
+                    return RedirectToAction("LoanApplicationDisbursementReport");
+                }
+
+                // Adjust end date to include the entire day
+                var endDateAdjusted = endDate.Date.AddDays(1).AddSeconds(-1);
+
+                // Log the query parameters
+                Console.WriteLine($"CompanyCode: {companyCode}, StartDate: {startDate}, EndDate: {endDateAdjusted}");
+
+                // Get loans with member and loan type data
+                var loansQuery = from loan in _context.Loans
+                                 join member in _context.Members
+                                     on loan.MemberNo equals member.MemberNo into memberJoin
+                                 from m in memberJoin.DefaultIfEmpty()
+                                 join loantype in _context.Loantypes
+                                     on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                 from lt in loanTypeJoin.DefaultIfEmpty()
+                                 where loan.CompanyCode == companyCode
+                                     && loan.ApplicDate >= startDate
+                                     && loan.ApplicDate <= endDateAdjusted
+                                 select new
+                                 {
+                                     loan.MemberNo,
+                                     loan.LoanNo,
+                                     loan.LoanCode,
+                                     loan.LoanAmt,
+                                     loan.RepayPeriod,
+                                     loan.ApplicDate,
+                                     loan.Aamount,
+                                     loan.AuditTime,
+                                     loan.Status,
+                                     loan.Posted,
+                                     MemberSurname = m != null ? m.Surname : null,
+                                     MemberOtherNames = m != null ? m.OtherNames : null,
+                                     MemberDob = m != null ? m.Dob : null,
+                                     LoanTypeName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown")
+                                 };
+
+                var loansWithDetails = await loansQuery.ToListAsync();
+
+                // Log the count of loans found
+                Console.WriteLine($"Found {loansWithDetails.Count} loans");
+
+                // Create empty view model if no data
+                if (!loansWithDetails.Any())
+                {
+                    var emptyViewModel = new LoanApplicationDisbursementIndexViewModel
+                    {
+                        Loans = new List<LoanApplicationDisbursementReportViewModel>(),
+                        StartDate = startDate,
+                        EndDate = endDate,
+                        HasData = false,
+                        CompanyName = companyName,
+                        PrintedBy = printedBy,
+                        GeneratedOn = DateTime.Now,
+                        TotalLoanApplications = 0,
+                        ApprovedCount = 0,
+                        DisbursedCount = 0,
+                        ApprovedRate = 0,
+                        DisbursementRate = 0,
+                        TotalAppliedAmount = 0,
+                        TotalAppraisedAmount = 0,
+                        TotalDisbursedAmount = 0,
+                        TotalLoanBalance = 0
+                    };
+
+                    ViewBag.StartDate = startDate;
+                    ViewBag.EndDate = endDate;
+                    ViewBag.HasData = false;
+                    TempData["InfoMessage"] = "No loans found for the selected date range.";
+
+                    return View("~/Views/Reports/LoanApplicationDisbursementReport.cshtml", emptyViewModel);
+                }
+
+                var loanNos = loansWithDetails.Select(l => l.LoanNo).ToList();
+
+                // Get appraisals
+                var appraisals = new Dictionary<string, (decimal? AmtRecommended, DateTime? AppraisDate, string AuditID)>();
+                try
+                {
+                    appraisals = await _context.Appraisal
+                        .Where(a => loanNos.Contains(a.LoanNo) && a.CompanyCode == companyCode)
+                        .Select(a => new { a.LoanNo, a.AmtRecommended, a.AppraisDate, a.AuditID })
+                        .ToDictionaryAsync(a => a.LoanNo, a => (a.AmtRecommended, a.AppraisDate, a.AuditID));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading appraisals: {ex.Message}");
+                }
+
+                // Get loan balances
+                var loanBalances = new Dictionary<string, decimal>();
+                try
+                {
+                    loanBalances = await _context.Loanbal
+                        .Where(lb => loanNos.Contains(lb.LoanNo) && lb.Companycode == companyCode)
+                        .Select(lb => new { lb.LoanNo, lb.Balance })
+                        .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading loan balances: {ex.Message}");
+                }
+
+                // Get guarantor counts
+                var guarantorCounts = new Dictionary<string, int>();
+                try
+                {
+                    guarantorCounts = await _context.Loanguar
+                        .Where(g => loanNos.Contains(g.LoanNo) && g.CompanyCode == companyCode && g.Transfered == false)
+                        .GroupBy(g => g.LoanNo)
+                        .Select(g => new { LoanNo = g.Key, Count = g.Count() })
+                        .ToDictionaryAsync(g => g.LoanNo, g => g.Count);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading guarantor counts: {ex.Message}");
+                }
+
+                var reportData = new List<LoanApplicationDisbursementReportViewModel>();
+                int approvedCount = 0;
+                int disbursedCount = 0;
+                decimal totalAppliedAmount = 0;
+                decimal totalAppraisedAmount = 0;
+                decimal totalDisbursedAmount = 0;
+                decimal totalLoanBalance = 0;
+
+                foreach (var loan in loansWithDetails)
+                {
+                    try
+                    {
+                        // Get age group
+                        string ageGroup = "N/A";
+                        if (loan.MemberDob.HasValue)
+                        {
+                            int age = DateTime.Today.Year - loan.MemberDob.Value.Year;
+                            if (loan.MemberDob.Value.Date > DateTime.Today.AddYears(-age)) age--;
+
+                            if (age <= 35) ageGroup = "Youth (18-35)";
+                            else if (age <= 50) ageGroup = "Adult (36-50)";
+                            else ageGroup = "Senior (50+)";
+                        }
+
+                        // Get member name
+                        string fullName = $"{loan.MemberSurname ?? ""} {loan.MemberOtherNames ?? ""}".Trim();
+                        if (string.IsNullOrWhiteSpace(fullName)) fullName = loan.MemberNo;
+
+                        // Get appraisal details
+                        decimal? appraisedAmount = null;
+                        DateTime? appraisedDate = null;
+                        string appraisedBy = null;
+
+                        if (appraisals.ContainsKey(loan.LoanNo))
+                        {
+                            var appraisal = appraisals[loan.LoanNo];
+                            appraisedAmount = appraisal.AmtRecommended;
+                            appraisedDate = appraisal.AppraisDate;
+                            appraisedBy = appraisal.AuditID;
+                        }
+
+                        // Get loan balance
+                        decimal loanBalance = 0;
+                        if (loanBalances.ContainsKey(loan.LoanNo))
+                        {
+                            loanBalance = loanBalances[loan.LoanNo];
+                        }
+
+                        // Get guarantor count
+                        int guarantorCount = 0;
+                        if (guarantorCounts.ContainsKey(loan.LoanNo))
+                        {
+                            guarantorCount = guarantorCounts[loan.LoanNo];
+                        }
+
+                        // Determine loan status - FIXED: Use the actual Status enum values
+                        string loanStatus = GetLoanStatusString(loan.Status, loan.Posted);
+
+                        // Log status for debugging
+                        Console.WriteLine($"Loan {loan.LoanNo}: Status={loan.Status}, Posted={loan.Posted}, StatusString={loanStatus}");
+
+                        // Count approved and disbursed - FIXED: Use correct status values
+                        // Status 4 = Approved, 5 = Endorsed, 6 = Disbursed
+                        if (loan.Status == 4 || loan.Status == 5 || loan.Status == 6)
+                        {
+                            approvedCount++;
+                        }
+
+                        if (loan.Status == 6) // Disbursed
+                        {
+                            disbursedCount++;
+                            totalDisbursedAmount += loan.Aamount ?? loan.LoanAmt ?? 0;
+                        }
+
+                        // Get disbursement amount and date
+                        decimal? disbursementAmount = null;
+                        DateTime? disbursementDate = null;
+
+                        if (loan.Status == 6) // Disbursed
+                        {
+                            disbursementAmount = loan.Aamount ?? loan.LoanAmt ?? 0;
+                            disbursementDate = loan.AuditTime;
+                        }
+
+                        totalAppliedAmount += loan.LoanAmt ?? 0;
+                        totalAppraisedAmount += appraisedAmount ?? 0;
+                        totalLoanBalance += loanBalance;
+
+                        reportData.Add(new LoanApplicationDisbursementReportViewModel
+                        {
+                            MemberNo = loan.MemberNo,
+                            Name = fullName,
+                            LoanNo = loan.LoanNo,
+                            AgeGroup = ageGroup,
+                            LoanType = loan.LoanTypeName,
+                            AppliedAmount = loan.LoanAmt ?? 0,
+                            Period = loan.RepayPeriod ?? 0,
+                            ApplyDate = loan.ApplicDate,
+                            AppraisedAmount = appraisedAmount,
+                            AppraisedDate = appraisedDate,
+                            AppraisedBy = appraisedBy,
+                            LoanStatus = loanStatus,
+                            DisbursementAmount = disbursementAmount,
+                            DisbursementDate = disbursementDate,
+                            LoanBalance = loanBalance,
+                            GuarantorCount = guarantorCount
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error processing loan {loan.LoanNo}: {ex.Message}");
+                    }
+                }
+
+                // Calculate rates
+                decimal approvedRate = totalAppliedAmount > 0 ? (totalAppraisedAmount / totalAppliedAmount) * 100 : 0;
+                decimal disbursementRate = totalAppraisedAmount > 0 ? (totalDisbursedAmount / totalAppraisedAmount) * 100 : 0;
+
+                var viewModel = new LoanApplicationDisbursementIndexViewModel
+                {
+                    Loans = reportData.OrderByDescending(l => l.ApplyDate).ToList(),
+                    TotalLoanApplications = reportData.Count,
+                    ApprovedCount = approvedCount,
+                    DisbursedCount = disbursedCount,
+                    ApprovedRate = approvedRate,
+                    DisbursementRate = disbursementRate,
+                    TotalAppliedAmount = totalAppliedAmount,
+                    TotalAppraisedAmount = totalAppraisedAmount,
+                    TotalDisbursedAmount = totalDisbursedAmount,
+                    TotalLoanBalance = totalLoanBalance,
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    HasData = reportData.Any(),
+                    CompanyName = companyName,
+                    PrintedBy = printedBy,
+                    GeneratedOn = DateTime.Now
+                };
+
                 ViewBag.StartDate = startDate;
                 ViewBag.EndDate = endDate;
-                ViewBag.HasData = false;
+                ViewBag.HasData = viewModel.HasData;
+
+                return View("~/Views/Reports/LoanApplicationDisbursementReport.cshtml", viewModel);
+            }
+            catch (SqlException ex)
+            {
+                Console.WriteLine($"SQL Error: {ex.Message}");
+                TempData["ErrorMessage"] = "Database connection error. Please try again.";
+
+                var emptyViewModel = new LoanApplicationDisbursementIndexViewModel
+                {
+                    Loans = new List<LoanApplicationDisbursementReportViewModel>(),
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    HasData = false,
+                    CompanyName = User.FindFirstValue("CompanyName") ?? "",
+                    PrintedBy = User.Identity?.Name ?? "System",
+                    GeneratedOn = DateTime.Now
+                };
 
                 return View("~/Views/Reports/LoanApplicationDisbursementReport.cshtml", emptyViewModel);
             }
-
-            var loanNos = loansWithDetails.Select(l => l.LoanNo).ToList();
-
-            // Get appraisals for each loan
-            var appraisals = await _context.Appraisal
-                .Where(a => loanNos.Contains(a.LoanNo) && a.CompanyCode == companyCode)
-                .ToDictionaryAsync(a => a.LoanNo, a => new { a.AmtRecommended, a.AppraisDate, a.AuditID });
-
-            // Get loan balances
-            var loanBalances = await _context.Loanbal
-                .Where(lb => loanNos.Contains(lb.LoanNo) && lb.Companycode == companyCode)
-                .ToDictionaryAsync(lb => lb.LoanNo, lb => lb.Balance);
-
-            // Get guarantor counts
-            var guarantorCounts = await _context.Loanguar
-                .Where(g => loanNos.Contains(g.LoanNo) && g.CompanyCode == companyCode && g.Transfered == false)
-                .GroupBy(g => g.LoanNo)
-                .Select(g => new { LoanNo = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(g => g.LoanNo, g => g.Count);
-
-            var reportData = new List<LoanApplicationDisbursementReportViewModel>();
-            int approvedCount = 0;
-            int disbursedCount = 0;
-            decimal totalAppliedAmount = 0;
-            decimal totalAppraisedAmount = 0;
-            decimal totalDisbursedAmount = 0;
-            decimal totalLoanBalance = 0;
-
-            foreach (var loan in loansWithDetails)
+            catch (Exception ex)
             {
-                // Get age group
-                string ageGroup = "N/A";
-                if (loan.MemberDob.HasValue)
+                Console.WriteLine($"Error: {ex.Message}");
+                TempData["ErrorMessage"] = "Error generating report: " + ex.Message;
+
+                var emptyViewModel = new LoanApplicationDisbursementIndexViewModel
                 {
-                    int age = DateTime.Today.Year - loan.MemberDob.Value.Year;
-                    if (loan.MemberDob.Value.Date > DateTime.Today.AddYears(-age)) age--;
+                    Loans = new List<LoanApplicationDisbursementReportViewModel>(),
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    HasData = false,
+                    CompanyName = User.FindFirstValue("CompanyName") ?? "",
+                    PrintedBy = User.Identity?.Name ?? "System",
+                    GeneratedOn = DateTime.Now
+                };
 
-                    if (age <= 35) ageGroup = "Youth (18-35)";
-                    else if (age <= 50) ageGroup = "Adult (36-50)";
-                    else ageGroup = "Senior (50+)";
-                }
-
-                // Get member name
-                string fullName = $"{loan.MemberSurname ?? ""} {loan.MemberOtherNames ?? ""}".Trim();
-                if (string.IsNullOrWhiteSpace(fullName)) fullName = loan.MemberNo;
-
-                // Get appraisal details
-                decimal? appraisedAmount = null;
-                DateTime? appraisedDate = null;
-                string appraisedBy = null;
-
-                if (appraisals.ContainsKey(loan.LoanNo))
-                {
-                    var appraisal = appraisals[loan.LoanNo];
-                    appraisedAmount = appraisal.AmtRecommended;
-                    appraisedDate = appraisal.AppraisDate;
-                    appraisedBy = appraisal.AuditID;
-                }
-
-                // Get loan balance
-                decimal loanBalance = 0;
-                if (loanBalances.ContainsKey(loan.LoanNo))
-                {
-                    loanBalance = loanBalances[loan.LoanNo];
-                }
-
-                // Get guarantor count
-                int guarantorCount = 0;
-                if (guarantorCounts.ContainsKey(loan.LoanNo))
-                {
-                    guarantorCount = guarantorCounts[loan.LoanNo];
-                }
-
-                // Determine loan status
-                string loanStatus = GetLoanStatusString(loan.Status);
-
-                // Count approved and disbursed
-                if (loan.Status == (int)Status.Approved || loan.Status == (int)Status.Endorsed || loan.Status == (int)Status.Disbursed)
-                {
-                    approvedCount++;
-                }
-
-                if (loan.Status == (int)Status.Disbursed)
-                {
-                    disbursedCount++;
-                    totalDisbursedAmount += loan.Aamount ?? loan.LoanAmt ?? 0;
-                }
-
-                // Get disbursement amount and date
-                decimal? disbursementAmount = null;
-                DateTime? disbursementDate = null;
-
-                if (loan.Status == (int)Status.Disbursed)
-                {
-                    disbursementAmount = loan.Aamount ?? loan.LoanAmt ?? 0;
-                    disbursementDate = loan.AuditTime;
-                }
-
-                totalAppliedAmount += loan.LoanAmt ?? 0;
-                totalAppraisedAmount += appraisedAmount ?? 0;
-                totalLoanBalance += loanBalance;
-
-                reportData.Add(new LoanApplicationDisbursementReportViewModel
-                {
-                    MemberNo = loan.MemberNo,
-                    Name = fullName,
-                    LoanNo = loan.LoanNo,
-                    AgeGroup = ageGroup,
-                    LoanType = loan.LoanTypeName,
-                    AppliedAmount = loan.LoanAmt ?? 0,
-                    Period = loan.RepayPeriod ?? 0,
-                    ApplyDate = loan.ApplicDate,
-                    AppraisedAmount = appraisedAmount,
-                    AppraisedDate = appraisedDate,
-                    AppraisedBy = appraisedBy,
-                    LoanStatus = loanStatus,
-                    DisbursementAmount = disbursementAmount,
-                    DisbursementDate = disbursementDate,
-                    LoanBalance = loanBalance,
-                    GuarantorCount = guarantorCount
-                });
+                return View("~/Views/Reports/LoanApplicationDisbursementReport.cshtml", emptyViewModel);
             }
-
-            // Calculate rates
-            decimal approvedRate = totalAppliedAmount > 0 ? (totalAppraisedAmount / totalAppliedAmount) * 100 : 0;
-            decimal disbursementRate = totalAppraisedAmount > 0 ? (totalDisbursedAmount / totalAppraisedAmount) * 100 : 0;
-
-            var viewModel = new LoanApplicationDisbursementIndexViewModel
-            {
-                Loans = reportData.OrderByDescending(l => l.ApplyDate).ToList(),
-                TotalLoanApplications = reportData.Count,
-                ApprovedCount = approvedCount,
-                DisbursedCount = disbursedCount,
-                ApprovedRate = approvedRate,
-                DisbursementRate = disbursementRate,
-                TotalAppliedAmount = totalAppliedAmount,
-                TotalAppraisedAmount = totalAppraisedAmount,
-                TotalDisbursedAmount = totalDisbursedAmount,
-                TotalLoanBalance = totalLoanBalance,
-                StartDate = startDate,
-                EndDate = endDate,
-                HasData = reportData.Any(),
-                CompanyName = companyName,
-                PrintedBy = printedBy,
-                GeneratedOn = DateTime.Now
-            };
-
-            ViewBag.StartDate = startDate;
-            ViewBag.EndDate = endDate;
-            ViewBag.HasData = viewModel.HasData;
-
-            return View("~/Views/Reports/LoanApplicationDisbursementReport.cshtml", viewModel);
         }
+
+        // Helper method to get loan status string
+        private string GetLoanStatusString(int? status, string posted = null)
+        {
+            if (status == null) return "Unknown";
+
+            // Check posted status first for pending approval
+            if (posted == "PENDING_APPROVAL" || posted == "PENDING")
+                return "Pending Approval";
+
+            // Use the actual status values
+            return status switch
+            {
+                1 => "Draft",
+                2 => "Submitted",
+                3 => "Under Appraisal",
+                4 => "Approved",
+                5 => "Endorsed",
+                6 => "Disbursed",
+                7 => "Closed",
+                8 => "Defaulted",
+                9 => "Written Off",
+                10 => "Rejected",
+                _ => $"Status {status}"
+            };
+        }
+
+
 
         [HttpPost]
         public async Task<IActionResult> ExportLoanApplicationDisbursementToExcel(DateTime startDate, DateTime endDate)
@@ -5633,7 +6147,7 @@ namespace SACCOBlockChainSystem.Controllers
                                               on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
                                           from lt in loanTypeJoin.DefaultIfEmpty()
                                           where loan.CompanyCode == companyCode
-                                              && (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
+                                              //&& (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
                                               && loan.AuditTime <= asAtDateEnd
                                           select new
                                           {
@@ -6281,7 +6795,7 @@ namespace SACCOBlockChainSystem.Controllers
                                           join loan in _context.Loans on member.MemberNo equals loan.MemberNo into memberLoans
                                           from ml in memberLoans.DefaultIfEmpty()
                                           where member.CompanyCode == companyCode
-                                              && (ml == null || (ml.Status == (int)Status.Disbursed || ml.Status == (int)Status.Endorsed))
+                                              //&& (ml == null || (ml.Status == (int)Status.Disbursed || ml.Status == (int)Status.Endorsed))
                                               && (ml == null || ml.AuditTime <= asAtDateEnd)
                                           select new
                                           {
@@ -14716,6 +15230,1407 @@ namespace SACCOBlockChainSystem.Controllers
             public decimal Credits { get; set; }
             public string AccountNo { get; set; }
         }
+        #endregion
+
+
+        #region Completed Loans Report
+
+        [HttpGet]
+        public IActionResult CompletedLoansReport()
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+            var asAtDate = DateTime.Now;
+
+            var viewModel = new CompletedLoansIndexViewModel
+            {
+                Loans = new List<CompletedLoansReportViewModel>(),
+                AsAtDate = asAtDate,
+                HasData = false,
+                CompanyName = companyName,
+                PrintedBy = User.Identity?.Name ?? "System",
+                GeneratedOn = DateTime.Now,
+                TotalLoans = 0,
+                TotalLoanAmount = 0,
+                TotalWomen = 0,
+                TotalMen = 0,
+                TotalOthers = 0
+            };
+
+            ViewBag.AsAtDate = asAtDate;
+            ViewBag.CompanyName = companyName;
+            ViewBag.HasData = false;
+
+            return View("~/Views/Reports/CompletedLoansReport.cshtml", viewModel);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CompletedLoansReport(DateTime asAtDate)
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+            var printedBy = User.Identity?.Name ?? "System";
+
+            var asAtDateEnd = asAtDate.Date.AddDays(1).AddSeconds(-1);
+
+            // Get completed loans (Status = Closed = 7)
+            var completedLoansQuery = from loan in _context.Loans
+                                      join member in _context.Members
+                                          on loan.MemberNo equals member.MemberNo
+                                      join loantype in _context.Loantypes
+                                          on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                      from lt in loanTypeJoin.DefaultIfEmpty()
+                                      where loan.CompanyCode == companyCode
+                                          && loan.Status == (int)Status.Closed
+                                          && loan.AuditTime <= asAtDateEnd
+                                      select new
+                                      {
+                                          loan.MemberNo,
+                                          loan.LoanNo,
+                                          loan.LoanCode,
+                                          loan.LoanAmt,      // Principal = LoanAmt only
+                                          loan.ApplicDate,
+                                          loan.AuditTime,
+                                          loan.RepayPeriod,
+                                          loan.Interest,
+                                          MemberSurname = member.Surname,
+                                          MemberOtherNames = member.OtherNames,
+                                          MemberFullName = member.FullName,
+                                          MemberSex = member.Sex,
+                                          MemberIdno = member.Idno,
+                                          MemberPhoneNo = member.PhoneNo,
+                                          LoanTypeName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown")
+                                      };
+
+            var completedLoans = await completedLoansQuery.ToListAsync();
+
+            if (!completedLoans.Any())
+            {
+                var emptyViewModel = new CompletedLoansIndexViewModel
+                {
+                    Loans = new List<CompletedLoansReportViewModel>(),
+                    AsAtDate = asAtDate,
+                    HasData = false,
+                    CompanyName = companyName,
+                    PrintedBy = printedBy,
+                    GeneratedOn = DateTime.Now,
+                    TotalLoans = 0,
+                    TotalLoanAmount = 0,
+                    TotalWomen = 0,
+                    TotalMen = 0,
+                    TotalOthers = 0
+                };
+
+                ViewBag.AsAtDate = asAtDate;
+                ViewBag.CompanyName = companyName;
+                ViewBag.HasData = false;
+                ViewBag.Message = "No completed loans found as at the selected date.";
+
+                return View("~/Views/Reports/CompletedLoansReport.cshtml", emptyViewModel);
+            }
+
+            var loanNos = completedLoans.Select(l => l.LoanNo).ToList();
+
+            // Get total repayments for each completed loan
+            var repayments = await _context.Repay
+                .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode)
+                .GroupBy(r => r.LoanNo)
+                .Select(g => new
+                {
+                    LoanNo = g.Key,
+                    TotalPaid = g.Sum(r => r.Amount ?? 0),
+                    TotalPrincipal = g.Sum(r => r.Principal ?? 0),
+                    TotalInterest = g.Sum(r => r.Interest ?? 0),
+                    PaymentCount = g.Count()
+                })
+                .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+            var reportData = new List<CompletedLoansReportViewModel>();
+            decimal totalLoanAmount = 0;
+            int womenCount = 0;
+            int menCount = 0;
+            int othersCount = 0;
+
+            foreach (var loan in completedLoans)
+            {
+                // Build member name
+                string fullName = !string.IsNullOrEmpty(loan.MemberFullName)
+                    ? loan.MemberFullName
+                    : $"{loan.MemberSurname ?? ""} {loan.MemberOtherNames ?? ""}".Trim();
+                if (string.IsNullOrWhiteSpace(fullName)) fullName = loan.MemberNo;
+
+                // Get repayment details
+                decimal totalPaid = 0;
+                decimal totalPrincipal = 0;
+                decimal totalInterest = 0;
+                int paymentCount = 0;
+
+                if (repayments.ContainsKey(loan.LoanNo))
+                {
+                    var repay = repayments[loan.LoanNo];
+                    totalPaid = repay.TotalPaid;
+                    totalPrincipal = repay.TotalPrincipal;
+                    totalInterest = repay.TotalInterest;
+                    paymentCount = repay.PaymentCount;
+                }
+
+                // Determine gender
+                string gender = NormalizeGenderForReport(loan.MemberSex);
+                if (gender == "FEMALE") womenCount++;
+                else if (gender == "MALE") menCount++;
+                else othersCount++;
+
+                // Principal = LoanAmt only (Original Loan Amount)
+                decimal principalAmount = loan.LoanAmt ?? 0;
+                totalLoanAmount += principalAmount;
+
+                // Interest = Total Paid - Principal
+                decimal interestAmount = totalPaid - principalAmount;
+                if (interestAmount < 0) interestAmount = 0;
+
+                reportData.Add(new CompletedLoansReportViewModel
+                {
+                    MemberNo = loan.MemberNo,
+                    Names = fullName,
+                    LoanNo = loan.LoanNo,
+                    LoanType = loan.LoanTypeName,
+                    Gender = gender,
+                    IDNo = loan.MemberIdno ?? "-",
+                    PhoneNo = loan.MemberPhoneNo ?? "-",
+                    PrincipalAmount = principalAmount,        // Using LoanAmt only
+                    TotalPaid = totalPaid,
+                    InterestAmount = interestAmount,           // Interest = Total Paid - Principal
+                    PaymentCount = paymentCount,
+                    DateIssued = loan.AuditTime,
+                    DateCompleted = loan.AuditTime,
+                    RepayPeriod = loan.RepayPeriod ?? 0,
+                    InterestRate = loan.Interest
+                });
+            }
+
+            var viewModel = new CompletedLoansIndexViewModel
+            {
+                Loans = reportData.OrderByDescending(l => l.DateCompleted).ThenBy(l => l.MemberNo).ToList(),
+                TotalLoans = reportData.Count,
+                TotalLoanAmount = totalLoanAmount,
+                TotalWomen = womenCount,
+                TotalMen = menCount,
+                TotalOthers = othersCount,
+                AsAtDate = asAtDate,
+                HasData = reportData.Any(),
+                CompanyName = companyName,
+                PrintedBy = printedBy,
+                GeneratedOn = DateTime.Now
+            };
+
+            ViewBag.AsAtDate = asAtDate;
+            ViewBag.CompanyName = companyName;
+            ViewBag.HasData = viewModel.HasData;
+
+            return View("~/Views/Reports/CompletedLoansReport.cshtml", viewModel);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportCompletedLoansToExcel(DateTime asAtDate)
+        {
+            try
+            {
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+                var asAtDateEnd = asAtDate.Date.AddDays(1).AddSeconds(-1);
+
+                var completedLoans = await (from loan in _context.Loans
+                                            join member in _context.Members
+                                                on loan.MemberNo equals member.MemberNo
+                                            join loantype in _context.Loantypes
+                                                on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                            from lt in loanTypeJoin.DefaultIfEmpty()
+                                            where loan.CompanyCode == companyCode
+                                                && loan.Status == (int)Status.Closed
+                                                && loan.AuditTime <= asAtDateEnd
+                                            select new
+                                            {
+                                                loan.MemberNo,
+                                                loan.LoanNo,
+                                                loan.LoanCode,
+                                                loan.LoanAmt,      // Principal = LoanAmt only
+                                                loan.ApplicDate,
+                                                loan.AuditTime,
+                                                loan.RepayPeriod,
+                                                loan.Interest,
+                                                MemberSurname = member.Surname,
+                                                MemberOtherNames = member.OtherNames,
+                                                MemberFullName = member.FullName,
+                                                MemberSex = member.Sex,
+                                                MemberIdno = member.Idno,
+                                                MemberPhoneNo = member.PhoneNo,
+                                                LoanTypeName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown")
+                                            }).ToListAsync();
+
+                if (!completedLoans.Any())
+                {
+                    TempData["Error"] = "No completed loans found for the selected date";
+                    return RedirectToAction("CompletedLoansReport");
+                }
+
+                var loanNos = completedLoans.Select(l => l.LoanNo).ToList();
+
+                var repayments = await _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode)
+                    .GroupBy(r => r.LoanNo)
+                    .Select(g => new
+                    {
+                        LoanNo = g.Key,
+                        TotalPaid = g.Sum(r => r.Amount ?? 0),
+                        TotalPrincipal = g.Sum(r => r.Principal ?? 0),
+                        TotalInterest = g.Sum(r => r.Interest ?? 0)
+                    })
+                    .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+                using var workbook = new XLWorkbook();
+                var worksheet = workbook.Worksheets.Add("Completed Loans");
+                int currentRow = 1;
+
+                // Header
+                worksheet.Cell(currentRow, 1).Value = companyName.ToUpper();
+                worksheet.Range(currentRow, 1, currentRow, 11).Merge();
+                worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(18);
+                worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                worksheet.Cell(currentRow, 1).Value = $"COMPLETED LOANS REPORT - AS AT {asAtDate:dd/MM/yyyy HH:mm:ss}";
+                worksheet.Range(currentRow, 1, currentRow, 11).Merge();
+                worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                worksheet.Cell(currentRow, 1).Value = $"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}";
+                worksheet.Range(currentRow, 1, currentRow, 11).Merge();
+                worksheet.Cell(currentRow, 1).Style.Font.SetItalic();
+                currentRow += 2;
+
+                // Headers - Updated to show Principal, Interest, and Total Paid
+                string[] headers = { "MemberNo", "Names", "LoanNo", "Loan Type", "Gender", "ID No", "Phone No",
+                     "Principal (Amount Issued)", "Interest", "Total Paid", "Date Issued", "Date Completed" };
+
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    worksheet.Cell(currentRow, i + 1).Value = headers[i];
+                    worksheet.Cell(currentRow, i + 1).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                    worksheet.Cell(currentRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    worksheet.Cell(currentRow, i + 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                }
+                currentRow++;
+
+                decimal totalPrincipalAmount = 0;
+                decimal totalInterestAmount = 0;
+                decimal totalPaidAmount = 0;
+
+                foreach (var loan in completedLoans)
+                {
+                    string fullName = !string.IsNullOrEmpty(loan.MemberFullName)
+                        ? loan.MemberFullName
+                        : $"{loan.MemberSurname ?? ""} {loan.MemberOtherNames ?? ""}".Trim();
+                    if (string.IsNullOrWhiteSpace(fullName)) fullName = loan.MemberNo;
+
+                    decimal totalPaid = 0;
+                    if (repayments.ContainsKey(loan.LoanNo))
+                    {
+                        totalPaid = repayments[loan.LoanNo].TotalPaid;
+                    }
+
+                    // Principal = LoanAmt only
+                    decimal principalAmount = loan.LoanAmt ?? 0;
+
+                    // Interest = Total Paid - Principal
+                    decimal interestAmount = totalPaid - principalAmount;
+                    if (interestAmount < 0) interestAmount = 0;
+
+                    totalPrincipalAmount += principalAmount;
+                    totalInterestAmount += interestAmount;
+                    totalPaidAmount += totalPaid;
+
+                    string gender = NormalizeGenderForReport(loan.MemberSex);
+
+                    worksheet.Cell(currentRow, 1).Value = loan.MemberNo;
+                    worksheet.Cell(currentRow, 2).Value = fullName;
+                    worksheet.Cell(currentRow, 3).Value = loan.LoanNo;
+                    worksheet.Cell(currentRow, 4).Value = loan.LoanTypeName;
+                    worksheet.Cell(currentRow, 5).Value = gender;
+                    worksheet.Cell(currentRow, 6).Value = loan.MemberIdno ?? "-";
+                    worksheet.Cell(currentRow, 7).Value = loan.MemberPhoneNo ?? "-";
+                    worksheet.Cell(currentRow, 8).Value = principalAmount;
+                    worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 9).Value = interestAmount;
+                    worksheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 10).Value = totalPaid;
+                    worksheet.Cell(currentRow, 10).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 11).Value = loan.AuditTime.ToString("dd/MM/yyyy");
+                    worksheet.Cell(currentRow, 12).Value = loan.AuditTime.ToString("dd/MM/yyyy");
+
+                    currentRow++;
+                }
+
+                // Totals row
+                currentRow++;
+                worksheet.Cell(currentRow, 7).Value = "GRAND TOTAL:";
+                worksheet.Cell(currentRow, 7).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 7).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
+                worksheet.Cell(currentRow, 8).Value = totalPrincipalAmount;
+                worksheet.Cell(currentRow, 8).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 9).Value = totalInterestAmount;
+                worksheet.Cell(currentRow, 9).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 10).Value = totalPaidAmount;
+                worksheet.Cell(currentRow, 10).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 10).Style.NumberFormat.Format = "#,##0.00";
+
+                worksheet.Columns().AdjustToContents();
+
+                using var stream = new MemoryStream();
+                workbook.SaveAs(stream);
+                return File(stream.ToArray(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"CompletedLoansReport_{asAtDate:yyyyMMdd}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting Completed Loans to Excel");
+                TempData["ErrorMessage"] = "Error exporting to Excel: " + ex.Message;
+                return RedirectToAction("CompletedLoansReport");
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportCompletedLoansToPdf(DateTime asAtDate)
+        {
+            try
+            {
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+                var asAtDateEnd = asAtDate.Date.AddDays(1).AddSeconds(-1);
+
+                var completedLoans = await (from loan in _context.Loans
+                                            join member in _context.Members
+                                                on loan.MemberNo equals member.MemberNo
+                                            join loantype in _context.Loantypes
+                                                on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                            from lt in loanTypeJoin.DefaultIfEmpty()
+                                            where loan.CompanyCode == companyCode
+                                                && loan.Status == (int)Status.Closed
+                                                && loan.AuditTime <= asAtDateEnd
+                                            select new
+                                            {
+                                                loan.MemberNo,
+                                                loan.LoanNo,
+                                                loan.LoanCode,
+                                                loan.LoanAmt,      // Principal = LoanAmt only
+                                                loan.ApplicDate,
+                                                loan.AuditTime,
+                                                loan.RepayPeriod,
+                                                loan.Interest,
+                                                MemberSurname = member.Surname,
+                                                MemberOtherNames = member.OtherNames,
+                                                MemberFullName = member.FullName,
+                                                MemberSex = member.Sex,
+                                                MemberIdno = member.Idno,
+                                                MemberPhoneNo = member.PhoneNo,
+                                                LoanTypeName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown")
+                                            }).ToListAsync();
+
+                if (!completedLoans.Any())
+                {
+                    TempData["Error"] = "No completed loans found for the selected date";
+                    return RedirectToAction("CompletedLoansReport");
+                }
+
+                var loanNos = completedLoans.Select(l => l.LoanNo).ToList();
+
+                // Get repayments with PaymentCount
+                var repayments = await _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode)
+                    .GroupBy(r => r.LoanNo)
+                    .Select(g => new
+                    {
+                        LoanNo = g.Key,
+                        TotalPaid = g.Sum(r => r.Amount ?? 0),
+                        TotalPrincipal = g.Sum(r => r.Principal ?? 0),
+                        TotalInterest = g.Sum(r => r.Interest ?? 0),
+                        PaymentCount = g.Count()
+                    })
+                    .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+                var reportData = new List<CompletedLoansReportViewModel>();
+                decimal totalPrincipalAmount = 0;
+                decimal totalInterestAmount = 0;
+                decimal totalPaidAmount = 0;
+
+                foreach (var loan in completedLoans)
+                {
+                    string fullName = !string.IsNullOrEmpty(loan.MemberFullName)
+                        ? loan.MemberFullName
+                        : $"{loan.MemberSurname ?? ""} {loan.MemberOtherNames ?? ""}".Trim();
+                    if (string.IsNullOrWhiteSpace(fullName)) fullName = loan.MemberNo;
+
+                    decimal totalPaid = 0;
+                    int paymentCount = 0;
+
+                    if (repayments.ContainsKey(loan.LoanNo))
+                    {
+                        var repay = repayments[loan.LoanNo];
+                        totalPaid = repay.TotalPaid;
+                        paymentCount = repay.PaymentCount;
+                    }
+
+                    // Principal = LoanAmt only
+                    decimal principalAmount = loan.LoanAmt ?? 0;
+
+                    // Interest = Total Paid - Principal
+                    decimal interestAmount = totalPaid - principalAmount;
+                    if (interestAmount < 0) interestAmount = 0;
+
+                    totalPrincipalAmount += principalAmount;
+                    totalInterestAmount += interestAmount;
+                    totalPaidAmount += totalPaid;
+
+                    string gender = NormalizeGenderForReport(loan.MemberSex);
+
+                    reportData.Add(new CompletedLoansReportViewModel
+                    {
+                        MemberNo = loan.MemberNo,
+                        Names = fullName,
+                        LoanNo = loan.LoanNo,
+                        LoanType = loan.LoanTypeName,
+                        Gender = gender,
+                        IDNo = loan.MemberIdno ?? "-",
+                        PhoneNo = loan.MemberPhoneNo ?? "-",
+                        PrincipalAmount = principalAmount,
+                        TotalPaid = totalPaid,
+                        InterestAmount = interestAmount,
+                        PaymentCount = paymentCount,
+                        DateIssued = loan.AuditTime,
+                        DateCompleted = loan.AuditTime,
+                        RepayPeriod = loan.RepayPeriod ?? 0,
+                        InterestRate = loan.Interest
+                    });
+                }
+
+                using var stream = new MemoryStream();
+
+                QuestPDF.Fluent.Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(PageSizes.A4.Landscape());
+                        page.MarginTop(1.5f, Unit.Centimetre);
+                        page.MarginBottom(1.5f, Unit.Centimetre);
+                        page.MarginLeft(1.2f, Unit.Centimetre);
+                        page.MarginRight(1.2f, Unit.Centimetre);
+                        page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
+
+                        page.Header().Column(header =>
+                        {
+                            header.Item().AlignCenter().Text(companyName.ToUpper()).FontSize(16).Bold();
+                            header.Item().AlignCenter().Text($"COMPLETED LOANS REPORT - AS AT {asAtDate:dd/MM/yyyy HH:mm:ss}").FontSize(12).Bold();
+                            header.Item().AlignCenter().Text($"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}").FontSize(9).Italic();
+                            header.Item().PaddingTop(0.3f, Unit.Centimetre).LineHorizontal(0.5f);
+                            header.Item().PaddingBottom(0.5f, Unit.Centimetre);
+                        });
+
+                        page.Content().Column(contentCol =>
+                        {
+                            // Summary Statistics
+                            contentCol.Item().Table(summaryTable =>
+                            {
+                                summaryTable.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                });
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Completed Loans:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).Text(reportData.Count.ToString());
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Principal:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{totalPrincipalAmount:N0}");
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Interest:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{totalInterestAmount:N0}");
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Paid:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{totalPaidAmount:N0}");
+                            });
+
+                            // Detailed Table
+                            contentCol.Item().PaddingTop(1, Unit.Centimetre);
+                            contentCol.Item().Text("COMPLETED LOANS DETAILS").FontSize(11).Bold();
+
+                            contentCol.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(0.8f);
+                                    cols.RelativeColumn(1.2f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(0.6f);
+                                    cols.RelativeColumn(0.8f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                });
+
+                                table.Header(header =>
+                                {
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("MemberNo").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Names").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("LoanNo").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Loan Type").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Gender").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Principal").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Interest").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Total Paid").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Date Issued").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Date Completed").Bold().FontSize(7);
+                                });
+
+                                foreach (var loan in reportData.OrderBy(l => l.MemberNo))
+                                {
+                                    table.Cell().Border(0.2f).Padding(4).Text(loan.MemberNo ?? "").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).Text(loan.Names ?? "").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).Text(loan.LoanNo ?? "").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).Text(loan.LoanType ?? "").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.Gender).FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.PrincipalAmount:N0}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.InterestAmount:N0}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.TotalPaid:N0}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.DateIssued?.ToString("dd/MM/yyyy") ?? "").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.DateCompleted?.ToString("dd/MM/yyyy") ?? "").FontSize(7);
+                                }
+
+                                // Totals row
+                                table.Cell().ColumnSpan(5).Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text("TOTAL:").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{totalPrincipalAmount:N0}").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{totalInterestAmount:N0}").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{totalPaidAmount:N0}").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4);
+                            });
+                        });
+
+                        page.Footer()
+                            .AlignCenter()
+                            .Text(x =>
+                            {
+                                x.DefaultTextStyle(t => t.FontSize(8));
+                                x.Span("Page ");
+                                x.CurrentPageNumber();
+                                x.Span(" of ");
+                                x.TotalPages();
+                                x.Span($" | Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+                            });
+                    });
+                }).GeneratePdf(stream);
+
+                var content = stream.ToArray();
+                return File(content, "application/pdf", $"CompletedLoansReport_{asAtDate:yyyyMMdd}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting Completed Loans to PDF");
+                TempData["ErrorMessage"] = "Error exporting to PDF: " + ex.Message;
+                return RedirectToAction("CompletedLoansReport");
+            }
+        }
+
+        #endregion
+
+        #region Active Loans Report
+
+        [HttpGet]
+        public IActionResult ActiveLoansReport()
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+            var asAtDate = DateTime.Now;
+
+            var viewModel = new ActiveLoansIndexViewModel
+            {
+                Loans = new List<ActiveLoansReportViewModel>(),
+                AsAtDate = asAtDate,
+                HasData = false,
+                CompanyName = companyName,
+                PrintedBy = User.Identity?.Name ?? "System",
+                GeneratedOn = DateTime.Now,
+                TotalLoans = 0,
+                TotalLoanBalance = 0,
+                TotalAmountIssued = 0,
+                TotalWomen = 0,
+                TotalMen = 0,
+                TotalOthers = 0
+            };
+
+            ViewBag.AsAtDate = asAtDate;
+            ViewBag.CompanyName = companyName;
+            ViewBag.HasData = false;
+
+            return View("~/Views/Reports/ActiveLoansReport.cshtml", viewModel);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ActiveLoansReport(DateTime asAtDate)
+        {
+            var companyCode = User.FindFirstValue("CompanyCode");
+            var companyName = User.FindFirstValue("CompanyName") ?? "";
+            var printedBy = User.Identity?.Name ?? "System";
+
+            var asAtDateEnd = asAtDate.Date.AddDays(1).AddSeconds(-1);
+
+            var activeLoansQuery = from loan in _context.Loans
+                                   join member in _context.Members
+                                       on loan.MemberNo equals member.MemberNo
+                                   join loantype in _context.Loantypes
+                                       on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                   from lt in loanTypeJoin.DefaultIfEmpty()
+                                   where loan.CompanyCode == companyCode
+                                       && (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
+                                       && loan.AuditTime <= asAtDateEnd
+                                   select new
+                                   {
+                                       loan.MemberNo,
+                                       loan.LoanNo,
+                                       loan.LoanCode,
+                                       loan.LoanAmt,
+                                       loan.Aamount,
+                                       loan.ApplicDate,
+                                       loan.AuditTime,
+                                       loan.RepayPeriod,
+                                       loan.Interest,
+                                       MemberSurname = member.Surname,
+                                       MemberOtherNames = member.OtherNames,
+                                       MemberFullName = member.FullName,
+                                       MemberSex = member.Sex,
+                                       MemberIdno = member.Idno,
+                                       MemberPhoneNo = member.PhoneNo,
+                                       LoanTypeName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown")
+                                   };
+
+            var activeLoans = await activeLoansQuery.ToListAsync();
+
+            if (!activeLoans.Any())
+            {
+                var emptyViewModel = new ActiveLoansIndexViewModel
+                {
+                    Loans = new List<ActiveLoansReportViewModel>(),
+                    AsAtDate = asAtDate,
+                    HasData = false,
+                    CompanyName = companyName,
+                    PrintedBy = printedBy,
+                    GeneratedOn = DateTime.Now,
+                    TotalLoans = 0,
+                    TotalLoanBalance = 0,
+                    TotalAmountIssued = 0,
+                    TotalWomen = 0,
+                    TotalMen = 0,
+                    TotalOthers = 0
+                };
+
+                ViewBag.AsAtDate = asAtDate;
+                ViewBag.CompanyName = companyName;
+                ViewBag.HasData = false;
+                ViewBag.Message = "No active loans found as at the selected date.";
+
+                return View("~/Views/Reports/ActiveLoansReport.cshtml", emptyViewModel);
+            }
+
+            var loanNos = activeLoans.Select(l => l.LoanNo).ToList();
+
+            var loanBalances = await _context.Loanbal
+                .Where(lb => loanNos.Contains(lb.LoanNo) && lb.Companycode == companyCode)
+                .ToDictionaryAsync(lb => lb.LoanNo, lb => new { lb.Balance, lb.IntrOwed, lb.Penalty });
+
+            var repayments = await _context.Repay
+                .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode)
+                .GroupBy(r => r.LoanNo)
+                .Select(g => new
+                {
+                    LoanNo = g.Key,
+                    TotalPaid = g.Sum(r => r.Amount ?? 0),
+                    TotalPrincipal = g.Sum(r => r.Principal ?? 0),
+                    TotalInterest = g.Sum(r => r.Interest ?? 0),
+                    PaymentCount = g.Count(),
+                    LastPaymentDate = g.Max(r => r.DateReceived)
+                })
+                .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+            var latestRepayments = await _context.Repay
+                .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode && r.DateReceived <= asAtDateEnd && r.Posted == true)
+                .GroupBy(r => r.LoanNo)
+                .Select(g => new
+                {
+                    LoanNo = g.Key,
+                    LastPaymentDate = g.Max(r => r.DateReceived)
+                })
+                .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+            var reportData = new List<ActiveLoansReportViewModel>();
+            decimal totalLoanBalance = 0;
+            decimal totalAmountIssued = 0;
+            int womenCount = 0;
+            int menCount = 0;
+            int othersCount = 0;
+
+            foreach (var loan in activeLoans)
+            {
+                string fullName = !string.IsNullOrEmpty(loan.MemberFullName)
+                    ? loan.MemberFullName
+                    : $"{loan.MemberSurname ?? ""} {loan.MemberOtherNames ?? ""}".Trim();
+                if (string.IsNullOrWhiteSpace(fullName)) fullName = loan.MemberNo;
+
+                decimal currentBalance = 0;
+                decimal unpaidInterest = 0;
+                decimal penalty = 0;
+
+                if (loanBalances.ContainsKey(loan.LoanNo))
+                {
+                    var lb = loanBalances[loan.LoanNo];
+                    currentBalance = lb.Balance;
+                    unpaidInterest = lb.IntrOwed;
+                    penalty = lb.Penalty;
+                }
+                else
+                {
+                    currentBalance = loan.Aamount ?? loan.LoanAmt ?? 0;
+                }
+
+                decimal totalPaid = 0;
+                decimal totalPrincipal = 0;
+                decimal totalInterest = 0;
+                int paymentCount = 0;
+                DateTime? lastPaymentDate = null;
+
+                if (repayments.ContainsKey(loan.LoanNo))
+                {
+                    var repay = repayments[loan.LoanNo];
+                    totalPaid = repay.TotalPaid;
+                    totalPrincipal = repay.TotalPrincipal;
+                    totalInterest = repay.TotalInterest;
+                    paymentCount = repay.PaymentCount;
+                    lastPaymentDate = repay.LastPaymentDate;
+                }
+
+                if (latestRepayments.ContainsKey(loan.LoanNo))
+                {
+                    lastPaymentDate = latestRepayments[loan.LoanNo].LastPaymentDate;
+                }
+
+                int daysOverdue = 0;
+                if (lastPaymentDate.HasValue)
+                {
+                    DateTime nextDueDate = lastPaymentDate.Value.AddMonths(1);
+                    if (asAtDate > nextDueDate)
+                    {
+                        daysOverdue = (asAtDate - nextDueDate).Days;
+                    }
+                }
+                else
+                {
+                    DateTime firstDueDate = loan.AuditTime.AddMonths(1);
+                    if (asAtDate > firstDueDate)
+                    {
+                        daysOverdue = (asAtDate - firstDueDate).Days;
+                    }
+                }
+                if (daysOverdue < 0) daysOverdue = 0;
+
+                string gender = NormalizeGenderForReport(loan.MemberSex);
+                if (gender == "FEMALE") womenCount++;
+                else if (gender == "MALE") menCount++;
+                else othersCount++;
+
+                decimal amountIssued = loan.Aamount ?? loan.LoanAmt ?? 0;
+                totalAmountIssued += amountIssued;
+                totalLoanBalance += currentBalance;
+
+                string loanStatus = "Current";
+                if (daysOverdue > 0 && daysOverdue <= 30) loanStatus = "Special Mention";
+                else if (daysOverdue > 30 && daysOverdue <= 60) loanStatus = "Watchful";
+                else if (daysOverdue > 60 && daysOverdue <= 90) loanStatus = "Substandard";
+                else if (daysOverdue > 90 && daysOverdue <= 180) loanStatus = "Doubtful";
+                else if (daysOverdue > 180) loanStatus = "Loss";
+
+                reportData.Add(new ActiveLoansReportViewModel
+                {
+                    MemberNo = loan.MemberNo,
+                    Names = fullName,
+                    LoanNo = loan.LoanNo,
+                    LoanType = loan.LoanTypeName,
+                    Gender = gender,
+                    IDNo = loan.MemberIdno ?? "-",
+                    PhoneNo = loan.MemberPhoneNo ?? "-",
+                    AmountIssued = amountIssued,
+                    CurrentBalance = currentBalance,
+                    UnpaidInterest = unpaidInterest,
+                    Penalty = penalty,
+                    TotalPaid = totalPaid,
+                    TotalPrincipal = totalPrincipal,
+                    TotalInterest = totalInterest,
+                    PaymentCount = paymentCount,
+                    DateIssued = loan.AuditTime,
+                    RepayPeriod = loan.RepayPeriod ?? 0,
+                    InterestRate = loan.Interest,
+                    DaysOverdue = daysOverdue,
+                    LoanStatus = loanStatus
+                });
+            }
+
+            var viewModel = new ActiveLoansIndexViewModel
+            {
+                Loans = reportData.OrderByDescending(l => l.DaysOverdue).ThenBy(l => l.MemberNo).ToList(),
+                TotalLoans = reportData.Count,
+                TotalLoanBalance = totalLoanBalance,
+                TotalAmountIssued = totalAmountIssued,
+                TotalWomen = womenCount,
+                TotalMen = menCount,
+                TotalOthers = othersCount,
+                AsAtDate = asAtDate,
+                HasData = reportData.Any(),
+                CompanyName = companyName,
+                PrintedBy = printedBy,
+                GeneratedOn = DateTime.Now
+            };
+
+            ViewBag.AsAtDate = asAtDate;
+            ViewBag.CompanyName = companyName;
+            ViewBag.HasData = viewModel.HasData;
+
+            return View("~/Views/Reports/ActiveLoansReport.cshtml", viewModel);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportActiveLoansToExcel(DateTime asAtDate)
+        {
+            try
+            {
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+                var asAtDateEnd = asAtDate.Date.AddDays(1).AddSeconds(-1);
+
+                var activeLoans = await (from loan in _context.Loans
+                                         join member in _context.Members
+                                             on loan.MemberNo equals member.MemberNo
+                                         join loantype in _context.Loantypes
+                                             on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                         from lt in loanTypeJoin.DefaultIfEmpty()
+                                         where loan.CompanyCode == companyCode
+                                             && (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
+                                             && loan.AuditTime <= asAtDateEnd
+                                         select new
+                                         {
+                                             loan.MemberNo,
+                                             loan.LoanNo,
+                                             loan.LoanCode,
+                                             loan.LoanAmt,
+                                             loan.Aamount,
+                                             loan.ApplicDate,
+                                             loan.AuditTime,
+                                             loan.RepayPeriod,
+                                             loan.Interest,
+                                             MemberSurname = member.Surname,
+                                             MemberOtherNames = member.OtherNames,
+                                             MemberFullName = member.FullName,
+                                             MemberSex = member.Sex,
+                                             MemberIdno = member.Idno,
+                                             MemberPhoneNo = member.PhoneNo,
+                                             LoanTypeName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown")
+                                         }).ToListAsync();
+
+                if (!activeLoans.Any())
+                {
+                    TempData["Error"] = "No active loans found for the selected date";
+                    return RedirectToAction("ActiveLoansReport");
+                }
+
+                var loanNos = activeLoans.Select(l => l.LoanNo).ToList();
+
+                var loanBalances = await _context.Loanbal
+                    .Where(lb => loanNos.Contains(lb.LoanNo) && lb.Companycode == companyCode)
+                    .ToDictionaryAsync(lb => lb.LoanNo, lb => new { lb.Balance, lb.IntrOwed, lb.Penalty });
+
+                var repayments = await _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode)
+                    .GroupBy(r => r.LoanNo)
+                    .Select(g => new
+                    {
+                        LoanNo = g.Key,
+                        TotalPaid = g.Sum(r => r.Amount ?? 0),
+                        TotalPrincipal = g.Sum(r => r.Principal ?? 0),
+                        TotalInterest = g.Sum(r => r.Interest ?? 0)
+                    })
+                    .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+                var latestRepayments = await _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode && r.DateReceived <= asAtDateEnd && r.Posted == true)
+                    .GroupBy(r => r.LoanNo)
+                    .Select(g => new
+                    {
+                        LoanNo = g.Key,
+                        LastPaymentDate = g.Max(r => r.DateReceived)
+                    })
+                    .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+                using var workbook = new XLWorkbook();
+                var worksheet = workbook.Worksheets.Add("Active Loans");
+                int currentRow = 1;
+
+                worksheet.Cell(currentRow, 1).Value = companyName.ToUpper();
+                worksheet.Range(currentRow, 1, currentRow, 12).Merge();
+                worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(18);
+                worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                worksheet.Cell(currentRow, 1).Value = $"ACTIVE LOANS REPORT - AS AT {asAtDate:dd/MM/yyyy HH:mm:ss}";
+                worksheet.Range(currentRow, 1, currentRow, 12).Merge();
+                worksheet.Cell(currentRow, 1).Style.Font.SetBold().Font.SetFontSize(14);
+                worksheet.Cell(currentRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                currentRow += 2;
+
+                worksheet.Cell(currentRow, 1).Value = $"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}";
+                worksheet.Range(currentRow, 1, currentRow, 12).Merge();
+                worksheet.Cell(currentRow, 1).Style.Font.SetItalic();
+                currentRow += 2;
+
+                string[] headers = { "MemberNo", "Names", "LoanNo", "Loan Type", "Gender", "ID No", "Phone No",
+                     "Amount Issued", "Balance", "Unpaid Interest", "Penalty", "Total Paid", "Days Overdue" };
+
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    worksheet.Cell(currentRow, i + 1).Value = headers[i];
+                    worksheet.Cell(currentRow, i + 1).Style.Font.SetBold();
+                    worksheet.Cell(currentRow, i + 1).Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                    worksheet.Cell(currentRow, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    worksheet.Cell(currentRow, i + 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                }
+                currentRow++;
+
+                decimal totalAmountIssued = 0;
+                decimal totalBalance = 0;
+
+                foreach (var loan in activeLoans)
+                {
+                    string fullName = !string.IsNullOrEmpty(loan.MemberFullName)
+                        ? loan.MemberFullName
+                        : $"{loan.MemberSurname ?? ""} {loan.MemberOtherNames ?? ""}".Trim();
+                    if (string.IsNullOrWhiteSpace(fullName)) fullName = loan.MemberNo;
+
+                    decimal currentBalance = 0;
+                    decimal unpaidInterest = 0;
+                    decimal penalty = 0;
+
+                    if (loanBalances.ContainsKey(loan.LoanNo))
+                    {
+                        var lb = loanBalances[loan.LoanNo];
+                        currentBalance = lb.Balance;
+                        unpaidInterest = lb.IntrOwed;
+                        penalty = lb.Penalty;
+                    }
+
+                    decimal totalPaid = 0;
+                    if (repayments.ContainsKey(loan.LoanNo))
+                    {
+                        totalPaid = repayments[loan.LoanNo].TotalPaid;
+                    }
+
+                    DateTime? lastPaymentDate = null;
+                    if (latestRepayments.ContainsKey(loan.LoanNo))
+                    {
+                        lastPaymentDate = latestRepayments[loan.LoanNo].LastPaymentDate;
+                    }
+
+                    int daysOverdue = 0;
+                    if (lastPaymentDate.HasValue)
+                    {
+                        DateTime nextDueDate = lastPaymentDate.Value.AddMonths(1);
+                        if (asAtDate > nextDueDate)
+                        {
+                            daysOverdue = (asAtDate - nextDueDate).Days;
+                        }
+                    }
+                    else
+                    {
+                        DateTime firstDueDate = loan.AuditTime.AddMonths(1);
+                        if (asAtDate > firstDueDate)
+                        {
+                            daysOverdue = (asAtDate - firstDueDate).Days;
+                        }
+                    }
+                    if (daysOverdue < 0) daysOverdue = 0;
+
+                    string gender = NormalizeGenderForReport(loan.MemberSex);
+                    decimal amountIssued = loan.Aamount ?? loan.LoanAmt ?? 0;
+                    totalAmountIssued += amountIssued;
+                    totalBalance += currentBalance;
+
+                    worksheet.Cell(currentRow, 1).Value = loan.MemberNo;
+                    worksheet.Cell(currentRow, 2).Value = fullName;
+                    worksheet.Cell(currentRow, 3).Value = loan.LoanNo;
+                    worksheet.Cell(currentRow, 4).Value = loan.LoanTypeName;
+                    worksheet.Cell(currentRow, 5).Value = gender;
+                    worksheet.Cell(currentRow, 6).Value = loan.MemberIdno ?? "-";
+                    worksheet.Cell(currentRow, 7).Value = loan.MemberPhoneNo ?? "-";
+                    worksheet.Cell(currentRow, 8).Value = amountIssued;
+                    worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 9).Value = currentBalance;
+                    worksheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 10).Value = unpaidInterest;
+                    worksheet.Cell(currentRow, 10).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 11).Value = penalty;
+                    worksheet.Cell(currentRow, 11).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 12).Value = totalPaid;
+                    worksheet.Cell(currentRow, 12).Style.NumberFormat.Format = "#,##0.00";
+                    worksheet.Cell(currentRow, 13).Value = daysOverdue;
+
+                    currentRow++;
+                }
+
+                currentRow++;
+                worksheet.Cell(currentRow, 7).Value = "GRAND TOTAL:";
+                worksheet.Cell(currentRow, 7).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 7).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
+                worksheet.Cell(currentRow, 8).Value = totalAmountIssued;
+                worksheet.Cell(currentRow, 8).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 8).Style.NumberFormat.Format = "#,##0.00";
+                worksheet.Cell(currentRow, 9).Value = totalBalance;
+                worksheet.Cell(currentRow, 9).Style.Font.SetBold();
+                worksheet.Cell(currentRow, 9).Style.NumberFormat.Format = "#,##0.00";
+
+                worksheet.Columns().AdjustToContents();
+
+                using var stream = new MemoryStream();
+                workbook.SaveAs(stream);
+                return File(stream.ToArray(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"ActiveLoansReport_{asAtDate:yyyyMMdd}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting Active Loans to Excel");
+                TempData["ErrorMessage"] = "Error exporting to Excel: " + ex.Message;
+                return RedirectToAction("ActiveLoansReport");
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportActiveLoansToPdf(DateTime asAtDate)
+        {
+            try
+            {
+                var companyCode = User.FindFirstValue("CompanyCode");
+                var companyName = User.FindFirstValue("CompanyName") ?? "";
+                var printedBy = User.Identity?.Name ?? "System";
+                var asAtDateEnd = asAtDate.Date.AddDays(1).AddSeconds(-1);
+
+                var activeLoans = await (from loan in _context.Loans
+                                         join member in _context.Members
+                                             on loan.MemberNo equals member.MemberNo
+                                         join loantype in _context.Loantypes
+                                             on loan.LoanCode equals loantype.LoanCode into loanTypeJoin
+                                         from lt in loanTypeJoin.DefaultIfEmpty()
+                                         where loan.CompanyCode == companyCode
+                                             && (loan.Status == (int)Status.Disbursed || loan.Status == (int)Status.Endorsed)
+                                             && loan.AuditTime <= asAtDateEnd
+                                         select new
+                                         {
+                                             loan.MemberNo,
+                                             loan.LoanNo,
+                                             loan.LoanCode,
+                                             loan.LoanAmt,
+                                             loan.Aamount,
+                                             loan.ApplicDate,
+                                             loan.AuditTime,
+                                             loan.RepayPeriod,
+                                             loan.Interest,
+                                             MemberSurname = member.Surname,
+                                             MemberOtherNames = member.OtherNames,
+                                             MemberFullName = member.FullName,
+                                             MemberSex = member.Sex,
+                                             MemberIdno = member.Idno,
+                                             MemberPhoneNo = member.PhoneNo,
+                                             LoanTypeName = lt != null ? lt.LoanType1 : (loan.LoanCode ?? "Unknown")
+                                         }).ToListAsync();
+
+                if (!activeLoans.Any())
+                {
+                    TempData["Error"] = "No active loans found for the selected date";
+                    return RedirectToAction("ActiveLoansReport");
+                }
+
+                var loanNos = activeLoans.Select(l => l.LoanNo).ToList();
+
+                var loanBalances = await _context.Loanbal
+                    .Where(lb => loanNos.Contains(lb.LoanNo) && lb.Companycode == companyCode)
+                    .ToDictionaryAsync(lb => lb.LoanNo, lb => new { lb.Balance, lb.IntrOwed, lb.Penalty });
+
+                var repayments = await _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode)
+                    .GroupBy(r => r.LoanNo)
+                    .Select(g => new
+                    {
+                        LoanNo = g.Key,
+                        TotalPaid = g.Sum(r => r.Amount ?? 0),
+                        TotalPrincipal = g.Sum(r => r.Principal ?? 0),
+                        TotalInterest = g.Sum(r => r.Interest ?? 0),
+                        PaymentCount = g.Count()
+                    })
+                    .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+                var latestRepayments = await _context.Repay
+                    .Where(r => loanNos.Contains(r.LoanNo) && r.CompanyCode == companyCode && r.DateReceived <= asAtDateEnd && r.Posted == true)
+                    .GroupBy(r => r.LoanNo)
+                    .Select(g => new
+                    {
+                        LoanNo = g.Key,
+                        LastPaymentDate = g.Max(r => r.DateReceived)
+                    })
+                    .ToDictionaryAsync(g => g.LoanNo, g => g);
+
+                var reportData = new List<ActiveLoansReportViewModel>();
+                decimal totalAmountIssued = 0;
+                decimal totalBalance = 0;
+
+                foreach (var loan in activeLoans)
+                {
+                    string fullName = !string.IsNullOrEmpty(loan.MemberFullName)
+                        ? loan.MemberFullName
+                        : $"{loan.MemberSurname ?? ""} {loan.MemberOtherNames ?? ""}".Trim();
+                    if (string.IsNullOrWhiteSpace(fullName)) fullName = loan.MemberNo;
+
+                    decimal currentBalance = 0;
+                    decimal unpaidInterest = 0;
+                    decimal penalty = 0;
+
+                    if (loanBalances.ContainsKey(loan.LoanNo))
+                    {
+                        var lb = loanBalances[loan.LoanNo];
+                        currentBalance = lb.Balance;
+                        unpaidInterest = lb.IntrOwed;
+                        penalty = lb.Penalty;
+                    }
+
+                    decimal totalPaid = 0;
+                    int paymentCount = 0;
+                    if (repayments.ContainsKey(loan.LoanNo))
+                    {
+                        totalPaid = repayments[loan.LoanNo].TotalPaid;
+                        paymentCount = repayments[loan.LoanNo].PaymentCount;
+                    }
+
+                    DateTime? lastPaymentDate = null;
+                    if (latestRepayments.ContainsKey(loan.LoanNo))
+                    {
+                        lastPaymentDate = latestRepayments[loan.LoanNo].LastPaymentDate;
+                    }
+
+                    int daysOverdue = 0;
+                    if (lastPaymentDate.HasValue)
+                    {
+                        DateTime nextDueDate = lastPaymentDate.Value.AddMonths(1);
+                        if (asAtDate > nextDueDate)
+                        {
+                            daysOverdue = (asAtDate - nextDueDate).Days;
+                        }
+                    }
+                    else
+                    {
+                        DateTime firstDueDate = loan.AuditTime.AddMonths(1);
+                        if (asAtDate > firstDueDate)
+                        {
+                            daysOverdue = (asAtDate - firstDueDate).Days;
+                        }
+                    }
+                    if (daysOverdue < 0) daysOverdue = 0;
+
+                    string loanStatus = daysOverdue <= 0 ? "Current" :
+                                        daysOverdue <= 30 ? "Special Mention" :
+                                        daysOverdue <= 60 ? "Watchful" :
+                                        daysOverdue <= 90 ? "Substandard" :
+                                        daysOverdue <= 180 ? "Doubtful" : "Loss";
+
+                    string gender = NormalizeGenderForReport(loan.MemberSex);
+                    decimal amountIssued = loan.Aamount ?? loan.LoanAmt ?? 0;
+                    totalAmountIssued += amountIssued;
+                    totalBalance += currentBalance;
+
+                    reportData.Add(new ActiveLoansReportViewModel
+                    {
+                        MemberNo = loan.MemberNo,
+                        Names = fullName,
+                        LoanNo = loan.LoanNo,
+                        LoanType = loan.LoanTypeName,
+                        Gender = gender,
+                        IDNo = loan.MemberIdno ?? "-",
+                        PhoneNo = loan.MemberPhoneNo ?? "-",
+                        AmountIssued = amountIssued,
+                        CurrentBalance = currentBalance,
+                        UnpaidInterest = unpaidInterest,
+                        Penalty = penalty,
+                        TotalPaid = totalPaid,
+                        PaymentCount = paymentCount,
+                        DateIssued = loan.AuditTime,
+                        RepayPeriod = loan.RepayPeriod ?? 0,
+                        InterestRate = loan.Interest,
+                        DaysOverdue = daysOverdue,
+                        LoanStatus = loanStatus
+                    });
+                }
+
+                using var stream = new MemoryStream();
+
+                QuestPDF.Fluent.Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(PageSizes.A4.Landscape());
+                        page.MarginTop(1.5f, Unit.Centimetre);
+                        page.MarginBottom(1.5f, Unit.Centimetre);
+                        page.MarginLeft(1.2f, Unit.Centimetre);
+                        page.MarginRight(1.2f, Unit.Centimetre);
+                        page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
+
+                        page.Header().Column(header =>
+                        {
+                            header.Item().AlignCenter().Text(companyName.ToUpper()).FontSize(16).Bold();
+                            header.Item().AlignCenter().Text($"ACTIVE LOANS REPORT - AS AT {asAtDate:dd/MM/yyyy HH:mm:ss}").FontSize(12).Bold();
+                            header.Item().AlignCenter().Text($"Printed By: {printedBy} On: {DateTime.Now:dd-MMM-yyyy HH:mm}").FontSize(9).Italic();
+                            header.Item().PaddingTop(0.3f, Unit.Centimetre).LineHorizontal(0.5f);
+                            header.Item().PaddingBottom(0.5f, Unit.Centimetre);
+                        });
+
+                        page.Content().Column(contentCol =>
+                        {
+                            contentCol.Item().Table(summaryTable =>
+                            {
+                                summaryTable.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                    cols.RelativeColumn(1);
+                                });
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Active Loans:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).Text(reportData.Count.ToString());
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Balance:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{totalBalance:N0}");
+
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Total Amount Issued:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{totalAmountIssued:N0}");
+                                summaryTable.Cell().Border(0.2f).Background("#e8f4f8").Padding(4).Text("Overdue Loans:").Bold();
+                                summaryTable.Cell().Border(0.2f).Padding(4).Text(reportData.Count(l => l.DaysOverdue > 0).ToString());
+                            });
+
+                            contentCol.Item().PaddingTop(1, Unit.Centimetre);
+                            contentCol.Item().Text("ACTIVE LOANS DETAILS").FontSize(11).Bold();
+
+                            contentCol.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(cols =>
+                                {
+                                    cols.RelativeColumn(0.8f);
+                                    cols.RelativeColumn(1.2f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(0.6f);
+                                    cols.RelativeColumn(0.8f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(1.0f);
+                                    cols.RelativeColumn(0.8f);
+                                });
+
+                                table.Header(header =>
+                                {
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("MemberNo").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Names").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("LoanNo").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Loan Type").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Gender").Bold().FontSize(8);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Amount Issued").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Balance").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Unpaid Interest").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Penalty").Bold().FontSize(7);
+                                    header.Cell().Border(0.2f).Background("#f0f0f0").Padding(4).AlignCenter().Text("Days Overdue").Bold().FontSize(7);
+                                });
+
+                                foreach (var loan in reportData.OrderByDescending(l => l.DaysOverdue).ThenBy(l => l.MemberNo))
+                                {
+                                    table.Cell().Border(0.2f).Padding(4).Text(loan.MemberNo ?? "").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).Text(loan.Names ?? "").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).Text(loan.LoanNo ?? "").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).Text(loan.LoanType ?? "").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.Gender).FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.AmountIssued:N0}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.CurrentBalance:N0}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.UnpaidInterest:N0}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignRight().Text($"{loan.Penalty:N0}").FontSize(7);
+                                    table.Cell().Border(0.2f).Padding(4).AlignCenter().Text(loan.DaysOverdue.ToString()).FontSize(7);
+                                }
+
+                                table.Cell().ColumnSpan(6).Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text("TOTAL:").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{totalAmountIssued:N0}").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4).AlignRight().Text($"{totalBalance:N0}").Bold().FontSize(8);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4);
+                                table.Cell().Border(0.2f).Background("#f9f9f9").Padding(4);
+                            });
+                        });
+
+                        page.Footer()
+                            .AlignCenter()
+                            .Text(x =>
+                            {
+                                x.DefaultTextStyle(t => t.FontSize(8));
+                                x.Span("Page ");
+                                x.CurrentPageNumber();
+                                x.Span(" of ");
+                                x.TotalPages();
+                                x.Span($" | Generated: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+                            });
+                    });
+                }).GeneratePdf(stream);
+
+                var content = stream.ToArray();
+                return File(content, "application/pdf", $"ActiveLoansReport_{asAtDate:yyyyMMdd}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting Active Loans to PDF");
+                TempData["ErrorMessage"] = "Error exporting to PDF: " + ex.Message;
+                return RedirectToAction("ActiveLoansReport");
+            }
+        }
+
+        #endregion
+
+        #region Helper Methods
+
+        private string NormalizeGenderForReport(string? gender)
+        {
+            if (string.IsNullOrEmpty(gender))
+                return "OTHERS";
+
+            var normalized = gender.ToUpper().Trim();
+            if (normalized == "M" || normalized == "MALE") return "MALE";
+            if (normalized == "F" || normalized == "FEMALE") return "FEMALE";
+            return "OTHERS";
+        }
+
         #endregion
 
     }

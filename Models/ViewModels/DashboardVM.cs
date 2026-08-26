@@ -81,7 +81,7 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public int OthersLoanees { get; set; }
         public decimal InclusionGrantTotal { get; set; }
         public decimal MatchingGrantTotal { get; set; }
-
+        public decimal BalanceOfLoansInArrears { get; set; }
         public decimal TotalGrants => InclusionGrantTotal + MatchingGrantTotal;
 
         public int InclusionGrantCount { get; set; }
@@ -92,6 +92,7 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         // ==========================
         public decimal RepaymentRate { get; set; }  // Current month repayment rate (%)
         public decimal PARPercent { get; set; }     // Portfolio at Risk > 30 Days (%)
+        public decimal PAR60Percent { get; set; }      // Portfolio at Risk > 60 Days (%)
         public decimal AmountPastDueRate { get; set; } // Amount past due rate (%)
 
         // ==========================
@@ -199,8 +200,38 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public DashboardSummaryMetrics SummaryMetrics { get; set; } = new DashboardSummaryMetrics();
 
         // Add this property to DashboardVM class
-        public decimal PenaltyInterestRate { get; set; } // This is the AmountPastDueRate
-        public string PenaltyCalculationMode { get; set; } = "Percentage"; // "Percentage" or "Fixed"
+        public decimal PenaltyInterestRate { get; set; } 
+        public string PenaltyCalculationMode { get; set; } = "Percentage"; 
+
+        // county Admin
+        public bool IsCountyView { get; set; } = false;
+        public string? CountyName { get; set; }
+        public List<string> CountyCompanyCodes { get; set; } = new List<string>();
+
+        // Total Loans by Gender
+        public int TotalLoanCount { get; set; }
+        public int WomenLoanCount { get; set; }
+        public int MenLoanCount { get; set; }
+        public int OthersLoanCount { get; set; }
+
+        // Completed Loans
+        public int CompletedLoansCount { get; set; }
+        public int WomenCompletedLoans { get; set; }
+        public int MenCompletedLoans { get; set; }
+        public int OthersCompletedLoans { get; set; }
+
+        // Active Loans
+        public int ActiveLoansCount { get; set; }
+        public int WomenActiveLoans { get; set; }
+        public int MenActiveLoans { get; set; }
+        public int OthersActiveLoans { get; set; }
+
+        // Overdue Loans
+        public int OverdueLoansCount { get; set; }
+        public int WomenOverdueLoans { get; set; }
+        public int MenOverdueLoans { get; set; }
+        public int OthersOverdueLoans { get; set; }    
+        public int UncompletedLoansCount { get; set; }  
     }
 
     // Rest of your existing classes remain the same...
@@ -404,6 +435,9 @@ namespace SACCOBlockChainSystem.Models.ViewModels
         public decimal Balance { get; set; }
         public DateTime LastActivity { get; set; }
         public bool IsActive { get; set; }
+        public string WalletAddress { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public long TransactionNonce { get; set; }
     }
 
     public class BlockchainChain

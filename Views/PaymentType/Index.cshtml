@@ -7,7 +7,7 @@
     ViewData["Title"] = "Payment Types";
     var glAccounts = ViewBag.GlAccounts as List<GlSetup> ?? new List<GlSetup>();
     var paymentTypes = ViewBag.PaymentTypes as List<PaymentTypeViewModel> ?? new List<PaymentTypeViewModel>();
-    var companyName = ViewBag.CompanyName as string ?? "JUHUDI SACCO";
+    var companyName = ViewBag.CompanyName as string ?? "AMTECH SACCO";
 }
 
 <div class="container-fluid">
@@ -303,11 +303,11 @@
                                                 data-active="@item.IsActive.ToString().ToLower()">
                                             @if (item.IsActive)
                                             {
-                                                <i class="fas fa-ban"></i>
+                                                <i class="fas fa-ban">Deactivate</i>
                                             }
                                             else
                                             {
-                                                <i class="fas fa-check"></i>
+                                                <i class="fas fa-check">Activate</i>
                                             }
                                         </button>
                                     </div>

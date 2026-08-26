@@ -62,6 +62,92 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
+
+
+        [HttpPost("BulkAdd")]
+        public async Task<IActionResult> BulkAddContributions([FromBody] BulkContributionRequestDTO request)
+        {
+            try
+            {
+                _logger.LogInformation($"Bulk add contributions for member: {request.MemberNo}, Count: {request.Contributions.Count}");
+
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new BulkContributionResponseDTO
+                    {
+                        Success = false,
+                        Message = "Invalid request data",
+                        Errors = ModelState.Values
+                            .SelectMany(v => v.Errors)
+                            .Select(e => e.ErrorMessage)
+                            .ToList()
+                    });
+                }
+
+                // Get company code from claims or use request
+                var companyCode = User.FindFirst("CompanyCode")?.Value ?? request.CompanyCode;
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    return BadRequest(new BulkContributionResponseDTO
+                    {
+                        Success = false,
+                        Message = "Company code not found"
+                    });
+                }
+
+                request.CompanyCode = companyCode;
+                request.CreatedBy = User.Identity?.Name ?? "SYSTEM";
+
+                // Process all contributions in a transaction
+                var result = await _contributionService.BulkAddContributionsAsync(request);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in bulk contribution");
+                return StatusCode(500, new BulkContributionResponseDTO
+                {
+                    Success = false,
+                    Message = "An error occurred while processing contributions",
+                    Errors = new List<string> { ex.Message }
+                });
+            }
+        }
+
+
+        [HttpGet("member/{memberNo}/sharetype-totals")]
+        public async Task<IActionResult> GetMemberShareTypeTotals(string memberNo)
+        {
+            try
+            {
+                var companyCode = User.FindFirst("CompanyCode")?.Value;
+                if (string.IsNullOrEmpty(companyCode))
+                {
+                    return BadRequest(new { Success = false, Message = "Company code not found" });
+                }
+
+                var totals = await _contributionService.GetMemberShareTypeTotalsAsync(memberNo, companyCode);
+
+                return Ok(new
+                {
+                    Success = true,
+                    Data = totals,
+                    Message = "Share type totals retrieved successfully"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting member share type totals");
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "An error occurred while fetching share type totals",
+                    Error = ex.Message
+                });
+            }
+        }
+
         [HttpGet("member/{memberNo}/sharetype/{shareTypeCode}/total")]
         public async Task<IActionResult> GetMemberShareTypeTotal(string memberNo, string shareTypeCode)
         {

@@ -91,8 +91,13 @@ namespace SACCOBlockChainSystem.Models
         public decimal? Sharecapital { get; set; }
 
         public DateTime? Rescheduledate { get; set; }
-
-        public string? Gperiod { get; set; }
+        public int? Gperiod { get; set; }
+        public string? PenaltyMode { get; set; }
+        public string? PenaltyRate { get; set; }
+        public decimal? PenaltyValue { get; set; }
+        public short? PenaltyChargeItem { get; set; }
+        public bool? AttractsPenalty { get; set; }
+        public bool? InterestUpront { get; set; }
 
         public int? Run { get; set; }
 
@@ -111,12 +116,12 @@ namespace SACCOBlockChainSystem.Models
 
     public enum Status
     {
-        Draft = 1,        
-        Submitted = 2,    
+        Draft = 1,
+        Submitted = 2,
         UnderAppraisal = 3,
-        Approved = 4,     
-        Endorsed = 5,     
-        Disbursed = 6,    
+        Approved = 4,
+        Endorsed = 5,
+        Disbursed = 6,
         Closed = 7,
         Defaulted = 8,
         WrittenOff = 9,

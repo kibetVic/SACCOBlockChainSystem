@@ -7,18 +7,20 @@ using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Repositories;
 using SACCOBlockChainSystem.Services;
 using QuestPDF.Infrastructure;
-using Radzen;
 
 var builder = WebApplication.CreateBuilder(args);
 
 QuestPDF.Settings.License = LicenseType.Community;
 
-// Add services
+
 builder.Services.AddControllersWithViews();
+
+builder.Services.AddScoped<RoleService>();
+builder.Services.AddScoped<PrivilegeService>();
+
+
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
-builder.Services.AddServerSideBlazor();
-builder.Services.AddRadzenComponents();
 builder.Services.AddSignalR();// For API calls if needed
 // session for storing verification codes
 builder.Services.AddDistributedMemoryCache();
@@ -63,11 +65,17 @@ builder.Services.AddAuthorization(options =>
 });
 
 // Database Context
+var commandTimeout = builder.Configuration.GetValue<int>("CommandTimeout", 1800);
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("BlockchainDb")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("BlockchainDb"),
+        sqlOptions => sqlOptions.CommandTimeout(commandTimeout)));
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("Connection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("Connection"),
+        sqlOptions => sqlOptions.CommandTimeout(commandTimeout)));
 
 // Register Repository Pattern
 builder.Services.AddScoped<IMemberRepository, MemberRepository>();
@@ -81,6 +89,8 @@ builder.Services.AddScoped<IBlockchainService, BlockchainService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ISaccoService, SaccoService>();
 builder.Services.AddScoped<IMemberService, MemberService>();
+builder.Services.AddScoped<WalletService, WalletService>();
+builder.Services.AddScoped<ICryptoService, CryptoService>();
 builder.Services.AddScoped<IContributionService, ContributionService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<ILoanTypeService, LoanTypeService>();
@@ -103,17 +113,43 @@ builder.Services.AddScoped<ILoanTypePerformanceService, LoanTypePerformanceServi
 builder.Services.AddScoped<IChequeReceivedReportService, ChequeReceivedReportService>();
 builder.Services.AddScoped<AuditTrailService>();
 builder.Services.AddScoped<IAgentService, AgentService>();
-builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<IEmployeePaymentService, EmployeePaymentService>();
 builder.Services.AddScoped<IPaymentTypeService, PaymentTypeService>();
-
-builder.Services.AddHostedService<BlockchainSyncService>();
-builder.Services.AddHostedService<TransactionProcessorService>();
-builder.Services.AddHostedService<LoanOverdueUpdateService>();
-
-// email service
+builder.Services.AddScoped<ISupplierService, SupplierService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IInvoicePaymentService, InvoicePaymentService>();
+builder.Services.AddScoped<IMigrationService, MigrationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<ISelfServiceLoanService, SelfServiceLoanService>();
+builder.Services.AddScoped<IOtpService, OtpService>();
+builder.Services.AddScoped<ICountyReportService, CountyReportService>();
+builder.Services.AddScoped<IAssetsRegisterService, AssetsRegisterService>();
+builder.Services.AddScoped<IUserSessionService, UserSessionService>();
+builder.Services.AddScoped<IIpAddressHelper, IpAddressHelper>();
+
+
+builder.Services.AddScoped<IMpesaApiService, MpesaApiService>();
+builder.Services.AddHttpClient();
+
+// Configuration for M-PESA API
+builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+
+
+
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IDashboardCacheService, DashboardCacheService>();
+
+var backgroundServicesEnabled = builder.Configuration.GetValue<bool>("BackgroundServices:Enabled", true);
+var transactionInterval = builder.Configuration.GetValue<int>("BackgroundServices:TransactionProcessorIntervalSeconds", 60);
+var syncInterval = builder.Configuration.GetValue<int>("BackgroundServices:BlockchainSyncIntervalMinutes", 10);
+
+if (backgroundServicesEnabled && !builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<TransactionProcessorService>();
+    builder.Services.AddHostedService<BlockchainSyncService>();
+    builder.Services.AddHostedService<LoanOverdueUpdateService>();
+}
 
 // Caching
 builder.Services.AddMemoryCache();
@@ -166,7 +202,7 @@ app.UseRouting();
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapBlazorHub();
+// app.MapBlazorHub();
 // SIMPLIFIED Health check endpoint
 app.MapHealthChecks("/health");
 

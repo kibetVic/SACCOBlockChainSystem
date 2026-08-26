@@ -9,8 +9,9 @@
     var netAmount = ViewBag.NetAmount as decimal? ?? 0;
     var totalDeductions = ViewBag.TotalDeductions as decimal? ?? 0;
     var banks = ViewBag.Banks as IEnumerable<dynamic> ?? new List<dynamic>();
-    var glAccounts = ViewBag.CashGlAccounts as IEnumerable<dynamic> ?? new List<dynamic>();
     var member = ViewBag.Member as SACCOBlockChainSystem.Models.Member;
+    var isUpfrontInterest = ViewBag.IsUpfrontInterest as bool? ?? false;
+    var upfrontInterestAmount = ViewBag.UpfrontInterestAmount as decimal? ?? 0;
 }
 
 <div class="container py-4">
@@ -65,6 +66,13 @@
                         <span class="text-muted">Approved Amount:</span>
                         <strong class="text-primary">KES @approvedAmount.ToString("N2")</strong>
                     </div>
+                    @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                    {
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Upfront Interest:</span>
+                            <strong class="text-info">KES @upfrontInterestAmount.ToString("N2")</strong>
+                        </div>
+                    }
                     <div class="d-flex justify-content-between mb-2">
                         <span class="text-muted">Total Deductions:</span>
                         <strong class="text-danger">KES @totalDeductions.ToString("N2")</strong>
@@ -86,14 +94,6 @@
                         <span class="text-muted">Repayment Method:</span>
                         <span>@loan?.RepayMethod</span>
                     </div>
-                    @if (cheque != null)
-                    {
-                        <hr>
-                        <div class="d-flex justify-content-between mb-2">
-                            <span class="text-muted">Cheque/Voucher No:</span>
-                            <span>@cheque.Voucherno</span>
-                        </div>
-                    }
                 </div>
             </div>
         </div>
@@ -111,8 +111,11 @@
                         <input type="hidden" asp-for="CompanyCode" />
                         <input type="hidden" asp-for="DisbursedBy" />
                         <input type="hidden" asp-for="AuthorizedBy" />
+                        <input type="hidden" asp-for="GlAccountNo" />
                         <input type="hidden" asp-for="DisbursedAmount" value="@netAmount" />
-                        <input type="hidden" id="printReceiptHidden" name="printReceipt" value="true" />
+
+                        <!-- ✅ Hidden field for PrintReceipt -->
+                        <input type="hidden" name="PrintReceipt" value="true" id="printReceiptHidden" />
 
                         <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
@@ -134,31 +137,13 @@
                                     <option value="">-- Select Bank --</option>
                                     @foreach (var bank in banks)
                                     {
-                                        <option value="@bank.BankId" data-bank-name="@bank.BankName" data-account-no="@bank.AccountNumber">
+                                        <option value="@bank.BankId" data-bank-name="@bank.BankName" data-account-no="@bank.AccountNumber" data-gl-account="@bank.GlAccountNo">
                                             @bank.DisplayText
                                         </option>
                                     }
                                 </select>
                                 <small class="text-muted">Select the bank from which funds will be disbursed</small>
                                 <span asp-validation-for="BankId" class="text-danger"></span>
-                            </div>
-                        </div>
-
-                        <!-- GL Account Selection -->
-                        <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label fw-bold">GL Account *</label>
-                            <div class="col-sm-9">
-                                <select asp-for="GlAccountNo" class="form-select" id="GlAccountNo" required>
-                                    <option value="">-- Select GL Account --</option>
-                                    @foreach (var account in glAccounts)
-                                    {
-                                        <option value="@account.AccountNo" data-account-name="@account.AccountName">
-                                            @account.DisplayText
-                                        </option>
-                                    }
-                                </select>
-                                <small class="text-muted">Select the GL account for this transaction</small>
-                                <span asp-validation-for="GlAccountNo" class="text-danger"></span>
                             </div>
                         </div>
 
@@ -173,7 +158,7 @@
                                     <option value="CHEQUE">Cheque</option>
                                     <option value="CASH">Cash</option>
                                 </select>
-                                <span asp-validation-for="DisbursementMethod" class="text-danger"></span>Net Amount:
+                                <span asp-validation-for="DisbursementMethod" class="text-danger"></span>
                             </div>
                         </div>
 
@@ -213,6 +198,13 @@
                                     <input type="text" class="form-control" id="accountNoDisplay" readonly disabled />
                                 </div>
                             </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">Bank GL Account</label>
+                                <div class="col-sm-9">
+                                    <input type="text" class="form-control" id="bankGlAccountDisplay" readonly disabled />
+                                    <small class="text-muted">Bank GL account for this transaction (automatically assigned)</small>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Cheque Details -->
@@ -226,11 +218,11 @@
                             </div>
                         </div>
 
-                        <!-- Print Receipt Checkbox - ADD THIS -->
+                        <!-- Print Receipt Checkbox -->
                         <div class="row mb-3">
                             <div class="col-sm-9 offset-sm-3">
                                 <div class="form-check">
-                                    <input type="checkbox" class="form-check-input" id="printReceipt" checked />
+                                    <input type="checkbox" class="form-check-input" id="printReceipt" checked="checked" />
                                     <label class="form-check-label" for="printReceipt">
                                         <i class="fas fa-print"></i> Print receipt after disbursement
                                     </label>
@@ -249,6 +241,13 @@
                                                 <td>Approved Amount:</td>
                                                 <td class="text-end">KES @approvedAmount.ToString("N2")</td>
                                             </tr>
+                                            @if (isUpfrontInterest && upfrontInterestAmount > 0)
+                                            {
+                                                <tr>
+                                                    <td><strong>Upfront Interest:</strong></td>
+                                                    <td class="text-end text-info">KES @upfrontInterestAmount.ToString("N2")</td>
+                                                </tr>
+                                            }
                                             <tr class="text-danger">
                                                 <td>Total Deductions:</td>
                                                 <td class="text-end">- KES @totalDeductions.ToString("N2")</td>
@@ -270,7 +269,7 @@
                                 Cancel
                             </a>
                             <button type="submit" class="btn btn-success" id="submitBtn">
-                                <i class="bi bi-cash-stack me-2"></i>Disbursement
+                                <i class="bi bi-cash-stack me-2"></i>Disburse Loan
                             </button>
                         </div>
                     </form>
@@ -292,16 +291,12 @@
                 var selectedOption = $(this).find('option:selected');
                 var bankName = selectedOption.data('bank-name') || selectedOption.text().split(' - ')[0] || '-';
                 var accountNo = selectedOption.data('account-no') || '';
+                var glAccount = selectedOption.data('gl-account') || '';
 
                 $('#bankNameDisplay').val(bankName);
                 $('#accountNoDisplay').val(accountNo);
-            });
-
-            // Update GL Account display
-            $('#GlAccountNo').on('change', function() {
-                var selectedOption = $(this).find('option:selected');
-                var glAccountName = selectedOption.data('account-name') || selectedOption.text().split(' - ')[1] || selectedOption.text();
-                $('#glAccountDisplay').text(glAccountName);
+                $('#bankGlAccountDisplay').val(glAccount);
+                $('#sourceBankAccountDisplay').text(glAccount || 'Not selected');
             });
 
             // Toggle payment method details
@@ -326,29 +321,30 @@
 
             // Trigger initial display
             $('#bankSelect').trigger('change');
-            $('#GlAccountNo').trigger('change');
             $('#disbursementMethod').trigger('change');
 
-            // Sync printReceipt checkbox with hidden field
+            // Sync checkbox with hidden field
             $('#printReceipt').on('change', function() {
-                $('#printReceiptHidden').val(this.checked);
+                $('#printReceiptHidden').val(this.checked ? 'true' : 'false');
+            });
+
+            // Ensure hidden field is set on form submit
+            $('#disbursementForm').on('submit', function(e) {
+                var isChecked = $('#printReceipt').is(':checked');
+                $('#printReceiptHidden').val(isChecked ? 'true' : 'false');
+
+                console.log('Print Receipt:', isChecked);
+                console.log('Hidden value:', $('#printReceiptHidden').val());
             });
 
             // Form validation
             $('#disbursementForm').on('submit', function(e) {
                 var method = $('#disbursementMethod').val();
                 var bankId = $('#bankSelect').val();
-                var glAccount = $('#GlAccountNo').val();
 
                 if (!bankId) {
                     e.preventDefault();
                     alert('Please select a source bank');
-                    return false;
-                }
-
-                if (!glAccount) {
-                    e.preventDefault();
-                    alert('Please select a GL Account');
                     return false;
                 }
 

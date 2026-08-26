@@ -8,6 +8,18 @@ using System.Security.Claims;
 
 namespace SACCOBlockChainSystem.Services
 {
+    public interface IMemberService
+    {
+        Task<MemberResponseDTO> RegisterMemberAsync(MemberRegistrationDTO registration);
+        Task<List<Member>> SearchMembersAsync(string searchTerm);
+        Task<List<BlockchainTransaction>> GetMemberBlockchainHistoryAsync(string memberNo);
+        Task<List<Member>> GetAllMembersAsync();
+        Task<decimal> GetShareBalanceAsync(string memberNo);
+        Task<MemberDTO> GetMemberDetailsAsync(string memberNo);
+        Task<MemberResponseDTO> UpdateMemberAsync(string memberNo, MemberUpdateDTO updateDto);
+        Task<decimal> GetMemberShareTypeTotalAsync(string memberNo, string shareTypeCode, string companyCode);
+        Task<MembersPerCIGReportViewModel> GetMembersPerCIGReportAsync(string companyCode, string? searchTerm = null, string? statusFilter = null);
+    }
     public class MemberService : IMemberService
     {
         private readonly ApplicationDbContext _context;
@@ -17,6 +29,8 @@ namespace SACCOBlockChainSystem.Services
         private readonly ICompanyContextService _companyContextService;
         private readonly IHttpContextAccessor _httpContextAccesso;
         private readonly AuditTrailService _auditService;
+        private readonly ICryptoService _cryptoService;
+        private WalletService _walletService;
         // private readonly UserManager<IdentityUser> _userManager;
 
         public MemberService(
@@ -25,6 +39,8 @@ namespace SACCOBlockChainSystem.Services
             ILogger<MemberService> logger,
             IHttpContextAccessor httpContextAccessor,
             AuditTrailService auditService,
+            ICryptoService cryptoService,
+            WalletService walletService,
             //UserManager<IdentityUser> userManager,
             ICompanyContextService companyContextService)
         {
@@ -32,7 +48,9 @@ namespace SACCOBlockChainSystem.Services
             _blockchainService = blockchainService;
             _httpContextAccessor = httpContextAccessor;
             _auditService = auditService;
+            _walletService = walletService;
             _logger = logger;
+            _cryptoService = cryptoService;
             //_userManager = userManager;
             _companyContextService = companyContextService;
         }
@@ -95,9 +113,7 @@ namespace SACCOBlockChainSystem.Services
                     throw new ValidationException("ID Number is required.");
                 }
 
-                // =====================================================
                 // AGE VALIDATION BASED ON MEMBERSHIP TYPE
-                // =====================================================
                 if (!string.IsNullOrEmpty(registration.MembershipType))
                 {
                     if (registration.MembershipType.Equals("Individual", StringComparison.OrdinalIgnoreCase))
@@ -107,22 +123,20 @@ namespace SACCOBlockChainSystem.Services
                             throw new ValidationException("Date of Birth is required for Individual members.");
                         }
 
-                        var age = registration.Age ??
-                                  CalculateAge(registration.DateOfBirth.Value);
+                        var age = registration.Age ?? CalculateAge(registration.DateOfBirth.Value);
 
                         if (age < 18)
                         {
                             throw new ValidationException("Individual members must be 18 years or older.");
                         }
                     }
-                    // Corporate → no restriction (allow any or null age)
                 }
 
                 // Get current user's company code
                 var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();
                 _logger.LogInformation($"Using company code from current user context: {currentCompanyCode}");
 
-                // Get company name for Employer field (MOVED HERE - AFTER currentCompanyCode is declared)
+                // Get company name for Employer field
                 var company = await _context.Companies
                     .FirstOrDefaultAsync(c => c.CompanyCode == currentCompanyCode);
                 registration.Employer = company?.CompanyName ?? currentCompanyCode;
@@ -160,35 +174,16 @@ namespace SACCOBlockChainSystem.Services
                     }
                 }
 
-                // Determine member number - PRIORITIZE the one from the DTO
-                string memberNo;
+                string memberNo = registration.MemberNo;
 
-                // FIRST: Check if user provided a member number via the DTO (from the view)
-                if (!string.IsNullOrEmpty(registration.MemberNo))
+                if (string.IsNullOrEmpty(memberNo))
                 {
-                    // Check if the provided member number is available
-                    var existingByMemberNo = await _context.Members
-                        .FirstOrDefaultAsync(m => m.MemberNo == registration.MemberNo && m.CompanyCode == currentCompanyCode);
+                    // This should NEVER happen if controller always provides one
+                    // But as a safety net, throw an error
+                    throw new InvalidOperationException("Member number is required. Controller must provide a valid member number.");
+                }
 
-                    if (existingByMemberNo == null)
-                    {
-                        // Use the member number from the view/DTO
-                        memberNo = registration.MemberNo;
-                        _logger.LogInformation($"Using member number from view: {memberNo}");
-                    }
-                    else
-                    {
-                        // The number from view already exists - generate a new one
-                        _logger.LogWarning($"Member number from view ({registration.MemberNo}) already exists. Generating new number.");
-                        memberNo = await GenerateUniqueMemberNumberAsync(currentCompanyCode, registration);
-                    }
-                }
-                else
-                {
-                    // No member number provided - auto-generate
-                    _logger.LogInformation("No member number provided in DTO. Auto-generating new number.");
-                    memberNo = await GenerateUniqueMemberNumberAsync(currentCompanyCode, registration);
-                }
+                _logger.LogInformation($"Using member number from controller: {memberNo}");
 
                 // Validate CIG group if provided
                 if (!string.IsNullOrEmpty(registration.Cigcode))
@@ -209,76 +204,124 @@ namespace SACCOBlockChainSystem.Services
                 // Create Member record with all fields from DTO
                 var member = new Member
                 {
-                    // Core Fields
-                    MemberNo = memberNo, // USE THE DETERMINED member number
+                    MemberNo = memberNo,
                     Surname = registration.Surname,
                     OtherNames = registration.OtherNames,
                     FullName = $"{registration.Surname} {registration.OtherNames}".Trim(),
-
-                    // Identification
                     Idno = registration.IdNo,
-
-                    // Contact Information
                     PhoneNo = registration.PhoneNo,
                     HomeTelNo = registration.LandLine,
                     Email = registration.Email,
                     EmailAddress = registration.Email,
-
-                    // Personal Details
                     Sex = registration.Gender,
                     Dob = registration.DateOfBirth,
-                    Age = registration.Age ?? (registration.DateOfBirth.HasValue ?
-                          CalculateAge(registration.DateOfBirth.Value) : (int?)null),
-
-                    // Employment & Location
+                    Age = registration.Age ?? (registration.DateOfBirth.HasValue ? CalculateAge(registration.DateOfBirth.Value) : (int?)null),
                     Station = registration.Station,
                     Dept = registration.Department,
                     PresentAddr = registration.PresentAddress,
                     Employer = registration.Employer,
-
-                    // Company Information
                     CompanyCode = currentCompanyCode,
                     Cigcode = registration.Cigcode ?? currentCompanyCode,
-
-                    // Membership Details
                     MembershipType = registration.MembershipType,
                     MemberDescription = registration.RegistrationType,
-
-                    // Financial Information
                     ShareCap = registration.InitialShares,
                     InitShares = registration.InitialShares,
+                    Photo = registration.Photo,
+                    IdFrontImage = registration.IdFrontImage,  
+                    IdBackImage = registration.IdBackImage, 
                     LoanBalance = 0,
                     InterestBalance = 0,
-
-                    // Status Flags
-                    Status = 1,
+                    Status = 1,  // Active
                     Mstatus = true,
                     Archived = false,
                     Withdrawn = false,
                     Dormant = 0,
-
-                    // Dates
                     ApplicDate = registration.RegistrationDate,
                     EffectDate = DateTime.Now,
                     AsAtDate = DateTime.Now,
                     EDate = DateTime.Now,
-
-                    // Audit Fields
                     Posted = "Y",
                     AuditId = currentUserName,
                     AuditTime = DateTime.Now,
                     AuditDateTime = DateTime.Now,
-
-                    // Blockchain
                     BlockchainTxId = null
                 };
 
-                _logger.LogInformation($"Adding member to database with MemberNo: {memberNo} (from view: {registration.MemberNo}) for company: {currentCompanyCode}");
+                _logger.LogInformation($"Adding member to database with MemberNo: {memberNo}");
                 _context.Members.Add(member);
-                await _context.SaveChangesAsync();
-                _logger.LogInformation($"Member saved to database successfully with MemberNo: {member.MemberNo}");
 
-                // Rest of your blockchain and response code remains the same...
+                // IMPORTANT: Save changes and capture the result
+                var saveResult = await _context.SaveChangesAsync();
+                _logger.LogInformation($"SaveChangesAsync returned {saveResult} rows affected. Member ID: {member.Id}, MemberNo: {member.MemberNo}");
+
+                // CRITICAL FIX: Check if SaveChangesAsync affected any rows
+                if (saveResult <= 0)
+                {
+                    _logger.LogError("SaveChangesAsync returned 0 rows affected. Member was not saved!");
+                    throw new Exception("Failed to save member properly - no rows affected");
+                }
+
+                // CRITICAL FIX: After SaveChangesAsync, refresh the entity to ensure we have the generated ID
+                if (member.Id == 0)
+                {
+                    _logger.LogWarning("Member Id is 0 after SaveChanges. Attempting to refresh entity...");
+
+                    // Try to reload the entity from database
+                    await _context.Entry(member).ReloadAsync();
+
+                    // If still 0, query for it directly
+                    if (member.Id == 0)
+                    {
+                        var savedMember = await _context.Members
+                            .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == currentCompanyCode);
+
+                        if (savedMember != null)
+                        {
+                            member = savedMember;
+                            _logger.LogInformation($"Found member via query with ID: {member.Id}");
+                        }
+                        else
+                        {
+                            _logger.LogError($"Cannot find member with MemberNo: {memberNo} after save!");
+                            throw new Exception("Failed to save member properly - cannot retrieve saved member");
+                        }
+                    }
+                }
+
+                _logger.LogInformation($"Member verified with ID: {member.Id}, MemberNo: {member.MemberNo}");
+
+                // Create wallet for the new member (ONLY ONCE)
+                try
+                {
+                    WalletConfig walletConfig = await _walletService.GetConfigurations(company.CompanyCode);
+                    if (walletConfig.EnableWallets == true)
+                    {
+                        if (walletConfig.AutoAssignWalletOnRegistration == true)
+                        {
+                            _logger.LogInformation($"Creating wallet for member ID={member.Id}, MemberNo={member.MemberNo}");
+                            var walletResult = await _cryptoService.CreateWalletForMemberAsync(member.Id, member.MemberNo, currentCompanyCode);
+
+                            if (walletResult.Success)
+                            {
+                                _logger.LogInformation($"Wallet created for new member {memberNo}: {walletResult.WalletAddress}");
+                                // Refresh member to get updated WalletAddress
+                                await _context.Entry(member).ReloadAsync();
+                            }
+                            else
+                            {
+                                _logger.LogWarning($"Failed to create wallet for member {memberNo}: {walletResult.Message}");
+                            }
+                        }
+                    }
+                    
+                }
+                catch (Exception walletEx)
+                {
+                    _logger.LogError(walletEx, $"Error creating wallet for member {memberNo}");
+                    // Don't throw - wallet creation shouldn't block member registration
+                }
+
+                // Create blockchain transaction
                 try
                 {
                     var blockchainData = new
@@ -328,6 +371,7 @@ namespace SACCOBlockChainSystem.Services
                         await _context.SaveChangesAsync();
                         _logger.LogInformation($"Blockchain transaction ID saved: {blockchainTx.TransactionId}");
                     }
+                    
 
                     await transaction.CommitAsync();
                     _logger.LogInformation($"Transaction committed successfully for member: {memberNo}");
@@ -350,27 +394,29 @@ namespace SACCOBlockChainSystem.Services
                 catch (Exception blockchainEx)
                 {
                     _logger.LogError(blockchainEx, "Error with blockchain transaction, but member was saved to database");
-                    await transaction.CommitAsync();
-
-                    return new MemberResponseDTO
-                    {
-                        MemberNo = memberNo,
-                        FullName = $"{registration.Surname} {registration.OtherNames}",
-                        Status = "ACTIVE",
-                        RegistrationDate = registration.RegistrationDate,
-                        BlockchainTxId = null,
-                        ShareBalance = registration.InitialShares,
-                        Email = registration.Email,
-                        Phone = registration.PhoneNo,
-                        CompanyCode = currentCompanyCode,
-                        MembershipType = registration.MembershipType,
-                        RegistrationType = registration.RegistrationType
-                    };
+                    // Don't throw - blockchain failure shouldn't rollback member registration
                 }
+
+                await transaction.CommitAsync();
+                _logger.LogInformation($"Transaction committed successfully for member: {memberNo}");
+
+                return new MemberResponseDTO
+                {
+                    MemberNo = memberNo,
+                    FullName = $"{registration.Surname} {registration.OtherNames}",
+                    Status = "ACTIVE",
+                    RegistrationDate = registration.RegistrationDate,
+                    BlockchainTxId = member.BlockchainTxId,
+                    ShareBalance = registration.InitialShares,
+                    Email = registration.Email,
+                    Phone = registration.PhoneNo,
+                    CompanyCode = currentCompanyCode,
+                    MembershipType = registration.MembershipType,
+                    RegistrationType = registration.RegistrationType
+                };
             }
             catch (Exception ex)
             {
-                // Rollback and error handling remains the same...
                 try
                 {
                     await transaction.RollbackAsync();
@@ -381,6 +427,7 @@ namespace SACCOBlockChainSystem.Services
                     _logger.LogError(rollbackEx, "Error rolling back transaction");
                 }
 
+                // Handle specific exceptions
                 if (ex is ValidationException)
                 {
                     throw new Exception($"Validation error: {ex.Message}");
@@ -409,6 +456,7 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
+
         public async Task<MemberResponseDTO> UpdateMemberAsync(string memberNo, MemberUpdateDTO updateDto)
         {
             _logger.LogInformation($"Starting member update for: {memberNo}");
@@ -429,62 +477,13 @@ namespace SACCOBlockChainSystem.Services
                     throw new InvalidOperationException($"Member {memberNo} not found.");
                 }
 
+                _logger.LogInformation($"Found member: {memberNo}, Current Surname: {member.Surname}");
+
                 // =====================================================
-                // AGE VALIDATION FOR UPDATE
+                // UPDATE ID NUMBER
                 // =====================================================
-                if (updateDto.DateOfBirth.HasValue || !string.IsNullOrEmpty(updateDto.MembershipType))
+                if (!string.IsNullOrEmpty(updateDto.IdNo))
                 {
-                    string membershipType = updateDto.MembershipType ?? member.MembershipType;
-                    DateTime? dob = updateDto.DateOfBirth.HasValue ? updateDto.DateOfBirth : member.Dob;
-
-                    if (!string.IsNullOrEmpty(membershipType) && membershipType.Equals("Individual", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (!dob.HasValue || dob.Value == default(DateTime))
-                        {
-                            throw new ValidationException("Date of Birth is required for Individual members.");
-                        }
-
-                        int age = CalculateAge(dob.Value);
-                        if (age < 18)
-                        {
-                            throw new ValidationException("Individual members must be 18 years or older.");
-                        }
-
-                        // Update age if dob was changed
-                        if (updateDto.DateOfBirth.HasValue)
-                        {
-                            member.Age = age;
-                        }
-                    }
-                }
-
-                // Store old values for blockchain record
-                var oldValues = new
-                {
-                    member.Idno,
-                    member.ApplicDate,
-                    member.Surname,
-                    member.OtherNames,
-                    member.PhoneNo,
-                    member.HomeTelNo,
-                    member.Email,
-                    member.Sex,
-                    member.Dob,
-                    member.Station,
-                    member.Dept,
-                    member.PresentAddr,
-                    member.Cigcode,
-                    member.MembershipType,
-                    member.MemberDescription,
-                    member.Status,
-                    member.Mstatus,
-                    member.Employer  // Add employer to old values
-                };
-
-                // Update ID Number if provided and different
-                if (!string.IsNullOrEmpty(updateDto.IdNo) && updateDto.IdNo != member.Idno)
-                {
-                    // Check if the new ID number already exists for another member
                     var existingWithId = await _context.Members
                         .FirstOrDefaultAsync(m => m.Idno == updateDto.IdNo &&
                                                  m.CompanyCode == currentCompanyCode &&
@@ -494,37 +493,52 @@ namespace SACCOBlockChainSystem.Services
                     {
                         throw new InvalidOperationException($"ID Number {updateDto.IdNo} is already registered to another member.");
                     }
-
                     member.Idno = updateDto.IdNo;
                 }
 
-                // Update Registration Date if provided - FIXED: RegistrationDate is DateTime, not nullable
-                // Check if it's a valid date (not default/min value)
+                // =====================================================
+                // UPDATE REGISTRATION DATE
+                // =====================================================
                 if (updateDto.RegistrationDate != default(DateTime) && updateDto.RegistrationDate != DateTime.MinValue)
                 {
                     member.ApplicDate = updateDto.RegistrationDate;
                 }
 
-                // Update employer if provided
+                // =====================================================
+                // UPDATE EMPLOYER
+                // =====================================================
                 if (!string.IsNullOrEmpty(updateDto.Employer))
                 {
                     member.Employer = updateDto.Employer;
                 }
 
-                // Update other fields
+                // =====================================================
+                // UPDATE NAME
+                // =====================================================
                 if (!string.IsNullOrEmpty(updateDto.Surname))
+                {
                     member.Surname = updateDto.Surname;
+                }
 
                 if (!string.IsNullOrEmpty(updateDto.OtherNames))
+                {
                     member.OtherNames = updateDto.OtherNames;
+                }
 
                 member.FullName = $"{member.Surname} {member.OtherNames}".Trim();
 
+                // =====================================================
+                // UPDATE CONTACT
+                // =====================================================
                 if (!string.IsNullOrEmpty(updateDto.PhoneNo))
+                {
                     member.PhoneNo = updateDto.PhoneNo;
+                }
 
                 if (updateDto.LandLine != null)
+                {
                     member.HomeTelNo = updateDto.LandLine;
+                }
 
                 if (updateDto.Email != null)
                 {
@@ -532,8 +546,13 @@ namespace SACCOBlockChainSystem.Services
                     member.EmailAddress = updateDto.Email;
                 }
 
+                // =====================================================
+                // UPDATE PERSONAL DETAILS
+                // =====================================================
                 if (updateDto.Gender != null)
+                {
                     member.Sex = updateDto.Gender;
+                }
 
                 if (updateDto.DateOfBirth.HasValue)
                 {
@@ -542,31 +561,50 @@ namespace SACCOBlockChainSystem.Services
                 }
 
                 if (updateDto.Station != null)
+                {
                     member.Station = updateDto.Station;
+                }
 
                 if (updateDto.Department != null)
+                {
                     member.Dept = updateDto.Department;
+                }
 
                 if (updateDto.PresentAddress != null)
+                {
                     member.PresentAddr = updateDto.PresentAddress;
+                }
 
+                // =====================================================
+                // UPDATE MEMBERSHIP SETTINGS
+                // =====================================================
                 if (updateDto.Cigcode != null)
+                {
                     member.Cigcode = updateDto.Cigcode;
+                }
 
                 if (updateDto.MembershipType != null)
+                {
                     member.MembershipType = updateDto.MembershipType;
+                }
 
                 if (updateDto.RegistrationType != null)
+                {
                     member.MemberDescription = updateDto.RegistrationType;
+                }
 
-                // Update marital status
+                // =====================================================
+                // UPDATE MARITAL STATUS
+                // =====================================================
                 if (!string.IsNullOrEmpty(updateDto.MaritalStatus))
                 {
                     member.Mstatus = updateDto.MaritalStatus.ToUpper() == "MARRIED" ? true :
                                      updateDto.MaritalStatus.ToUpper() == "SINGLE" ? false : member.Mstatus;
                 }
 
-                // Update status
+                // =====================================================
+                // UPDATE STATUS
+                // =====================================================
                 if (!string.IsNullOrEmpty(updateDto.Status))
                 {
                     member.Status = updateDto.Status switch
@@ -580,15 +618,50 @@ namespace SACCOBlockChainSystem.Services
                     };
                 }
 
-                // Update audit fields
+                // =====================================================
+                // UPDATE PHOTO - Handle base64 images
+                // =====================================================
+                if (!string.IsNullOrEmpty(updateDto.Photo))
+                {
+                    member.Photo = updateDto.Photo;
+                    _logger.LogInformation($"Photo updated for member {memberNo}");
+                }
+
+                // =====================================================
+                // UPDATE ID FRONT IMAGE
+                // =====================================================
+                if (!string.IsNullOrEmpty(updateDto.IdFrontImage))
+                {
+                    member.IdFrontImage = updateDto.IdFrontImage;
+                    _logger.LogInformation($"ID Front image updated for member {memberNo}");
+                }
+
+                // =====================================================
+                // UPDATE ID BACK IMAGE
+                // =====================================================
+                if (!string.IsNullOrEmpty(updateDto.IdBackImage))
+                {
+                    member.IdBackImage = updateDto.IdBackImage;
+                    _logger.LogInformation($"ID Back image updated for member {memberNo}");
+                }
+
+                // =====================================================
+                // UPDATE AUDIT FIELDS
+                // =====================================================
                 member.AuditId = currentUserName;
                 member.AuditTime = DateTime.Now;
                 member.AuditDateTime = DateTime.Now;
 
+                // =====================================================
+                // SAVE CHANGES
+                // =====================================================
+                _logger.LogInformation($"Saving member {memberNo} with updated fields");
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Member {memberNo} updated in database");
+                _logger.LogInformation($"Member {memberNo} saved successfully");
 
-                // Create blockchain transaction for the update
+                // =====================================================
+                // BLOCKCHAIN TRANSACTION (Optional)
+                // =====================================================
                 string blockchainTxId = null;
                 try
                 {
@@ -596,38 +669,25 @@ namespace SACCOBlockChainSystem.Services
                     {
                         MemberNo = memberNo,
                         Action = "UPDATE",
-                        OldValues = oldValues,
-                        NewValues = new
-                        {
-                            member.Idno,
-                            member.ApplicDate,
-                            member.Surname,
-                            member.OtherNames,
-                            member.PhoneNo,
-                            member.HomeTelNo,
-                            member.Email,
-                            member.Sex,
-                            member.Dob,
-                            member.Station,
-                            member.Dept,
-                            member.PresentAddr,
-                            member.Cigcode,
-                            member.MembershipType,
-                            member.MemberDescription,
-                            member.Status,
-                            member.Mstatus,
-                            member.Employer 
-                        },
                         UpdatedBy = currentUserName,
                         UpdatedAt = DateTime.Now,
-                        UpdateType = "MEMBER_UPDATE"
+                        Fields = new
+                        {
+                            IdNo = member.Idno,
+                            Surname = member.Surname,
+                            OtherNames = member.OtherNames,
+                            PhoneNo = member.PhoneNo,
+                            Email = member.Email,
+                            MembershipType = member.MembershipType,
+                            Status = member.Status
+                        }
                     };
 
                     var blockchainTx = await _blockchainService.CreateAndAddTransactionAsync(
                         "MEMBER_UPDATE",
                         memberNo,
                         currentCompanyCode,
-                        0, // No amount for update
+                        0,
                         memberNo,
                         blockchainData
                     );
@@ -643,12 +703,10 @@ namespace SACCOBlockChainSystem.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error recording blockchain update transaction, but member was updated");
-                    // Don't throw - member update succeeded, blockchain recording failed
                 }
 
                 await transaction.CommitAsync();
 
-                // Return response DTO
                 return new MemberResponseDTO
                 {
                     MemberNo = member.MemberNo,
@@ -667,11 +725,12 @@ namespace SACCOBlockChainSystem.Services
                     ShareBalance = member.ShareCap ?? 0,
                     Email = member.Email,
                     Phone = member.PhoneNo,
+                    Photo = member.Photo,
                     CompanyCode = member.CompanyCode,
                     MembershipType = member.MembershipType,
                     RegistrationType = member.MemberDescription,
                     IsActive = member.Status == 1,
-                    Employer = member.Employer  
+                    Employer = member.Employer
                 };
             }
             catch (Exception ex)
@@ -682,83 +741,83 @@ namespace SACCOBlockChainSystem.Services
             }
         }
 
-        private async Task<string> GenerateUniqueMemberNumberAsync(string companyCode, MemberRegistrationDTO registration)
-        {
-            string memberNo = string.Empty;
-            bool isUnique = false;
-            int attempts = 0;
-            const int maxAttempts = 5;
+        //private async Task<string> GenerateUniqueMemberNumberAsync(string companyCode, MemberRegistrationDTO registration)
+        //{
+        //    string memberNo = string.Empty;
+        //    bool isUnique = false;
+        //    int attempts = 0;
+        //    const int maxAttempts = 5;
 
-            do
-            {
-                attempts++;
+        //    do
+        //    {
+        //        attempts++;
 
-                // Get month initial (first letter of current month in uppercase)
-                string monthInitial = DateTime.Now.ToString("MMM").Substring(0, 1).ToUpper();
+        //        // Get month initial (first letter of current month in uppercase)
+        //        string monthInitial = DateTime.Now.ToString("MMM").Substring(0, 1).ToUpper();
 
-                // Generate 11 unique digits: yyMMddHHmmss (12 digits) but we'll take last 11 or generate differently
-                // Option 1: Use timestamp (yyMMddHHmmss) - 12 digits, take last 11
-                string timestamp = DateTime.Now.ToString("yyMMddHHmmss");
-                string uniqueDigits = timestamp.Length > 11 ? timestamp.Substring(timestamp.Length - 11) : timestamp.PadLeft(11, '0');
+        //        // Generate 11 unique digits: yyMMddHHmmss (12 digits) but we'll take last 11 or generate differently
+        //        // Option 1: Use timestamp (yyMMddHHmmss) - 12 digits, take last 11
+        //        string timestamp = DateTime.Now.ToString("yyMMddHHmmss");
+        //        string uniqueDigits = timestamp.Length > 11 ? timestamp.Substring(timestamp.Length - 11) : timestamp.PadLeft(11, '0');
 
-                // Alternative Option 2: Use combination of date + random for more uniqueness
-                // string datePart = DateTime.Now.ToString("yyMMdd"); // 6 digits
-                // string randomPart = new Random().Next(10000, 99999).ToString(); // 5 digits
-                // string uniqueDigits = $"{datePart}{randomPart}"; // 11 digits
+        //        // Alternative Option 2: Use combination of date + random for more uniqueness
+        //        // string datePart = DateTime.Now.ToString("yyMMdd"); // 6 digits
+        //        // string randomPart = new Random().Next(10000, 99999).ToString(); // 5 digits
+        //        // string uniqueDigits = $"{datePart}{randomPart}"; // 11 digits
 
-                // Combine: Month Initial + 11 digits = 12 characters total
-                memberNo = $"{monthInitial}{uniqueDigits}";
+        //        // Combine: Month Initial + 11 digits = 12 characters total
+        //        memberNo = $"{monthInitial}{uniqueDigits}";
 
-                // Ensure exact length (should be 12 characters)
-                if (memberNo.Length > 12)
-                {
-                    memberNo = memberNo.Substring(0, 12);
-                }
-                else if (memberNo.Length < 12)
-                {
-                    // Pad with random numbers if too short
-                    Random rand = new Random();
-                    memberNo = memberNo.PadRight(12, (char)('0' + rand.Next(0, 9)));
-                }
+        //        // Ensure exact length (should be 12 characters)
+        //        if (memberNo.Length > 12)
+        //        {
+        //            memberNo = memberNo.Substring(0, 12);
+        //        }
+        //        else if (memberNo.Length < 12)
+        //        {
+        //            // Pad with random numbers if too short
+        //            Random rand = new Random();
+        //            memberNo = memberNo.PadRight(12, (char)('0' + rand.Next(0, 9)));
+        //        }
 
-                // Check uniqueness
-                var existing = await _context.Members
-                    .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
+        //        // Check uniqueness
+        //        var existing = await _context.Members
+        //            .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
 
-                isUnique = existing == null;
+        //        isUnique = existing == null;
 
-                if (!isUnique && attempts < maxAttempts)
-                {
-                    // Small delay to ensure different timestamp
-                    await Task.Delay(100);
-                }
+        //        if (!isUnique && attempts < maxAttempts)
+        //        {
+        //            // Small delay to ensure different timestamp
+        //            await Task.Delay(100);
+        //        }
 
-            } while (!isUnique && attempts < maxAttempts);
+        //    } while (!isUnique && attempts < maxAttempts);
 
-            // If still not unique after max attempts
-            if (!isUnique)
-            {
-                // Use GUID for guaranteed uniqueness
-                string monthInitial = DateTime.Now.ToString("MMM").Substring(0, 1).ToUpper();
-                string guidDigits = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 11);
-                memberNo = $"{monthInitial}{guidDigits}";
+        //    // If still not unique after max attempts
+        //    if (!isUnique)
+        //    {
+        //        // Use GUID for guaranteed uniqueness
+        //        string monthInitial = DateTime.Now.ToString("MMM").Substring(0, 1).ToUpper();
+        //        string guidDigits = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 11);
+        //        memberNo = $"{monthInitial}{guidDigits}";
 
-                // Final check
-                var finalCheck = await _context.Members
-                    .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
+        //        // Final check
+        //        var finalCheck = await _context.Members
+        //            .FirstOrDefaultAsync(m => m.MemberNo == memberNo && m.CompanyCode == companyCode);
 
-                if (finalCheck != null)
-                {
-                    // Last resort: add random suffix
-                    Random random = new Random();
-                    string suffix = random.Next(100, 999).ToString();
-                    memberNo = $"{memberNo.Substring(0, Math.Min(9, memberNo.Length))}{suffix}";
-                }
-            }
+        //        if (finalCheck != null)
+        //        {
+        //            // Last resort: add random suffix
+        //            Random random = new Random();
+        //            string suffix = random.Next(100, 999).ToString();
+        //            memberNo = $"{memberNo.Substring(0, Math.Min(9, memberNo.Length))}{suffix}";
+        //        }
+        //    }
 
-            _logger.LogInformation($"Generated member number: {memberNo} after {attempts} attempt(s)");
-            return memberNo;
-        }
+        //    _logger.LogInformation($"Generated member number: {memberNo} after {attempts} attempt(s)");
+        //    return memberNo;
+        //}
 
         private int CalculateAge(DateTime dateOfBirth)
         {
@@ -840,7 +899,7 @@ namespace SACCOBlockChainSystem.Services
             if (shareTypeName.Contains("reg") ||
                 shareTypeName.Contains("fee") ||
                 shareTypeName.Contains("registration") ||
-                (shareType.Issharecapital == 0 && shareType.UsedToGuarantee == false && shareType.UsedToOffset == false && shareType.Withdrawable == false))
+                (shareType.Issharecapital == false && shareType.UsedToGuarantee == false && shareType.UsedToOffset == false && shareType.Withdrawable == false))
             {
                 return contribShare.RegFeeAmount ?? 0;
             }
@@ -925,9 +984,150 @@ namespace SACCOBlockChainSystem.Services
                 .ToListAsync();
         }
 
-        public Task<MemberDTO> GetMemberDetailsAsync(string memberNo)
+        public async Task<MembersPerCIGReportViewModel> GetMembersPerCIGReportAsync(string companyCode, string? searchTerm = null, string? statusFilter = null)
         {
-            throw new NotImplementedException();
+            try
+            {
+                _logger.LogInformation($"Generating Members per CIG Report for company: {companyCode}");
+
+                // 1. Get all CIGs for the company
+                var cigsQuery = _context.CIGs
+                    .Where(c => c.CompanyCode == companyCode && c.Status == "Active")
+                    .OrderBy(c => c.GigName);
+
+                var cigs = await cigsQuery.ToListAsync();
+
+                var report = new MembersPerCIGReportViewModel
+                {
+                    CompanyCode = companyCode,
+                    ReportDate = DateTime.Now,
+                    TotalCIGs = cigs.Count,
+                    CIGs = new List<CIGReportDTO>()
+                };
+
+                // Get company name
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyCode == companyCode);
+                report.CompanyName = company?.CompanyName ?? "SACCO BlockChain System";
+
+                // 2. For each CIG, get its members
+                foreach (var cig in cigs)
+                {
+                    var membersQuery = _context.Members
+                        .Where(m => m.CompanyCode == companyCode && m.Cigcode == cig.GigCode);
+
+                    // Apply search filter
+                    if (!string.IsNullOrEmpty(searchTerm))
+                    {
+                        membersQuery = membersQuery.Where(m =>
+                            m.MemberNo.Contains(searchTerm) ||
+                            (m.Surname + " " + m.OtherNames).Contains(searchTerm) ||
+                            m.Idno.Contains(searchTerm) ||
+                            m.PhoneNo.Contains(searchTerm) ||
+                            m.Email.Contains(searchTerm));
+                    }
+
+                    // Apply status filter
+                    if (!string.IsNullOrEmpty(statusFilter))
+                    {
+                        if (statusFilter == "Active")
+                        {
+                            membersQuery = membersQuery.Where(m => m.Withdrawn != true && m.Archived != true && m.Dormant != 1);
+                        }
+                        else if (statusFilter == "Inactive")
+                        {
+                            membersQuery = membersQuery.Where(m => m.Withdrawn == true || m.Archived == true || m.Dormant == 1);
+                        }
+                    }
+
+                    var members = await membersQuery
+                        .OrderBy(m => m.Surname)
+                        .ThenBy(m => m.OtherNames)
+                        .ToListAsync();
+
+                    var cigReport = new CIGReportDTO
+                    {
+                        CIGCode = cig.GigCode,
+                        CIGName = cig.GigName,
+                        ContactPhone = cig.ContactPhone,
+                        ContactEmail = cig.ContactEmail,
+                        Chairperson = cig.Chairperson,
+                        RegistrationDate = cig.RegistrationDate,
+                        Status = cig.Status,
+                        TotalMembers = members.Count,
+                        Members = members.Select(m => new MemberPerCIGDTO
+                        {
+                            MemberNo = m.MemberNo,
+                            FullName = $"{m.Surname ?? ""} {m.OtherNames ?? ""}".Trim(),
+                            Surname = m.Surname,
+                            OtherNames = m.OtherNames,
+                            IdNo = m.Idno,
+                            PhoneNo = m.PhoneNo ?? m.MobileNo,
+                            Email = m.Email,
+                            Gender = m.Sex,
+                            Employer = m.Employer,
+                            Department = m.Dept,
+                            Rank = m.Rank,
+                            ShareCapital = m.ShareCap,
+                            Status = (m.Withdrawn == true || m.Archived == true || m.Dormant == 1) ? "Inactive" : "Active",
+                            JoinedDate = m.ApplicDate ?? m.EffectDate ?? m.ApplicDate,
+                            IsActive = m.Withdrawn != true && m.Archived != true && m.Dormant != 1
+                        }).ToList()
+                    };
+
+                    report.CIGs.Add(cigReport);
+                    report.TotalMembers += cigReport.Members.Count;
+                    report.ActiveMembers += cigReport.Members.Count(m => m.IsActive == true);
+                    report.InactiveMembers += cigReport.Members.Count(m => m.IsActive == false);
+                }
+
+                return report;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating Members per CIG report");
+                throw;
+            }
+        }
+
+        public async Task<MemberDTO> GetMemberDetailsAsync(string memberNo)
+        {
+            var currentCompanyCode = _companyContextService.GetCurrentCompanyCode();
+
+            var member = await _context.Members
+                .Where(m => m.CompanyCode == currentCompanyCode &&
+                           m.MemberNo == memberNo)
+                .FirstOrDefaultAsync();
+            return new MemberDTO { 
+                Id = member.Id,
+                CurrentBalance = 0,
+                
+            FullName = member.FullName,
+            LandLine = "",
+            PhoneNo = member.PhoneNo,
+            Idno = member.Idno,
+            DateJoined = member.EffectDate,
+            RegistrationType = member.MembershipType,
+            ShareBalance = 0,
+            DateOfBirth = member.Dob,
+            Department = member.Dept,
+            IsDormant = false,
+            LastTransactionDate = DateTime.Now,
+            CompanyCode = member.CompanyCode,
+            Age = member.Age,
+            HomeAddress = member.HomeAddr,
+            Email = member.Email,
+            Station = member.Station,
+            Status = member.Status.ToString(),
+            MaritalStatus = member.Mstatus.ToString(),
+            MemberNo = member.MemberNo,
+            IsActive = true,
+            Surname = member.Surname,
+            GroupCig = member.Cigcode,
+            Gender = member.Sex,
+            MembershipType = member.MembershipType,
+            
+            };
         }
     }
 }

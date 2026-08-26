@@ -25,7 +25,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [Range(0, 10, ErrorMessage = "Loan to share ratio must be between 0 and 10")]
         public float? LoanToShareRatio { get; set; }
 
-        public int? Issharecapital { get; set; } = 1;
+        public bool Issharecapital { get; set; } = true;
 
         [Range(0, 100, ErrorMessage = "Interest rate must be between 0 and 100")]
         public decimal? Interest { get; set; }
@@ -51,7 +51,6 @@ namespace SACCOBlockChainSystem.Models.DTOs
         [Range(0, double.MaxValue, ErrorMessage = "Minimum amount must be positive")]
         public decimal MinAmount { get; set; } = 0;
 
-        // Make Ppacc optional with a default value
         public string? Ppacc { get; set; } = null;
 
         [Range(0, double.MaxValue, ErrorMessage = "Lower limit must be positive")]
@@ -69,7 +68,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
 
     public class ShareTypeUpdateDTO : ShareTypeCreateDTO
     {
-        // Inherits all properties from CreateDTO
+        // Inherits all properties from CreateDTO including Issharecapital
     }
 
     public class ShareTypeResponseDTO
@@ -80,7 +79,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string? ContraAcc { get; set; }
         public int? PlacePeriod { get; set; }
         public float? LoanToShareRatio { get; set; }
-        public int? Issharecapital { get; set; }
+        public bool Issharecapital { get; set; }
         public decimal? Interest { get; set; }
         public decimal? MaxAmount { get; set; }
         public string? Guarantor { get; set; }
@@ -107,6 +106,7 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public string SharesCode { get; set; } = null!;
         public string SharesType { get; set; } = null!;
         public bool IsMainShares { get; set; }
+        public bool Issharecapital { get; set; }
         public decimal MinAmount { get; set; }
         public decimal? MaxAmount { get; set; }
         public bool UsedToGuarantee { get; set; }

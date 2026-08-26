@@ -1,7 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SACCOBlockChainSystem.Data;
 using SACCOBlockChainSystem.Models;
+using Microsoft.EntityFrameworkCore;
 using SACCOBlockChainSystem.Models.DTOs;
+using SACCOBlockChainSystem.Models.ViewModels;
 using SACCOBlockChainSystem.Services;
 
 namespace SACCOBlockChainSystem.Controllers
@@ -14,11 +17,14 @@ namespace SACCOBlockChainSystem.Controllers
         private readonly IMemberService _memberService;
         private readonly IContributionService _contributionService;
         private readonly ILogger<MemberController> _logger;
-
-        public MemberController(IMemberService memberService, IContributionService contributionService, ILogger<MemberController> logger)
+        private readonly ApplicationDbContext _context;
+        private WalletService _walletService;
+        public MemberController(IMemberService memberService, IContributionService contributionService, WalletService walletService, ApplicationDbContext context, ILogger<MemberController> logger)
         {
             _memberService = memberService;
             _contributionService = contributionService;
+            _walletService = walletService;
+            _context = context;
             _logger = logger;
         }
 
@@ -29,7 +35,8 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
-
+                var companyCode = User.FindFirst("CompanyCode")?.Value;
+                
                 var result = await _memberService.RegisterMemberAsync(registration);
 
                 return Ok(new
@@ -218,6 +225,93 @@ namespace SACCOBlockChainSystem.Controllers
                     Error = ex.Message
                 });
             }
+        }
+
+        // GET: /api/Member/wallet
+        [HttpGet("wallet")]
+        public async Task<IActionResult> GetMemberWallet()
+        {
+            try
+            {
+                var memberNo = GetLoggedInMemberNumber();
+                if (string.IsNullOrEmpty(memberNo))
+                {
+                    return Unauthorized(new { success = false, message = "Member not found" });
+                }
+
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
+
+                if (member == null)
+                {
+                    return NotFound(new { success = false, message = "Member not found" });
+                }
+                var wallet =await _context.Wallets.AsNoTracking().FirstOrDefaultAsync(w => w.memberNo == member.MemberNo && w.CompanyCode == member.CompanyCode);
+                return Ok(new
+                {
+                    success = true,
+                    walletAddress = wallet?.Address ?? "Not created",
+                    hasWallet = !string.IsNullOrEmpty(wallet.Address)
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting member wallet");
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        // GET: /api/Member/blockchain-status
+        [HttpGet("blockchain-status")]
+        public async Task<IActionResult> GetBlockchainStatus()
+        {
+            try
+            {
+                var memberNo = GetLoggedInMemberNumber();
+                if (string.IsNullOrEmpty(memberNo))
+                {
+                    return Unauthorized(new { success = false, message = "Member not found" });
+                }
+
+                var member = await _context.Members
+                    .FirstOrDefaultAsync(m => m.MemberNo == memberNo);
+
+                var transactionCount = await _context.Contribs
+                    .CountAsync(c => c.MemberNo == memberNo && !string.IsNullOrEmpty(c.BlockchainTxId));
+
+                var hasBlockchainRecord = !string.IsNullOrEmpty(member?.BlockchainTxId);
+
+                return Ok(new
+                {
+                    success = true,
+                    hasBlockchainRecord = hasBlockchainRecord,
+                    transactionCount = transactionCount,
+                    lastTxId = member?.BlockchainTxId
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting blockchain status");
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        private string GetLoggedInMemberNumber()
+        {
+            var memberNoClaim = User.FindFirst("MemberNo")?.Value;
+            if (!string.IsNullOrEmpty(memberNoClaim))
+            {
+                return memberNoClaim;
+            }
+
+            var nameClaim = User.Identity?.Name;
+            if (!string.IsNullOrEmpty(nameClaim))
+            {
+                var member = _context.Members.FirstOrDefault(m => m.MemberNo == nameClaim);
+                return member?.MemberNo;
+            }
+
+            return null;
         }
     }
 }

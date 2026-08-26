@@ -10,6 +10,77 @@
     var hasMember = member != null;
 }
 
+<style>
+    .search-results-table tbody tr {
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+        .search-results-table tbody tr:hover {
+            background-color: rgba(13, 110, 253, 0.05);
+        }
+
+    .selected-member-card {
+        border-left: 4px solid #28a745;
+    }
+
+    .btn-select-member {
+        min-width: 80px;
+    }
+
+    .calculation-summary {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 8px;
+        padding: 15px;
+    }
+
+    .net-payable {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #28a745;
+    }
+
+    .withdrawal-warning {
+        border-left: 4px solid #ffc107;
+    }
+
+    .file-upload-wrapper {
+        position: relative;
+        overflow: hidden;
+        display: inline-block;
+    }
+
+    .file-upload-wrapper input[type=file] {
+        position: absolute;
+        left: 0;
+        top: 0;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+    }
+
+    .uploaded-file {
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        padding: 10px;
+        border-left: 4px solid #28a745;
+    }
+
+    .file-preview {
+        max-width: 100%;
+        max-height: 200px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 5px;
+    }
+
+    .file-name {
+        font-weight: 500;
+        word-break: break-all;
+    }
+</style>
+
 <div class="container-fluid py-4">
     <div class="row mb-4">
         <div class="col-12">
@@ -40,74 +111,87 @@
         </div>
     }
 
-    <!-- Member Search Section - Similar to ShareTransfer -->
+    <!-- Member Search Section -->
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-primary text-white">
             <h5 class="card-title mb-0">
-                <i class="bi bi-search me-2"></i>Search Member
+                <i class="bi bi-search me-2"></i>Step 1: Search & Select Member
             </h5>
         </div>
         <div class="card-body">
-            <div class="row align-items-end">
-                <div class="col-md-3">
+            <!-- Search Input -->
+            <div class="row mb-3">
+                <div class="col-md-12">
                     <div class="form-group">
-                        <label class="fw-bold">Search By</label>
-                        <select id="searchType" class="form-select">
-                            <option value="memberNo">Member Number</option>
-                            <option value="idNo">ID Number</option>
-                            <option value="phoneNo">Phone Number</option>
-                            <option value="fullName">Full Name</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label class="fw-bold" id="searchLabel">Member Number</label>
+                        <label class="fw-bold">Search Member</label>
                         <div class="input-group">
-                            <input type="text" id="searchValue" class="form-control"
-                                   placeholder="Enter member number..." />
-                            <button type="button" class="btn btn-primary" onclick="performSearch()">
+                            <input type="text" id="searchInput" class="form-control form-control-lg"
+                                   placeholder="Search by Member Number, Name, ID Number, or Phone Number..." />
+                            <button type="button" class="btn btn-primary" onclick="searchMembers()">
                                 <i class="bi bi-search"></i> Search
                             </button>
+                            <button type="button" class="btn btn-secondary" onclick="clearSearch()">
+                                <i class="bi bi-x-lg"></i> Clear
+                            </button>
                         </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="form-group">
-                        <label>&nbsp;</label>
-                        <button type="button" class="btn btn-outline-secondary w-100" onclick="clearSearch()">
-                            <i class="bi bi-eraser"></i> Clear
-                        </button>
+                        <small class="text-muted">Enter at least 3 characters then click Search or press Enter</small>
                     </div>
                 </div>
             </div>
 
-            <!-- Search Results - Same pattern as ShareTransfer -->
-            <div id="searchResults" class="mt-3" style="display: none;">
-                <div class="alert alert-success">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <strong>Member Found:</strong>
-                            <span id="memberInfo"></span>
+            <!-- Search Results -->
+            <div id="searchResults" style="display: none;">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover search-results-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Select</th>
+                                <th>Member No</th>
+                                <th>Full Name</th>
+                                <th>ID Number</th>
+                                <th>Phone Number</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="searchResultsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="searchLoading" style="display: none;" class="text-center p-3">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Searching for members...</p>
+            </div>
+
+            <!-- Selected Member Display -->
+            <div id="selectedMemberCard" style="display: @(hasMember ? "block" : "none");" class="mt-3">
+                <div class="alert alert-success selected-member-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-check-circle-fill"></i>
+                            <strong>Selected Member:</strong>
+                            <span id="selectedMemberName">@(hasMember? memberName : "")</span>
+                            <br />
+                            <small>
+                                <span id="selectedMemberNoDisplay">@(hasMember? memberNo : "")</span> |
+                                ID: <span id="selectedMemberIdNo">@(hasMember? member?.Idno : "N/A")</span> |
+                                Phone: <span id="selectedMemberPhone">@(hasMember? member?.PhoneNo : "N/A")</span>
+                            </small>
                         </div>
-                        <div class="col-md-4 text-end">
-                            <button type="button" class="btn btn-sm btn-success" onclick="selectMember()">
-                                <i class="bi bi-check-circle me-1"></i> Select This Member
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearSelectedMember()">
+                                <i class="bi bi-arrow-left"></i> Change
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Selected Member Display - Same pattern as ShareTransfer -->
-            <div id="selectedMemberInfo" class="mt-3" style="display: none;">
-                <div class="alert alert-info">
-                    <i class="bi bi-person-check-fill me-2"></i>
-                    <strong>Selected Member:</strong>
-                    <span id="selectedMemberName"></span>
-                    <input type="hidden" id="selectedMemberNo" />
-                </div>
-            </div>
+            <input type="hidden" id="selectedMemberNo" name="memberNo" value="@(hasMember? memberNo : "")" />
         </div>
     </div>
 
@@ -183,30 +267,32 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <div class="mb-3">
-                            <label class="text-muted">Total Shares Value:</label>
-                            <p class="fw-bold mb-0 text-primary">KES @calculation?.TotalSharesValue.ToString("N2")</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="text-muted">Total Deposits:</label>
-                            <p class="fw-bold mb-0 text-primary">KES @calculation?.TotalDeposits.ToString("N2")</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="text-muted text-danger">Outstanding Loans:</label>
-                            <p class="fw-bold mb-0 text-danger">KES @calculation?.OutstandingLoans.ToString("N2")</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="text-muted">Penalties/Deductions:</label>
-                            <p class="fw-bold mb-0 text-danger">KES @calculation?.PenaltiesAndDeductions.ToString("N2")</p>
-                        </div>
-                        <hr />
-                        <div class="mb-3">
-                            <label class="fw-bold">Net Payable Amount:</label>
-                            <p class="fw-bold mb-0 text-success fs-4">KES @calculation?.NetPayableAmount.ToString("N2")</p>
+                        <div class="calculation-summary">
+                            <div class="mb-3">
+                                <label class="text-muted">Total Shares Value:</label>
+                                <p class="fw-bold mb-0 text-primary">KES @calculation?.TotalSharesValue.ToString("N2")</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="text-muted">Total Deposits:</label>
+                                <p class="fw-bold mb-0 text-primary">KES @calculation?.TotalDeposits.ToString("N2")</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="text-muted text-danger">Outstanding Loans:</label>
+                                <p class="fw-bold mb-0 text-danger">KES @calculation?.OutstandingLoans.ToString("N2")</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="text-muted">Penalties/Deductions:</label>
+                                <p class="fw-bold mb-0 text-danger">KES @calculation?.PenaltiesAndDeductions.ToString("N2")</p>
+                            </div>
+                            <hr />
+                            <div class="mb-3">
+                                <label class="fw-bold">Net Payable Amount:</label>
+                                <p class="net-payable mb-0">KES @calculation?.NetPayableAmount.ToString("N2")</p>
+                            </div>
                         </div>
                         @if (!calculation.IsEligibleForWithdrawal)
                         {
-                            <div class="alert alert-warning mt-3">
+                            <div class="alert alert-warning withdrawal-warning mt-3">
                                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
                                 @calculation.EligibilityMessage
                             </div>
@@ -224,7 +310,7 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <form asp-action="Create" method="post" id="withdrawalForm">
+                        <form asp-action="Create" method="post" enctype="multipart/form-data" id="withdrawalForm">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="memberNo" id="memberNoField" value="@memberNo" />
 
@@ -329,11 +415,73 @@
                                 </div>
                             </div>
 
+                            <!-- Document Upload Section -->
                             <div class="row">
                                 <div class="col-md-12 mb-3">
-                                    <label asp-for="DocumentPath" class="form-label">Supporting Document</label>
-                                    <input asp-for="DocumentPath" class="form-control" placeholder="Path to uploaded document" />
-                                    <small class="text-muted">Upload the withdrawal application letter or other supporting documents</small>
+                                    <label class="form-label fw-bold">Supporting Documents</label>
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="form-label">Application Letter</label>
+                                                    <div class="file-upload-wrapper">
+                                                        <input type="file" id="applicationLetterUpload" name="applicationLetterUpload" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+                                                        <span class="text-muted small">PDF, DOC, DOCX, JPG, PNG (Max 5MB)</span>
+                                                    </div>
+                                                    <div id="applicationLetterPreview" class="mt-2" style="display: none;">
+                                                        <div class="uploaded-file">
+                                                            <i class="bi bi-file-pdf text-danger me-2"></i>
+                                                            <span id="applicationLetterName" class="file-name"></span>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="clearFile('applicationLetter')">
+                                                                <i class="bi bi-x-circle"></i> Remove
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    @if (!string.IsNullOrEmpty(Model.DocumentPath))
+                                                    {
+                                                        <div class="mt-2">
+                                                            <small class="text-muted">Current file: <a href="#" target="_blank">@System.IO.Path.GetFileName(Model.DocumentPath)</a></small>
+                                                        </div>
+                                                    }
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="form-label">ID Copy</label>
+                                                    <div class="file-upload-wrapper">
+                                                        <input type="file" id="idCopyUpload" name="idCopyUpload" class="form-control" accept=".pdf,.jpg,.jpeg,.png" />
+                                                        <span class="text-muted small">PDF, JPG, PNG (Max 5MB)</span>
+                                                    </div>
+                                                    <div id="idCopyPreview" class="mt-2" style="display: none;">
+                                                        <div class="uploaded-file">
+                                                            <i class="bi bi-file-image text-primary me-2"></i>
+                                                            <span id="idCopyName" class="file-name"></span>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="clearFile('idCopy')">
+                                                                <i class="bi bi-x-circle"></i> Remove
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-md-12 mb-3">
+                                                    <label class="form-label">Other Supporting Documents</label>
+                                                    <div class="file-upload-wrapper">
+                                                        <input type="file" id="otherDocumentsUpload" name="otherDocumentsUpload" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" multiple />
+                                                        <span class="text-muted small">PDF, DOC, DOCX, JPG, PNG (Max 5MB each, multiple files allowed)</span>
+                                                    </div>
+                                                    <div id="otherDocumentsPreview" class="mt-2" style="display: none;">
+                                                        <div class="uploaded-file">
+                                                            <i class="bi bi-files text-success me-2"></i>
+                                                            <span id="otherDocumentsCount" class="file-name">0 file(s) selected</span>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="clearFile('otherDocuments')">
+                                                                <i class="bi bi-x-circle"></i> Clear All
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">Upload all required supporting documents for the withdrawal request</small>
                                 </div>
                             </div>
 
@@ -379,31 +527,104 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        let currentMemberData = null;
+        let selectedMemberData = null;
+        let isMemberSelected = @(hasMember ? "true" : "false");
+        let isLoading = false;
+        let isSelectionInProgress = false;
+        let hasShownSuccess = false;
+
+        // File upload handling
+        const maxFileSize = 5 * 1024 * 1024; // 5MB
+        const allowedExtensions = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+
+        function validateFile(file) {
+            const extension = file.name.split('.').pop().toLowerCase();
+            if (!allowedExtensions.includes(extension)) {
+                alert(`File type ${extension} is not allowed. Allowed types: ${allowedExtensions.join(', ')}`);
+                return false;
+            }
+            if (file.size > maxFileSize) {
+                alert(`File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds the maximum allowed size of 5MB.`);
+                return false;
+            }
+            return true;
+        }
+
+        function handleFileUpload(inputId, previewId, nameId, fieldName) {
+            const input = document.getElementById(inputId);
+            const preview = document.getElementById(previewId);
+            const nameDisplay = document.getElementById(nameId);
+
+            if (!input || !preview || !nameDisplay) return;
+
+            input.addEventListener('change', function(e) {
+                const files = this.files;
+                if (!files || files.length === 0) {
+                    preview.style.display = 'none';
+                    return;
+                }
+
+                // Validate each file
+                let allValid = true;
+                for (let i = 0; i < files.length; i++) {
+                    if (!validateFile(files[i])) {
+                        allValid = false;
+                        break;
+                    }
+                }
+
+                if (!allValid) {
+                    this.value = '';
+                    preview.style.display = 'none';
+                    return;
+                }
+
+                // Handle multiple files
+                if (fieldName === 'otherDocuments') {
+                    nameDisplay.textContent = files.length + ' file(s) selected';
+                    // Store file list for processing
+                    if (window.otherDocumentsFiles === undefined) {
+                        window.otherDocumentsFiles = [];
+                    }
+                    window.otherDocumentsFiles = Array.from(files);
+                } else {
+                    nameDisplay.textContent = files[0].name;
+                }
+
+                preview.style.display = 'block';
+            });
+        }
+
+        function clearFile(fieldName) {
+            if (fieldName === 'applicationLetter') {
+                document.getElementById('applicationLetterUpload').value = '';
+                document.getElementById('applicationLetterPreview').style.display = 'none';
+                document.getElementById('applicationLetterName').textContent = '';
+            } else if (fieldName === 'idCopy') {
+                document.getElementById('idCopyUpload').value = '';
+                document.getElementById('idCopyPreview').style.display = 'none';
+                document.getElementById('idCopyName').textContent = '';
+            } else if (fieldName === 'otherDocuments') {
+                document.getElementById('otherDocumentsUpload').value = '';
+                document.getElementById('otherDocumentsPreview').style.display = 'none';
+                document.getElementById('otherDocumentsCount').textContent = '0 file(s) selected';
+                window.otherDocumentsFiles = [];
+            }
+        }
 
         $(document).ready(function() {
-            // Update search label based on selection - Same as ShareTransfer
-            $('#searchType').on('change', function() {
-                const searchType = $(this).val();
-                const searchLabel = $('#searchLabel');
-                const searchInput = $('#searchValue');
+            // Initialize file upload handlers
+            handleFileUpload('applicationLetterUpload', 'applicationLetterPreview', 'applicationLetterName', 'applicationLetter');
+            handleFileUpload('idCopyUpload', 'idCopyPreview', 'idCopyName', 'idCopy');
+            handleFileUpload('otherDocumentsUpload', 'otherDocumentsPreview', 'otherDocumentsCount', 'otherDocuments');
 
-                if (searchType === 'memberNo') {
-                    searchLabel.text('Member Number');
-                    searchInput.attr('placeholder', 'Enter member number...');
-                } else if (searchType === 'idNo') {
-                    searchLabel.text('ID Number');
-                    searchInput.attr('placeholder', 'Enter ID number...');
-                } else if (searchType === 'phoneNo') {
-                    searchLabel.text('Phone Number');
-                    searchInput.attr('placeholder', 'Enter phone number...');
-                } else {
-                    searchLabel.text('Full Name');
-                    searchInput.attr('placeholder', 'Enter full name...');
+            // Search input enter key - NO AUTO-SEARCH ON INPUT
+            $('#searchInput').on('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchMembers();
                 }
-                searchInput.val('');
-                $('#searchResults').hide();
             });
 
             // Payment method toggle
@@ -421,10 +642,27 @@
             });
 
             // Form submission with loading state
-            $('#withdrawalForm').on('submit', function() {
+            $('#withdrawalForm').on('submit', function(e) {
                 var submitBtn = $('#submitBtn');
                 submitBtn.prop('disabled', true);
                 submitBtn.html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...');
+
+                // Validate that at least one file is uploaded (optional)
+                // Uncomment if you want to require documents
+                // var hasFiles = false;
+                // if (document.getElementById('applicationLetterUpload').files.length > 0 ||
+                //     document.getElementById('idCopyUpload').files.length > 0 ||
+                //     document.getElementById('otherDocumentsUpload').files.length > 0) {
+                //     hasFiles = true;
+                // }
+                // if (!hasFiles) {
+                //     e.preventDefault();
+                //     Swal.fire('Warning', 'Please upload at least one supporting document.', 'warning');
+                //     submitBtn.prop('disabled', false);
+                //     submitBtn.html('<i class="bi bi-send me-2"></i>Submit Withdrawal Request');
+                //     return false;
+                // }
+
                 return true;
             });
 
@@ -432,86 +670,208 @@
             var today = new Date().toISOString().split('T')[0];
             $('#WithdrawalDate').attr('min', today);
 
-            // Allow Enter key to search - Same as ShareTransfer
-            $('#searchValue').on('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    performSearch();
-                }
-            });
+            @if (!string.IsNullOrEmpty(Context.Request.Query["memberNo"]))
+            {
+                    <text>
+                    const preSelectedMember = '@Context.Request.Query["memberNo"]';
+                    if (preSelectedMember && !isMemberSelected) {
+                        $('#selectedMemberNo').val(preSelectedMember);
+                        loadMemberDetailsSilently(preSelectedMember);
+                    }
+                    </text>
+            }
         });
 
-        // Search function - Same pattern as ShareTransfer
-        async function performSearch() {
-            const searchType = $('#searchType').val();
-            const searchValue = $('#searchValue').val().trim();
+        // Load member details silently (no popup)
+        async function loadMemberDetailsSilently(memberNo) {
+            try {
+                const response = await fetch(`/api/Member/${memberNo}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.data) {
+                        selectedMemberData = data.data;
+                        isMemberSelected = true;
+                        hasShownSuccess = true;
 
-            if (!searchValue) {
-                alert('Please enter a ' + $('#searchLabel').text());
+                        const fullName = (data.data.surname || '') + ' ' + (data.data.otherNames || '');
+                        $('#selectedMemberName').html(`<strong>${escapeHtml(fullName.trim() || memberNo)}</strong>`);
+                        $('#selectedMemberNoDisplay').html(memberNo);
+                        $('#selectedMemberIdNo').html(data.data.idno || 'N/A');
+                        $('#selectedMemberPhone').html(data.data.phoneNo || 'N/A');
+                        $('#selectedMemberCard').show();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading member details:', error);
+            }
+        }
+
+        // Search members function
+        async function searchMembers() {
+            if (isLoading) return;
+
+            const searchTerm = $('#searchInput').val().trim();
+            if (searchTerm.length < 3) {
+                Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
                 return;
             }
 
-            let url = '';
-            let params = {};
-
-            if (searchType === 'memberNo') {
-                url = '/MemberMvc/SearchMember';
-                params = { memberNo: searchValue };
-            } else if (searchType === 'idNo') {
-                url = '/MemberMvc/SearchMember';
-                params = { idNo: searchValue };
-            } else if (searchType === 'phoneNo') {
-                url = '/MemberMvc/SearchMember';
-                params = { phoneNo: searchValue };
-            } else {
-                url = '/MemberMvc/SearchMember';
-                params = { fullName: searchValue };
-            }
-
-            const queryString = new URLSearchParams(params).toString();
-            url = `${url}?${queryString}`;
+            isLoading = true;
+            $('#searchLoading').show();
+            $('#searchResults').hide();
+            $('#searchResultsBody').html('');
 
             try {
-                const response = await fetch(url);
+                const response = await fetch(`/api/Member/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    $('#searchResultsBody').html(`<tr><td colspan="7" class="text-center text-danger">Error: ${errorData.message || 'Error searching members'}</td></tr>`);
+                    $('#searchResults').show();
+                    isLoading = false;
+                    $('#searchLoading').hide();
+                    return;
+                }
+
                 const data = await response.json();
 
-                if (data.success && data.member) {
-                    currentMemberData = data.member;
-                    $('#memberInfo').html(`
-                        <strong>${data.member.memberNo}</strong> - ${data.member.fullName}<br/>
-                        <small>ID: ${data.member.idNo || 'N/A'} | Phone: ${data.member.phoneNo || 'N/A'}</small>
-                    `);
-                    $('#searchResults').show();
-                    $('#selectedMemberInfo').hide();
+                if (data.success && data.data && data.data.length > 0) {
+                    displaySearchResults(data.data);
                 } else {
-                    alert(data.message || 'Member not found');
-                    $('#searchResults').hide();
+                    $('#searchResultsBody').html('<tr><td colspan="7" class="text-center text-warning">No members found matching your search</td></tr>');
+                    $('#searchResults').show();
                 }
             } catch (error) {
-                console.error('Error searching member:', error);
-                alert('Error searching for member. Please try again.');
+                console.error('Error:', error);
+                $('#searchResultsBody').html(`<tr><td colspan="7" class="text-center text-danger">Error searching members: ${error.message}</td></tr>`);
+                $('#searchResults').show();
+            } finally {
+                isLoading = false;
+                $('#searchLoading').hide();
             }
         }
 
-        // Select member function - Same as ShareTransfer
-        function selectMember() {
-            if (currentMemberData) {
-                // Redirect to create with selected member
-                window.location.href = `/Withdrawal/Create?memberNo=${currentMemberData.memberNo}`;
+        // Display search results
+        function displaySearchResults(members) {
+            const tbody = $('#searchResultsBody');
+            tbody.empty();
+
+            members.forEach(member => {
+                const statusBadge = member.status == 1 ?
+                    '<span class="badge bg-success">Active</span>' :
+                    '<span class="badge bg-danger">Inactive</span>';
+
+                const fullName = (member.surname || '') + ' ' + (member.otherNames || '');
+                const phone = member.phoneNo || 'N/A';
+
+                const row = `
+                    <tr>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-success" onclick="selectMember('${member.memberNo}')">
+                                <i class="bi bi-check-lg"></i> Select
+                            </button>
+                        </td>
+                        <td><strong>${escapeHtml(member.memberNo)}</strong></td>
+                        <td>${escapeHtml(fullName.trim() || member.memberNo)}</td>
+                        <td>${escapeHtml(member.idno || 'N/A')}</td>
+                        <td>${escapeHtml(phone)}</td>
+                        <td>${escapeHtml(member.email || 'N/A')}</td>
+                        <td>${statusBadge}</td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            $('#searchResults').show();
+        }
+
+        // Select a member
+        async function selectMember(memberNo) {
+            if (isLoading || isSelectionInProgress) return;
+            if (isMemberSelected && memberNo === selectedMemberData?.memberNo) return;
+
+            isSelectionInProgress = true;
+            isLoading = true;
+
+            try {
+                const response = await fetch(`/api/Member/${memberNo}`);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    Swal.fire('Error', `Failed to fetch member details: ${response.status}`, 'error');
+                    isSelectionInProgress = false;
+                    isLoading = false;
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.data) {
+                    selectedMemberData = data.data;
+                    isMemberSelected = true;
+                    hasShownSuccess = true;
+
+                    $('#selectedMemberNo').val(memberNo);
+
+                    const fullName = (selectedMemberData.surname || '') + ' ' + (selectedMemberData.otherNames || '');
+                    $('#selectedMemberName').html(`<strong>${escapeHtml(fullName.trim() || memberNo)}</strong>`);
+                    $('#selectedMemberNoDisplay').html(memberNo);
+                    $('#selectedMemberIdNo').html(selectedMemberData.idno || 'N/A');
+                    $('#selectedMemberPhone').html(selectedMemberData.phoneNo || 'N/A');
+
+                    $('#selectedMemberCard').show();
+                    $('#searchResults').hide();
+                    $('#searchInput').val('');
+
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Member Selected!',
+                        text: `Member ${fullName.trim() || memberNo} selected successfully.`,
+                        timer: 1500,
+                        showConfirmButton: true,
+                        confirmButtonText: 'OK'
+                    });
+
+                    window.location.href = `/Withdrawal/Create?memberNo=${encodeURIComponent(memberNo)}`;
+                } else {
+                    Swal.fire('Error', data.message || 'Failed to load member details', 'error');
+                }
+            } catch (error) {
+                console.error('Error selecting member:', error);
+                Swal.fire('Error', 'Error selecting member: ' + error.message, 'error');
+            } finally {
+                isSelectionInProgress = false;
+                isLoading = false;
             }
         }
 
-        // Clear search function - Same as ShareTransfer
-        function clearSearch() {
-            $('#searchType').val('memberNo');
-            $('#searchValue').val('');
-            $('#searchLabel').text('Member Number');
-            $('#searchValue').attr('placeholder', 'Enter member number...');
-            $('#searchResults').hide();
-            $('#selectedMemberInfo').hide();
-            currentMemberData = null;
+        // Clear selected member
+        function clearSelectedMember() {
+            selectedMemberData = null;
+            isMemberSelected = false;
+            hasShownSuccess = false;
 
-            // Redirect back to empty create page
+            $('#selectedMemberNo').val('');
+            $('#selectedMemberCard').hide();
             window.location.href = '/Withdrawal/Create';
+        }
+
+        // Clear search
+        function clearSearch() {
+            $('#searchInput').val('');
+            $('#searchResults').hide();
+            $('#searchResultsBody').empty();
+            if (!isMemberSelected) {
+                clearSelectedMember();
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
     </script>
 }

@@ -75,6 +75,10 @@ namespace SACCOBlockChainSystem.Models.DTOs
         public decimal TotalGuaranteeAmount { get; set; }
         public int FullyGuaranteedLoans { get; set; }
         public int PartiallyGuaranteedLoans { get; set; }
+        public int LoansWithoutGuarantors { get; internal set; }
+        public decimal AverageGuarantorsPerLoan { get; internal set; }
+        public decimal AverageGuaranteeAmount { get; internal set; }
+        public string UserEmail { get; internal set; }
     }
 
     // ViewModel for All Guarantors Report

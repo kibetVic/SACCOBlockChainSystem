@@ -7,7 +7,7 @@
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
-<div class="container-fluid p-4">
+<div class="container-fluid p-4" style="max-width: 100%;">
     <!-- Page Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 style="color: #3f2b96; font-weight: 600;">
@@ -33,7 +33,7 @@
     <div class="card shadow-sm mb-4" style="border: none; border-radius: 10px;">
         <div class="card-header bg-white py-3" style="border-bottom: 2px solid #3f2b96;">
             <h5 class="mb-0" style="color: #3f2b96; font-weight: 600;">
-                <i class="fas fa-filter me-2"></i> Trial Balance Filters
+                <i class="fas fa-filter me-2"></i> Report Filters
             </h5>
         </div>
         <div class="card-body p-4" style="background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);">
@@ -87,61 +87,88 @@
         </div>
     </div>
 
-    <!-- Export Button -->
-    @if (!string.IsNullOrEmpty(Model.ReportType) && Model.ReportType != "TrialBalance" || Model.TrialBalance.Any())
-    {
-        <div class="mb-3 text-end">
-            <a href="@Url.Action("Export", new { 
-                startDate = Model.StartDate.ToString("yyyy-MM-dd"), 
-                endDate = Model.EndDate.ToString("yyyy-MM-dd"), 
-                reportType = Model.ReportType,
-                format = "excel"
-            })" class="btn btn-success">
-                <i class="fas fa-file-excel me-2"></i> Export to Excel
-            </a>
-        </div>
-    }
-
-    <!-- Report Results -->
-    @if (Model.ReportType == "TrialBalance" && Model.TrialBalance.Any())
-    {
-        @await Html.PartialAsync("_TrialBalanceReport", Model)
-    }
-    else if (Model.ReportType == "IncomeStatement" && (Model.IncomeStatement.Revenue.Any() || Model.IncomeStatement.Expenses.Any()))
-    {
-        @await Html.PartialAsync("_IncomeStatementReport", Model)
-    }
-    else if (Model.ReportType == "BalanceSheet" && (Model.BalanceSheet.Assets.Any() || Model.BalanceSheet.Liabilities.Any() || Model.BalanceSheet.Equity.Any()))
-    {
-        @await Html.PartialAsync("_BalanceSheetReport", Model)
-    }
-    else if (Model.ReportType == "CashFlow" && (Model.CashFlow.OperatingActivities.Any() || Model.CashFlow.InvestingActivities.Any() || Model.CashFlow.FinancingActivities.Any()))
-    {
-        @await Html.PartialAsync("_CashFlowReport", Model)
-    }
-    else if (!string.IsNullOrEmpty(Model.ReportType))
-    {
-        <div class="card shadow-sm" style="border: none; border-radius: 10px; background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);">
-            <div class="card-body text-center py-5">
-                <i class="fas fa-chart-bar fa-4x text-muted mb-3"></i>
-                <h5 class="text-muted">No data found for the selected period</h5>
-                <p class="text-muted mb-0">Try adjusting your date range</p>
+    <!-- Report Results - Full Width -->
+    <div class="report-container" style="width: 100%; overflow-x: auto;">
+        @if (Model.ReportType == "TrialBalance" && Model.TrialBalance.Any())
+        {
+            <div style="min-width: 100%;">
+                @await Html.PartialAsync("_TrialBalanceReport", Model)
             </div>
-        </div>
-    }
-    else
-    {
-        <div class="card shadow-sm" style="border: none; border-radius: 10px; background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);">
-            <div class="card-body text-center py-5">
-                <i class="fas fa-chart-bar fa-4x text-muted mb-3"></i>
-                <h5 class="text-muted">Select a report type and date range</h5>
-                <p class="text-muted mb-0">Choose from Trial Balance, Income Statement, Balance Sheet, or Cash Flow</p>
+        }
+        else if (Model.ReportType == "IncomeStatement" && (Model.IncomeStatement.Revenue.Any() || Model.IncomeStatement.Expenses.Any()))
+        {
+            <div style="min-width: 100%;">
+                @await Html.PartialAsync("_IncomeStatementReport", Model)
             </div>
-        </div>
-    }
+        }
+        else if (Model.ReportType == "BalanceSheet" && (Model.BalanceSheet.Assets.Any() || Model.BalanceSheet.Liabilities.Any() || Model.BalanceSheet.Equity.Any()))
+        {
+            <div style="min-width: 100%;">
+                @await Html.PartialAsync("_BalanceSheetReport", Model)
+            </div>
+        }
+        else if (Model.ReportType == "CashFlow" && (Model.CashFlow.OperatingActivities.Any() || Model.CashFlow.InvestingActivities.Any() || Model.CashFlow.FinancingActivities.Any()))
+        {
+            <div style="min-width: 100%;">
+                @await Html.PartialAsync("_CashFlowReport", Model)
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(Model.ReportType))
+        {
+            <div class="card shadow-sm" style="border: none; border-radius: 10px; background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-chart-bar fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">No data found for the selected period</h5>
+                    <p class="text-muted mb-0">Try adjusting your date range</p>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="card shadow-sm" style="border: none; border-radius: 10px; background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-chart-bar fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">Select a report type and date range</h5>
+                    <p class="text-muted mb-0">Choose from Trial Balance, Income Statement, Balance Sheet, or Cash Flow</p>
+                </div>
+            </div>
+        }
+    </div>
 </div>
 
 <style>
+    /* Force full width for all containers */
+    .container-fluid {
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+        max-width: 100% !important;
+    }
+    
+    .report-container {
+        width: 100%;
+        max-width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .report-container .card {
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+    }
+    
+    .report-container .table-responsive {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    
+    .report-container .table {
+        width: 100%;
+        min-width: 100%;
+        table-layout: auto;
+    }
+    
     .btn.active {
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
@@ -166,6 +193,41 @@
         font-weight: 500;
         padding: 5px 10px;
     }
+
+    /* Override any layout constraints */
+    .container, .container-fluid, .row, .col-* {
+        max-width: 100% !important;
+    }
+
+    .main-content {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+    }
+
+    /* Ensure cards take full width */
+    .card {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .card-body {
+        padding: 15px !important;
+    }
+
+    /* Table responsive fixes */
+    .table-responsive {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Fix for nested containers */
+    .report-container > div {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
 </style>
 
 @section Scripts {
@@ -175,6 +237,30 @@
             $('.btn[type="submit"]').click(function() {
                 $('.btn[type="submit"]').removeClass('active');
                 $(this).addClass('active');
+            });
+
+            // Ensure report container fills width
+            function fixContainerWidth() {
+                var container = document.querySelector('.report-container');
+                if (container) {
+                    var parent = container.parentElement;
+                    if (parent) {
+                        parent.style.maxWidth = '100%';
+                        parent.style.padding = '0';
+                        parent.style.margin = '0';
+                    }
+                    container.style.width = '100%';
+                    container.style.maxWidth = '100%';
+                }
+            }
+
+            // Run on load and resize
+            fixContainerWidth();
+            $(window).resize(fixContainerWidth);
+
+            // Also run after any partial view loads
+            $(document).ajaxComplete(function() {
+                fixContainerWidth();
             });
         });
     </script>

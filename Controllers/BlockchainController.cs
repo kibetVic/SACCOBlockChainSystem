@@ -30,7 +30,6 @@ namespace SACCOBlockChainSystem.Controllers
         }
 
         #region Explorer
-
         // GET: /Blockchain/Explorer
         public async Task<IActionResult> Explorer(int page = 1, int pageSize = 20)
         {
@@ -38,11 +37,11 @@ namespace SACCOBlockChainSystem.Controllers
             {
                 var companyCode = _companyContext.GetCurrentCompanyCode();
 
-                // Get blockchain status
-                var status = await _blockchainService.GetBlockchainStatus();
+                // Get blockchain status for the company
+                var status = await _blockchainService.GetBlockchainStatusByCompanyAsync(companyCode);
 
-                // Get paginated blocks
-                var blocks = await _blockchainService.GetAllBlocksAsync();
+                // Get blocks specific to this company
+                var blocks = await _blockchainService.GetBlocksByCompanyAsync(companyCode);
                 var totalBlocks = blocks.Count;
 
                 var paginatedBlocks = blocks
@@ -50,7 +49,7 @@ namespace SACCOBlockChainSystem.Controllers
                     .Take(pageSize)
                     .ToList();
 
-                // Get recent transactions
+                // Get recent transactions for this company
                 var recentTransactions = await _context.BlockchainTransactions
                     .Where(t => t.CompanyCode == companyCode)
                     .OrderByDescending(t => t.Timestamp)
@@ -82,7 +81,7 @@ namespace SACCOBlockChainSystem.Controllers
                         PendingTransactions = status.PendingTransactions,
                         LatestBlockHash = status.LatestBlockHash,
                         LatestBlockTimestamp = status.LatestBlockTimestamp,
-                        IsValid = await _blockchainService.VerifyBlockchainAsync()
+                        IsValid = await _blockchainService.VerifyBlockchainByCompanyAsync(companyCode)
                     }
                 };
 
@@ -95,7 +94,7 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-        // GET: /Blockchain/Explorer/Block/{blockHash}
+
         public async Task<IActionResult> BlockDetails(string blockHash)
         {
             try
@@ -193,231 +192,8 @@ namespace SACCOBlockChainSystem.Controllers
 
         #endregion
 
-        //#region Verify
-
-        //// GET: /Blockchain/Verify
-        //public IActionResult Verify()
-        //{
-        //    return View(new TransactionVerificationViewModel());
-        //}
-
-        //// POST: /Blockchain/Verify
-        //[HttpPost]
-        //public async Task<IActionResult> Verify(TransactionVerificationViewModel model)
-        //{
-        //    try
-        //    {
-        //        if (string.IsNullOrEmpty(model.TransactionId))
-        //        {
-        //            ModelState.AddModelError("TransactionId", "Please enter a transaction ID");
-        //            return View(model);
-        //        }
-
-        //        var companyCode = _companyContext.GetCurrentCompanyCode();
-
-        //        // Get transaction
-        //        var transaction = await _blockchainService.GetTransactionAsync(model.TransactionId);
-
-        //        if (transaction == null)
-        //        {
-        //            model.IsValid = false;
-        //            model.Message = "Transaction not found in the blockchain";
-        //            return View(model);
-        //        }
-
-        //        // Verify transaction exists and is confirmed
-        //        var isVerified = await _blockchainService.VerifyTransactionAsync(model.TransactionId);
-
-        //        // Verify data integrity by recalculating hash
-        //        var dataIntegrity = true;
-        //        if (!string.IsNullOrEmpty(transaction.PayloadJson))
-        //        {
-        //            var calculatedHash = await _blockchainService.GenerateTransactionHash(transaction.PayloadJson);
-        //            dataIntegrity = calculatedHash == transaction.DataHash;
-        //        }
-
-        //        // Verify block integrity if transaction is in a block
-        //        var blockValid = true;
-        //        if (!string.IsNullOrEmpty(transaction.BlockHash))
-        //        {
-        //            var block = await _blockchainService.GetBlockAsync(transaction.BlockHash);
-        //            blockValid = block != null && block.Confirmed;
-        //        }
-
-        //        model.IsValid = isVerified && dataIntegrity && blockValid;
-        //        model.Transaction = transaction;
-        //        model.VerificationDetails = new VerificationDetails
-        //        {
-        //            FoundInBlock = !string.IsNullOrEmpty(transaction.BlockHash),
-        //            BlockConfirmed = transaction.Status == "CONFIRMED",
-        //            DataIntegrity = dataIntegrity,
-        //            TimestampValid = transaction.Timestamp <= DateTime.UtcNow,
-        //            CalculatedHash = dataIntegrity ? transaction.DataHash : "MISMATCH"
-        //        };
-
-        //        model.Message = model.IsValid
-        //            ? "✓ Transaction verified successfully. The transaction is authentic and recorded on the blockchain."
-        //            : "✗ Verification failed. The transaction data may have been tampered with.";
-
-        //        return View(model);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error verifying transaction");
-        //        ModelState.AddModelError("", "An error occurred during verification");
-        //        return View(model);
-        //    }
-        //}
-
-        //// GET: /Blockchain/Verify/ByReference/{referenceId}
-        //public async Task<IActionResult> VerifyByReference(string referenceId, string type = "member")
-        //{
-        //    try
-        //    {
-        //        var companyCode = _companyContext.GetCurrentCompanyCode();
-
-        //        var transactions = await _context.BlockchainTransactions
-        //            .Where(t => t.TransactionId == referenceId && t.CompanyCode == companyCode)
-        //            .OrderByDescending(t => t.Timestamp)
-        //            .ToListAsync();
-
-        //        if (!transactions.Any())
-        //        {
-        //            return NotFound();
-        //        }
-
-        //        var viewModel = new ReferenceVerificationViewModel
-        //        {
-        //            ReferenceId = referenceId,
-        //            ReferenceType = type,
-        //            Transactions = transactions,
-        //            TotalTransactions = transactions.Count,
-        //            TotalAmount = transactions.Sum(t => t.Amount),
-        //            AllVerified = true
-        //        };
-
-        //        foreach (var tx in transactions)
-        //        {
-        //            var verified = await _blockchainService.VerifyTransactionAsync(tx.TransactionId);
-        //            if (!verified)
-        //            {
-        //                viewModel.AllVerified = false;
-        //                break;
-        //            }
-        //        }
-
-        //        return View(viewModel);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, $"Error verifying by reference: {referenceId}");
-        //        return View("Error");
-        //    }
-        //}
-
-        //// GET: /Blockchain/QuickVerify (for page view)
-        //[HttpGet("Blockchain/QuickVerify")]
-        //public IActionResult QuickVerify()
-        //{
-        //    return View(); // Returns the view
-        //}
-
-        //// GET: /Blockchain/QuickVerify/{transactionId} (for API)
-        //[HttpGet("Blockchain/QuickVerify/{transactionId}")]
-        //public async Task<IActionResult> QuickVerify(string transactionId)
-        //{
-        //    try
-        //    {
-        //        var transaction = await _blockchainService.GetTransactionAsync(transactionId);
-
-        //        if (transaction == null)
-        //        {
-        //            return Json(new
-        //            {
-        //                success = false,
-        //                message = "Transaction not found"
-        //            });
-        //        }
-
-        //        var isVerified = await _blockchainService.VerifyTransactionAsync(transactionId);
-
-        //        return Json(new
-        //        {
-        //            success = true,
-        //            verified = isVerified,
-        //            transactionId = transaction.TransactionId,
-        //            type = transaction.TransactionType,
-        //            memberNo = transaction.MemberNo,
-        //            amount = transaction.Amount,
-        //            timestamp = transaction.Timestamp,
-        //            status = transaction.Status,
-        //            blockHash = transaction.BlockHash,
-        //            dataHash = transaction.DataHash
-        //        });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, $"Error in quick verify: {transactionId}");
-        //        return Json(new { success = false, message = ex.Message });
-        //    }
-        //}
-
-        //// GET: /Blockchain/Verify/{transactionId}
-        //[HttpGet("Blockchain/Verify/{transactionId}")]
-        //public async Task<IActionResult> Verify(string transactionId)
-        //{
-        //    try
-        //    {
-        //        _logger.LogInformation($"Verifying blockchain transaction: {transactionId}");
-
-        //        // Get transaction from blockchain service
-        //        var transaction = await _blockchainService.GetTransactionAsync(transactionId);
-
-        //        if (transaction == null)
-        //        {
-        //            return NotFound(new
-        //            {
-        //                success = false,
-        //                message = "Transaction not found in blockchain"
-        //            });
-        //        }
-
-        //        // Verify the transaction
-        //        var isVerified = await _blockchainService.VerifyTransactionAsync(transactionId);
-
-        //        return Ok(new
-        //        {
-        //            success = true,
-        //            transaction = new
-        //            {
-        //                transactionId = transaction.TransactionId,
-        //                transactionType = transaction.TransactionType,
-        //                memberNo = transaction.MemberNo,
-        //                amount = transaction.Amount,
-        //                timestamp = transaction.Timestamp,
-        //                status = transaction.Status,
-        //                dataHash = transaction.DataHash,
-        //                blockHash = transaction.BlockHash,
-        //                verified = isVerified
-        //            }
-        //        });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, $"Error verifying transaction: {transactionId}");
-        //        return BadRequest(new
-        //        {
-        //            success = false,
-        //            message = "Error verifying transaction",
-        //            error = ex.Message
-        //        });
-        //    }
-        //}
-
-        //#endregion
 
         #region My Transactions
-        // Add this method to BlockchainController.cs
         private async Task<Dictionary<string, bool>> GetTransactionVerificationStatuses(List<BlockchainTransaction> transactions)
         {
             var statuses = new Dictionary<string, bool>();
@@ -624,12 +400,33 @@ namespace SACCOBlockChainSystem.Controllers
         #region Blocks
 
         // GET: /Blockchain/Blocks
-        public async Task<IActionResult> Blocks()
+        public async Task<IActionResult> Blocks(int page = 1, int pageSize = 20)
         {
             try
             {
-                var blocks = await _blockchainService.GetAllBlocksAsync();
-                return View(blocks);
+                var companyCode = _companyContext.GetCurrentCompanyCode();
+
+                // Get blocks specific to this company
+                var allBlocks = await _blockchainService.GetBlocksByCompanyAsync(companyCode);
+
+                // Paginate the blocks
+                var paginatedBlocks = allBlocks
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                var viewModel = new BlocksViewModel
+                {
+                    Blocks = paginatedBlocks,
+                    CurrentPage = page,
+                    PageSize = pageSize,
+                    TotalBlocks = allBlocks.Count,
+                    TotalPages = (int)Math.Ceiling(allBlocks.Count / (double)pageSize),
+                    CompanyCode = companyCode,
+                    BlockchainValid = await _blockchainService.VerifyBlockchainByCompanyAsync(companyCode)
+                };
+
+                return View(viewModel);
             }
             catch (Exception ex)
             {
@@ -638,8 +435,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-
-        // Add these methods to your BlockchainController.cs
 
         #region Quick Verify and Verify Actions
 
@@ -862,46 +657,6 @@ namespace SACCOBlockChainSystem.Controllers
                 });
             }
         }
-
-        //// GET: /Blockchain/VerifyBlock/{blockHash}
-        //[HttpGet("Blockchain/VerifyBlock/{blockHash}")]
-        //public async Task<IActionResult> VerifyBlock(string blockHash)
-        //{
-        //    try
-        //    {
-        //        var isValid = await _blockchainService.VerifyBlockchainAsync();
-
-        //        if (isValid)
-        //        {
-        //            var block = await _blockchainService.GetBlockAsync(blockHash);
-        //            return Ok(new
-        //            {
-        //                success = true,
-        //                message = "Blockchain is valid",
-        //                block = block?.BlockHash,
-        //                blockId = block?.BlockId,
-        //                confirmed = block?.Confirmed ?? false
-        //            });
-        //        }
-        //        else
-        //        {
-        //            return Ok(new
-        //            {
-        //                success = false,
-        //                message = "Blockchain integrity check failed"
-        //            });
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error verifying blockchain");
-        //        return BadRequest(new
-        //        {
-        //            success = false,
-        //            message = ex.Message
-        //        });
-        //    }
-        //}
 
         #endregion
 

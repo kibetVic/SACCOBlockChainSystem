@@ -1,0 +1,241 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.AssetsRegisterDTO
+@{
+    ViewData["Title"] = "Edit Asset";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var companyCode = ViewBag.CompanyCode as string;
+}
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <a asp-action="Index" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i> Back to List
+            </a>
+            <h2 class="page-title mb-0">
+                <i class="bi bi-pencil-square me-2"></i>Edit Asset
+            </h2>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-pencil-square me-2"></i>Edit Asset: <strong>@Model.AssetName</strong>
+            </h5>
+        </div>
+        <div class="card-body">
+            <form asp-action="Edit" method="post" id="assetForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="Id" />
+                <input type="hidden" asp-for="CompanyCode" value="@companyCode" />
+
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger" style="display: none;"></div>
+
+                <div class="row">
+                    <!-- Basic Information -->
+                    <div class="col-md-6">
+                        <div class="card bg-light mb-3">
+                            <div class="card-header">
+                                <i class="bi bi-info-circle me-2"></i>Basic Information
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label asp-for="AssetName" class="form-label fw-bold">Asset Name *</label>
+                                    <input asp-for="AssetName" class="form-control" placeholder="Enter asset name" required />
+                                    <span asp-validation-for="AssetName" class="text-danger"></span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label asp-for="AssetType" class="form-label fw-bold">Asset Type *</label>
+                                    <input asp-for="AssetType" class="form-control" placeholder="e.g., Vehicle, Equipment, Furniture" required />
+                                    <span asp-validation-for="AssetType" class="text-danger"></span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label asp-for="Class" class="form-label">Class</label>
+                                    <select asp-for="Class" class="form-select">
+                                        <option value="">-- Select Class --</option>
+                                        <option value="Fixed Asset">Fixed Asset</option>
+                                        <option value="Current Asset">Current Asset</option>
+                                        <option value="Intangible Asset">Intangible Asset</option>
+                                        <option value="Financial Asset">Financial Asset</option>
+                                        <option value="Tangible Asset">Tangible Asset</option>
+                                        <option value="Capital Asset">Capital Asset</option>
+                                        <option value="Operating Asset">Operating Asset</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                    <span asp-validation-for="Class" class="text-danger"></span>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label asp-for="TagNo" class="form-label">Tag Number</label>
+                                            <input asp-for="TagNo" class="form-control" placeholder="Asset tag number" />
+                                            <span asp-validation-for="TagNo" class="text-danger"></span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label asp-for="SerialNo" class="form-label">Serial Number</label>
+                                            <input asp-for="SerialNo" class="form-control" placeholder="Serial number" />
+                                            <span asp-validation-for="SerialNo" class="text-danger"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label asp-for="Location" class="form-label">Location</label>
+                                    <input asp-for="Location" class="form-control" placeholder="Asset location" />
+                                    <span asp-validation-for="Location" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Financial Information -->
+                    <div class="col-md-6">
+                        <div class="card bg-light mb-3">
+                            <div class="card-header">
+                                <i class="bi bi-cash-stack me-2"></i>Financial Information
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label asp-for="Quantity" class="form-label fw-bold">Quantity *</label>
+                                    <input asp-for="Quantity" class="form-control" type="number" min="1" required />
+                                    <span asp-validation-for="Quantity" class="text-danger"></span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label asp-for="ActualValue" class="form-label fw-bold">Actual Value (KES) *</label>
+                                    <input asp-for="ActualValue" class="form-control" type="number" min="0" required />
+                                    <span asp-validation-for="ActualValue" class="text-danger"></span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label asp-for="MarketValue" class="form-label">Market Value (KES)</label>
+                                    <input asp-for="MarketValue" class="form-control" type="number" min="0" />
+                                    <span asp-validation-for="MarketValue" class="text-danger"></span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label asp-for="TotalValue" class="form-label">Total Value (KES)</label>
+                                    <input asp-for="TotalValue" class="form-control" type="number" min="0" />
+                                    <span asp-validation-for="TotalValue" class="text-danger"></span>
+                                    <small class="text-muted">Leave blank to auto-calculate (Quantity × Actual Value)</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <!-- FIX: Use value and name directly instead of asp-for for nullable bool -->
+                                        <input type="checkbox" class="form-check-input" id="Posted" name="Posted" value="true" @(Model.Posted == true ? "checked" : "") />
+                                        <label class="form-check-label" for="Posted">
+                                            <i class="bi bi-check-circle me-1"></i> Posted
+                                        </label>
+                                        <input type="hidden" name="Posted" value="false" />
+                                    </div>
+                                    <small class="text-muted">Uncheck to unpost the asset</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Date Information -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card bg-light mb-3">
+                            <div class="card-header">
+                                <i class="bi bi-calendar me-2"></i>Date Information
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label asp-for="DatePurchased" class="form-label">Date Purchased</label>
+                                    <input asp-for="DatePurchased" class="form-control" type="date" />
+                                    <span asp-validation-for="DatePurchased" class="text-danger"></span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label asp-for="DateOfManufacture" class="form-label">Date of Manufacture</label>
+                                    <input asp-for="DateOfManufacture" class="form-control" type="date" />
+                                    <span asp-validation-for="DateOfManufacture" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card bg-light mb-3">
+                            <div class="card-header">
+                                <i class="bi bi-info-circle me-2"></i>Transaction Information
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label asp-for="TransactionNo" class="form-label">Transaction Number</label>
+                                    <input asp-for="TransactionNo" class="form-control" readonly />
+                                    <small class="text-muted">Transaction number is read-only</small>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(Model.BlockchainTxId))
+                                {
+                                    <div class="mb-3">
+                                        <label class="form-label">Blockchain Transaction ID</label>
+                                        <input value="@Model.BlockchainTxId" class="form-control" readonly />
+                                        <small class="text-muted"><i class="bi bi-link me-1"></i>Verified on blockchain</small>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr />
+
+                <div class="d-flex justify-content-end gap-2">
+                    <a asp-action="Index" class="btn btn-secondary">
+                        <i class="bi bi-x-circle me-1"></i> Cancel
+                    </a>
+                    <button type="submit" class="btn btn-warning" id="submitBtn">
+                        <i class="bi bi-save me-2"></i>Update Asset
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function() {
+            // Auto-calculate total value
+            $('#Quantity, #ActualValue').on('input', function() {
+                const quantity = parseFloat($('#Quantity').val()) || 0;
+                const actualValue = parseFloat($('#ActualValue').val()) || 0;
+
+                if (quantity > 0 && actualValue > 0) {
+                    const total = quantity * actualValue;
+                    $('#TotalValue').val(total.toFixed(2));
+                }
+            });
+
+            // Form submission with loading state
+            $('#assetForm').on('submit', function() {
+                var submitBtn = $('#submitBtn');
+                submitBtn.prop('disabled', true);
+                submitBtn.html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Updating...');
+                return true;
+            });
+        });
+    </script>
+}
