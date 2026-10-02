@@ -1,0 +1,336 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.ShareContributionsStatementViewModel
+
+@{
+    ViewData["Title"] = "Share Contributions Statement";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var companyName = ViewBag.CompanyName ?? "";
+}
+
+<style>
+    .summary-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 15px;
+    }
+
+        .summary-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .summary-card .label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .summary-card.green {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+        .summary-card.orange {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        }
+
+        .summary-card.blue {
+            background: linear-gradient(135deg, #17a2b8 0%, #0dcaf0 100%);
+        }
+
+        .summary-card.red {
+            background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+        }
+
+        .summary-card.teal {
+            background: linear-gradient(135deg, #20c997 0%, #0dcaf0 100%);
+        }
+
+    .share-type-header {
+        background-color: #e8f4f8;
+        padding: 10px 15px;
+        border-radius: 5px;
+        margin-bottom: 5px;
+        border-left: 4px solid #17a2b8;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+        .share-type-header:hover {
+            opacity: 0.85;
+            transform: translateX(2px);
+        }
+
+        .share-type-header.share-capital {
+            border-left-color: #28a745;
+            background-color: #e8f8e8;
+        }
+
+            .share-type-header.share-capital:hover {
+                background-color: #d4edda;
+            }
+
+        .share-type-header.deposits {
+            border-left-color: #17a2b8;
+            background-color: #e8f4f8;
+        }
+
+            .share-type-header.deposits:hover {
+                background-color: #d4edf8;
+            }
+
+        .share-type-header .badge-type {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+    .share-type-details {
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 0 0 5px 5px;
+        margin-bottom: 15px;
+        border: 1px solid #dee2e6;
+        border-top: none;
+    }
+
+    .no-print {
+        display: block;
+    }
+
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+
+        .share-type-details {
+            display: block !important;
+            border: 1px solid #000 !important;
+        }
+
+        .share-type-header {
+            border: 1px solid #000 !important;
+        }
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-3 no-print">
+        <div class="col-md-8">
+            <h2 style="color: #3f2b96;">
+                <i class="bi bi-wallet2"></i> Share Contributions Statement
+            </h2>
+            <p class="text-muted">
+                <strong>@Model.MemberName</strong> (@Model.MemberNo)
+                @if (!string.IsNullOrEmpty(Model.MemberPhone))
+                {
+                    <span>| Phone: @Model.MemberPhone</span>
+                }
+            </p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="@Url.Action("Index", "Home")" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+            @if (Model.HasData)
+            {
+                <button type="button" class="btn btn-danger ms-2" onclick="exportToPdf()">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Hidden form for PDF export -->
+    <form id="pdfExportForm" action="@Url.Action("ExportShareContributionsToPdf", "MemberReport")" method="post" target="_blank">
+        @Html.AntiForgeryToken()
+    </form>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="summary-card green">
+                <div class="number">@Model.TotalShareCapital.ToString("N0")</div>
+                <div class="label">Total Share Capital</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card blue">
+                <div class="number">@Model.TotalDeposits.ToString("N0")</div>
+                <div class="label">Total Deposits/Savings</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card teal">
+                <div class="number">@Model.ActiveShareTypes</div>
+                <div class="label">Active Share Types</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                <div class="number">@Model.TotalTransactions</div>
+                <div class="label">Total Transactions</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contributions by Share Type -->
+    @if (Model.HasData)
+    {
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-ul"></i> Contributions by Share Type
+                </h5>
+                <span class="badge bg-light text-dark float-end">@Model.TotalTransactions transactions</span>
+            </div>
+            <div class="card-body">
+                @foreach (var group in Model.ShareTypeGroups)
+                {
+                    var headerClass = group.IsShareCapital ? "share-capital" : "deposits";
+                    var typeLabel = group.IsShareCapital ? "SHARE CAPITAL" : "DEPOSITS/SAVINGS";
+                    var headerIcon = group.IsShareCapital ? "bi bi-coin" : "bi bi-piggy-bank";
+
+                    <div class="share-type-header @headerClass" onclick="toggleGroup('@group.ShareCode')">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <i class="@headerIcon me-2"></i>
+                                <strong>@group.ShareTypeName</strong>
+                                <span class="badge bg-secondary ms-2">@group.ShareCode</span>
+                            </div>
+                            <div class="col-md-2">
+                                <span class="badge-type bg-info text-white">@typeLabel</span>
+                            </div>
+                            <div class="col-md-2">
+                                <span class="badge bg-secondary">@group.TransactionCount transactions</span>
+                            </div>
+                            <div class="col-md-3">
+                                <span class="badge bg-success">Total: @group.TotalAmount.ToString("N0")</span>
+                            </div>
+                            <div class="col-md-1 text-end">
+                                <i class="bi bi-chevron-down" id="icon_@group.ShareCode"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="share-type-details" id="group_@group.ShareCode" style="display: none;">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 5%;">#</th>
+                                        <th style="width: 15%;">Date</th>
+                                        <th style="width: 15%;">Amount</th>
+                                        <th style="width: 35%;">Description</th>
+                                        <th style="width: 15%;">Receipt No</th>
+                                        <th style="width: 15%;">Ref No</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in group.Contributions.Select((c, i) => new { c, Index = i + 1 }))
+                                    {
+                                        <tr>
+                                            <td class="text-center">@item.Index</td>
+                                            <td class="text-center">@item.c.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                            <td class="text-end fw-bold">@item.c.Amount.ToString("N2")</td>
+                                            <td>@item.c.Description</td>
+                                            <td class="text-center">@(item.c.ReceiptNo ?? "-")</td>
+                                            <td class="text-center">@(item.c.RefNo ?? "-")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="table-secondary">
+                                    <tr>
+                                        <th colspan="2" class="text-end">Subtotal:</th>
+                                        <th class="text-end fw-bold">@group.TotalAmount.ToString("N2")</th>
+                                        <th colspan="3"></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- Grand Total -->
+                <div class="alert alert-dark mt-3">
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <strong><i class="bi bi-calculator me-2"></i>GRAND TOTAL:</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <span class="text-success"><i class="bi bi-coin me-1"></i>Share Capital: @Model.TotalShareCapital.ToString("N0")</span>
+                        </div>
+                        <div class="col-md-3">
+                            <span class="text-primary"><i class="bi bi-piggy-bank me-1"></i>Deposits: @Model.TotalDeposits.ToString("N0")</span>
+                        </div>
+                        <div class="col-md-3 text-end">
+                            <strong style="font-size: 1.1rem; color: #3f2b96;">
+                                <i class="bi bi-cash-stack me-1"></i>Total: @Model.TotalAmount.ToString("N0")
+                            </strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            No share contributions found for <strong>@Model.MemberName</strong>.
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Expand the first group by default
+            var firstHeader = $('.share-type-header').first();
+            if (firstHeader.length > 0) {
+                var onclickAttr = firstHeader.attr('onclick');
+                if (onclickAttr) {
+                    var match = onclickAttr.match(/toggleGroup\('([^']+)'\)/);
+                    if (match && match[1]) {
+                        toggleGroup(match[1]);
+                    }
+                }
+            }
+
+            // Initialize tooltips if any
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+
+        function toggleGroup(shareCode) {
+            var div = $('#group_' + shareCode);
+            var icon = $('#icon_' + shareCode);
+
+            if (div.is(':visible')) {
+                div.slideUp('fast');
+                icon.removeClass('bi-chevron-up').addClass('bi-chevron-down');
+            } else {
+                div.slideDown('fast');
+                icon.removeClass('bi-chevron-down').addClass('bi-chevron-up');
+            }
+        }
+
+        function exportToPdf() {
+            var btn = document.querySelector('.btn-danger');
+            if (btn) {
+                btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating PDF...';
+                btn.disabled = true;
+            }
+
+            // Submit the form to the Export action
+            document.getElementById('pdfExportForm').submit();
+
+            // Reset button after a delay
+            setTimeout(function() {
+                if (btn) {
+                    btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Export PDF';
+                    btn.disabled = false;
+                }
+            }, 5000);
+        }
+    </script>
+}

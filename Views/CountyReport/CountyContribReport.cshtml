@@ -1,0 +1,575 @@
+﻿@using System.Security.Claims
+@model SACCOBlockChainSystem.Models.ViewModels.CountyReportViewModel
+@{
+    ViewData["Title"] = $"County Contribution Report - {Model?.CountyName ?? "County Report"}";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var hasData = Model != null && Model.CompanySummaries != null && Model.CompanySummaries.Any();
+    var reportDate = Model?.ReportDate ?? (ViewBag.ReportDate as DateTime? ?? DateTime.Now);
+    var countyName = Model?.CountyName ?? ViewBag.CountyName ?? "";
+    var isPdfExport = ViewBag.IsPdfExport ?? false;
+}
+
+<style media="print">
+    .app-sidebar, .app-header, .main-footer, .sidebar-wrapper, .navbar,
+    .breadcrumb, .footer, [data-lte-toggle="sidebar"], .brand-link,
+    .sidebar-footer, .no-print {
+        display: none !important;
+    }
+
+    .app-main, .app-content, .content-wrapper, .main-content {
+        margin-left: 0 !important;
+        padding: 20px !important;
+        width: 100% !important;
+    }
+
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    .card-header {
+        background-color: #1a73e8 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+    }
+
+        .table th {
+            background-color: #f2f2f2 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+    .btn, .export-buttons, #exportExcelBtn, #exportPdfBtn, #exportCsvBtn {
+        display: none !important;
+    }
+
+    body {
+        background: white !important;
+        font-size: 11pt;
+    }
+
+    .bg-primary {
+        background-color: #1a73e8 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .bg-success {
+        background-color: #28a745 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .bg-warning {
+        background-color: #ffc107 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .bg-danger {
+        background-color: #dc3545 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .progress {
+        border: 1px solid #ddd !important;
+    }
+
+    .progress-bar {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+</style>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h3 class="card-title">
+            <i class="fas fa-map-marked-alt me-2"></i>County Contribution Report
+        </h3>
+        <div class="card-tools no-print">
+            <span class="badge badge-light">@DateTime.Now.ToString("dd MMM yyyy HH:mm")</span>
+        </div>
+    </div>
+
+    <div class="card-body">
+        <!-- Filter Section - REMOVED COUNTY DROPDOWN -->
+        <div class="row mb-4 no-print">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            Report Date
+                            @if (!string.IsNullOrEmpty(countyName))
+                            {
+                                <span class="ms-3 text-muted">
+                                    <i class="fas fa-map-marker-alt me-1"></i>
+                                    County: <strong>@countyName</strong>
+                                </span>
+                            }
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="CountyContribReport" method="post" id="reportForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label fw-bold">As At Date</label>
+                                        <input type="date" name="reportDate" id="reportDate"
+                                               class="form-control"
+                                               value="@reportDate.ToString("yyyy-MM-dd")"
+                                               required />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label fw-bold">&nbsp;</label>
+                                        <div>
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="fas fa-search me-1"></i>Generate Report
+                                            </button>
+                                            @if (hasData)
+                                            {
+                                                <button type="button" class="btn btn-success" id="exportExcelBtn" onclick="exportToExcel();">
+                                                    <i class="fas fa-file-excel me-1"></i>Excel
+                                                </button>
+                                                <button type="button" class="btn btn-danger" id="exportPdfBtn" onclick="exportToPdf();">
+                                                    <i class="fas fa-file-pdf me-1"></i>PDF
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+
+                        <!-- Export Forms -->
+                        <form asp-action="ExportCountyReportToExcel" method="post" id="excelForm" style="display:none;">
+                            <input type="hidden" name="reportDate" id="excelReportDate" />
+                        </form>
+                        <form asp-action="ExportCountyReportToPdf" method="post" id="pdfForm" style="display:none;">
+                            <input type="hidden" name="reportDate" id="pdfReportDate" />
+                        </form>
+                        <form asp-action="ExportCountyReportToCsv" method="post" id="csvForm" style="display:none;">
+                            <input type="hidden" name="reportDate" id="csvReportDate" />
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (hasData)
+        {
+            <!-- Report Header -->
+            <div class="text-center mb-4">
+                <h2 class="display-6 fw-bold">@Model.CountyName.ToUpper() COUNTY</h2>
+                <h4 class="text-muted">CONTRIBUTION REPORT AS AT @reportDate.ToString("dd/MM/yyyy")</h4>
+                <h6 class="text-muted">
+                    Period: @Model.StartDate?.ToString("dd/MM/yyyy") - @Model.EndDate?.ToString("dd/MM/yyyy")
+                </h6>
+                <hr class="my-3" />
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="row g-3 mb-4">
+                <div class="col-xl-3 col-md-6">
+                    <div class="card h-100 shadow-sm border-0 rounded-3">
+                        <div class="card-body py-3 px-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="text-muted mb-1">Total Companies</h6>
+                                    <h3 class="mb-0">@Model.TotalCompanies</h3>
+                                </div>
+                                <div class="bg-primary bg-opacity-10 p-3 rounded-circle">
+                                    <i class="fas fa-building text-primary fs-4"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6">
+                    <div class="card h-100 shadow-sm border-0 rounded-3">
+                        <div class="card-body py-3 px-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="text-muted mb-1">Total Members</h6>
+                                    <h3 class="mb-0">@Model.TotalMembers.ToString("N0")</h3>
+                                </div>
+                                <div class="bg-info bg-opacity-10 p-3 rounded-circle">
+                                    <i class="fas fa-users text-info fs-4"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6">
+                    <div class="card h-100 shadow-sm border-0 rounded-3">
+                        <div class="card-body py-3 px-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="text-muted mb-1">Total Contributions</h6>
+                                    <h3 class="mb-0 text-success">@Model.TotalContributions.ToString("N0")</h3>
+                                </div>
+                                <div class="bg-success bg-opacity-10 p-3 rounded-circle">
+                                    <i class="fas fa-hand-holding-usd text-success fs-4"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6">
+                    <div class="card h-100 shadow-sm border-0 rounded-3">
+                        <div class="card-body py-3 px-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="text-muted mb-1">Avg Per Member</h6>
+                                    <h3 class="mb-0 text-warning">
+                                        @(Model.TotalMembers > 0 ? (Model.TotalContributions / Model.TotalMembers).ToString("N0") : "0")
+                                    </h3>
+                                </div>
+                                <div class="bg-warning bg-opacity-10 p-3 rounded-circle">
+                                    <i class="fas fa-calculator text-warning fs-4"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gender Summary -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-12">
+                    <div class="card shadow-sm border-0 rounded-3">
+                        <div class="card-header bg-white py-3 border-0">
+                            <h6 class="mb-0 fw-bold text-primary">
+                                <i class="fas fa-venus-mars me-2"></i>Gender Distribution
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="text-center p-3 bg-light rounded">
+                                        <h5 class="text-primary">@Model.GenderSummary.FemaleTotal.ToString("N0")</h5>
+                                        <small class="text-muted">Women (@Model.GenderSummary.FemalePercentage.ToString("F1")%)</small>
+                                        <div class="progress mt-2" style="height:10px;">
+                                            <div class="progress-bar bg-primary" style="width: @Model.GenderSummary.FemalePercentage%"></div>
+                                        </div>
+                                        <span class="badge bg-primary mt-1">@Model.GenderSummary.FemaleCount members</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center p-3 bg-light rounded">
+                                        <h5 class="text-success">@Model.GenderSummary.MaleTotal.ToString("N0")</h5>
+                                        <small class="text-muted">Men (@Model.GenderSummary.MalePercentage.ToString("F1")%)</small>
+                                        <div class="progress mt-2" style="height:10px;">
+                                            <div class="progress-bar bg-success" style="width: @Model.GenderSummary.MalePercentage%"></div>
+                                        </div>
+                                        <span class="badge bg-success mt-1">@Model.GenderSummary.MaleCount members</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center p-3 bg-light rounded">
+                                        <h5 class="text-warning">@Model.GenderSummary.OtherTotal.ToString("N0")</h5>
+                                        <small class="text-muted">Others (@Model.GenderSummary.OtherPercentage.ToString("F1")%)</small>
+                                        <div class="progress mt-2" style="height:10px;">
+                                            <div class="progress-bar bg-warning" style="width: @Model.GenderSummary.OtherPercentage%"></div>
+                                        </div>
+                                        <span class="badge bg-warning mt-1">@Model.GenderSummary.OtherCount members</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Company Contributions Table -->
+            <div class="card shadow-sm border-0 rounded-3">
+                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold text-primary">
+                        <i class="fas fa-building me-2"></i>Company Contributions
+                    </h6>
+                    <span class="badge bg-primary">@Model.CompanySummaries.Count Companies</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-hover mb-0" id="contribTable">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th width="50">#</th>
+                                    <th>Company</th>
+                                    <th class="text-center">Members</th>
+                                    <th class="text-end">Share Capital</th>
+                                    <th class="text-end">Deposits</th>
+                                    <th class="text-end">Reg. Fees</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-center">% of Total</th>
+                                    <th class="text-end">Avg/Member</th>
+                                    <th class="text-center">Women</th>
+                                    <th class="text-center">Men</th>
+                                    <th class="text-center">Others</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    int counter = 1;
+                                }
+                                @foreach (var company in Model.CompanySummaries)
+                                {
+                                    var rowClass = company.PercentageOfTotal > 20 ? "table-success" :
+                                    company.PercentageOfTotal > 10 ? "table-info" :
+                                    company.PercentageOfTotal > 5 ? "table-warning" : "";
+                                    <tr class="@rowClass">
+                                        <td class="text-center">@counter</td>
+                                        <td>
+                                            <strong>@company.CompanyName</strong>
+                                            <br />
+                                            <small class="text-muted">@company.CompanyCode</small>
+                                        </td>
+                                        <td class="text-center">@company.MemberCount.ToString("N0")</td>
+                                        <td class="text-end">@company.TotalShareCapital.ToString("N2")</td>
+                                        <td class="text-end">@company.TotalDeposits.ToString("N2")</td>
+                                        <td class="text-end">@company.TotalRegistrationFees.ToString("N2")</td>
+                                        <td class="text-end fw-bold text-primary">@company.TotalContributions.ToString("N2")</td>
+                                        <td class="text-center">
+                                            <span class="badge @(company.PercentageOfTotal > 20 ? "bg-success" : company.PercentageOfTotal > 10 ? "bg-info" : "bg-secondary")">
+                                                @company.PercentageOfTotal.ToString("F1")%
+                                            </span>
+                                        </td>
+                                        <td class="text-end">@company.AverageContributionPerMember.ToString("N2")</td>
+                                        <td class="text-center">
+                                            <span class="badge bg-primary">@company.FemaleCount</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-success">@company.MaleCount</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-warning">@company.OtherCount</span>
+                                        </td>
+                                    </tr>
+                                    counter++;
+                                }
+                            </tbody>
+                            <tfoot class="bg-light fw-bold">
+                                <tr>
+                                    <td colspan="2" class="text-end">TOTALS</td>
+                                    <td class="text-center">@Model.TotalMembers.ToString("N0")</td>
+                                    <td class="text-end">@Model.TotalShareCapital.ToString("N2")</td>
+                                    <td class="text-end">@Model.TotalDeposits.ToString("N2")</td>
+                                    <td class="text-end">@Model.TotalRegistrationFees.ToString("N2")</td>
+                                    <td class="text-end text-primary">@Model.TotalContributions.ToString("N2")</td>
+                                    <td class="text-center">100%</td>
+                                    <td class="text-end">
+                                        @(Model.TotalMembers > 0 ? (Model.TotalContributions / Model.TotalMembers).ToString("N2") : "0")
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary">@Model.GenderSummary.FemaleCount</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-success">@Model.GenderSummary.MaleCount</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-warning">@Model.GenderSummary.OtherCount</span>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Report Information -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="small text-muted">
+                        <i class="fas fa-info-circle"></i>
+                        Generated By: @User.Identity.Name on @DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss") |
+                        As At: @Model.ReportDate.ToString("dd/MM/yyyy") |
+                        County: @Model.CountyName |
+                        @if (Model.StartDate.HasValue && Model.EndDate.HasValue)
+                        {
+                            <span>Period: @Model.StartDate.Value.ToString("dd/MM/yyyy") - @Model.EndDate.Value.ToString("dd/MM/yyyy")</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info text-center py-5">
+                <i class="fas fa-map-marked-alt fa-3x mb-3"></i>
+                <h5>No Data Available</h5>
+                <p>No contribution data found for your county.</p>
+                <p class="small text-muted">
+                    County: <strong>@countyName</strong>
+                </p>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Wait for DOM to be ready
+        document.addEventListener('DOMContentLoaded', function() {
+            'use strict';
+
+            // Get all required elements
+            const exportExcelBtn = document.getElementById('exportExcelBtn');
+            const exportPdfBtn = document.getElementById('exportPdfBtn');
+            const exportCsvBtn = document.getElementById('exportCsvBtn');
+            const reportDate = document.getElementById('reportDate');
+
+            // Excel Report Date
+            const excelReportDate = document.getElementById('excelReportDate');
+            const excelForm = document.getElementById('excelForm');
+
+            // PDF Report Date
+            const pdfReportDate = document.getElementById('pdfReportDate');
+            const pdfForm = document.getElementById('pdfForm');
+
+            // CSV Report Date
+            const csvReportDate = document.getElementById('csvReportDate');
+            const csvForm = document.getElementById('csvForm');
+
+            // Export to Excel
+            if (exportExcelBtn) {
+                exportExcelBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+
+                    const date = reportDate.value;
+
+                    if (!date) {
+                        alert('Please select a report date');
+                        return;
+                    }
+
+                    excelReportDate.value = date;
+                    excelForm.submit();
+                });
+            }
+
+            // Export to PDF
+            if (exportPdfBtn) {
+                exportPdfBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+
+                    const date = reportDate.value;
+
+                    if (!date) {
+                        alert('Please select a report date');
+                        return;
+                    }
+
+                    pdfReportDate.value = date;
+                    pdfForm.submit();
+                });
+            }
+
+            // Export to CSV
+            if (exportCsvBtn) {
+                exportCsvBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+
+                    const date = reportDate.value;
+
+                    if (!date) {
+                        alert('Please select a report date');
+                        return;
+                    }
+
+                    csvReportDate.value = date;
+                    csvForm.submit();
+                });
+            }
+
+            // Handle form submission
+            const reportForm = document.getElementById('reportForm');
+            if (reportForm) {
+                reportForm.addEventListener('submit', function(e) {
+                    const date = reportDate.value;
+                    if (!date) {
+                        e.preventDefault();
+                        alert('Please select a report date');
+                    }
+                });
+            }
+
+            // Initialize DataTable if there's data
+            @if (hasData)
+            {
+                    <text>
+                    const contribTable = document.getElementById('contribTable');
+                    if (contribTable && typeof $.fn !== 'undefined' && $.fn.DataTable) {
+                        try {
+                            $(contribTable).DataTable({
+                                pageLength: 25,
+                                ordering: true,
+                                responsive: true,
+                                language: {
+                                    search: "Search:",
+                                    lengthMenu: "Show _MENU_ entries",
+                                    info: "Showing _START_ to _END_ of _TOTAL_ entries"
+                                }
+                            });
+                        } catch (error) {
+                            console.error('DataTable initialization error:', error);
+                        }
+                    }
+                    </text>
+            }
+        });
+
+        // Export functions as fallback
+        window.exportToExcel = function() {
+            const reportDate = document.getElementById('reportDate');
+            const excelReportDate = document.getElementById('excelReportDate');
+            const excelForm = document.getElementById('excelForm');
+
+            if (!reportDate || !excelReportDate || !excelForm) return;
+
+            const date = reportDate.value;
+            if (!date) { alert('Please select a report date'); return; }
+
+            excelReportDate.value = date;
+            excelForm.submit();
+        };
+
+        window.exportToPdf = function() {
+            const reportDate = document.getElementById('reportDate');
+            const pdfReportDate = document.getElementById('pdfReportDate');
+            const pdfForm = document.getElementById('pdfForm');
+
+            if (!reportDate || !pdfReportDate || !pdfForm) return;
+
+            const date = reportDate.value;
+            if (!date) { alert('Please select a report date'); return; }
+
+            pdfReportDate.value = date;
+            pdfForm.submit();
+        };
+
+        window.exportToCsv = function() {
+            const reportDate = document.getElementById('reportDate');
+            const csvReportDate = document.getElementById('csvReportDate');
+            const csvForm = document.getElementById('csvForm');
+
+            if (!reportDate || !csvReportDate || !csvForm) return;
+
+            const date = reportDate.value;
+            if (!date) { alert('Please select a report date'); return; }
+
+            csvReportDate.value = date;
+            csvForm.submit();
+        };
+    </script>
+}

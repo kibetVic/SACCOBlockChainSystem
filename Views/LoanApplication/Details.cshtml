@@ -1,0 +1,173 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.LoanDetailsViewModel
+@{
+    ViewData["Title"] = "Loan Details - " + Model.LoanNo;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Loan Details - @Model.LoanNo</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Loan Information</h6>
+                    <hr />
+                    <div class="row mb-2">
+                        <div class="col-6">Loan Number:</div>
+                        <div class="col-6 text-end fw-bold">@Model.LoanNo</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Loan Type:</div>
+                        <div class="col-6 text-end">@Model.LoanType</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Principal Amount:</div>
+                        <div class="col-6 text-end">@Model.PrincipalAmount.ToString("N0") KES</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Outstanding Balance:</div>
+                        <div class="col-6 text-end text-primary fw-bold">@Model.OutstandingBalance.ToString("N0") KES</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Monthly Installment:</div>
+                        <div class="col-6 text-end">@Model.MonthlyInstallment.ToString("N0") KES</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Next Payment Due:</div>
+                        <div class="col-6 text-end">
+                            @if (Model.NextPaymentDate.HasValue)
+                            {
+                                <span>@Model.NextPaymentDate.Value.ToString("dd MMM yyyy")</span>
+                                @if (Model.NextPaymentDate.Value < DateTime.Now)
+                                {
+                                    <br />
+                                    <span class="text-danger small">Overdue!</span>
+                                }
+                            }
+                            else
+                            {
+                                <span>-</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Status:</div>
+                        <div class="col-6 text-end">
+                            @{
+                                var statusClass = Model.Status switch
+                                {
+                                    "Disbursed" => "success",
+                                    "Approved" => "primary",
+                                    "Endorsed" => "info",
+                                    "Closed" => "secondary",
+                                    "Defaulted" => "danger",
+                                    _ => "warning"
+                                };
+                            }
+                            <span class="badge bg-@statusClass">@Model.Status</span>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">Application Date:</div>
+                        <div class="col-6 text-end">@Model.ApplicationDate.ToString("dd MMM yyyy")</div>
+                    </div>
+                    @if (Model.DisbursementDate.HasValue)
+                    {
+                        <div class="row mb-2">
+                            <div class="col-6">Disbursement Date:</div>
+                            <div class="col-6 text-end">@Model.DisbursementDate.Value.ToString("dd MMM yyyy")</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Repayment Schedule</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Due Date</th>
+                                    <th>Principal</th>
+                                    <th>Interest</th>
+                                    <th>Total</th>
+                                    <th>Paid</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var schedule in Model.RepaymentSchedule)
+                                {
+                                    var rowClass = schedule.Status == "Overdue" ? "table-danger" :
+                                    (schedule.Status == "Paid" ? "table-success" : "");
+
+                                    <tr class="@rowClass">
+                                        <td>@schedule.InstallmentNo</td>
+                                        <td>@schedule.DueDate.ToString("dd MMM yyyy")</td>
+                                        <td>@schedule.PrincipalAmount.ToString("N0")</td>
+                                        <td>@schedule.InterestAmount.ToString("N0")</td>
+                                        <td>@schedule.TotalInstallment.ToString("N0")</td>
+                                        <td>@schedule.PaidAmount.ToString("N0")</td>
+                                        <td>
+                                            @if (schedule.Status == "Paid")
+                                            {
+                                                <span class="badge bg-success">Paid</span>
+                                            }
+                                            else if (schedule.Status == "Overdue")
+                                            {
+                                                <span class="badge bg-danger">Overdue</span>
+                                            }
+                                            else if (schedule.Status == "Partial")
+                                            {
+                                                <span class="badge bg-warning">Partial</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Pending</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (Model.Status == "Disbursed" && Model.OutstandingBalance > 0)
+                                            {
+                                                <a href="@Url.Action("Repay", "LoanApplication", new { loanNo = Model.LoanNo })" class="btn btn-primary">
+                                                    <i class="fa fa-money-bill-wave"></i> Make Payment
+                                                </a>
+                                            }
+                                            @if (Model.Status == "Disbursed" || Model.Status == "Closed")
+                                            {
+                                                <a href="@Url.Action("RepaymentHistory", "LoanApplication", new { loanNo = Model.LoanNo })" class="btn btn-info">
+                                                    <i class="fa fa-history"></i> Payment History
+                                                </a>
+                                            }
+                                        </td>
+
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-12">
+            <a href="@Url.Action("MyLoans")" class="btn btn-outline-secondary">
+                <i class="fa fa-arrow-left"></i> Back to My Loans
+            </a>
+        </div>
+    </div>
+</div>

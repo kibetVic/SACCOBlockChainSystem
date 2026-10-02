@@ -1,0 +1,873 @@
+﻿@using SACCOBlockChainSystem.Models.DTOs
+@model MemberUpdateDTO
+@{
+    ViewData["Title"] = "My Profile";
+    var totalContributions = ViewBag.TotalContributions as decimal? ?? 0;
+    var shareBalance = ViewBag.ShareBalance as decimal? ?? 0;
+    var lastTransactionDate = ViewBag.LastTransactionDate as DateTime?;
+    var lastTransactionAmount = ViewBag.LastTransactionAmount as decimal?;
+    var memberName = ViewBag.MemberName as string;
+    var memberNo = ViewBag.MemberNo as string;
+}
+
+<div class="container-fluid">
+    <!-- Success/Error Messages -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Welcome Banner with Time Greeting -->
+    <div class="alert alert-info mb-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-1">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="timeBasedGreeting"></span>, @memberName!
+                </h5>
+                <small style="opacity: 0.9;">
+                    <i class="fas fa-id-card"></i> Member No: @memberNo
+                </small>
+            </div>
+            <div class="text-end">
+                <div id="currentTimeDisplay" style="font-size: 1rem; font-weight: bold;"></div>
+                <span id="greetingBadge" class="badge" style="background: rgba(255,255,255,0.2);"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Total Contributions</h6>
+                            <h3 class="mb-0">@totalContributions.ToString("N0")</h3>
+                        </div>
+                        <i class="fas fa-hand-holding-usd fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Share Balance</h6>
+                            <h3 class="mb-0">@shareBalance.ToString("N0")</h3>
+                        </div>
+                        <i class="fas fa-chart-line fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Last Transaction</h6>
+                            <h6 class="mb-0">@(lastTransactionDate?.ToString("dd/MM/yyyy") ?? "N/A")</h6>
+                            <small>@(lastTransactionAmount?.ToString("N0") ?? "0")</small>
+                        </div>
+                        <i class="fas fa-receipt fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Member Since</h6>
+                            <h6 class="mb-0">@(Model.RegistrationDate.ToString("dd/MM/yyyy"))</h6>
+                        </div>
+                        <i class="fas fa-calendar-alt fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Update Form -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h4><i class="fas fa-user-edit"></i> Edit Profile</h4>
+        </div>
+        <div class="card-body">
+            <form id="profileForm" method="post" asp-action="MyProfile">
+                @Html.AntiForgeryToken()
+                
+                <!-- Hidden fields - Make sure they have values -->
+                <input type="hidden" id="MemberNo" name="MemberNo" value="@Model.MemberNo" />
+                <input type="hidden" id="RegistrationDate" name="RegistrationDate" value="@Model.RegistrationDate.ToString("yyyy-MM-dd")" />
+                <input type="hidden" id="Status" name="Status" value="@Model.Status" />
+                <input type="hidden" id="MembershipType" name="MembershipType" value="@Model.MembershipType" />
+                <input type="hidden" id="RegistrationType" name="RegistrationType" value="@Model.RegistrationType" />
+                <input type="hidden" name="CreatedBy" value="@User.Identity?.Name" />
+
+                <div class="row">
+                    <!-- LEFT SIDE - Form Fields -->
+                    <div class="col-md-8">
+                        <!-- Basic Information Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="required">Member Number</label>
+                                <input type="text" class="form-control" value="@Model.MemberNo" disabled />
+                                <small class="text-muted">Member number cannot be changed</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="required">ID Number *</label>
+                                <input type="text" id="IdNo" name="IdNo" value="@Model.IdNo" class="form-control" maxlength="20" />
+                                <span class="text-danger" id="IdNoError"></span>
+                            </div>
+                        </div>
+
+                        <!-- Name Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="required">Surname *</label>
+                                <input type="text" id="Surname" name="Surname" value="@Model.Surname" class="form-control" />
+                                <span class="text-danger" id="SurnameError"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="required">Other Names *</label>
+                                <input type="text" id="OtherNames" name="OtherNames" value="@Model.OtherNames" class="form-control" />
+                                <span class="text-danger" id="OtherNamesError"></span>
+                            </div>
+                        </div>
+
+                        <!-- Contact Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="required">Phone Number *</label>
+                                <input type="tel" id="PhoneNo" name="PhoneNo" value="@Model.PhoneNo" class="form-control" placeholder="0712345678" />
+                                <span class="text-danger" id="PhoneNoError"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Landline</label>
+                                <input type="tel" id="LandLine" name="LandLine" value="@Model.LandLine" class="form-control" placeholder="0201234567" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Email</label>
+                                <input type="email" id="Email" name="Email" value="@Model.Email" class="form-control" placeholder="member@example.com" />
+                                <span class="text-danger" id="EmailError"></span>
+                            </div>
+                        </div>
+
+                        <!-- Personal Details Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label>Gender</label>
+                                <select id="Gender" name="Gender" class="form-control" asp-for="Gender">
+                                    <option value="">Select</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Date of Birth</label>
+                                <input type="date" id="DateOfBirth" name="DateOfBirth" value="@(Model.DateOfBirth?.ToString("yyyy-MM-dd"))" class="form-control" />
+                                <span id="ageWarning" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-2">
+                                <label>Age</label>
+                                <input type="number" id="Age" name="Age" value="@Model.Age" class="form-control" readonly />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Marital Status</label>
+                                <select id="MaritalStatus" name="MaritalStatus" class="form-control" asp-for="MaritalStatus">
+                                    <option value="">Select</option>
+                                    <option value="Single">Single</option>
+                                    <option value="Married">Married</option>
+                                    <option value="Divorced">Divorced</option>
+                                    <option value="Widowed">Widowed</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Employment & Location Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Employer</label>
+                                <input type="text" id="Employer" name="Employer" value="@Model.Employer" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Department</label>
+                                <input type="text" id="Department" name="Department" value="@Model.Department" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Station/County</label>
+                                <input type="text" id="Station" name="Station" value="@Model.Station" class="form-control" />
+                            </div>
+                        </div>
+
+                        <!-- Address Row -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label>Present Address</label>
+                                <textarea id="PresentAddress" name="PresentAddress" class="form-control" rows="2">@Model.PresentAddress</textarea>
+                            </div>
+                        </div>
+
+                        <!-- Membership Information (Read-only display) -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label>Membership Type</label>
+                                <input type="text" class="form-control" value="@Model.MembershipType" disabled />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Registration Type</label>
+                                <input type="text" class="form-control" value="@Model.RegistrationType" disabled />
+                            </div>
+                            <div class="col-md-4">
+                                <label>Status</label>
+                                <input type="text" class="form-control" value="@Model.Status" disabled />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT SIDE - Profile Info & Security -->
+                    <div class="col-md-4">
+                        <div class="card bg-light mb-3">
+                            <!-- Add this AFTER the Membership Information row and BEFORE the BUTTONS section -->
+                            <!-- Profile Image Upload Section -->
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <div class="card bg-light">
+                                        <div class="card-header">
+                                            <h6 class="mb-0"><i class="fas fa-image"></i> Profile Picture</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="profile-image-wrapper">
+                                                <img id="profileImagePreview"
+                                                     src="@(string.IsNullOrEmpty(Model.Photo) ? $"https://ui-avatars.com/api/?background=2563EB&color=fff&name={Uri.EscapeDataString(memberName)}" : Model.Photo)"
+                                                     alt="Profile Picture"
+                                                     class="profile-preview-img"
+                                                     onclick="document.getElementById('imageUpload').click()" />
+
+                                                <div class="image-upload-btn">
+                                                    <input type="file" id="imageUpload" accept="image/*" style="display: none;" />
+                                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('imageUpload').click()">
+                                                        <i class="fas fa-upload"></i> Upload Photo
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeImage()">
+                                                        <i class="fas fa-trash-alt"></i> Remove
+                                                    </button>
+                                                </div>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-info-circle"></i> Click to upload (Max 5MB, JPG/PNG)
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Hidden field for photo data -->
+                            <input type="hidden" id="PhotoBase64" name="Photo" value="@Model.Photo" />
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="mb-0"><i class="fas fa-shield-alt"></i> Account Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label>Wallet Address</label>
+                                    <div class="input-group">
+                                        <input type="text" id="WalletAddress" class="form-control font-monospace small"
+                                               value="Loading..." readonly />
+                                        <button type="button" class="btn btn-outline-secondary" onclick="copyWalletAddress()">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>Blockchain Status</label>
+                                    <div id="blockchainStatus" class="mt-2">
+                                        <span class="badge bg-warning">Checking...</span>
+                                    </div>
+                                </div>
+
+                                <hr />
+
+                                <div class="mb-3">
+                                    <label>Change Pin</label>
+                                    <a asp-action="AccountSetup" asp-controller="Home" class="btn btn-outline-primary btn-sm w-100">
+                                        <i class="fas fa-key"></i> Change Password
+                                    </a>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label>2-Factor Authentication</label>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                        <i class="fas fa-mobile-alt"></i> Coming Soon
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BUTTONS -->
+                <div class="mt-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg" id="btnSave">
+                        <i class="fas fa-save"></i> Update Profile
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-lg" onclick="resetForm()">
+                        <i class="fas fa-undo"></i> Reset
+                    </button>
+                    <a asp-action="MemberContribute" asp-controller="ContributionMvc" class="btn btn-info btn-lg">
+                        <i class="fas fa-hand-holding-usd"></i> Make Contribution
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; text-align:center; padding-top:20%;">
+    <div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="text-light mt-2">Updating Profile...</div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: red;
+    }
+
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+    .opacity-50 {
+        opacity: 0.5;
+    }
+
+    .font-monospace {
+        font-family: monospace;
+        font-size: 12px;
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+
+    .alert {
+        animation: slideDown 0.5s ease;
+    }
+
+    @@keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    /* Profile Image Styles */
+    .profile-image-wrapper {
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+
+    .profile-preview-img {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #2563EB;
+        cursor: pointer;
+        transition: opacity 0.3s;
+    }
+
+        .profile-preview-img:hover {
+            opacity: 0.8;
+        }
+
+    .image-upload-btn {
+        margin-top: 0.5rem;
+    }
+
+        .image-upload-btn .btn {
+            margin: 0 2px;
+        }
+</style>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let cropper = null;
+        let selectedImageData = null;
+
+        $(document).ready(function() {
+            // Calculate age when DOB changes
+            $('#DateOfBirth').on('change', function() {
+                calculateAge();
+            });
+
+            // Initialize age on page load
+            if ($('#DateOfBirth').val()) {
+                calculateAge();
+            }
+
+            // Load wallet address
+            loadWalletAddress();
+
+            // Load blockchain status
+            loadBlockchainStatus();
+
+            // Image upload handler
+            $('#imageUpload').on('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    if (!file.type.match('image.*')) {
+                        Swal.fire('Error', 'Please select an image file (JPEG, PNG, GIF)', 'error');
+                        return;
+                    }
+
+                    if (file.size > 5 * 1024 * 1024) {
+                        Swal.fire('Error', 'Image size must be less than 5MB', 'error');
+                        return;
+                    }
+
+                    initImageCropper(file);
+                }
+            });
+
+            // Form submit
+            $('#profileForm').on('submit', function(e) {
+                e.preventDefault();
+                updateProfile();
+            });
+        });
+
+        function calculateAge() {
+            const dob = $('#DateOfBirth').val();
+            if (dob) {
+                const birthDate = new Date(dob);
+                const today = new Date();
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const monthDiff = today.getMonth() - birthDate.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                $('#Age').val(age);
+            } else {
+                $('#Age').val('');
+            }
+        }
+
+        async function loadWalletAddress() {
+            try {
+                const response = await fetch('/api/Member/wallet');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.walletAddress) {
+                        $('#WalletAddress').val(data.walletAddress);
+                    } else {
+                        $('#WalletAddress').val('No wallet created yet');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading wallet:', error);
+                $('#WalletAddress').val('Error loading wallet');
+            }
+        }
+
+        async function loadBlockchainStatus() {
+            try {
+                const response = await fetch('/api/Member/blockchain-status');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        const statusHtml = `
+                            <span class="badge bg-success">Verified on Blockchain</span>
+                            <small class="d-block text-muted mt-1">Tx: ${data.transactionCount} transactions</small>
+                        `;
+                        $('#blockchainStatus').html(statusHtml);
+                    } else {
+                        $('#blockchainStatus').html('<span class="badge bg-secondary">Not on Blockchain</span>');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading blockchain status:', error);
+                $('#blockchainStatus').html('<span class="badge bg-danger">Error checking status</span>');
+            }
+        }
+
+        function copyWalletAddress() {
+            const walletAddress = $('#WalletAddress').val();
+            if (walletAddress && walletAddress !== 'No wallet created yet' && walletAddress !== 'Error loading wallet') {
+                navigator.clipboard.writeText(walletAddress).then(() => {
+                    Swal.fire({
+                        title: 'Copied!',
+                        text: 'Wallet address copied to clipboard',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                });
+            } else {
+                Swal.fire('Info', 'No wallet address available to copy', 'info');
+            }
+        }
+
+        function resetForm() {
+            location.reload();
+        }
+
+        async function updateProfile() {
+            // Clear previous errors
+            $('#SurnameError').text('');
+            $('#OtherNamesError').text('');
+            $('#IdNoError').text('');
+            $('#PhoneNoError').text('');
+            $('#EmailError').text('');
+
+            // Get values from form fields
+            const surname = $('#Surname').val();
+            const otherNames = $('#OtherNames').val();
+            const idNo = $('#IdNo').val();
+            const phoneNo = $('#PhoneNo').val();
+
+            // Validate required fields
+            let hasError = false;
+
+            if (!surname || !surname.trim()) {
+                $('#SurnameError').text('Surname is required');
+                hasError = true;
+            }
+
+            if (!otherNames || !otherNames.trim()) {
+                $('#OtherNamesError').text('Other Names are required');
+                hasError = true;
+            }
+
+            if (!idNo || !idNo.trim()) {
+                $('#IdNoError').text('ID Number is required');
+                hasError = true;
+            }
+
+            if (!phoneNo || !phoneNo.trim()) {
+                $('#PhoneNoError').text('Phone Number is required');
+                hasError = true;
+            }
+
+            const email = $('#Email').val();
+            if (email && email.trim() && !/^[^\s@@]+@@[^\s@@]+\.[^\s@@]+$/.test(email.trim())) {
+                $('#EmailError').text('Please enter a valid email address');
+                hasError = true;
+            }
+
+            if (hasError) {
+                Swal.fire('Error', 'Please fill in all required fields', 'error');
+                return;
+            }
+
+            // Build formData with photo included
+            const formData = {
+                memberNo: $('#MemberNo').val(),
+                surname: $('#Surname').val(),
+                otherNames: $('#OtherNames').val(),
+                idNo: $('#IdNo').val(),
+                phoneNo: $('#PhoneNo').val(),
+                landLine: $('#LandLine').val(),
+                email: $('#Email').val(),
+                gender: $('#Gender').val(),
+                dateOfBirth: $('#DateOfBirth').val() || null,
+                age: $('#Age').val(),
+                maritalStatus: $('#MaritalStatus').val(),
+                employer: $('#Employer').val(),
+                department: $('#Department').val(),
+                station: $('#Station').val(),
+                presentAddress: $('#PresentAddress').val(),
+                registrationDate: $('#RegistrationDate').val(),
+                status: $('#Status').val(),
+                membershipType: $('#MembershipType').val(),
+                registrationType: $('#RegistrationType').val(),
+                photo: $('#PhotoBase64').val()
+            };
+
+            console.log('Photo data present:', formData.photo ? 'Yes - Length: ' + formData.photo.length : 'No');
+
+            $('#loadingOverlay').fadeIn(200);
+
+            try {
+                const response = await fetch('/MemberMvc/MyProfile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+                $('#loadingOverlay').fadeOut(200);
+
+                if (data.success) {
+                    Swal.fire({
+                        title: 'Success!',
+                        text: data.message,
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            } catch (error) {
+                $('#loadingOverlay').fadeOut(200);
+                console.error('Error:', error);
+                Swal.fire('Error', 'An error occurred while updating profile', 'error');
+            }
+        }
+
+        // Time-based greeting function
+        function updateTimeBasedGreeting() {
+            const now = new Date();
+            const hour = now.getHours();
+            const greetingElement = document.getElementById('timeBasedGreeting');
+            const badgeElement = document.getElementById('greetingBadge');
+            const timeDisplayElement = document.getElementById('currentTimeDisplay');
+
+            const formattedTime = now.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+
+            if (timeDisplayElement) {
+                timeDisplayElement.innerHTML = `<i class="fas fa-clock"></i> ${formattedTime}`;
+            }
+
+            let greeting = '';
+            let emoji = '';
+            let badgeText = '';
+
+            if (hour >= 5 && hour < 12) {
+                greeting = 'Good Morning';
+                emoji = '🌅';
+                badgeText = 'Morning';
+            } else if (hour >= 12 && hour < 17) {
+                greeting = 'Good Afternoon';
+                emoji = '☀️';
+                badgeText = 'Afternoon';
+            } else if (hour >= 17 && hour < 21) {
+                greeting = 'Good Evening';
+                emoji = '🌆';
+                badgeText = 'Evening';
+            } else {
+                greeting = 'Good Night';
+                emoji = '🌙';
+                badgeText = 'Night';
+            }
+
+            if (greetingElement) {
+                greetingElement.innerHTML = `${greeting} ${emoji}`;
+            }
+
+            if (badgeElement) {
+                badgeElement.innerHTML = `${emoji} ${badgeText}`;
+            }
+        }
+
+        updateTimeBasedGreeting();
+        setInterval(updateTimeBasedGreeting, 60000);
+
+        // Image cropping functions
+        window.initImageCropper = function(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // Remove existing modal if any
+                if ($('#cropModal').length) {
+                    $('#cropModal').remove();
+                }
+
+                // Create modal HTML
+                const modalHtml = `
+                    <div class="modal fade" id="cropModal" tabindex="-1">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Crop Profile Picture</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body text-center">
+                                    <div class="img-container">
+                                        <img id="cropImage" style="max-width: 100%; max-height: 400px;" />
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="cropAndSaveBtn">Crop & Save</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                $('body').append(modalHtml);
+
+                // Set image source
+                $('#cropImage').attr('src', e.target.result);
+
+                // Initialize modal
+                const modal = new bootstrap.Modal(document.getElementById('cropModal'));
+
+                // Show modal when image is loaded
+                $('#cropImage').on('load', function() {
+                    modal.show();
+
+                    // Initialize cropper
+                    if (cropper) {
+                        cropper.destroy();
+                    }
+
+                    cropper = new Cropper(this, {
+                        aspectRatio: 1,
+                        viewMode: 1,
+                        autoCropArea: 1,
+                        cropBoxResizable: true,
+                        dragMode: 'move',
+                        background: false,
+                        zoomable: true,
+                        scalable: true
+                    });
+                });
+
+                // Handle crop and save button click
+                $('#cropAndSaveBtn').off('click').on('click', function() {
+                    if (cropper) {
+                        const canvas = cropper.getCroppedCanvas({
+                            width: 300,
+                            height: 300
+                        });
+
+                        selectedImageData = canvas.toDataURL('image/jpeg', 0.8);
+
+                        // Update preview
+                        $('#profileImagePreview').attr('src', selectedImageData);
+
+                        // Set hidden field value
+                        $('#PhotoBase64').val(selectedImageData);
+
+                        // Close modal
+                        modal.hide();
+
+                        // Destroy cropper
+                        if (cropper) {
+                            cropper.destroy();
+                            cropper = null;
+                        }
+
+                        // Remove modal from DOM
+                        $('#cropModal').remove();
+
+                        // Show success message
+                        Swal.fire({
+                            title: 'Cropped!',
+                            text: 'Profile picture cropped successfully',
+                            icon: 'success',
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                    }
+                });
+
+                // Clean up when modal is hidden
+                $('#cropModal').on('hidden.bs.modal', function() {
+                    if (cropper) {
+                        cropper.destroy();
+                        cropper = null;
+                    }
+                    $('#cropModal').remove();
+                });
+            };
+            reader.readAsDataURL(file);
+        };
+
+        window.cropAndSaveImage = function() {
+            if (cropper) {
+                const canvas = cropper.getCroppedCanvas({
+                    width: 300,
+                    height: 300
+                });
+
+                selectedImageData = canvas.toDataURL('image/jpeg', 0.8);
+
+                // Update preview
+                $('#profileImagePreview').attr('src', selectedImageData);
+
+                // Set hidden field value
+                $('#PhotoBase64').val(selectedImageData);
+
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('cropModal'));
+                if (modal) {
+                    modal.hide();
+                }
+
+                // Destroy cropper
+                if (cropper) {
+                    cropper.destroy();
+                    cropper = null;
+                }
+
+                // Remove modal from DOM
+                $('#cropModal').remove();
+            }
+        };
+
+        window.removeImage = function() {
+            Swal.fire({
+                title: 'Remove Profile Picture?',
+                text: 'This will remove your current profile picture',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, remove it!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const memberName = '@memberName';
+                    const defaultAvatar = `https://ui-avatars.com/api/?background=2563EB&color=fff&name=${encodeURIComponent(memberName)}`;
+
+                    $('#profileImagePreview').attr('src', defaultAvatar);
+                    $('#PhotoBase64').val('');
+
+                    Swal.fire('Removed!', 'Profile picture has been removed.', 'success');
+                }
+            });
+        };
+    </script>
+}

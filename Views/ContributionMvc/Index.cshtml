@@ -1,0 +1,1275 @@
+﻿@using SACCOBlockChainSystem.Models.DTOs
+@model dynamic
+@{
+    ViewData["Title"] = "Contributions";
+    var recentContributions = Model.RecentContributions as List<ContributionResponseDTO>;
+    var shareTypes = Model.ShareTypes as List<ShareTypeDTO>;
+    var companyCode = ViewBag.CompanyCode as string;
+}
+
+<div class="container-fluid">
+    <!-- Display validation summary -->
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <h5 class="alert-heading">
+                <i class="fas fa-exclamation-triangle"></i> Please fix the following errors:
+            </h5>
+            <ul class="mb-0">
+                @foreach (var modelState in ViewData.ModelState.Values)
+                {
+                    foreach (var error in modelState.Errors)
+                    {
+                        <li>@error.ErrorMessage</li>
+                    }
+                }
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong>Error!</strong> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <strong>Success!</strong> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- MAIN CARD - Bulk Contribution -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h4><i class="fas fa-hand-holding-usd"></i> Bulk Contributions</h4>
+        </div>
+        <div class="card-body">
+            <!-- MEMBER SELECTION SECTION -->
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0"><i class="fas fa-user"></i> Step 1: Select Member</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="input-group">
+                                        <input type="text" id="searchInput" class="form-control"
+                                               placeholder="Search by Member Number, Name, ID Number, or Phone Number..." />
+                                        <button type="button" class="btn btn-primary" onclick="searchMembers()">
+                                            <i class="fas fa-search"></i> Search
+                                        </button>
+                                        <button type="button" class="btn btn-secondary" onclick="clearSearch()">
+                                            <i class="fas fa-times"></i> Clear
+                                        </button>
+                                    </div>
+                                    <small class="text-muted">Enter at least 3 characters to search</small>
+                                </div>
+                            </div>
+
+                            <!-- Search Results -->
+                            <div id="searchResults" style="display: none;" class="mt-2">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover table-sm">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Select</th>
+                                                <th>Member No</th>
+                                                <th>Full Name</th>
+                                                <th>ID Number</th>
+                                                <th>Phone Number</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="searchResultsBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Loading Indicator -->
+                            <div id="searchLoading" style="display: none;" class="text-center p-3">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p>Searching for members...</p>
+                            </div>
+
+                            <!-- Selected Member Display -->
+                            <div id="selectedMemberCard" style="display: none;" class="mt-2">
+                                <div class="alert alert-success">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <i class="fas fa-check-circle"></i>
+                                            <strong>Selected Member:</strong>
+                                            <span id="selectedMemberName"></span>
+                                            <br />
+                                            <small>
+                                                <span id="selectedMemberNoDisplay"></span> |
+                                                ID: <span id="selectedMemberIdNo"></span> |
+                                                Phone: <span id="selectedMemberPhone"></span>
+                                            </small>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearSelectedMember()">
+                                            <i class="fas fa-trash"></i> Change
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <input type="hidden" id="selectedMemberNo" name="MemberNo" />
+                            <input type="hidden" id="companyCode" value="@companyCode" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTRIBUTION ENTRY SECTION -->
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="fas fa-plus-circle"></i> Step 2: Add Contributions</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label>Deposit Date (Actual Payment Date)</label>
+                                    <input type="date" id="depositedDateInput" class="form-control"
+                                           value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                                    <small class="text-muted">Date when payment was actually made</small>
+                                </div>
+                                <div class="col-md-3">
+                                    <label>Contribution Date</label>
+                                    <input type="date" id="transactionDateInput" class="form-control"
+                                           value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                                    <small class="text-muted">Date to record this contribution</small>
+                                </div>
+                                <div class="col-md-3">
+                                    <label>Receipt Date</label>
+                                    <input type="date" id="receiptDateInput" class="form-control"
+                                           value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                                    <small class="text-muted">Date on the receipt</small>
+                                </div>
+
+                                <!-- Share Type -->
+                                <div class="col-md-3">
+                                    <label class="required">Share Type *</label>
+                                    <select id="shareTypeSelect" class="form-select">
+                                        <option value="">-- Select Share Type --</option>
+                                        @if (shareTypes != null)
+                                        {
+                                            foreach (var shareType in shareTypes)
+                                            {
+                                                <option value="@shareType.SharesCode"
+                                                        data-min="@shareType.MinAmount"
+                                                        data-max="@shareType.MaxAmount"
+                                                        data-name="@shareType.SharesType"
+                                                        data-isMain="@shareType.IsMainShares"
+                                                        data-usedToGuarantee="@shareType.UsedToGuarantee"
+                                                        data-usedToOffset="@shareType.UsedToOffset"
+                                                        data-withdrawable="@shareType.Withdrawable">
+                                                    @shareType.SharesType
+                                                    @if (shareType.IsMainShares)
+                                                    {
+                                                        <text> (Main)</text>
+                                                    }
+                                                </option>
+                                            }
+                                        }
+                                    </select>
+                                    <div id="shareTypeInfo" class="small text-muted mt-1"></div>
+                                </div>
+
+                                <!-- Amount -->
+                                <div class="col-md-3">
+                                    <label class="required">Amount (KES) *</label>
+                                    <input type="number" id="contributionAmount" step="0.01" class="form-control"
+                                           placeholder="0.00" />
+                                    <div id="amountValidation" class="text-danger mt-1" style="font-size: 0.8rem;"></div>
+                                </div>
+
+                                <!-- Payment Method -->
+                                <div class="col-md-3">
+                                    <label>Payment Method</label>
+                                    <select id="paymentMethodSelect" class="form-select">
+                                        <option value="CASH">Cash</option>
+                                        <option value="CHEQUE">Cheque</option>
+                                        <option value="BANK_TRANSFER">Bank Transfer</option>
+                                        <option value="MPESA">M-Pesa</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+
+                                <!-- Reference No -->
+                                <div class="col-md-3">
+                                    <label>Reference No</label>
+                                    <input type="text" id="referenceNoInput" class="form-control"
+                                           placeholder="Cheque No, M-Pesa Code, etc." />
+                                </div>
+
+                                <!-- Remarks -->
+                                <div class="col-md-3">
+                                    <label class="required">Remarks *</label>
+                                    <input type="text" id="remarksInput" class="form-control"
+                                           placeholder="e.g., Share Capital, savings, reg fees etc" />
+                                    <div id="remarksValidation" class="text-danger mt-1" style="font-size: 0.8rem;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Add to List Button -->
+                            <div class="row mt-3">
+                                <div class="col-md-12">
+                                    <button type="button" class="btn btn-primary" onclick="addToContributionList()">
+                                        <i class="fas fa-plus-circle"></i> Add to List
+                                    </button>
+                                    <button type="button" class="btn btn-warning" onclick="clearContributionForm()">
+                                        <i class="fas fa-eraser"></i> Clear Form
+                                    </button>
+                                    <span id="itemCountBadge" class="badge bg-secondary ms-2">0 items</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTRIBUTION LIST SECTION -->
+            <div class="row mt-3">
+                <div class="col-md-12">
+                    <div class="card border-info">
+                        <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="fas fa-list"></i> Contribution List</h6>
+                            <span id="totalAmountDisplay" class="badge bg-light text-dark">Total: KES 0.00</span>
+                        </div>
+                        <div class="card-body">
+                            <div id="contributionListContainer">
+                                <div id="emptyListMessage" class="text-center text-muted py-4">
+                                    <i class="fas fa-inbox fa-3x"></i>
+                                    <p class="mt-2">No contributions added yet. Add contributions using the form above.</p>
+                                </div>
+                                <div id="contributionListTable" style="display: none;">
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover table-sm">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th style="width: 50px;">#</th>
+                                                    <th>Share Type</th>
+                                                    <th>Amount (KES)</th>
+                                                    <th>Payment Method</th>
+                                                    <th>Reference</th>
+                                                    <th>Remarks</th>
+                                                    <th style="width: 150px;">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="contributionListBody"></tbody>
+                                            <tfoot>
+                                                <tr class="table-info">
+                                                    <td colspan="2" class="text-end fw-bold">TOTAL:</td>
+                                                    <td class="fw-bold" id="listTotalAmount">0.00</td>
+                                                    <td colspan="4"></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SAVE BUTTONS -->
+            <div class="row mt-3">
+                <div class="col-md-12">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-success btn-lg" id="saveAllBtn" onclick="saveAllContributions()" disabled>
+                            <i class="fas fa-save"></i> Save All (<span id="saveCount">0</span> items)
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="clearAllContributions()">
+                            <i class="fas fa-trash"></i> Clear All
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                            <i class="fas fa-redo"></i> Reset
+                        </button>
+                        <div class="form-check ms-3">
+                            <input type="checkbox" class="form-check-input" id="printReceiptCheck" checked />
+                            <label class="form-check-label" for="printReceiptCheck">
+                                <i class="fas fa-print"></i> Print Receipt
+                            </label>
+                        </div>
+                        <div class="form-check ms-3">
+                            <input type="checkbox" class="form-check-input" id="promptPaymentCheck" />
+                            <label class="form-check-label" for="promptPaymentCheck">
+                                <i class="fas fa-bolt"></i> Prompt Payment
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden elements -->
+            <input type="hidden" id="printReceiptHidden" name="printReceipt" value="true" />
+        </div>
+    </div>
+
+    <!-- EXISTING CONTRIBUTIONS TABLE -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5><i class="fas fa-history"></i> Recent Contributions</h5>
+        </div>
+        <div class="card-body">
+            <!-- Search and Filter Bar -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="tableSearchInput" class="form-control"
+                               placeholder="Search by Member No, Name, Receipt No..." autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" onclick="clearTableSearch()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <input type="date" id="fromDateFilter" class="form-control" placeholder="From Date">
+                </div>
+                <div class="col-md-3">
+                    <input type="date" id="toDateFilter" class="form-control" placeholder="To Date">
+                </div>
+                <div class="col-md-2">
+                    <select id="shareTypeFilter" class="form-select">
+                        <option value="all">All Share Types</option>
+                        @if (shareTypes != null)
+                        {
+                            foreach (var type in shareTypes)
+                            {
+                                <option value="@type.SharesCode">@type.SharesType</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-bordered table-hover" id="contributionsTable">
+                    <thead class="table-light sticky-top" style="position: sticky; top: 0; z-index: 1;">
+                        <tr>
+                            <th style="width: 50px;">#</th>
+                            <th style="width: 100px;">Date</th>
+                            <th style="width: 130px;">Member No</th>
+                            <th style="width: 180px;">Member Name</th>
+                            <th style="width: 120px;">Receipt No</th>
+                            <th style="width: 150px;">Share Type</th>
+                            <th style="width: 120px;" class="text-end">Amount</th>
+                            <th style="width: 80px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contributionsTableBody">
+                        @if (recentContributions != null && recentContributions.Any())
+                        {
+                            var counter = 1;
+                            foreach (var contribution in recentContributions)
+                            {
+                                <tr data-id="@contribution.Id"
+                                    data-date="@contribution.TransactionDate.ToString("yyyy-MM-dd")"
+                                    data-memberno="@contribution.MemberNo"
+                                    data-membername="@contribution.MemberName"
+                                    data-receiptno="@contribution.ReceiptNo"
+                                    data-sharetype="@contribution.ShareTypeName"
+                                    data-sharescode="@contribution.SharesCode"
+                                    data-amount="@contribution.Amount"
+                                    data-createdby="@contribution.CreatedBy">
+                                    <td class="row-number">@counter</td>
+                                    <td>@contribution.TransactionDate.ToString("dd/MM/yyyy")</td>
+                                    <td><strong>@contribution.MemberNo</strong></td>
+                                    <td class="member-name-cell">@(contribution.MemberName ?? contribution.MemberNo)</td>
+                                    <td><span class="badge bg-primary">@contribution.ReceiptNo</span></td>
+                                    <td class="share-type-cell">@contribution.ShareTypeName</td>
+                                    <td class="text-end amount-cell">@contribution.Amount.ToString("N0")</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a asp-action="PrintReceipt" asp-route-receiptNo="@contribution.ReceiptNo"
+                                               class="btn btn-sm btn-info" title="Print Receipt">
+                                                <i class="fas fa-print">Re-Print PT</i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                counter++;
+                            }
+                        }
+                        else
+                        {
+                            <tr id="noDataRow">
+                                <td colspan="8" class="text-center py-4">
+                                    <i class="fas fa-info-circle fa-2x text-muted mb-3"></i>
+                                    <p class="text-muted">No contributions found.</p>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Statistics Summary -->
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="totalContributionsCount">@(recentContributions?.Count ?? 0)</h3>
+                            <p class="text-muted mb-0">Total Contributions</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="totalAmountSum">@(recentContributions?.Sum(c => c.Amount).ToString("N0") ?? "0")</h3>
+                            <p class="text-muted mb-0">Total Amount (KES)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 id="blockchainCount">@(recentContributions?.Count(c => !string.IsNullOrEmpty(c.BlockchainTxId)) ?? 0)</h3>
+                            <p class="text-muted mb-0">On Blockchain</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; text-align:center; padding-top:20%;">
+    <div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="text-light mt-2">Processing contributions...</div>
+    <div id="saveProgress" class="text-light mt-2"></div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: red;
+    }
+
+    .sticky-top {
+        background: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .table-responsive::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .alert {
+        animation: slideDown 0.5s ease;
+    }
+
+    @@keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    #contributionListBody tr {
+        animation: fadeIn 0.3s ease;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .highlight-row {
+        background-color: #fff3cd !important;
+    }
+
+    .list-item-removing {
+        animation: slideOut 0.3s ease forwards;
+    }
+
+    @@keyframes slideOut {
+        to {
+            opacity: 0;
+            transform: translateX(20px);
+        }
+    }
+
+    .flex-wrap {
+        flex-wrap: wrap;
+    }
+</style>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let currentMemberNo = null;
+        let currentMemberData = null;
+        let currentMemberTotals = null;
+        let selectedShareTypeData = null;
+        let isMemberSelected = false;
+        let contributionList = [];
+        let nextId = 1;
+
+        // ============================================================
+        // MEMBER SEARCH FUNCTIONS
+        // ============================================================
+
+        $(document).ready(function() {
+            // Set default dates
+            const today = new Date().toISOString().split('T')[0];
+            $('#depositedDateInput').val(today);
+            $('#transactionDateInput').val(today);
+            $('#receiptDateInput').val(today);
+
+            // Search input enter key
+            $('#searchInput').on('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchMembers();
+                }
+            });
+
+            // Share type change event
+            $('#shareTypeSelect').on('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                if (!selectedOption || !selectedOption.value) {
+                    $('#shareTypeInfo').html('');
+                    return;
+                }
+
+                selectedShareTypeData = {
+                    code: selectedOption.value,
+                    name: selectedOption.getAttribute('data-name') || '',
+                    min: parseFloat(selectedOption.getAttribute('data-min')) || 0,
+                    max: parseFloat(selectedOption.getAttribute('data-max')) || 0,
+                    isMain: selectedOption.getAttribute('data-isMain') === 'true',
+                    usedToGuarantee: selectedOption.getAttribute('data-usedToGuarantee') === 'true',
+                    usedToOffset: selectedOption.getAttribute('data-usedToOffset') === 'true',
+                    withdrawable: selectedOption.getAttribute('data-withdrawable') === 'true'
+                };
+
+                let infoText = `<i class="fas fa-chart-line"></i> Min: ${formatCurrency(selectedShareTypeData.min)}`;
+                if (selectedShareTypeData.max > 0) {
+                    infoText += `, Max: ${formatCurrency(selectedShareTypeData.max)}`;
+                } else {
+                    infoText += `, Max: Unlimited`;
+                }
+                $('#shareTypeInfo').html(infoText);
+
+                validateContributionForm();
+            });
+
+            // Amount input validation
+            $('#contributionAmount').on('input', function() {
+                validateContributionForm();
+            });
+
+            // Remarks input validation
+            $('#remarksInput').on('input', function() {
+                validateContributionForm();
+            });
+
+            // Table search and filters
+            $('#tableSearchInput').on('keyup', filterTable);
+            $('#shareTypeFilter').on('change', filterTable);
+            $('#fromDateFilter, #toDateFilter').on('change', filterTable);
+
+            // Print receipt checkbox
+            $('#printReceiptCheck').on('change', function() {
+                $('#printReceiptHidden').val($(this).is(':checked'));
+            });
+        });
+
+        async function searchMembers() {
+            const searchTerm = $('#searchInput').val().trim();
+            if (searchTerm.length < 3) {
+                Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
+                return;
+            }
+
+            $('#searchLoading').show();
+            $('#searchResults').hide();
+            $('#searchResultsBody').html('');
+
+            try {
+                const companyCode = $('#companyCode').val();
+                const response = await fetch(`/api/Member/search?searchTerm=${encodeURIComponent(searchTerm)}&companyCode=${encodeURIComponent(companyCode)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.data && data.data.length > 0) {
+                        displaySearchResults(data.data);
+                    } else {
+                        $('#searchResultsBody').html('<tr><td colspan="5" class="text-center text-danger">No members found matching your search</td></tr>');
+                        $('#searchResults').show();
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                $('#searchResultsBody').html('<tr><td colspan="5" class="text-center text-danger">Error searching members</td></tr>');
+                $('#searchResults').show();
+            } finally {
+                $('#searchLoading').hide();
+            }
+        }
+
+        function displaySearchResults(members) {
+            const tbody = $('#searchResultsBody');
+            tbody.empty();
+
+            members.forEach(member => {
+                const fullName = member.fullName || (member.surname + ' ' + member.otherNames);
+                const row = `
+                    <tr>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-success" onclick="selectMember('${member.memberNo}')">
+                                <i class="fas fa-check"></i> Select
+                            </button>
+                        </td>
+                        <td><strong>${escapeHtml(member.memberNo)}</strong></td>
+                        <td>${escapeHtml(fullName)}</td>
+                        <td>${escapeHtml(member.idNo || member.idno || 'N/A')}</td>
+                        <td>${escapeHtml(member.phoneNo || member.phone || 'N/A')}</td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            $('#searchResults').show();
+        }
+
+        async function selectMember(memberNo) {
+            try {
+                const response = await fetch(`/api/Member/${memberNo}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        currentMemberData = data.data;
+                        currentMemberNo = memberNo;
+                        isMemberSelected = true;
+
+                        $('#selectedMemberNo').val(memberNo);
+                        const fullName = `${currentMemberData.surname || ''} ${currentMemberData.otherNames || ''}`.trim();
+                        $('#selectedMemberName').html(`<strong>${escapeHtml(fullName)}</strong>`);
+                        $('#selectedMemberNoDisplay').html(memberNo);
+                        $('#selectedMemberIdNo').html(currentMemberData.idno || 'N/A');
+                        $('#selectedMemberPhone').html(currentMemberData.phoneNo || currentMemberData.phone || 'N/A');
+
+                        $('#selectedMemberCard').show();
+                        $('#searchResults').hide();
+                        $('#searchInput').val('');
+
+                        // Get member totals for validation
+                        await getMemberShareTypeTotals(memberNo);
+                        validateContributionForm();
+                        updateSaveButton();
+
+                        Swal.fire('Success', 'Member selected successfully!', 'success');
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                Swal.fire('Error', 'Error selecting member', 'error');
+            }
+        }
+
+        async function getMemberShareTypeTotals(memberNo) {
+            if (!memberNo) return;
+
+            try {
+                const response = await fetch(`/api/Contribution/member/${memberNo}/sharetype-totals`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        currentMemberTotals = data.data;
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function clearSelectedMember() {
+            currentMemberNo = null;
+            currentMemberData = null;
+            currentMemberTotals = null;
+            isMemberSelected = false;
+
+            $('#selectedMemberNo').val('');
+            $('#selectedMemberCard').hide();
+            $('#searchResults').hide();
+            $('#searchInput').val('');
+
+            clearAllContributions();
+            validateContributionForm();
+            updateSaveButton();
+        }
+
+        function clearSearch() {
+            $('#searchInput').val('');
+            $('#searchResults').hide();
+            $('#searchResultsBody').empty();
+        }
+
+        // ============================================================
+        // CONTRIBUTION LIST FUNCTIONS - UPDATED
+        // ============================================================
+
+        function validateContributionForm() {
+            const amount = parseFloat($('#contributionAmount').val());
+            const shareType = $('#shareTypeSelect').val();
+            const remarks = $('#remarksInput').val().trim();
+            const validationDiv = $('#amountValidation');
+            const remarksValidation = $('#remarksValidation');
+
+            let isValid = true;
+
+            // Reset validation
+            validationDiv.html('');
+            remarksValidation.html('');
+
+            // Check if member is selected
+            if (!isMemberSelected) {
+                validationDiv.html('<i class="fas fa-info-circle"></i> Please select a member first');
+                return false;
+            }
+
+            // Check share type
+            if (!shareType) {
+                validationDiv.html('<i class="fas fa-exclamation-circle"></i> Please select a share type');
+                return false;
+            }
+
+            // Check amount
+            if (isNaN(amount) || amount <= 0) {
+                validationDiv.html('<i class="fas fa-exclamation-circle"></i> Please enter a valid amount');
+                return false;
+            }
+
+            // Check minimum amount
+            if (selectedShareTypeData && amount < selectedShareTypeData.min) {
+                validationDiv.html(`<i class="fas fa-exclamation-circle"></i> Minimum amount is ${formatCurrency(selectedShareTypeData.min)}`);
+                return false;
+            }
+
+            // Check maximum limit - but only as a warning, not a block
+            // The server will validate this properly
+            if (currentMemberTotals && selectedShareTypeData) {
+                const shareTypeTotal = currentMemberTotals.shareTypeTotals?.find(s => s.sharesCode === selectedShareTypeData.code);
+                if (shareTypeTotal) {
+                    if (shareTypeTotal.isFullyPaid && shareTypeTotal.maxAmount > 0) {
+                        // Show warning but allow
+                        validationDiv.html(`<i class="fas fa-exclamation-triangle text-warning"></i> Warning: ${selectedShareTypeData.name} is fully paid! This will be validated at save time.`);
+                        // Don't return false - allow the user to add
+                    } else if (shareTypeTotal.maxAmount > 0 && amount > shareTypeTotal.remainingAmount) {
+                        // Show warning but allow
+                        validationDiv.html(`<i class="fas fa-exclamation-triangle text-warning"></i> Warning: Amount exceeds remaining limit! You can add up to ${formatCurrency(shareTypeTotal.remainingAmount)}. This will be validated at save time.`);
+                        // Don't return false - allow the user to add
+                    }
+                }
+            }
+
+            // Check remarks
+            if (!remarks) {
+                remarksValidation.html('<i class="fas fa-exclamation-circle"></i> Remarks is required');
+                return false;
+            }
+
+            validationDiv.html('<i class="fas fa-check-circle text-success"></i> Valid');
+            return true;
+        }
+
+        function addToContributionList() {
+            if (!isMemberSelected) {
+                Swal.fire('Validation Error', 'Please select a member first', 'error');
+                return;
+            }
+
+            if (!validateContributionForm()) {
+                Swal.fire('Validation Error', 'Please fix the validation errors before adding to list', 'error');
+                return;
+            }
+
+            const shareType = $('#shareTypeSelect').val();
+            const shareTypeName = $('#shareTypeSelect option:selected').text().trim();
+            const amount = parseFloat($('#contributionAmount').val());
+            const paymentMethod = $('#paymentMethodSelect').val();
+            const referenceNo = $('#referenceNoInput').val().trim();
+            const remarks = $('#remarksInput').val().trim();
+
+            // Get date values
+            const depositedDate = $('#depositedDateInput').val();
+            const transactionDate = $('#transactionDateInput').val();
+            const receiptDate = $('#receiptDateInput').val();
+
+            // ============================================================
+            // ALLOW DUPLICATE SHARE TYPES AND DUPLICATE AMOUNTS
+            // Each contribution is separate - no blocking
+            // ============================================================
+            // No duplicate check - every addition is a new contribution
+            // Even if share type and amount are the same, it's accepted
+
+            addItemToList(shareType, shareTypeName, amount, paymentMethod, referenceNo, remarks, depositedDate, transactionDate, receiptDate);
+        }
+
+        function addItemToList(shareType, shareTypeName, amount, paymentMethod, referenceNo, remarks, depositedDate, transactionDate, receiptDate) {
+            const item = {
+                id: nextId++,
+                shareType: shareType,
+                shareTypeName: shareTypeName,
+                amount: amount,
+                paymentMethod: paymentMethod,
+                referenceNo: referenceNo,
+                remarks: remarks,
+                depositedDate: depositedDate,
+                transactionDate: transactionDate,
+                receiptDate: receiptDate,
+                status: 'pending'
+            };
+
+            contributionList.push(item);
+            renderContributionList();
+            clearContributionForm();
+            updateSaveButton();
+
+            // Show success feedback
+            Swal.fire({
+                title: 'Added!',
+                text: `${shareTypeName} of ${formatCurrency(amount)} added to list`,
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }
+
+        function renderContributionList() {
+            const tbody = $('#contributionListBody');
+            const table = $('#contributionListTable');
+            const emptyMessage = $('#emptyListMessage');
+            const itemCountBadge = $('#itemCountBadge');
+            const totalAmountDisplay = $('#listTotalAmount');
+
+            if (contributionList.length === 0) {
+                table.hide();
+                emptyMessage.show();
+                itemCountBadge.text('0 items');
+                totalAmountDisplay.text('0.00');
+                return;
+            }
+
+            table.show();
+            emptyMessage.hide();
+            itemCountBadge.text(`${contributionList.length} items`);
+
+            tbody.empty();
+            let totalAmount = 0;
+
+            contributionList.forEach((item, index) => {
+                totalAmount += item.amount;
+                const row = `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td><strong>${escapeHtml(item.shareTypeName)}</strong></td>
+                        <td class="text-end">${formatCurrency(item.amount)}</td>
+                        <td>${escapeHtml(item.paymentMethod)}</td>
+                        <td>${escapeHtml(item.referenceNo || '-')}</td>
+                        <td>${escapeHtml(item.remarks)}</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-danger" onclick="removeFromList(${item.id})">
+                                <i class="fas fa-trash">Trash</i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-warning" onclick="editListItem(${item.id})">
+                                <i class="fas fa-edit">Edit</i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            totalAmountDisplay.text(formatCurrency(totalAmount));
+            $('#totalAmountDisplay').text(`Total: ${formatCurrency(totalAmount)}`);
+        }
+
+        function removeFromList(id) {
+            Swal.fire({
+                title: 'Remove Item?',
+                text: 'Are you sure you want to remove this contribution?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Remove',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    contributionList = contributionList.filter(item => item.id !== id);
+                    renderContributionList();
+                    updateSaveButton();
+                }
+            });
+        }
+
+        function editListItem(id) {
+            const item = contributionList.find(i => i.id === id);
+            if (!item) return;
+
+            // Populate form with item data
+            $('#shareTypeSelect').val(item.shareType);
+            $('#shareTypeSelect').trigger('change');
+            $('#contributionAmount').val(item.amount);
+            $('#paymentMethodSelect').val(item.paymentMethod);
+            $('#referenceNoInput').val(item.referenceNo || '');
+            $('#remarksInput').val(item.remarks);
+
+            // Populate dates
+            if (item.depositedDate) $('#depositedDateInput').val(item.depositedDate);
+            if (item.transactionDate) $('#transactionDateInput').val(item.transactionDate);
+            if (item.receiptDate) $('#receiptDateInput').val(item.receiptDate);
+
+            // Remove from list
+            contributionList = contributionList.filter(i => i.id !== id);
+            renderContributionList();
+            updateSaveButton();
+
+            Swal.fire('Info', 'Item loaded for editing. Make changes and click "Add to List" again.', 'info');
+        }
+
+        function clearContributionForm() {
+            $('#shareTypeSelect').val('');
+            $('#shareTypeSelect').trigger('change');
+            $('#contributionAmount').val('');
+            $('#paymentMethodSelect').val('CASH');
+            $('#referenceNoInput').val('');
+            $('#remarksInput').val('');
+            $('#amountValidation').html('');
+            $('#remarksValidation').html('');
+            selectedShareTypeData = null;
+
+            // Reset dates to today
+            const today = new Date().toISOString().split('T')[0];
+            $('#depositedDateInput').val(today);
+            $('#transactionDateInput').val(today);
+            $('#receiptDateInput').val(today);
+        }
+
+        function clearAllContributions() {
+            if (contributionList.length === 0) return;
+
+            Swal.fire({
+                title: 'Clear All?',
+                text: `This will remove all ${contributionList.length} items from the list.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Clear All',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#dc3545'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    contributionList = [];
+                    renderContributionList();
+                    updateSaveButton();
+                    Swal.fire('Cleared', 'All contributions have been removed', 'success');
+                }
+            });
+        }
+
+        function updateSaveButton() {
+            const saveBtn = $('#saveAllBtn');
+            const saveCount = $('#saveCount');
+            const hasItems = contributionList.length > 0;
+            const hasMember = isMemberSelected;
+
+            saveBtn.prop('disabled', !(hasItems && hasMember));
+            saveCount.text(contributionList.length);
+        }
+
+        // ============================================================
+        // SAVE ALL CONTRIBUTIONS
+        // ============================================================
+
+        async function saveAllContributions() {
+            if (!isMemberSelected) {
+                Swal.fire('Error', 'Please select a member first', 'error');
+                return;
+            }
+
+            if (contributionList.length === 0) {
+                Swal.fire('Error', 'Please add at least one contribution', 'error');
+                return;
+            }
+
+            const saveBtn = $('#saveAllBtn');
+            const printReceipt = $('#printReceiptCheck').is(':checked');
+            const promptPayment = $('#promptPaymentCheck').is(':checked');
+
+            // Confirm with user
+            const totalAmount = contributionList.reduce((sum, item) => sum + item.amount, 0);
+            const confirmResult = await Swal.fire({
+                title: 'Save All Contributions?',
+                html: `
+                    <p>You are about to save <strong>${contributionList.length}</strong> contributions.</p>
+                    <p>Total Amount: <strong>${formatCurrency(totalAmount)}</strong></p>
+                    <p>Member: <strong>${escapeHtml($('#selectedMemberName').text())}</strong></p>
+                    <p>Print Receipt: <strong>${printReceipt ? 'Yes' : 'No'}</strong></p>
+                    ${promptPayment ? '<p class="text-warning"><i class="fas fa-bolt"></i> Prompt Payment enabled</p>' : ''}
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, Save All',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#28a745'
+            });
+
+            if (!confirmResult.isConfirmed) return;
+
+            // Show loading overlay
+            showLoading(true);
+            $('#saveProgress').text('Saving contributions...');
+
+            try {
+                const companyCode = $('#companyCode').val();
+
+                // Build request payload with dates
+                const payload = {
+                    MemberNo: currentMemberNo,
+                    CompanyCode: companyCode,
+                    Contributions: contributionList.map(item => ({
+                        SharesCode: item.shareType,
+                        Amount: item.amount,
+                        PaymentMethod: item.paymentMethod,
+                        ReferenceNo: item.referenceNo || '',
+                        Remarks: item.remarks,
+                        DepositedDate: item.depositedDate || new Date().toISOString().split('T')[0],
+                        TransactionDate: item.transactionDate || new Date().toISOString().split('T')[0],
+                        ReceiptDate: item.receiptDate || new Date().toISOString().split('T')[0]
+                    })),
+                    PrintReceipt: printReceipt,
+                    PromptPayment: promptPayment,
+                    CreatedBy: '@User.Identity?.Name'
+                };
+
+                // Send to server
+                const response = await fetch('/api/Contribution/BulkAdd', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                showLoading(false);
+
+                if (result.success) {
+                    // Success!
+                    Swal.fire({
+                        title: 'Success!',
+                        html: `
+                            <p>All ${result.savedCount} contributions saved successfully!</p>
+                            <p>Total Amount: <strong>${formatCurrency(result.totalAmount)}</strong></p>
+                            <p>Receipt No: <strong>${result.receiptNo || 'N/A'}</strong></p>
+                        `,
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        // Clear list and reset form
+                        contributionList = [];
+                        renderContributionList();
+                        updateSaveButton();
+                        clearContributionForm();
+
+                        // Redirect to receipt if requested
+                        if (printReceipt && result.receiptNo) {
+                            window.location.href = `/ContributionMvc/PrintReceipt?receiptNo=${result.receiptNo}`;
+                        } else {
+                            location.reload();
+                        }
+                    });
+                } else {
+                    // Error
+                    let errorMessage = result.message || 'Error saving contributions';
+                    if (result.errors && result.errors.length > 0) {
+                        errorMessage += '<br><br><ul>';
+                        result.errors.forEach(err => {
+                            errorMessage += `<li>${escapeHtml(err)}</li>`;
+                        });
+                        errorMessage += '</ul>';
+                    }
+
+                    Swal.fire({
+                        title: 'Error!',
+                        html: errorMessage,
+                        icon: 'error',
+                        confirmButtonText: 'OK'
+                    });
+                }
+
+            } catch (error) {
+                showLoading(false);
+                console.error('Error:', error);
+                Swal.fire({
+                    title: 'Error!',
+                    text: 'An error occurred while saving contributions: ' + error.message,
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+            }
+        }
+
+        // ============================================================
+        // HELPER FUNCTIONS
+        // ============================================================
+
+        function showLoading(show) {
+            if (show) {
+                $('#loadingOverlay').fadeIn(200);
+            } else {
+                $('#loadingOverlay').fadeOut(200);
+                $('#saveProgress').text('');
+            }
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function resetForm() {
+            clearSelectedMember();
+            clearSearch();
+            clearAllContributions();
+            clearContributionForm();
+            updateSaveButton();
+            $('#printReceiptCheck').prop('checked', true);
+            $('#printReceiptHidden').val('true');
+            $('#promptPaymentCheck').prop('checked', false);
+
+            // Reset dates to today
+            const today = new Date().toISOString().split('T')[0];
+            $('#depositedDateInput').val(today);
+            $('#transactionDateInput').val(today);
+            $('#receiptDateInput').val(today);
+
+            Swal.fire('Reset', 'Form has been reset', 'info');
+        }
+
+        // ============================================================
+        // TABLE FILTER FUNCTIONS
+        // ============================================================
+
+        function filterTable() {
+            const searchTerm = $('#tableSearchInput').val().toLowerCase();
+            const shareTypeFilter = $('#shareTypeFilter').val();
+            const fromDate = $('#fromDateFilter').val();
+            const toDate = $('#toDateFilter').val();
+            let visibleCount = 0;
+            let totalAmount = 0;
+
+            $('#contributionsTableBody tr').each(function() {
+                const row = $(this);
+                if (row.attr('id') === 'noDataRow') return;
+
+                const date = row.data('date');
+                const memberNo = row.data('memberno')?.toLowerCase() || '';
+                const memberName = row.data('membername')?.toLowerCase() || '';
+                const receiptNo = row.data('receiptno')?.toLowerCase() || '';
+                const shareType = row.data('sharetype')?.toLowerCase() || '';
+                const sharesCode = row.data('sharescode') || '';
+                const amount = row.data('amount') || 0;
+
+                const matchesSearch = searchTerm === '' ||
+                    memberNo.includes(searchTerm) ||
+                    memberName.includes(searchTerm) ||
+                    receiptNo.includes(searchTerm) ||
+                    shareType.includes(searchTerm);
+
+                const matchesShareType = shareTypeFilter === 'all' || sharesCode === shareTypeFilter;
+
+                let matchesDate = true;
+                if (fromDate && date < fromDate) matchesDate = false;
+                if (toDate && date > toDate) matchesDate = false;
+
+                if (matchesSearch && matchesShareType && matchesDate) {
+                    row.show();
+                    visibleCount++;
+                    totalAmount += amount;
+                } else {
+                    row.hide();
+                }
+            });
+
+            $('#totalContributionsCount').text(visibleCount);
+            $('#totalAmountSum').text(totalAmount.toLocaleString());
+        }
+
+        function clearTableSearch() {
+            $('#tableSearchInput').val('');
+            $('#shareTypeFilter').val('all');
+            $('#fromDateFilter').val('');
+            $('#toDateFilter').val('');
+            filterTable();
+        }
+    </script>
+}

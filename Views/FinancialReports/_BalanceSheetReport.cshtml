@@ -1,0 +1,286 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.FinancialReportViewModel
+
+<div class="card shadow-sm mt-4" style="border: none; border-radius: 10px;">
+    <div class="card-header bg-white py-3" style="border-bottom: 2px solid #3f2b96;">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0" style="color: #3f2b96; font-weight: 600;">
+                <i class="fas fa-file-invoice me-2"></i> BALANCE SHEET
+            </h5>
+            <span class="badge bg-info p-2">
+                <i class="fas fa-calendar me-1"></i> As at @Model.EndDate.ToString("dd/MM/yyyy")
+            </span>
+        </div>
+    </div>
+
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" style="border-collapse: collapse; width: 100%;" id="balanceSheetTable">
+                <thead style="background-color: white; color: black;">
+                    <tr>
+                        <th style="padding: 15px; text-align: left; width: 20%;">Category</th>
+                        <th style="padding: 15px; text-align: left; width: 35%;">Account Name</th>
+                        <th style="padding: 15px; text-align: left; width: 15%;">Account No</th>
+                        <th style="padding: 15px; text-align: right; width: 30%;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        decimal totalAssets = 0;
+                        decimal totalLiabilities = 0;
+                        decimal totalEquity = 0;
+
+                        // Check if we have any data
+                        var hasAssets = Model.BalanceSheet.Assets.Any();
+                        var hasLiabilities = Model.BalanceSheet.Liabilities.Any();
+                        var hasEquity = Model.BalanceSheet.Equity.Any();
+                    }
+
+                    @if (!hasAssets && !hasLiabilities && !hasEquity)
+                    {
+                        <tr>
+                            <td colspan="4" style="padding: 30px; text-align: center; color: #6c757d;">
+                                <i class="fas fa-info-circle me-2"></i>
+                                No data available for the selected period.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        <!-- ============================================ -->
+                        <!-- ASSETS SECTION -->
+                        <!-- ============================================ -->
+                        if (hasAssets)
+                        {
+                            <tr style="background-color: #e8f0fe; font-weight: bold;">
+                                <td colspan="4" style="padding: 12px; font-size: 15px; color: #1a73e8;">
+                                    <i class="fas fa-building me-2"></i> ASSETS
+                                </td>
+                            </tr>
+
+                            @foreach (var item in Model.BalanceSheet.Assets.OrderBy(x => x.AccountNo))
+                            {
+                                totalAssets += item.Amount;
+                                <tr class="@(item.IsSuspense ? "table-warning" : "")">
+                                    <td style="padding: 12px; padding-left: 30px; font-size: 13px;">&nbsp;</td>
+                                    <td style="padding: 12px;">
+                                        @item.AccountName
+                                        @if (item.IsSuspense)
+                                        {
+                                            <span class="badge bg-warning ms-2">SUSPENSE</span>
+                                        }
+                                        @if (item.IsRetainedEarnings)
+                                        {
+                                            <span class="badge bg-info ms-2">RETAINED</span>
+                                        }
+                                    </td>
+                                    <td style="padding: 12px;">@item.AccountNo</td>
+                                    <td style="padding: 12px; text-align: right; color: #1a73e8; font-weight: 500;">
+                                        @item.Amount.ToString("N4")
+                                    </td>
+                                </tr>
+                            }
+
+                            <tr style="background-color: #e9ecef; font-weight: bold;">
+                                <td colspan="3" style="padding: 12px; text-align: right; font-size: 14px;">Total Assets</td>
+                                <td style="padding: 12px; text-align: right; color: #1a73e8; font-weight: 600; font-size: 14px;">
+                                    @totalAssets.ToString("N4")
+                                </td>
+                            </tr>
+                        }
+
+                        <!-- ============================================ -->
+                        <!-- LIABILITIES SECTION -->
+                        <!-- ============================================ -->
+                        if (hasLiabilities)
+                        {
+                            <tr style="background-color: #fce8e6; font-weight: bold;">
+                                <td colspan="4" style="padding: 12px; font-size: 15px; color: #d93025;">
+                                    <i class="fas fa-hand-holding-usd me-2"></i> LIABILITIES
+                                </td>
+                            </tr>
+
+                            @foreach (var item in Model.BalanceSheet.Liabilities.OrderBy(x => x.AccountNo))
+                            {
+                                totalLiabilities += item.Amount;
+                                <tr class="@(item.IsSuspense ? "table-warning" : "")">
+                                    <td style="padding: 12px; padding-left: 30px; font-size: 13px;">&nbsp;</td>
+                                    <td style="padding: 12px;">
+                                        @item.AccountName
+                                        @if (item.IsSuspense)
+                                        {
+                                            <span class="badge bg-warning ms-2">SUSPENSE</span>
+                                        }
+                                        @if (item.IsRetainedEarnings)
+                                        {
+                                            <span class="badge bg-info ms-2">RETAINED</span>
+                                        }
+                                    </td>
+                                    <td style="padding: 12px;">@item.AccountNo</td>
+                                    <td style="padding: 12px; text-align: right; color: #d93025; font-weight: 500;">
+                                        @item.Amount.ToString("N4")
+                                    </td>
+                                </tr>
+                            }
+
+                            <tr style="background-color: #e9ecef; font-weight: bold;">
+                                <td colspan="3" style="padding: 12px; text-align: right; font-size: 14px;">Total Liabilities</td>
+                                <td style="padding: 12px; text-align: right; color: #d93025; font-weight: 600; font-size: 14px;">
+                                    @totalLiabilities.ToString("N4")
+                                </td>
+                            </tr>
+                        }
+
+                        <!-- ============================================ -->
+                        <!-- EQUITY SECTION -->
+                        <!-- ============================================ -->
+                        if (hasEquity)
+                        {
+                            <tr style="background-color: #e6f4ea; font-weight: bold;">
+                                <td colspan="4" style="padding: 12px; font-size: 15px; color: #1e8e3e;">
+                                    <i class="fas fa-chart-pie me-2"></i> EQUITY
+                                </td>
+                            </tr>
+
+                            @foreach (var item in Model.BalanceSheet.Equity.OrderBy(x => x.AccountNo))
+                            {
+                                totalEquity += item.Amount;
+                                <tr class="@(item.IsSuspense ? "table-warning" : "")">
+                                    <td style="padding: 12px; padding-left: 30px; font-size: 13px;">&nbsp;</td>
+                                    <td style="padding: 12px;">
+                                        @item.AccountName
+                                        @if (item.IsSuspense)
+                                        {
+                                            <span class="badge bg-warning ms-2">SUSPENSE</span>
+                                        }
+                                        @if (item.IsRetainedEarnings)
+                                        {
+                                            <span class="badge bg-info ms-2">RETAINED</span>
+                                        }
+                                    </td>
+                                    <td style="padding: 12px;">@item.AccountNo</td>
+                                    <td style="padding: 12px; text-align: right; color: #1e8e3e; font-weight: 500;">
+                                        @item.Amount.ToString("N4")
+                                    </td>
+                                </tr>
+                            }
+
+                            <tr style="background-color: #e9ecef; font-weight: bold;">
+                                <td colspan="3" style="padding: 12px; text-align: right; font-size: 14px;">Total Equity</td>
+                                <td style="padding: 12px; text-align: right; color: #1e8e3e; font-weight: 600; font-size: 14px;">
+                                    @totalEquity.ToString("N4")
+                                </td>
+                            </tr>
+                        }
+
+                        <!-- ============================================ -->
+                        <!-- GRAND TOTALS -->
+                        <!-- ============================================ -->
+                        var totalLiabilitiesAndEquity = totalLiabilities + totalEquity;
+                        var isBalanced = Math.Abs(totalAssets - totalLiabilitiesAndEquity) < 0.01m;
+
+                        <tr style="background-color: #e9ecef; font-weight: bold;">
+                            <td colspan="3" style="padding: 15px; text-align: right; font-size: 16px;">
+                                <i class="fas fa-check-circle me-2"></i> Total Liabilities &amp; Equity
+                            </td>
+                            <td style="padding: 15px; text-align: right; font-size: 16px;">
+                                @totalLiabilitiesAndEquity.ToString("N4")
+                            </td>
+                        </tr>
+                        <tr style="background-color: #e9ecef; font-weight: bold;">
+                            <td colspan="3" style="padding: 15px; text-align: right; font-size: 16px;">
+                                <i class="fas fa-building me-2"></i> Total Assets
+                            </td>
+                            <td style="padding: 15px; text-align: right; font-size: 16px; color: #28a745;">
+                                @totalAssets.ToString("N4")
+                            </td>
+                        </tr>
+
+                        <!-- Balance Status -->
+                        @if (!isBalanced)
+                        {
+                            var difference = totalAssets - totalLiabilitiesAndEquity;
+                            <tr style="background-color: #fff3cd;">
+                                <td colspan="4" style="padding: 12px; color: #856404;">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <strong>Note:</strong> Balance Sheet is unbalanced.
+                                    Assets (@totalAssets.ToString("N4")) vs Liabilities + Equity (@totalLiabilitiesAndEquity.ToString("N4"))
+                                    Difference: @difference.ToString("N4")
+                                    @if (Model.HasSuspenseAccount)
+                                    {
+                                        <br />
+                                        <span>Suspense Account: @Model.SuspenseAccountNo - @Model.SuspenseAccountName (Balance: @Model.SuspenseBalance.ToString("N4"))</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            <tr style="background-color: #d4edda;">
+                                <td colspan="4" style="padding: 12px; color: #155724;">
+                                    <i class="fas fa-check-circle me-2"></i>
+                                    <strong>✓ Balance Sheet is Balanced!</strong>
+                                    Assets (@totalAssets.ToString("N4")) = Liabilities + Equity (@totalLiabilitiesAndEquity.ToString("N4"))
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card-footer bg-white py-3">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Generated: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")
+                </small>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-success btn-sm me-2" onclick="exportToExcel('balanceSheetTable', 'Balance_Sheet')">
+                    <i class="fas fa-file-excel me-2"></i> Excel
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="exportToPDF('balanceSheetTable', 'Balance Sheet')">
+                    <i class="fas fa-file-pdf me-2"></i> PDF
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+    function exportToExcel(tableId, fileName) {
+        var table = document.getElementById(tableId);
+        var wb = XLSX.utils.table_to_book(table, { sheet: "Sheet1" });
+        XLSX.writeFile(wb, fileName + '_@Model.EndDate.ToString("yyyyMMdd")' + '.xlsx');
+    }
+
+    function exportToPDF(tableId, title) {
+        const { jsPDF } = window.jspdf;
+        var doc = new jsPDF('landscape', 'mm', 'a4');
+
+        // Add title
+        doc.setFontSize(16);
+        doc.text(title, 14, 15);
+        doc.setFontSize(10);
+        doc.text('As at @Model.EndDate.ToString("dd/MM/yyyy")', 14, 22);
+        doc.text('Generated: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")', 14, 28);
+
+        // Add table
+        doc.autoTable({
+            html: '#' + tableId,
+            startY: 35,
+            theme: 'grid',
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [52, 58, 64], textColor: [255, 255, 255] },
+            alternateRowStyles: { fillColor: [245, 245, 245] }
+        });
+
+        doc.save(title + '_@Model.EndDate.ToString("yyyyMMdd")' + '.pdf');
+    }
+</script>

@@ -1,0 +1,15 @@
+﻿@using SACCOBlockChainSystem.Views.Shared.RazorComponents
+@{
+    ViewData["Title"] = "Configure Privilege";
+}
+
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <div>
+        @(await Html.RenderComponentAsync<UserPrivilege>(RenderMode.ServerPrerendered))
+    </div>
+</body>
+</html>

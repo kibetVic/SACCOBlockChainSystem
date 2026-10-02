@@ -1,0 +1,342 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.LoanWithdrawalViewModel
+@{
+    ViewData["Title"] = "Withdraw Loan";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    // Check if the loan is approved and ready for withdrawal
+    bool isApproved = Model.IsApproved ?? false;
+    bool requiresApproval = Model.RequiresApproval ?? false;
+
+    // Button is active only if loan is approved OR doesn't require approval
+    bool canWithdraw = isApproved || !requiresApproval;
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Withdraw Loan</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        @if (canWithdraw)
+                        {
+                            <i class="fa fa-check-circle text-success" style="font-size: 64px;"></i>
+                            <h4 class="text-success">Your Loan is Ready for Disbursement!</h4>
+                        }
+                        else
+                        {
+                            <i class="fa fa-clock text-warning" style="font-size: 64px;"></i>
+                            <h4 class="text-warning">Loan Awaiting Approval</h4>
+                            <p class="text-muted">This loan requires approval before withdrawal.</p>
+                        }
+                    </div>
+
+                    <p class="text-center lead">Loan Number: <strong>@Model.LoanNo</strong></p>
+
+                    <div class="alert @(canWithdraw ? "alert-success" : "alert-warning") text-center">
+                        <h2 class="mb-0">@Model.Amount.ToString("N0") KES</h2>
+                        <small>@(canWithdraw ? "Approved Loan Amount" : "Pending Approval Amount")</small>
+                    </div>
+
+                    @if (Model.ProcessingFee > 0)
+                    {
+                        <div class="alert alert-warning text-center">
+                            <i class="fa fa-info-circle"></i>
+                            <strong>Processing Fee: @Model.ProcessingFee.ToString("N0") KES</strong><br />
+                            <small>Net amount to receive: <strong>@((Model.Amount - Model.ProcessingFee).ToString("N0")) KES</strong></small>
+                        </div>
+                    }
+
+                    @if (!canWithdraw)
+                    {
+                        <div class="alert alert-info text-center">
+                            <i class="fa fa-info-circle"></i>
+                            <strong>Status: Pending Approval</strong><br />
+                            <small>Your loan application has been submitted and is waiting for approval from a Finance Officer.</small>
+                            <br />
+                            <small>You will be notified once approved.</small>
+                        </div>
+                    }
+
+                    <p class="text-center mb-4">Choose how you want to receive your funds:</p>
+
+                    <form method="post" id="withdrawalForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="LoanNo" />
+                        <input type="hidden" asp-for="Amount" />
+                        <input type="hidden" asp-for="ProcessingFee" />
+                        <input type="hidden" asp-for="IsApproved" />
+                        <input type="hidden" asp-for="RequiresApproval" />
+
+                        <div class="row">
+                            @foreach (var method in Model.WithdrawalMethods)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <div class="card withdrawal-method @(method.Code == "MPESA" ? "border-success selected" : "")"
+                                         data-method="@method.Code">
+                                        <div class="card-body text-center">
+                                            <i class="fa @method.Icon" style="font-size: 48px;"></i>
+                                            <h5 class="mt-2">@method.Name</h5>
+                                            @if (method.Code == "MPESA")
+                                            {
+                                                <span class="badge bg-success mt-1">Instant</span>
+                                            }
+                                            else if (method.Code == "FOSA")
+                                            {
+                                                <span class="badge bg-info mt-1">Same Day</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary mt-1">1-2 Days</span>
+                                            }
+                                            <div class="form-check mt-2">
+                                                <input type="radio" name="WithdrawalMethod" value="@method.Code"
+                                                       class="form-check-input" id="method_@method.Code"
+                                                       @(method.Code == "MPESA" ? "checked" : "")
+                                                       @(!canWithdraw ? "disabled" : "") />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- M-Pesa Section -->
+                        <div id="mpesaSection" class="mt-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fa fa-mobile-alt"></i> M-Pesa Details</h6>
+                                    <div class="form-group mb-3">
+                                        <label for="MpesaPhoneNumber" class="form-label">M-Pesa Phone Number</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">+254</span>
+                                            <input type="tel" class="form-control" id="MpesaPhoneNumber" name="MpesaPhoneNumber"
+                                                   placeholder="712345678" value="@Model.MpesaPhoneNumber"
+                                                   @(!canWithdraw ? "disabled" : "") />
+                                        </div>
+                                        <small class="text-muted">Enter the phone number registered with M-Pesa</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FOSA Section -->
+                        <div id="fosaSection" class="mt-3" style="display: none">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fa fa-university"></i> FOSA Account Details</h6>
+                                    <p class="mb-0">Funds will be deposited to your FOSA account.</p>
+                                    @if (!string.IsNullOrEmpty(Model.MemberAccount))
+                                    {
+                                        <p class="mb-0">Account: <strong>@Model.MemberAccount</strong></p>
+                                    }
+                                    <small class="text-muted">Please ensure your FOSA account is active</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cheque Section -->
+                        <div id="chequeSection" class="mt-3" style="display: none">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fa fa-file-alt"></i> Cheque Collection</h6>
+                                    <p class="mb-0">A cheque will be prepared for collection at the SACCO office.</p>
+                                    <small class="text-muted">Please bring your ID for verification</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Summary Card -->
+                        <div class="card @(canWithdraw ? "bg-success" : "bg-secondary") text-white mt-3">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small>Gross Amount</small>
+                                        <h5 class="mb-0">@Model.Amount.ToString("N0") KES</h5>
+                                    </div>
+                                    @if (Model.ProcessingFee > 0)
+                                    {
+                                        <div class="col-6">
+                                            <small>Processing Fee</small>
+                                            <h5 class="mb-0 text-warning">-@Model.ProcessingFee.ToString("N0") KES</h5>
+                                        </div>
+                                    }
+                                    <div class="col-6">
+                                        <small>Net Amount</small>
+                                        <h5 class="mb-0">@((Model.Amount - Model.ProcessingFee).ToString("N0")) KES</h5>
+                                    </div>
+                                    <div class="col-6">
+                                        <small>You'll Receive</small>
+                                        <h5 class="mb-0" id="receiveAmount">@((Model.Amount - Model.ProcessingFee).ToString("N0")) KES</h5>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (canWithdraw)
+                        {
+                            <button type="submit" class="btn btn-success btn-lg w-100 mt-3" id="submitBtn">
+                                <i class="fa fa-check-circle"></i> Confirm Withdrawal
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-secondary btn-lg w-100 mt-3" id="submitBtn" disabled>
+                                <i class="fa fa-clock"></i> Awaiting Approval
+                            </button>
+                            <div class="text-center mt-2">
+                                <small class="text-muted">
+                                    <i class="fa fa-info-circle"></i>
+                                    This loan requires approval before withdrawal.
+                                    <br />
+                                    <a href="@Url.Action("Status", new { loanNo = Model.LoanNo })" class="btn btn-link btn-sm">
+                                        Check Status
+                                    </a>
+                                </small>
+                            </div>
+                        }
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Check if withdrawal is allowed
+            var canWithdraw = @(canWithdraw ? "true" : "false");
+
+            if (!canWithdraw) {
+                // Disable all interactive elements
+                $('.withdrawal-method').css('cursor', 'not-allowed').css('opacity', '0.6');
+                $('.form-check-input').prop('disabled', true);
+                $('#MpesaPhoneNumber').prop('disabled', true);
+                return;
+            }
+
+            // Initialize
+            let initialMethod = $('input[name="WithdrawalMethod"]:checked').val();
+            selectMethod(initialMethod);
+
+            // Pre-fill phone number if available
+            let memberPhone = '@Model.MemberPhone';
+            if (memberPhone && memberPhone.length > 0) {
+                let cleanPhone = memberPhone.replace(/\D/g, '');
+                if (cleanPhone.length === 12 && cleanPhone.startsWith('254')) {
+                    cleanPhone = cleanPhone.substring(3);
+                }
+                $('#MpesaPhoneNumber').val(cleanPhone);
+            }
+        });
+
+        function selectMethod(method) {
+            // Update radio button
+            $('input[name="WithdrawalMethod"]').prop('checked', false);
+            $(`#method_${method}`).prop('checked', true);
+
+            // Update UI styling
+            $('.withdrawal-method').removeClass('border-primary selected');
+            $(`.withdrawal-method[data-method="${method}"]`).addClass('border-primary selected');
+
+            // Show/hide relevant sections
+            $('#mpesaSection').hide();
+            $('#fosaSection').hide();
+            $('#chequeSection').hide();
+
+            switch(method) {
+                case 'MPESA':
+                    $('#mpesaSection').show();
+                    break;
+                case 'FOSA':
+                    $('#fosaSection').show();
+                    break;
+                case 'CHEQUE':
+                    $('#chequeSection').show();
+                    break;
+            }
+        }
+
+        // Click handlers for withdrawal method cards
+        $('.withdrawal-method').on('click', function() {
+            let method = $(this).data('method');
+            selectMethod(method);
+        });
+
+        // Form submission
+        $('#withdrawalForm').on('submit', function(e) {
+            let selectedMethod = $('input[name="WithdrawalMethod"]:checked').val();
+
+            if (!selectedMethod) {
+                e.preventDefault();
+                alert('Please select a withdrawal method');
+                return false;
+            }
+
+            if (selectedMethod === 'MPESA') {
+                let phone = $('#MpesaPhoneNumber').val();
+                let cleanPhone = phone.replace(/\D/g, '');
+
+                if (!cleanPhone || cleanPhone.length !== 9) {
+                    e.preventDefault();
+                    alert('Please enter a valid 9-digit M-Pesa phone number (e.g., 712345678)');
+                    $('#MpesaPhoneNumber').focus();
+                    return false;
+                }
+            }
+
+            // Disable button to prevent double submission
+            $('#submitBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Processing...');
+            return true;
+        });
+    </script>
+
+    <style>
+        .withdrawal-method {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+            .withdrawal-method:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            }
+
+            .withdrawal-method.selected {
+                border: 2px solid #198754 !important;
+                background-color: #f8f9fa;
+            }
+
+        .form-check-input:checked {
+            background-color: #198754;
+            border-color: #198754;
+        }
+
+        #submitBtn {
+            font-size: 1.2rem;
+            padding: 12px;
+        }
+
+        .card.bg-success {
+            background: linear-gradient(135deg, #198754 0%, #0d6efd 100%);
+        }
+
+        .card.bg-secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        }
+
+        .disabled-method {
+            cursor: not-allowed !important;
+            opacity: 0.6;
+        }
+    </style>
+}

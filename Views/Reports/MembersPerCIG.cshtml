@@ -1,0 +1,509 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.MembersPerCIGReportViewModel
+@{
+    ViewData["Title"] = "Members per CIG Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style media="print">
+    .app-sidebar, .app-header, .main-footer, .sidebar-wrapper, .navbar,
+    .breadcrumb, .footer, [data-lte-toggle="sidebar"], .brand-link,
+    .sidebar-footer, .no-print {
+        display: none !important;
+    }
+
+    .app-main, .app-content, .content-wrapper, .main-content {
+        margin-left: 0 !important;
+        padding: 20px !important;
+        width: 100% !important;
+    }
+
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    .card-header {
+        background-color: #007bff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+    }
+
+    .table th {
+        background-color: #f2f2f2 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .btn, .export-buttons {
+        display: none !important;
+    }
+
+    body {
+        background: white !important;
+        font-size: 10pt;
+    }
+
+    .bg-primary {
+        background-color: #007bff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .page-break {
+        page-break-before: always;
+    }
+
+    .cig-card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+</style>
+
+<div class="row mb-4 no-print">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <a asp-action="Index" asp-controller="GIGReport" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i> Back to CIG Report
+                </a>
+                <h2 class="page-title mb-0">
+                    <i class="bi bi-people me-2"></i>Members per CIG Report
+                </h2>
+            </div>
+            <div>
+                <button class="btn btn-success me-2" onclick="exportToExcel()">
+                    <i class="bi bi-file-excel me-2"></i>Export Excel
+                </button>
+                <button class="btn btn-danger" onclick="exportToPdf()">
+                    <i class="bi bi-file-pdf me-2"></i>Export PDF
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Report Header -->
+<div class="text-center mb-4">
+    <h2 class="display-6 fw-bold">@Model.CompanyName.ToUpper()</h2>
+    <p class="text-muted">Printed By: @Model.PrintedBy On: @DateTime.Now.ToString("dd-MMM-yyyy HH:mm")</p>
+    <h4 class="text-muted">MEMBERS PER CIG REPORT</h4>
+    <hr class="my-3" />
+</div>
+
+<!-- Summary Statistics -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="small-box bg-info">
+            <div class="inner">
+                <h3>@Model.TotalCIGs</h3>
+                <p>TOTAL CIGs</p>
+            </div>
+            <div class="icon">
+                <i class="fas fa-layer-group"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="small-box bg-success">
+            <div class="inner">
+                <h3>@Model.TotalMembers.ToString("N0")</h3>
+                <p>TOTAL MEMBERS</p>
+            </div>
+            <div class="icon">
+                <i class="fas fa-users"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="small-box bg-primary">
+            <div class="inner">
+                <h3>@Model.ActiveMembers.ToString("N0")</h3>
+                <p>ACTIVE MEMBERS</p>
+            </div>
+            <div class="icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="small-box bg-danger">
+            <div class="inner">
+                <h3>@Model.InactiveMembers.ToString("N0")</h3>
+                <p>INACTIVE MEMBERS</p>
+            </div>
+            <div class="icon">
+                <i class="fas fa-times-circle"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="filter-section no-print">
+    <h5 class="mb-3"><i class="fas fa-funnel me-2"></i>Filter Report</h5>
+    <form id="filterForm" method="get" asp-action="MembersPerCIG" asp-controller="GIGReport">
+        <div class="row g-3">
+            <div class="col-md-5">
+                <label class="form-label">Search</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" name="searchTerm" class="form-control" placeholder="Search by Name, Member No, ID, Phone..." value="@ViewBag.SearchTerm" />
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Status Filter</label>
+                <select name="statusFilter" class="form-select">
+                    <option value="">All Status</option>
+                    <option value="Active" selected="@(ViewBag.StatusFilter == "Active")">Active</option>
+                    <option value="Inactive" selected="@(ViewBag.StatusFilter == "Inactive")">Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="fas fa-search me-2"></i>Apply Filter
+                </button>
+                <a asp-action="MembersPerCIG" asp-controller="GIGReport" class="btn btn-secondary">
+                    <i class="fas fa-undo me-2"></i>Reset
+                </a>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- CIGs List -->
+@if (Model.CIGs.Any())
+{
+    foreach (var cig in Model.CIGs)
+    {
+        <div class="card mb-4 gig-card">
+            <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-layer-group me-2"></i>@cig.CIGName
+                        <small class="text-muted ms-2">(@cig.CIGCode)</small>
+                    </h4>
+                    <span class="badge bg-primary">Total Members: @cig.TotalMembers</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- CIG Details -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="d-flex gap-3 flex-wrap">
+                            <span class="badge bg-info p-2">
+                                <i class="fas fa-phone me-1"></i> @(cig.ContactPhone ?? "N/A")
+                            </span>
+                            <span class="badge bg-secondary p-2">
+                                <i class="fas fa-envelope me-1"></i> @(cig.ContactEmail ?? "N/A")
+                            </span>
+                            <span class="badge bg-warning p-2">
+                                <i class="fas fa-user-tie me-1"></i> @(cig.Chairperson ?? "N/A")
+                            </span>
+                            <span class="badge bg-dark p-2">
+                                <i class="fas fa-calendar me-1"></i> @(cig.RegistrationDate?.ToString("dd/MM/yyyy") ?? "N/A")
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                @if (cig.Members.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-hover">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th style="width:50px;">#</th>
+                                    <th>Member No</th>
+                                    <th>Full Name</th>
+                                    <th>ID No</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Joined Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    int counter = 1;
+                                }
+                                @foreach (var member in cig.Members)
+                                {
+                                    <tr>
+                                        <td class="text-center">@counter</td>
+                                        <td>@member.MemberNo</td>
+                                        <td>@member.FullName</td>
+                                        <td>@(member.IdNo ?? "-")</td>
+                                        <td>@(member.PhoneNo ?? "-")</td>
+                                        <td>@(member.Email ?? "-")</td>
+                                        <td>
+                                            <span class="badge @(member.Status == "Active" ? "bg-success" : "bg-danger")">
+                                                @member.Status
+                                            </span>
+                                        </td>
+                                        <td>@(member.JoinedDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                    </tr>
+                                    counter++;
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-3">
+                        <p class="text-muted">No members found in this CIG</p>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Report Footer -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="small text-muted text-center">
+                <i class="fas fa-info-circle"></i>
+                Report Generated By: @Model.PrintedBy on @DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")<br />
+                Company: @Model.CompanyName
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="alert alert-info text-center py-5">
+        <i class="fas fa-users fa-3x mb-3"></i>
+        <h5>No CIGs Found</h5>
+        <p>Please create CIGs and assign members to view the report.</p>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTables for each CIG table
+            @if (Model.CIGs.Any())
+            {
+                <text>
+                $('.gig-card').each(function() {
+                    var table = $(this).find('table.table-bordered');
+                    if (table.length && typeof $.fn.DataTable !== 'undefined') {
+                        try {
+                            table.DataTable({
+                                pageLength: 25,
+                                ordering: true,
+                                responsive: true,
+                                language: {
+                                    search: "Search:",
+                                    lengthMenu: "Show _MENU_ entries",
+                                    info: "Showing _START_ to _END_ of _TOTAL_ entries"
+                                }
+                            });
+                        } catch (error) {
+                            console.error('DataTable initialization error:', error);
+                        }
+                    }
+                });
+                </text>
+            }
+
+            // Filter form auto-submit on change
+            $('#statusFilter').on('change', function() {
+                $('#filterForm').submit();
+            });
+        });
+
+        function exportToExcel() {
+            var searchTerm = document.querySelector('input[name="searchTerm"]').value || '';
+            var statusFilter = document.querySelector('select[name="statusFilter"]').value || '';
+            // FIXED: Use GIGReport controller instead of Member controller
+            var url = '@Url.Action("ExportMembersPerCIGToExcel", "GIGReport")?searchTerm=' + encodeURIComponent(searchTerm) + '&statusFilter=' + encodeURIComponent(statusFilter);
+            window.location.href = url;
+        }
+
+        function exportToPdf() {
+            var searchTerm = document.querySelector('input[name="searchTerm"]').value || '';
+            var statusFilter = document.querySelector('select[name="statusFilter"]').value || '';
+            // FIXED: Use GIGReport controller instead of Member controller
+            var url = '@Url.Action("ExportMembersPerCIGToPdf", "GIGReport")?searchTerm=' + encodeURIComponent(searchTerm) + '&statusFilter=' + encodeURIComponent(statusFilter);
+            window.location.href = url;
+        }
+    </script>
+}
+
+<style>
+    /* Custom styles for better appearance */
+    .gig-card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .small-box {
+        border-radius: 0.25rem;
+        box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+        display: block;
+        margin-bottom: 20px;
+        position: relative;
+    }
+
+    .small-box .inner {
+        padding: 10px;
+    }
+
+    .small-box .icon {
+        position: absolute;
+        right: 10px;
+        top: 10px;
+        color: rgba(0,0,0,0.15);
+        font-size: 70px;
+    }
+
+    .small-box h3 {
+        font-size: 2rem;
+        font-weight: bold;
+        margin: 0 0 10px 0;
+        white-space: nowrap;
+        padding: 0;
+        color: white;
+    }
+
+    .small-box p {
+        font-size: 1rem;
+        margin-bottom: 0;
+        color: white;
+    }
+
+    .bg-info {
+        background-color: #17a2b8 !important;
+        color: white;
+    }
+
+    .bg-success {
+        background-color: #28a745 !important;
+        color: white;
+    }
+
+    .bg-primary {
+        background-color: #007bff !important;
+        color: white;
+    }
+
+    .bg-danger {
+        background-color: #dc3545 !important;
+        color: white;
+    }
+
+    .bg-warning {
+        background-color: #ffc107 !important;
+        color: #212529;
+    }
+
+    .bg-secondary {
+        background-color: #6c757d !important;
+        color: white;
+    }
+
+    .bg-dark {
+        background-color: #343a40 !important;
+        color: white;
+    }
+
+    .filter-section {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .badge {
+        font-size: 0.875rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+    }
+
+    .table-striped tbody tr:nth-of-type(odd) {
+        background-color: rgba(0,0,0,.02);
+    }
+
+    .table-hover tbody tr:hover {
+        background-color: rgba(0,0,0,.04);
+    }
+
+    @@media print {
+        .small-box {
+            box-shadow: none;
+            border: 1px solid #ddd;
+        }
+
+        .badge {
+            border: 1px solid #ddd;
+        }
+
+        .gig-card {
+            margin-bottom: 20px;
+        }
+
+        .table th {
+            background-color: #f2f2f2 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: #f9f9f9 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bg-success {
+            background-color: #28a745 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bg-danger {
+            background-color: #dc3545 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bg-primary {
+            background-color: #007bff !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bg-info {
+            background-color: #17a2b8 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bg-warning {
+            background-color: #ffc107 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bg-secondary {
+            background-color: #6c757d !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bg-dark {
+            background-color: #343a40 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    }
+</style>

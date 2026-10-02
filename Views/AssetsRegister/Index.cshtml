@@ -1,0 +1,428 @@
+﻿@model List<SACCOBlockChainSystem.Models.DTOs.AssetsRegisterResponseDTO>
+@{
+    ViewData["Title"] = "Assets Register";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var totalAssets = ViewBag.TotalAssets as int? ?? 0;
+    var totalValue = ViewBag.TotalValue as decimal? ?? 0;
+    var postedCount = ViewBag.PostedCount as int? ?? 0;
+    var blockchainVerifiedCount = ViewBag.BlockchainVerifiedCount as int? ?? 0;
+    var assetTypes = ViewBag.AssetTypes as List<string> ?? new List<string>();
+    var companyCode = ViewBag.CompanyCode as string;
+}
+
+<div class="container-fluid">
+    <!-- Success/Error Messages -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="page-title">
+                    <i class="fas fa-boxes me-2"></i>Assets Register
+                </h2>
+                <div>
+                    <a asp-action="Create" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Register New Asset
+                    </a>
+                    <a asp-action="Export" class="btn btn-info ms-2">
+                        <i class="fas fa-file-export"></i> Export
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Total Assets</h6>
+                            <h2 class="mb-0">@totalAssets</h2>
+                        </div>
+                        <i class="fas fa-boxes fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Total Value</h6>
+                            <h2 class="mb-0">KES @totalValue.ToString("N0")</h2>
+                        </div>
+                        <i class="fas fa-money-bill-wave fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Posted Assets</h6>
+                            <h2 class="mb-0">@postedCount</h2>
+                        </div>
+                        <i class="fas fa-check-circle fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Blockchain Verified</h6>
+                            <h2 class="mb-0">@blockchainVerifiedCount</h2>
+                        </div>
+                        <i class="fas fa-link fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assets Table with Integrated Search -->
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0"><i class="fas fa-list me-2"></i>Asset List</h5>
+        </div>
+        <div class="card-body">
+            <!-- Search and Filter Bar - Integrated inside the card -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="tableSearchInput" class="form-control"
+                               placeholder="Search by Asset Name, Tag No, Serial No..." autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" onclick="clearTableSearch()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <input type="date" id="fromDateFilter" class="form-control" placeholder="From Date">
+                </div>
+                <div class="col-md-2">
+                    <input type="date" id="toDateFilter" class="form-control" placeholder="To Date">
+                </div>
+                <div class="col-md-2">
+                    <select id="assetTypeFilter" class="form-select">
+                        <option value="all">All Types</option>
+                        @foreach (var type in assetTypes)
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select id="statusFilter" class="form-select">
+                        <option value="all">All Status</option>
+                        <option value="posted">Posted</option>
+                        <option value="unposted">Unposted</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Results Count -->
+            <div class="row mb-2">
+                <div class="col-md-12">
+                    <small class="text-muted">
+                        Showing <span id="visibleCount">0</span> of <span id="totalCount">@(Model?.Count ?? 0)</span> assets
+                    </small>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-bordered table-hover" id="assetsTable">
+                    <thead class="table-light sticky-top" style="position: sticky; top: 0; z-index: 1;">
+                        <tr>
+                            <th style="width: 50px;">#</th>
+                            <th style="width: 180px;">Asset Name</th>
+                            <th style="width: 150px;">Asset Type</th>
+                            <th style="width: 120px;">Class</th>
+                            <th style="width: 120px;">Tag No</th>
+                            <th style="width: 120px;">Serial No</th>
+                            <th style="width: 100px;" class="text-end">Quantity</th>
+                            <th style="width: 150px;" class="text-end">Total Value</th>
+                            <th style="width: 120px;">Location</th>
+                            <th style="width: 100px;">Status</th>
+                            <th style="width: 150px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="assetsTableBody">
+                        @if (Model != null && Model.Any())
+                        {
+                            var counter = 1;
+                            foreach (var asset in Model)
+                            {
+                                <tr data-id="@asset.Id"
+                                    data-name="@asset.AssetName"
+                                    data-type="@asset.AssetType"
+                                    data-class="@asset.Class"
+                                    data-tagno="@asset.TagNo"
+                                    data-serialno="@asset.SerialNo"
+                                    data-location="@asset.Location"
+                                    data-posted="@asset.Posted"
+                                    data-date="@asset.DatePurchased?.ToString("yyyy-MM-dd")">
+                                    <td class="row-number">@counter</td>
+                                    <td><strong>@asset.AssetName</strong></td>
+                                    <td>@asset.AssetType</td>
+                                    <td>@asset.Class</td>
+                                    <td>@asset.TagNo</td>
+                                    <td>@asset.SerialNo</td>
+                                    <td class="text-end">@(asset.Quantity ?? 0)</td>
+                                    <td class="text-end fw-bold">KES @(asset.TotalValue?.ToString("N0") ?? "0")</td>
+                                    <td>@asset.Location</td>
+                                    <td>
+                                        @if (asset.Posted == true)
+                                        {
+                                            <span class="badge bg-success">Posted</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Unposted</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a asp-action="Details" asp-route-id="@asset.Id" class="btn btn-sm btn-info" title="View Details">
+                                                <i class="fas fa-eye"></i> Details
+                                            </a>
+                                            <a asp-action="Edit" asp-route-id="@asset.Id" class="btn btn-sm btn-primary" title="Edit">
+                                                <i class="fas fa-edit"></i> Edit
+                                            </a>
+                                            @if (asset.Posted != true)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-warning" onclick="postAsset(@asset.Id)" title="Post Asset">
+                                                    <i class="fas fa-check"></i> Post
+                                                </button>
+                                            }
+                                            <button type="button" class="btn btn-sm btn-danger" onclick="deleteAsset(@asset.Id, '@asset.AssetName')" title="Delete">
+                                                <i class="fas fa-trash"></i> Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                counter++;
+                            }
+                        }
+                        else
+                        {
+                            <tr id="noDataRow">
+                                <td colspan="12" class="text-center py-4">
+                                    <i class="fas fa-info-circle fa-2x text-muted mb-3"></i>
+                                    <p class="text-muted">No assets registered yet.</p>
+                                    <a asp-action="Create" class="btn btn-success">
+                                        <i class="fas fa-plus"></i> Register First Asset
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete asset <strong id="deleteAssetName"></strong>?</p>
+                <p class="text-danger"><small>This action cannot be undone.</small></p>
+            </div>
+            <div class="modal-footer">
+                <form asp-action="DeleteConfirmed" method="post" id="deleteForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="deleteAssetId" />
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        $(document).ready(function() {
+            // Initial count
+            updateVisibleCount();
+
+            // Table search and filters
+            $('#tableSearchInput').on('keyup', filterTable);
+            $('#assetTypeFilter').on('change', filterTable);
+            $('#statusFilter').on('change', filterTable);
+            $('#fromDateFilter, #toDateFilter').on('change', filterTable);
+        });
+
+        function filterTable() {
+            const searchTerm = $('#tableSearchInput').val().toLowerCase();
+            const assetTypeFilter = $('#assetTypeFilter').val();
+            const statusFilter = $('#statusFilter').val();
+            const fromDate = $('#fromDateFilter').val();
+            const toDate = $('#toDateFilter').val();
+            let visibleCount = 0;
+            let totalAmount = 0;
+
+            $('#assetsTableBody tr').each(function() {
+                const row = $(this);
+                if (row.attr('id') === 'noDataRow') return;
+
+                const name = row.data('name')?.toLowerCase() || '';
+                const type = row.data('type')?.toLowerCase() || '';
+                const classType = row.data('class')?.toLowerCase() || '';
+                const tagNo = row.data('tagno')?.toLowerCase() || '';
+                const serialNo = row.data('serialno')?.toLowerCase() || '';
+                const location = row.data('location')?.toLowerCase() || '';
+                const posted = row.data('posted') === true;
+                const date = row.data('date') || '';
+
+                const matchesSearch = searchTerm === '' ||
+                    name.includes(searchTerm) ||
+                    type.includes(searchTerm) ||
+                    classType.includes(searchTerm) ||
+                    tagNo.includes(searchTerm) ||
+                    serialNo.includes(searchTerm) ||
+                    location.includes(searchTerm);
+
+                const matchesAssetType = assetTypeFilter === 'all' || type === assetTypeFilter.toLowerCase();
+
+                let matchesStatus = true;
+                if (statusFilter === 'posted') {
+                    matchesStatus = posted;
+                } else if (statusFilter === 'unposted') {
+                    matchesStatus = !posted;
+                }
+
+                let matchesDate = true;
+                if (fromDate && date < fromDate) matchesDate = false;
+                if (toDate && date > toDate) matchesDate = false;
+
+                if (matchesSearch && matchesAssetType && matchesStatus && matchesDate) {
+                    row.show();
+                    visibleCount++;
+                    const amountText = row.find('.text-end.fw-bold').text().replace(/[^0-9.]/g, '');
+                    const amount = parseFloat(amountText) || 0;
+                    totalAmount += amount;
+                } else {
+                    row.hide();
+                }
+            });
+
+            // Update counts
+            $('#visibleCount').text(visibleCount);
+            $('#totalCount').text($('#assetsTableBody tr:not(#noDataRow)').length);
+
+            // Show/hide no results message
+            if (visibleCount === 0 && $('#assetsTableBody tr:not(#noDataRow)').length > 0) {
+                if ($('#noResultsRow').length === 0) {
+                    $('#assetsTableBody').append(`
+                        <tr id="noResultsRow">
+                            <td colspan="12" class="text-center py-4">
+                                <i class="fas fa-search fa-2x text-muted mb-3"></i>
+                                <p class="text-muted">No assets match your search criteria.</p>
+                            </td>
+                        </tr>
+                    `);
+                }
+            } else {
+                $('#noResultsRow').remove();
+            }
+        }
+
+        function updateVisibleCount() {
+            const total = $('#assetsTableBody tr:not(#noDataRow)').length;
+            const visible = $('#assetsTableBody tr:visible:not(#noDataRow):not(#noResultsRow)').length;
+            $('#visibleCount').text(visible);
+            $('#totalCount').text(total);
+        }
+
+        function clearTableSearch() {
+            $('#tableSearchInput').val('');
+            $('#assetTypeFilter').val('all');
+            $('#statusFilter').val('all');
+            $('#fromDateFilter').val('');
+            $('#toDateFilter').val('');
+            filterTable();
+        }
+
+        function deleteAsset(id, name) {
+            $('#deleteAssetId').val(id);
+            $('#deleteAssetName').text(name);
+            $('#deleteModal').modal('show');
+        }
+
+        async function postAsset(id) {
+            const result = await Swal.fire({
+                title: 'Confirm Post',
+                text: 'Are you sure you want to post this asset? This action cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, Post it!'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const response = await fetch(`/AssetsRegister/Post/${id}`, {
+                        method: 'POST',
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        }
+                    });
+
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else {
+                        const data = await response.json();
+                        if (data.success) {
+                            Swal.fire('Success!', 'Asset posted successfully.', 'success').then(() => {
+                                location.reload();
+                            });
+                        } else {
+                            Swal.fire('Error', data.message || 'Failed to post asset.', 'error');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'An error occurred while posting the asset.', 'error');
+                }
+            }
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount);
+        }
+    </script>
+}

@@ -1,0 +1,434 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.SmsTemplateDTO
+@{
+    ViewData["Title"] = "Edit SMS Template";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center">
+                <a asp-action="Templates" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i> Back to Templates
+                </a>
+                <h2 class="page-title mb-0">
+                    <i class="bi bi-pencil-square me-2"></i>Edit SMS Template
+                </h2>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Template
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="EditTemplate" method="post" id="editTemplateForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="Id" />
+
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger" style="display: none;"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="TemplateCode" class="form-label fw-bold">Template Code *</label>
+                            <input asp-for="TemplateCode" class="form-control" placeholder="e.g., WELCOME_SMS, LOAN_APPROVED" />
+                            <span asp-validation-for="TemplateCode" class="text-danger"></span>
+                            <small class="text-muted">Unique identifier for this template (use uppercase with underscores)</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="TemplateName" class="form-label fw-bold">Template Name *</label>
+                            <input asp-for="TemplateName" class="form-control" placeholder="e.g., Welcome Message, Loan Approval" />
+                            <span asp-validation-for="TemplateName" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Description" class="form-label">Description</label>
+                            <textarea asp-for="Description" class="form-control" rows="2" placeholder="Brief description of when this template is used"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="TemplateContent" class="form-label fw-bold">Template Content *</label>
+                            <textarea asp-for="TemplateContent" class="form-control" rows="4" id="TemplateContent"
+                                      placeholder="Enter your SMS template with placeholders like {{FullName}}, {{MemberNo}}, etc."></textarea>
+                            <span asp-validation-for="TemplateContent" class="text-danger"></span>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Use <code>{{PlaceholderName}}</code> for dynamic content. Character count: <span id="charCount">0</span> / 160
+                                <span id="smsCount" class="ms-2"></span>
+                            </small>
+                        </div>
+
+                        <!-- AGM Custom Fields -->
+                        <div id="agmCustomFields" style="display: @(Model.TemplateCode == "AGM_NOTIFICATION" ? "block" : "none");" class="mb-3">
+                            <div class="card bg-light border-info">
+                                <div class="card-header bg-info text-white">
+                                    <i class="bi bi-calendar-event me-2"></i>AGM Details
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-2">
+                                            <label asp-for="AGMDate" class="form-label fw-bold">AGM Date</label>
+                                            <input asp-for="AGMDate" class="form-control" type="date" id="AGMDate" />
+                                            <span asp-validation-for="AGMDate" class="text-danger"></span>
+                                        </div>
+                                        <div class="col-md-6 mb-2">
+                                            <label asp-for="AGMTime" class="form-label fw-bold">AGM Time</label>
+                                            <input asp-for="AGMTime" class="form-control" type="time" id="AGMTime" />
+                                            <span asp-validation-for="AGMTime" class="text-danger"></span>
+                                        </div>
+                                        <div class="col-md-12 mb-2">
+                                            <label asp-for="AGMVenue" class="form-label fw-bold">Venue</label>
+                                            <input asp-for="AGMVenue" class="form-control" placeholder="Enter AGM venue" id="AGMVenue" />
+                                            <span asp-validation-for="AGMVenue" class="text-danger"></span>
+                                        </div>
+                                        <div class="col-md-12">
+                                            <small class="text-muted">
+                                                <i class="bi bi-info-circle me-1"></i>
+                                                These details will be saved with the template and used when sending AGM notifications.
+                                                Placeholders: <code>{{AGMDate}}</code>, <code>{{AGMTime}}</code>, <code>{{AGMVenue}}</code>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input asp-for="IsActive" class="form-check-input" type="checkbox" id="IsActive" />
+                                <label asp-for="IsActive" class="form-check-label fw-bold">Active</label>
+                                <br />
+                                <small class="text-muted">Inactive templates won't be available for use</small>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="alert alert-info small">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>Template Info:</strong>
+                                <ul class="mb-0 mt-1">
+                                    <li>Created: @(Model.CreatedAt?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")</li>
+                                    <li>Created By: @(Model.CreatedBy ?? "System")</li>
+                                    @if (!string.IsNullOrEmpty(Model.ModifiedBy))
+                                    {
+                                        <li>Last Modified: @(Model.ModifiedAt?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")</li>
+                                        <li>Modified By: @Model.ModifiedBy</li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a asp-action="Templates" class="btn btn-secondary">
+                                <i class="bi bi-x-circle me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">
+                                <i class="bi bi-save me-2"></i>Update Template
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Help Card -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-question-circle me-2"></i>Help & Tips
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info small">
+                        <i class="bi bi-lightbulb me-2"></i>
+                        <strong>Tips for creating effective SMS templates:</strong>
+                        <ul class="mt-2 mb-0">
+                            <li>Keep messages concise (160 characters per SMS)</li>
+                            <li>Use placeholders for personalization</li>
+                            <li>Include clear call-to-action when needed</li>
+                            <li>Test templates before sending to members</li>
+                        </ul>
+                    </div>
+
+                    <div class="alert alert-warning small mt-3">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Common placeholders used:</strong>
+                        <ul class="mt-2 mb-0">
+                            <li><code>{{FullName}}</code> - Member's full name</li>
+                            <li><code>{{MemberNo}}</code> - Member number</li>
+                            <li><code>{{CompanyName}}</code> - SACCO name</li>
+                            <li><code>{{Amount}}</code> - Transaction amount</li>
+                            <li><code>{{Date}}</code> - Current date</li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-outline-primary w-100" onclick="previewTemplate()">
+                            <i class="bi bi-eye me-1"></i> Preview Template
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Placeholders Quick Reference -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-code-square me-2"></i>Quick Placeholders
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-1">
+                        <div class="col-6">
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="insertPlaceholder('{{FullName}}')">
+                                FullName
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="insertPlaceholder('{{MemberNo}}')">
+                                MemberNo
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="insertPlaceholder('{{CompanyName}}')">
+                                CompanyName
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="insertPlaceholder('{{Amount}}')">
+                                Amount
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="insertPlaceholder('{{Date}}')">
+                                Date
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="insertPlaceholder('{{LoanNo}}')">
+                                LoanNo
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="insertPlaceholder('{{AGMDate}}')">
+                                AGMDate
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="insertPlaceholder('{{AGMTime}}')">
+                                AGMTime
+                            </button>
+                        </div>
+                        <div class="col-12">
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="insertPlaceholder('{{AGMVenue}}')">
+                                AGMVenue
+                            </button>
+                        </div>
+                    </div>
+                    <small class="text-muted mt-2 d-block">
+                        <i class="bi bi-mouse me-1"></i> Click any placeholder to insert at cursor position
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-eye me-2"></i>Template Preview
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Template Preview:</strong>
+                    <div id="previewContent" class="mt-2 p-3 bg-light rounded" style="white-space: pre-wrap;"></div>
+                </div>
+                <div class="alert alert-warning small">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Note:</strong> Placeholders will be replaced with actual data when sending.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function() {
+            // Character counter
+            $('#TemplateContent').on('input', function() {
+                updateCharacterCount();
+            });
+            updateCharacterCount();
+
+            // Toggle AGM fields based on template code
+            $('#TemplateCode').on('input', function() {
+                const code = $(this).val().toUpperCase();
+                if (code === 'AGM_NOTIFICATION') {
+                    $('#agmCustomFields').slideDown();
+                } else {
+                    $('#agmCustomFields').slideUp();
+                }
+            });
+
+            // Show AGM fields if already AGM template
+            if ($('#TemplateCode').val().toUpperCase() === 'AGM_NOTIFICATION') {
+                $('#agmCustomFields').show();
+            }
+        });
+
+        function updateCharacterCount() {
+            const message = $('#TemplateContent').val();
+            const length = message.length;
+            $('#charCount').text(length);
+
+            if (length > 160) {
+                const smsCount = Math.ceil(length / 153);
+                $('#smsCount').html(`<span class="text-warning">Will be split into ${smsCount} SMS messages</span>`);
+                $('#charCount').addClass('text-warning');
+            } else {
+                $('#smsCount').html('');
+                $('#charCount').removeClass('text-warning');
+            }
+        }
+
+        function insertPlaceholder(placeholder) {
+            const textarea = $('#TemplateContent');
+            const cursorPos = textarea.prop('selectionStart');
+            const content = textarea.val();
+
+            const before = content.substring(0, cursorPos);
+            const after = content.substring(cursorPos);
+
+            textarea.val(before + placeholder + after);
+            textarea.focus();
+
+            // Set cursor position after the inserted text
+            const newPos = cursorPos + placeholder.length;
+            textarea.prop('selectionStart', newPos);
+            textarea.prop('selectionEnd', newPos);
+
+            updateCharacterCount();
+        }
+
+        function previewTemplate() {
+            const content = $('#TemplateContent').val() || 'No content to preview';
+            $('#previewContent').text(content);
+            $('#previewModal').modal('show');
+        }
+
+        // Form validation
+        $('#editTemplateForm').on('submit', function(e) {
+            const templateCode = $('#TemplateCode').val().trim();
+            const templateName = $('#TemplateName').val().trim();
+            const templateContent = $('#TemplateContent').val().trim();
+
+            if (!templateCode) {
+                e.preventDefault();
+                alert('Please enter a Template Code');
+                $('#TemplateCode').focus();
+                return false;
+            }
+
+            if (!templateName) {
+                e.preventDefault();
+                alert('Please enter a Template Name');
+                $('#TemplateName').focus();
+                return false;
+            }
+
+            if (!templateContent) {
+                e.preventDefault();
+                alert('Please enter Template Content');
+                $('#TemplateContent').focus();
+                return false;
+            }
+
+            // Validate AGM fields if AGM template
+            if (templateCode.toUpperCase() === 'AGM_NOTIFICATION') {
+                const agmDate = $('#AGMDate').val();
+                const agmTime = $('#AGMTime').val();
+                const agmVenue = $('#AGMVenue').val();
+
+                if (!agmDate) {
+                    e.preventDefault();
+                    alert('Please enter AGM Date');
+                    $('#AGMDate').focus();
+                    return false;
+                }
+
+                if (!agmTime) {
+                    e.preventDefault();
+                    alert('Please enter AGM Time');
+                    $('#AGMTime').focus();
+                    return false;
+                }
+
+                if (!agmVenue) {
+                    e.preventDefault();
+                    alert('Please enter AGM Venue');
+                    $('#AGMVenue').focus();
+                    return false;
+                }
+
+                // Ensure AGM placeholders are in the template
+                if (!templateContent.includes('{{AGMDate}}') ||
+                    !templateContent.includes('{{AGMTime}}') ||
+                    !templateContent.includes('{{AGMVenue}}')) {
+                    if (!confirm('Your template does not contain AGM placeholders ({{AGMDate}}, {{AGMTime}}, {{AGMVenue}}). These will be needed for AGM notifications. Continue anyway?')) {
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+            }
+
+            const confirmMessage = 'Are you sure you want to update this template?';
+            if (!confirm(confirmMessage)) {
+                e.preventDefault();
+                return false;
+            }
+
+            return true;
+        });
+
+        // Auto-generate template code from name (optional)
+        $('#TemplateName').on('blur', function() {
+            const currentCode = $('#TemplateCode').val();
+            if (!currentCode) {
+                const name = $(this).val().trim();
+                if (name) {
+                    const code = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+                    $('#TemplateCode').val(code);
+                }
+            }
+        });
+    </script>
+}

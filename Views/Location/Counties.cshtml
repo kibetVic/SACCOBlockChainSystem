@@ -1,0 +1,434 @@
+﻿@using SACCOBlockChainSystem.Models.DTOs
+@model SACCOBlockChainSystem.Models.DTOs.CountyListResponseDTO
+@{
+    ViewData["Title"] = "County Management";
+    var counties = Model?.Counties ?? new List<SACCOBlockChainSystem.Models.DTOs.CountyDTO>();
+}
+
+<div class="container-fluid">
+    <!-- Success/Error Messages -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+            @if (TempData["BlockchainTxId"] != null)
+            {
+                <br />
+        
+                <small class="text-muted">Blockchain TX: @TempData["BlockchainTxId"]</small>
+            }
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link @(ViewBag.ActiveTab == "Counties" ? "active" : "")"
+               asp-action="Counties">
+                <i class="fas fa-map-marker-alt"></i> Counties
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(ViewBag.ActiveTab == "SubCounties" ? "active" : "")"
+               asp-action="SubCounties">
+                <i class="fas fa-city"></i> Sub-Counties
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(ViewBag.ActiveTab == "Wards" ? "active" : "")"
+               asp-action="Wards">
+                <i class="fas fa-building"></i> Wards
+            </a>
+        </li>
+    </ul>
+
+    <!-- FORM CARD - Add/Edit County -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h4><i class="fas fa-plus-circle"></i> Add New County</h4>
+        </div>
+        <div class="card-body">
+            <form id="countyForm" method="post" asp-action="CreateCounty">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="editId" name="Id" />
+
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="required">County Code</label>
+                        <input type="text" id="CountyCode" name="CountyCode" class="form-control"
+                               maxlength="10" required />
+                        <small class="text-muted">e.g., 001, 002, 047</small>
+                        <span id="countyCodeError" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="required">County Name</label>
+                        <input type="text" id="CountyName" name="CountyName" class="form-control"
+                               maxlength="100" required />
+                        <span id="countyNameError" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label>Headquarters</label>
+                        <input type="text" id="Headquarters" name="Headquarters" class="form-control"
+                               maxlength="100" />
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label>Region</label>
+                        <input type="text" id="Region" name="Region" class="form-control"
+                               maxlength="100" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label>Status</label>
+                        <select id="Status" name="Status" class="form-select">
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Save County
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                        <i class="fas fa-redo"></i> Reset
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EXISTING COUNTIES TABLE -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5><i class="fas fa-list"></i> Counties List</h5>
+        </div>
+        <div class="card-body">
+            <!-- Search and Filter -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="tableSearchInput" class="form-control"
+                               placeholder="Search by name or code..." autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <select id="statusFilter" class="form-select">
+                        <option value="all">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-bordered table-hover" id="countiesTable">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th style="width: 120px;">Actions</th>
+                            <th style="width: 100px;">Code</th>
+                            <th>County Name</th>
+                            <th>Headquarters</th>
+                            <th>Region</th>
+                            <th style="width: 80px;">Sub-Counties</th>
+                            <th style="width: 80px;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        @if (counties.Any())
+                        {
+                            var counter = 1;
+                            foreach (var county in counties)
+                            {
+                                <tr data-id="@county.Id"
+                                    data-code="@county.CountyCode"
+                                    data-name="@county.CountyName"
+                                    data-headquarters="@county.Headquarters"
+                                    data-region="@county.Region"
+                                    data-status="@county.Status"
+                                    data-subcountycount="@county.SubCountyCount">
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-warning btn-sm"
+                                                    onclick="editCounty(@county.Id)" title="Edit">
+                                                <i class="fas fa-edit">Select</i>
+                                            </button>
+                                            @if (User.IsInRole("SuperAdmin"))
+                                            {
+                                                <button type="button" class="btn btn-danger btn-sm"
+                                                        onclick="deleteCounty(@county.Id, '@county.CountyName')" title="Delete">
+                                                    <i class="fas fa-trash">Delete</i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td><strong>@county.CountyCode</strong></td>
+                                    <td class="county-name-cell">
+                                        @county.CountyName
+                                        @if (!string.IsNullOrEmpty(county.BlockchainTxId))
+                                        {
+                                            <span class="badge bg-success ms-1" title="On Blockchain">
+                                                <i class="fas fa-link fa-xs"></i>
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>@(county.Headquarters ?? "-")</td>
+                                    <td>@(county.Region ?? "-")</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-info">@county.SubCountyCount</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge @(county.Status == "Active" ? "bg-success" : "bg-secondary")">
+                                            @county.Status
+                                        </span>
+                                    </td>
+                                </tr>
+                                counter++;
+                            }
+                        }
+                        else
+                        {
+                            <tr id="noDataRow">
+                                <td colspan="8" class="text-center py-4">
+                                    <i class="fas fa-info-circle fa-2x text-muted mb-3"></i>
+                                    <p class="text-muted">No counties found.</p>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Statistics Summary -->
+            <div class="row mt-4">
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h4 id="totalCount">@counties.Count</h4>
+                            <p class="text-muted mb-0">Total Counties</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h4 id="activeCount">@counties.Count(c => c.Status == "Active")</h4>
+                            <p class="text-muted mb-0">Active Counties</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h4 id="inactiveCount">@counties.Count(c => c.Status == "Inactive")</h4>
+                            <p class="text-muted mb-0">Inactive Counties</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h4 id="blockchainCount">@counties.Count(c => !string.IsNullOrEmpty(c.BlockchainTxId))</h4>
+                            <p class="text-muted mb-0">On Blockchain</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteItemName"></strong>?</p>
+                <p class="text-danger"><small>This action cannot be undone.</small></p>
+            </div>
+            <div class="modal-footer">
+                <form id="deleteForm" method="post" asp-action="DeleteCounty">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" id="deleteId" name="id" />
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: red;
+    }
+
+    .sticky-top {
+        background: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .table-responsive::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+    .highlight {
+        background-color: #fff3cd;
+        padding: 0 2px;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+
+    .d-flex {
+        display: flex;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+</style>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let isEditMode = false;
+
+        $(document).ready(function() {
+            // Table search and filter
+            $('#tableSearchInput').on('keyup', filterTable);
+            $('#statusFilter').on('change', filterTable);
+        });
+
+        function filterTable() {
+            const searchTerm = $('#tableSearchInput').val().toLowerCase();
+            const statusFilter = $('#statusFilter').val();
+            let visibleCount = 0;
+            let activeCount = 0;
+            let inactiveCount = 0;
+            let blockchainCount = 0;
+
+            $('#tableBody tr').each(function() {
+                const row = $(this);
+                if (row.attr('id') === 'noDataRow') return;
+
+                const code = row.data('code')?.toLowerCase() || '';
+                const name = row.data('name')?.toLowerCase() || '';
+                const status = row.data('status') || '';
+
+                const matchesSearch = searchTerm === '' ||
+                    code.includes(searchTerm) ||
+                    name.includes(searchTerm);
+
+                const matchesStatus = statusFilter === 'all' || status === statusFilter;
+
+                if (matchesSearch && matchesStatus) {
+                    row.show();
+                    visibleCount++;
+                    if (status === 'Active') activeCount++;
+                    if (status === 'Inactive') inactiveCount++;
+                    if (row.find('.badge.bg-success').length) blockchainCount++;
+                } else {
+                    row.hide();
+                }
+            });
+
+            $('#totalCount').text(visibleCount);
+            $('#activeCount').text(activeCount);
+            $('#inactiveCount').text(inactiveCount);
+            $('#blockchainCount').text(blockchainCount);
+        }
+
+        function clearSearch() {
+            $('#tableSearchInput').val('');
+            $('#statusFilter').val('all');
+            filterTable();
+        }
+
+        function resetForm() {
+            isEditMode = false;
+            $('#editId').val('');
+            $('#CountyCode').val('').prop('readonly', false);
+            $('#CountyName').val('');
+            $('#Headquarters').val('');
+            $('#Region').val('');
+            $('#Status').val('Active');
+            $('#countyForm').attr('action', '@Url.Action("CreateCounty")');
+            $('.card-header.bg-success h4').html('<i class="fas fa-plus-circle"></i> Add New County');
+        }
+
+        function editCounty(id) {
+            const row = $(`#tableBody tr[data-id="${id}"]`);
+
+            isEditMode = true;
+            $('#editId').val(id);
+            $('#CountyCode').val(row.data('code')).prop('readonly', true);
+            $('#CountyName').val(row.data('name'));
+            $('#Headquarters').val(row.data('headquarters') || '');
+            $('#Region').val(row.data('region') || '');
+            $('#Status').val(row.data('status'));
+            $('#countyForm').attr('action', '@Url.Action("UpdateCounty")');
+            $('.card-header.bg-success h4').html('<i class="fas fa-edit"></i> Edit County');
+
+            $('html, body').animate({ scrollTop: 0 }, 'slow');
+        }
+
+        let deleteId = null;
+        let deleteName = null;
+
+        function deleteCounty(id, name) {
+            deleteId = id;
+            deleteName = name;
+            $('#deleteItemName').text(name);
+            $('#deleteId').val(id);
+            $('#deleteModal').modal('show');
+        }
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+                <text>
+                Swal.fire({
+                    title: 'Success!',
+                    text: '@TempData["SuccessMessage"]',
+                    icon: 'success',
+                    timer: 3000,
+                    showConfirmButton: false
+                });
+                </text>
+        }
+    </script>
+}

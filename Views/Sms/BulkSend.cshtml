@@ -1,0 +1,1517 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.BulkSmsRequestDTO
+@{
+    ViewData["Title"] = "Bulk SMS";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var templates = ViewBag.Templates as List<SACCOBlockChainSystem.Models.SmsTemplate> ?? new List<SACCOBlockChainSystem.Models.SmsTemplate>();
+    var groups = ViewBag.MemberGroups as List<string> ?? new List<string>();
+    var gigs = ViewBag.GIGs as List<SACCOBlockChainSystem.Models.GIGs> ?? new List<SACCOBlockChainSystem.Models.GIGs>();
+    var companyName = ViewBag.CompanyName as string ?? "SACCO";
+}
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center">
+                <a asp-action="Index" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i> Back to Messages
+                </a>
+                <h2 class="page-title mb-0">
+                    <i class="bi bi-envelope-plus me-2"></i>Bulk SMS - @companyName
+                </h2>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-md-12">
+            <!-- Step Navigation -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="step-item" id="step1Indicator">
+                            <div class="step-circle bg-primary text-white">1</div>
+                            <span class="step-label">Select Recipients</span>
+                        </div>
+                        <div class="flex-grow-1 mx-3">
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar" id="progressBar" role="progressbar" style="width: 33%;"></div>
+                            </div>
+                        </div>
+                        <div class="step-item" id="step2Indicator">
+                            <div class="step-circle bg-secondary text-white">2</div>
+                            <span class="step-label">Compose Message</span>
+                        </div>
+                        <div class="flex-grow-1 mx-3">
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar" id="progressBar2" role="progressbar" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                        <div class="step-item" id="step3Indicator">
+                            <div class="step-circle bg-secondary text-white">3</div>
+                            <span class="step-label">Review & Send</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <form asp-action="BulkSend" method="post" id="bulkSmsForm">
+                @Html.AntiForgeryToken()
+
+                <!-- Step 1: Select Recipients -->
+                <div id="step1" class="card shadow-sm mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-people me-2"></i>Step 1: Select Recipients
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="nav nav-tabs" id="recipientTab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="manual-tab" data-bs-toggle="tab" data-bs-target="#manual" type="button" role="tab">
+                                    <i class="bi bi-pencil-square"></i> Manual Entry
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="filter-tab" data-bs-toggle="tab" data-bs-target="#filter" type="button" role="tab">
+                                    <i class="bi bi-funnel"></i> Filter Members
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="group-tab" data-bs-toggle="tab" data-bs-target="#group" type="button" role="tab">
+                                    <i class="bi bi-tag"></i> Member Groups
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="gig-tab" data-bs-toggle="tab" data-bs-target="#gig" type="button" role="tab">
+                                    <i class="bi bi-people-fill"></i> GIG Groups
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content mt-3">
+                            <!-- Manual Entry Tab -->
+                            <div class="tab-pane fade" id="manual" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-info-circle me-2"></i>
+                                            Enter one recipient per line. Format: PhoneNumber, RecipientName (optional)
+                                        </div>
+                                        <textarea id="manualRecipients" class="form-control" rows="10"
+                                                  placeholder="0712345678, John Doe
+0712345679, Jane Smith
+0712345680
+0723456789, Peter Omondi"></textarea>
+                                        <div class="mt-2">
+                                            <button type="button" class="btn btn-sm btn-primary" onclick="parseManualRecipients()">
+                                                <i class="bi bi-check-circle"></i> Parse & Validate
+                                            </button>
+                                            <span class="ms-2 text-muted" id="manualStats"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Filter Members Tab -->
+                            <div class="tab-pane fade" id="filter" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Membership Type</label>
+                                            <select id="filterMembershipType" class="form-select">
+                                                <option value="">All</option>
+                                                <option value="Individual">Individual</option>
+                                                <option value="Corporate">Corporate</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Status</label>
+                                            <select id="filterStatus" class="form-select">
+                                                <option value="">All</option>
+                                                <option value="1">Active</option>
+                                                <option value="0">Inactive</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Department</label>
+                                            <input type="text" id="filterDepartment" class="form-control" placeholder="Enter department" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Station</label>
+                                            <input type="text" id="filterStation" class="form-control" placeholder="Enter station" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-12">
+                                        <button type="button" class="btn btn-primary" onclick="filterMembers()">
+                                            <i class="bi bi-search"></i> Search Members
+                                        </button>
+                                        <button type="button" class="btn btn-secondary" onclick="clearFilters()">
+                                            <i class="bi bi-eraser"></i> Clear
+                                        </button>
+                                        <span id="filterResultsCount" class="ms-2 text-muted"></span>
+                                    </div>
+                                </div>
+                                <div id="filterResults" class="mt-3" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-header bg-success text-white">
+                                            <i class="bi bi-check-circle me-2"></i>Members Found
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="table-responsive">
+                                                <table class="table table-sm" id="filterResultsTable">
+                                                    <thead>
+                                                        <tr>
+                                                            <th><input type="checkbox" id="selectAllFiltered" onchange="toggleSelectAllFiltered()" /></th>
+                                                            <th>Member No</th>
+                                                            <th>Name</th>
+                                                            <th>Phone</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="filterResultsBody"></tbody>
+                                                </table>
+                                            </div>
+                                            <div class="mt-2">
+                                                <button type="button" class="btn btn-sm btn-primary" onclick="addSelectedFiltered()">
+                                                    <i class="bi bi-plus-circle"></i> Add Selected to List
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Member Groups Tab -->
+                            <div class="tab-pane fade" id="group" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-info-circle me-2"></i>
+                                            Select predefined member groups to send SMS
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="card mb-3">
+                                                    <div class="card-body">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="groupAllActive" value="All Active Members">
+                                                            <label class="form-check-label fw-bold" for="groupAllActive">
+                                                                All Active Members
+                                                            </label>
+                                                            <br />
+                                                            <small class="text-muted">Send to all active members</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="card mb-3">
+                                                    <div class="card-body">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="groupNewMembers" value="New Members">
+                                                            <label class="form-check-label fw-bold" for="groupNewMembers">
+                                                                New Members (Last 30 days)
+                                                            </label>
+                                                            <br />
+                                                            <small class="text-muted">Members who joined in the last 30 days</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="card mb-3">
+                                                    <div class="card-body">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="groupLoanHolders" value="Loan Holders">
+                                                            <label class="form-check-label fw-bold" for="groupLoanHolders">
+                                                                Active Loan Holders
+                                                            </label>
+                                                            <br />
+                                                            <small class="text-muted">Members with active loans</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="card mb-3">
+                                                    <div class="card-body">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="groupNoLoans" value="No Loans">
+                                                            <label class="form-check-label fw-bold" for="groupNoLoans">
+                                                                Members with No Loans
+                                                            </label>
+                                                            <br />
+                                                            <small class="text-muted">Members without any loans</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3">
+                                            <button type="button" class="btn btn-primary" onclick="loadGroupMembers()">
+                                                <i class="bi bi-search"></i> Load Selected Groups
+                                            </button>
+                                            <span id="groupResultsCount" class="ms-2 text-muted"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- GIG Groups Tab -->
+                            <div class="tab-pane fade" id="gig" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-info-circle me-2"></i>
+                                            Select GIG (Community Investment Groups) to send SMS to their members
+                                        </div>
+                                        <div class="row">
+                                            @if (gigs.Any())
+                                            {
+                                                foreach (var gig in gigs)
+                                                {
+                                                    <div class="col-md-6">
+                                                        <div class="card mb-3">
+                                                            <div class="card-body">
+                                                                <div class="form-check">
+                                                                    <input class="form-check-input gig-checkbox" type="checkbox"
+                                                                           id="gig_@gig.Id" value="@gig.GigCode"
+                                                                           data-gigid="@gig.Id" data-gigname="@gig.GigName">
+                                                                    <label class="form-check-label fw-bold" for="gig_@gig.Id">
+                                                                        @gig.GigName (@gig.GigCode)
+                                                                    </label>
+                                                                    <br />
+                                                                    <small class="text-muted">
+                                                                        Members: <span id="gigCount_@gig.Id">Loading...</span>
+                                                                        <br />
+                                                                        Chairperson: @(gig.Chairperson ?? "N/A")
+                                                                    </small>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <div class="col-12">
+                                                    <div class="alert alert-warning">
+                                                        <i class="bi bi-exclamation-triangle me-2"></i>
+                                                        No GIGs found. Please create GIGs first.
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="mt-3">
+                                            <button type="button" class="btn btn-primary" onclick="loadGIGMembers()">
+                                                <i class="bi bi-search"></i> Load Selected GIG Members
+                                            </button>
+                                            <button type="button" class="btn btn-secondary" onclick="selectAllGIGs()">
+                                                <i class="bi bi-check-all"></i> Select All
+                                            </button>
+                                            <button type="button" class="btn btn-secondary" onclick="deselectAllGIGs()">
+                                                <i class="bi bi-x-circle"></i> Deselect All
+                                            </button>
+                                            <span id="gigResultsCount" class="ms-2 text-muted"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recipients Summary -->
+                        <div class="mt-4" id="recipientsSummary" style="display: none;">
+                            <div class="card bg-light">
+                                <div class="card-header bg-info text-white">
+                                    <i class="bi bi-list-check me-2"></i>Recipients Summary
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <strong>Total Recipients:</strong> <span id="totalRecipients">0</span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Valid Numbers:</strong> <span id="summaryValid">0</span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Invalid Numbers:</strong> <span id="summaryInvalid">0</span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="clearAllRecipients()">
+                                            <i class="bi bi-trash"></i> Clear All
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-primary" onclick="nextStep(2)">
+                                Next: Compose Message <i class="bi bi-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Compose Message -->
+                <div id="step2" class="card shadow-sm mb-4" style="display: none;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-pencil-square me-2"></i>Step 2: Compose Message
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Select Template (Optional)</label>
+                            <div class="input-group">
+                                <select id="bulkTemplateSelect" class="form-select" onchange="loadBulkTemplate()">
+                                    <option value="">-- Select Template --</option>
+                                    @foreach (var template in templates.Where(t => t.IsActive))
+                                    {
+                                        <option value="@template.TemplateCode"
+                                                data-content="@template.TemplateContent"
+                                                data-agmdate="@(template.AGMDate?.ToString("yyyy-MM-dd") ?? "")"
+                                                data-agmtime="@(template.AGMTime?.ToString() ?? "")"
+                                                data-agmvenue="@(template.AGMVenue ?? "")">
+                                            @template.TemplateName (@template.TemplateCode)
+                                        </option>
+                                    }
+                                </select>
+                                <a asp-action="Templates" class="btn btn-outline-secondary" target="_blank">
+                                    <i class="bi bi-gear"></i> Manage Templates
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- AGM Details Section for Bulk SMS -->
+                        <div id="bulkAgmDetailsSection" class="card bg-light border-info mb-3" style="display: none;">
+                            <div class="card-header bg-info text-white">
+                                <i class="bi bi-calendar-event me-2"></i>AGM Details
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">AGM Date</label>
+                                        <input type="date" id="bulkAgmDate" class="form-control" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">AGM Time</label>
+                                        <input type="time" id="bulkAgmTime" class="form-control" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">AGM Venue</label>
+                                        <input type="text" id="bulkAgmVenue" class="form-control" placeholder="Enter venue" />
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-success btn-sm" onclick="applyBulkAGMDetails()">
+                                        <i class="bi bi-check-circle"></i> Apply AGM Details to Message
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearBulkAGMFields()">
+                                        <i class="bi bi-eraser"></i> Clear
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Message Content *</label>
+                            <textarea id="bulkMessageContent" class="form-control" rows="6"
+                                      placeholder="Type your message here... Use {{Placeholder}} for dynamic content"></textarea>
+                            <div class="d-flex justify-content-between mt-1">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Character count: <span id="bulkCharCount">0</span> / 160
+                                    <span id="bulkSmsCount" class="ms-2"></span>
+                                </small>
+                                <small class="text-muted">
+                                    <a href="#" onclick="showBulkPlaceholders()">Available Placeholders</a>
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Message Type</label>
+                            <select id="bulkMessageType" class="form-select">
+                                <option value="General">General</option>
+                                <option value="Registration">Registration</option>
+                                <option value="Withdrawal">Withdrawal</option>
+                                <option value="Loan">Loan</option>
+                                <option value="Share Transfer">Share Transfer</option>
+                                <option value="Contribution">Contribution</option>
+                                <option value="Reminder">Reminder</option>
+                                <option value="Notification">Notification</option>
+                                <option value="Promotion">Promotion</option>
+                                <option value="AGM">AGM Notification</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Reference (Optional)</label>
+                            <input type="text" id="bulkReference" class="form-control" placeholder="e.g., Bulk Campaign 2024" />
+                        </div>
+
+                        <!-- Placeholder Panel -->
+                        <div class="card bg-light mb-3">
+                            <div class="card-header">
+                                <i class="bi bi-code-square me-2"></i>Placeholder Variables
+                                <button type="button" class="btn btn-sm btn-link float-end" onclick="toggleBulkPlaceholders()">
+                                    <i class="bi bi-chevron-down"></i>
+                                </button>
+                            </div>
+                            <div class="card-body" id="bulkPlaceholdersPanel" style="display: none;">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Member Information:</h6>
+                                        <ul class="list-unstyled">
+                                            <li><code>{{FullName}}</code> - Member's full name</li>
+                                            <li><code>{{MemberNo}}</code> - Member number</li>
+                                            <li><code>{{PhoneNo}}</code> - Phone number</li>
+                                            <li><code>{{GIGName}}</code> - GIG name</li>
+                                            <li><code>{{GIGCode}}</code> - GIG code</li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>System Information:</h6>
+                                        <ul class="list-unstyled">
+                                            <li><code>{{CompanyName}}</code> - SACCO name</li>
+                                            <li><code>{{Date}}</code> - Current date</li>
+                                            <li><code>{{Time}}</code> - Current time</li>
+                                        </ul>
+                                        <h6 class="mt-2">AGM Information:</h6>
+                                        <ul class="list-unstyled">
+                                            <li><code>{{AGMDate}}</code> - AGM Date</li>
+                                            <li><code>{{AGMTime}}</code> - AGM Time</li>
+                                            <li><code>{{AGMVenue}}</code> - AGM Venue</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preview -->
+                        <div class="card bg-light mb-3">
+                            <div class="card-header">
+                                <i class="bi bi-eye me-2"></i>Message Preview
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-secondary" id="bulkPreviewContent">
+                                    Message preview will appear here
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-secondary" onclick="prevStep(1)">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="nextStep(3)">
+                                Next: Review & Send <i class="bi bi-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Review & Send -->
+                <div id="step3" class="card shadow-sm mb-4" style="display: none;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-check2-circle me-2"></i>Step 3: Review & Send
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-info text-white">
+                                        <i class="bi bi-people me-2"></i>Recipients Summary
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="reviewRecipients">
+                                            <p><strong>Total Recipients:</strong> <span id="reviewTotal">0</span></p>
+                                            <p><strong>Valid Numbers:</strong> <span id="reviewValid">0</span></p>
+                                            <p><strong>Invalid Numbers:</strong> <span id="reviewInvalid">0</span></p>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="viewRecipientsList()">
+                                            <i class="bi bi-list"></i> View Recipients List
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-success text-white">
+                                        <i class="bi bi-envelope-paper me-2"></i>Message Summary
+                                    </div>
+                                    <div class="card-body">
+                                        <p><strong>Message Preview:</strong></p>
+                                        <div class="alert alert-light" id="reviewMessagePreview">-</div>
+                                        <p><strong>Message Type:</strong> <span id="reviewMessageType">-</span></p>
+                                        <p><strong>Reference:</strong> <span id="reviewReference">-</span></p>
+                                        <p><strong>Total SMS Cost:</strong> KES <span id="reviewCost">0.00</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>Important:</strong> Please review all information before sending. This action cannot be undone.
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-secondary" onclick="prevStep(2)">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </button>
+                            <button type="submit" class="btn btn-success" id="bulkSubmitBtn">
+                                <i class="bi bi-send me-2"></i>Send Bulk SMS
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden fields for recipients -->
+                <input type="hidden" id="recipientsData" name="Messages" />
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Recipients List Modal -->
+<div class="modal fade" id="recipientsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-list-ul me-2"></i>Recipients List
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Phone Number</th>
+                                <th>Recipient Name</th>
+                                <th>GIG</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recipientsModalBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .step-item {
+        text-align: center;
+        min-width: 80px;
+    }
+
+    .step-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 8px;
+        font-weight: bold;
+    }
+
+    .step-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #6c757d;
+    }
+
+    .upload-area {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background-color: #f8f9fa;
+    }
+
+        .upload-area:hover {
+            background-color: #e9ecef;
+            border-color: #0d6efd !important;
+        }
+
+    .progress-bar {
+        transition: width 0.3s ease;
+    }
+</style>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        let recipientsList = [];
+        let currentStep = 1;
+        let filteredMembersList = [];
+        let companyName = '@companyName';
+        let baseUrl = window.location.origin;
+
+        $(document).ready(function() {
+            // Character counter
+            $('#bulkMessageContent').on('input', function() {
+                updateBulkCharCount();
+                updateBulkPreview();
+            });
+
+            // File upload handling
+            $('#fileUpload').on('change', handleFileUpload);
+            $('#uploadArea').on('dragover', function(e) {
+                e.preventDefault();
+                $(this).addClass('border-primary');
+            });
+            $('#uploadArea').on('dragleave', function(e) {
+                e.preventDefault();
+                $(this).removeClass('border-primary');
+            });
+            $('#uploadArea').on('drop', function(e) {
+                e.preventDefault();
+                $(this).removeClass('border-primary');
+                const files = e.originalEvent.dataTransfer.files;
+                if (files.length) {
+                    handleFile({ target: { files: files } });
+                }
+            });
+            $('#uploadArea').on('click', function() {
+                $('#fileUpload').click();
+            });
+
+            // Hide upload info when switching tabs
+            $('#recipientTab button').on('shown.bs.tab', function(e) {
+                const target = $(e.target).attr('data-bs-target');
+                if (target !== '#upload') {
+                    $('#uploadInfoAlert').hide();
+                } else {
+                    $('#uploadInfoAlert').show();
+                }
+            });
+
+            // Load GIG member counts
+            loadGIGCounts();
+        });
+
+        function nextStep(step) {
+            if (step === 2 && recipientsList.length === 0) {
+                showToast('warning', 'Please add at least one recipient');
+                return;
+            }
+            if (step === 3 && !$('#bulkMessageContent').val()) {
+                showToast('warning', 'Please enter a message');
+                return;
+            }
+
+            $('#step' + currentStep).hide();
+            $('#step' + step).show();
+
+            // Update progress
+            if (step === 2) {
+                $('#progressBar').css('width', '66%');
+                $('#step2Indicator .step-circle').removeClass('bg-secondary').addClass('bg-primary');
+            } else if (step === 3) {
+                $('#progressBar2').css('width', '100%');
+                $('#step3Indicator .step-circle').removeClass('bg-secondary').addClass('bg-primary');
+                updateReview();
+            }
+
+            currentStep = step;
+        }
+
+        function prevStep(step) {
+            $('#step' + currentStep).hide();
+            $('#step' + step).show();
+            currentStep = step;
+        }
+
+        // File upload functions
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            $('#fileName').text(file.name);
+            const extension = file.name.split('.').pop().toLowerCase();
+            if (extension === 'csv') {
+                parseCSV(file);
+            } else if (extension === 'xlsx' || extension === 'xls') {
+                parseExcel(file);
+            } else {
+                showToast('error', 'Unsupported file format. Please upload CSV or Excel file.');
+            }
+        }
+
+        function parseCSV(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const lines = content.split('\n');
+                parseRecipientsFromLines(lines);
+            };
+            reader.readAsText(file);
+        }
+
+        function parseExcel(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                    const lines = rows.map(row => row.join(','));
+                    parseRecipientsFromLines(lines);
+                } catch (error) {
+                    showToast('error', 'Error parsing Excel file: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function parseRecipientsFromLines(lines) {
+            let validCount = 0;
+            let invalidCount = 0;
+
+            lines.forEach(line => {
+                if (line && line.trim()) {
+                    const parts = line.split(',');
+                    const phoneNumber = parts[0] ? parts[0].trim() : '';
+                    const recipientName = parts[1] ? parts[1].trim() : '';
+
+                    if (phoneNumber && isValidPhone(phoneNumber)) {
+                        recipientsList.push({
+                            phoneNumber: phoneNumber,
+                            recipientName: recipientName,
+                            gigName: null,
+                            message: null
+                        });
+                        validCount++;
+                    } else if (phoneNumber) {
+                        invalidCount++;
+                    }
+                }
+            });
+
+            $('#validCount').text(validCount);
+            $('#invalidCount').text(invalidCount);
+            $('#recordCount').text(validCount + invalidCount);
+            $('#uploadPreview').show();
+            updateRecipientsSummary();
+            if (validCount > 0) {
+                showToast('success', `Loaded ${validCount} valid numbers`);
+            } else {
+                showToast('warning', 'No valid phone numbers found in file');
+            }
+        }
+
+        function parseManualRecipients() {
+            const text = $('#manualRecipients').val();
+            if (!text || !text.trim()) {
+                showToast('warning', 'Please enter at least one recipient');
+                return;
+            }
+
+            const lines = text.split('\n');
+            let validCount = 0;
+            let invalidCount = 0;
+
+            lines.forEach(line => {
+                if (line && line.trim()) {
+                    const parts = line.split(',');
+                    const phoneNumber = parts[0] ? parts[0].trim() : '';
+                    const recipientName = parts[1] ? parts[1].trim() : '';
+
+                    if (phoneNumber && isValidPhone(phoneNumber)) {
+                        recipientsList.push({
+                            phoneNumber: phoneNumber,
+                            recipientName: recipientName,
+                            gigName: null,
+                            message: null
+                        });
+                        validCount++;
+                    } else if (phoneNumber) {
+                        invalidCount++;
+                    }
+                }
+            });
+
+            $('#manualStats').text(`Valid: ${validCount}, Invalid: ${invalidCount}`);
+            updateRecipientsSummary();
+            if (validCount > 0) {
+                showToast('success', `Loaded ${validCount} valid numbers`);
+            } else {
+                showToast('warning', 'No valid phone numbers found');
+            }
+        }
+
+        function isValidPhone(phone) {
+            const phoneRegex = /^(0|\+254)?[7][0-9]{8}$/;
+            return phoneRegex.test(phone);
+        }
+
+        function updateRecipientsSummary() {
+            const valid = recipientsList.filter(r => isValidPhone(r.phoneNumber)).length;
+            const invalid = recipientsList.length - valid;
+
+            $('#totalRecipients').text(recipientsList.length);
+            $('#summaryValid').text(valid);
+            $('#summaryInvalid').text(invalid);
+            if (recipientsList.length > 0) {
+                $('#recipientsSummary').show();
+            } else {
+                $('#recipientsSummary').hide();
+            }
+        }
+
+        function clearAllRecipients() {
+            if (confirm('Are you sure you want to clear all recipients?')) {
+                recipientsList = [];
+                updateRecipientsSummary();
+                $('#uploadPreview').hide();
+                $('#manualRecipients').val('');
+                $('#manualStats').text('');
+                $('#filterResults').hide();
+                $('#filterResultsCount').text('');
+                $('#gigResultsCount').text('');
+                $('#groupResultsCount').text('');
+                showToast('info', 'All recipients cleared');
+            }
+        }
+
+        function clearUpload() {
+            $('#fileUpload').val('');
+            $('#uploadPreview').hide();
+        }
+
+        function clearFilters() {
+            $('#filterMembershipType').val('');
+            $('#filterStatus').val('');
+            $('#filterDepartment').val('');
+            $('#filterStation').val('');
+            $('#filterResults').hide();
+            $('#filterResultsCount').text('');
+        }
+
+        function updateBulkCharCount() {
+            const message = $('#bulkMessageContent').val();
+            const length = message.length;
+            $('#bulkCharCount').text(length);
+
+            if (length > 160) {
+                const smsCount = Math.ceil(length / 153);
+                $('#bulkSmsCount').html(`<span class="text-warning">Will be split into ${smsCount} SMS messages</span>`);
+                $('#bulkCharCount').addClass('text-warning');
+            } else {
+                $('#bulkSmsCount').html('');
+                $('#bulkCharCount').removeClass('text-warning');
+            }
+        }
+
+        function updateBulkPreview() {
+            let message = $('#bulkMessageContent').val();
+
+            // Replace system placeholders
+            const now = new Date();
+            message = message.replace(/{{CompanyName}}/g, companyName);
+            message = message.replace(/{{Date}}/g, now.toLocaleDateString('en-KE'));
+            message = message.replace(/{{Time}}/g, now.toLocaleTimeString('en-KE'));
+
+            // Replace AGM placeholders if AGM details are filled
+            const agmDate = $('#bulkAgmDate').val();
+            const agmTime = $('#bulkAgmTime').val();
+            const agmVenue = $('#bulkAgmVenue').val();
+
+            if (agmDate) {
+                const formattedDate = formatDate(agmDate);
+                message = message.replace(/{{AGMDate}}/g, formattedDate);
+            }
+            if (agmTime) {
+                const formattedTime = formatTime(agmTime);
+                message = message.replace(/{{AGMTime}}/g, formattedTime);
+            }
+            if (agmVenue) {
+                message = message.replace(/{{AGMVenue}}/g, agmVenue);
+            }
+
+            // Show preview with sample data
+            message = message.replace(/{{FullName}}/g, 'John Doe');
+            message = message.replace(/{{MemberNo}}/g, 'M001234');
+            message = message.replace(/{{PhoneNo}}/g, '0712345678');
+            message = message.replace(/{{GIGName}}/g, 'Sample GIG');
+            message = message.replace(/{{GIGCode}}/g, 'GIG001');
+
+            $('#bulkPreviewContent').text(message || 'Message preview will appear here');
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString + 'T00:00:00');
+            const day = date.getDate();
+            const month = date.toLocaleString('default', { month: 'long' });
+            const year = date.getFullYear();
+
+            let suffix = 'th';
+            if (day === 1 || day === 21 || day === 31) suffix = 'st';
+            else if (day === 2 || day === 22) suffix = 'nd';
+            else if (day === 3 || day === 23) suffix = 'rd';
+
+            return `${day}${suffix} ${month} ${year}`;
+        }
+
+        function formatTime(timeString) {
+            if (!timeString) return '';
+            const [hours, minutes] = timeString.split(':');
+            const hour = parseInt(hours);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const hour12 = hour % 12 || 12;
+            return `${hour12}:${minutes} ${ampm}`;
+        }
+
+        function showBulkPlaceholders() {
+            $('#bulkPlaceholdersPanel').slideToggle();
+        }
+
+        function toggleBulkPlaceholders() {
+            $('#bulkPlaceholdersPanel').slideToggle();
+        }
+
+        function loadBulkTemplate() {
+            const templateCode = $('#bulkTemplateSelect').val();
+            if (templateCode) {
+                const selectedOption = $('#bulkTemplateSelect option:selected');
+                const content = selectedOption.data('content');
+                const agmDate = selectedOption.data('agmdate');
+                const agmTime = selectedOption.data('agmtime');
+                const agmVenue = selectedOption.data('agmvenue');
+
+                if (content) {
+                    $('#bulkMessageContent').val(content);
+
+                    // Check if it's an AGM template
+                    if (templateCode === 'AGM_NOTIFICATION' || content.includes('{{AGMDate}}')) {
+                        $('#bulkAgmDetailsSection').show();
+
+                        // Set AGM values from template
+                        if (agmDate) $('#bulkAgmDate').val(agmDate);
+                        if (agmTime) $('#bulkAgmTime').val(agmTime);
+                        if (agmVenue) $('#bulkAgmVenue').val(agmVenue);
+                    } else {
+                        $('#bulkAgmDetailsSection').hide();
+                    }
+
+                    updateBulkCharCount();
+                    updateBulkPreview();
+                }
+            } else {
+                $('#bulkAgmDetailsSection').hide();
+            }
+        }
+
+        function applyBulkAGMDetails() {
+            const agmDate = $('#bulkAgmDate').val();
+            const agmTime = $('#bulkAgmTime').val();
+            const agmVenue = $('#bulkAgmVenue').val();
+
+            if (!agmDate && !agmTime && !agmVenue) {
+                showToast('warning', 'Please enter AGM details first');
+                return;
+            }
+
+            let message = $('#bulkMessageContent').val();
+
+            if (agmDate) {
+                const formattedDate = formatDate(agmDate);
+                message = message.replace(/{{AGMDate}}/g, formattedDate);
+            }
+            if (agmTime) {
+                const formattedTime = formatTime(agmTime);
+                message = message.replace(/{{AGMTime}}/g, formattedTime);
+            }
+            if (agmVenue) {
+                message = message.replace(/{{AGMVenue}}/g, agmVenue);
+            }
+
+            $('#bulkMessageContent').val(message);
+            updateBulkCharCount();
+            updateBulkPreview();
+            showToast('success', 'AGM details applied to message');
+        }
+
+        function clearBulkAGMFields() {
+            $('#bulkAgmDate').val('');
+            $('#bulkAgmTime').val('');
+            $('#bulkAgmVenue').val('');
+            showToast('info', 'AGM fields cleared');
+        }
+
+        function updateReview() {
+            const valid = recipientsList.filter(r => isValidPhone(r.phoneNumber)).length;
+            const invalid = recipientsList.length - valid;
+            $('#reviewTotal').text(recipientsList.length);
+            $('#reviewValid').text(valid);
+            $('#reviewInvalid').text(invalid);
+
+            const message = $('#bulkMessageContent').val();
+            const messageType = $('#bulkMessageType').val();
+            const reference = $('#bulkReference').val();
+            const costPerSms = 0.50;
+            const smsCount = Math.ceil(message.length / 160) || 1;
+            const totalCost = (recipientsList.length * smsCount * costPerSms).toFixed(2);
+
+            let preview = message;
+            preview = preview.replace(/{{FullName}}/g, '[Member Name]');
+            preview = preview.replace(/{{MemberNo}}/g, '[Member No]');
+            preview = preview.replace(/{{PhoneNo}}/g, '[Phone No]');
+            preview = preview.replace(/{{CompanyName}}/g, companyName);
+            preview = preview.replace(/{{GIGName}}/g, '[GIG Name]');
+            preview = preview.replace(/{{GIGCode}}/g, '[GIG Code]');
+            preview = preview.replace(/{{Date}}/g, new Date().toLocaleDateString('en-KE'));
+            preview = preview.replace(/{{Time}}/g, new Date().toLocaleTimeString('en-KE'));
+
+            // Replace AGM placeholders if present
+            const agmDate = $('#bulkAgmDate').val();
+            const agmTime = $('#bulkAgmTime').val();
+            const agmVenue = $('#bulkAgmVenue').val();
+
+            if (agmDate) preview = preview.replace(/{{AGMDate}}/g, formatDate(agmDate));
+            if (agmTime) preview = preview.replace(/{{AGMTime}}/g, formatTime(agmTime));
+            if (agmVenue) preview = preview.replace(/{{AGMVenue}}/g, agmVenue);
+
+            $('#reviewMessagePreview').text(preview || '-');
+            $('#reviewMessageType').text(messageType);
+            $('#reviewReference').text(reference || 'N/A');
+            $('#reviewCost').text(totalCost);
+        }
+
+        function viewRecipientsList() {
+            const tbody = $('#recipientsModalBody');
+            tbody.empty();
+
+            if (recipientsList.length === 0) {
+                tbody.html('<tr><td colspan="4" class="text-center">No recipients added</td></tr>');
+            } else {
+                recipientsList.forEach(recipient => {
+                    const isValid = isValidPhone(recipient.phoneNumber);
+                    tbody.append(`
+                        <tr>
+                            <td>${escapeHtml(recipient.phoneNumber)}</td>
+                            <td>${escapeHtml(recipient.recipientName || '-')}</td>
+                            <td>${escapeHtml(recipient.gigName || '-')}</td>
+                            <td>${isValid ? '<span class="badge bg-success">Valid</span>' : '<span class="badge bg-danger">Invalid</span>'}</td>
+                        </tr>
+                    `);
+                });
+            }
+            $('#recipientsModal').modal('show');
+        }
+
+        // GIG Functions
+        async function loadGIGCounts() {
+            try {
+                const response = await fetch('/Sms/GetGIGMemberCounts');
+                const data = await response.json();
+
+                if (data.success) {
+                    data.counts.forEach(gig => {
+                        $(`#gigCount_${gig.id}`).text(gig.count);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading GIG counts:', error);
+                $('.gig-checkbox').each(function() {
+                    const id = $(this).data('gigid');
+                    $(`#gigCount_${id}`).text('0');
+                });
+            }
+        }
+
+        function selectAllGIGs() {
+            $('.gig-checkbox').prop('checked', true);
+        }
+
+        function deselectAllGIGs() {
+            $('.gig-checkbox').prop('checked', false);
+        }
+
+        async function loadGIGMembers() {
+            const selectedGIGs = [];
+            $('.gig-checkbox:checked').each(function() {
+                selectedGIGs.push($(this).data('gigid'));
+            });
+
+            if (selectedGIGs.length === 0) {
+                showToast('warning', 'Please select at least one GIG');
+                return;
+            }
+
+            $('#gigResultsCount').text('Loading...');
+
+            try {
+                const response = await fetch('/Sms/GetGIGMembers', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify({ gigIds: selectedGIGs })
+                });
+
+                const data = await response.json();
+                if (data.success && data.members) {
+                    let added = 0;
+                    data.members.forEach(member => {
+                        if (member.phoneNo && isValidPhone(member.phoneNo)) {
+                            const exists = recipientsList.some(r => r.phoneNumber === member.phoneNo);
+                            if (!exists) {
+                                recipientsList.push({
+                                    phoneNumber: member.phoneNo,
+                                    recipientName: member.fullName || member.surname,
+                                    gigName: member.gigName,
+                                    message: null
+                                });
+                                added++;
+                            }
+                        }
+                    });
+                    $('#gigResultsCount').text(`${added} members added from selected GIGs`);
+                    updateRecipientsSummary();
+                    if (added > 0) {
+                        showToast('success', `Added ${added} members to recipient list`);
+                    } else {
+                        showToast('info', 'No new members found in selected GIGs');
+                    }
+                } else {
+                    showToast('error', data.message || 'Error loading GIG members');
+                    $('#gigResultsCount').text('Error');
+                }
+            } catch (error) {
+                console.error('Error loading GIG members:', error);
+                showToast('error', 'Error loading GIG members');
+                $('#gigResultsCount').text('Error');
+            }
+        }
+
+        // Filter Members Function
+        async function filterMembers() {
+            const filters = {
+                membershipType: $('#filterMembershipType').val(),
+                status: $('#filterStatus').val(),
+                department: $('#filterDepartment').val(),
+                station: $('#filterStation').val()
+            };
+
+            $('#filterResultsCount').text('Searching...');
+
+            try {
+                const response = await fetch('/Sms/FilterMembers', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify(filters)
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    if (data.members && data.members.length > 0) {
+                        filteredMembersList = data.members;
+                        $('#filterResultsCount').text(`${data.members.length} members found`);
+                        renderFilterResults(data.members);
+                        $('#filterResults').show();
+                    } else {
+                        $('#filterResultsCount').text('0 members found');
+                        $('#filterResults').hide();
+                        showToast('info', data.message || 'No members found matching the criteria');
+                    }
+                } else {
+                    showToast('error', data.message || 'Error filtering members');
+                    $('#filterResultsCount').text('Error');
+                }
+            } catch (error) {
+                console.error('Error filtering members:', error);
+                showToast('error', 'Error filtering members. Please check your connection.');
+                $('#filterResultsCount').text('Error');
+            }
+        }
+
+        function renderFilterResults(members) {
+            const tbody = $('#filterResultsBody');
+            tbody.empty();
+
+            if (members && members.length > 0) {
+                members.forEach(member => {
+                    tbody.append(`
+                        <tr>
+                            <td><input type="checkbox" class="memberCheckbox" value="${member.memberNo}" data-phone="${member.phoneNo}" data-name="${member.fullName || member.surname}" /></td>
+                            <td>${escapeHtml(member.memberNo)}</td>
+                            <td>${escapeHtml(member.fullName || member.surname || 'N/A')}</td>
+                            <td>${escapeHtml(member.phoneNo || 'N/A')}</td>
+                        </tr>
+                    `);
+                });
+            } else {
+                tbody.append('<tr><td colspan="4" class="text-center">No members found</td></tr>');
+            }
+        }
+
+        function toggleSelectAllFiltered() {
+            const isChecked = $('#selectAllFiltered').is(':checked');
+            $('.memberCheckbox').prop('checked', isChecked);
+        }
+
+        function addSelectedFiltered() {
+            let added = 0;
+            $('.memberCheckbox:checked').each(function() {
+                const phoneNumber = $(this).data('phone');
+                const recipientName = $(this).data('name');
+
+                if (phoneNumber && isValidPhone(phoneNumber)) {
+                    const exists = recipientsList.some(r => r.phoneNumber === phoneNumber);
+                    if (!exists) {
+                        recipientsList.push({
+                            phoneNumber: phoneNumber,
+                            recipientName: recipientName,
+                            gigName: null,
+                            message: null
+                        });
+                        added++;
+                    }
+                }
+            });
+
+            updateRecipientsSummary();
+            if (added > 0) {
+                showToast('success', `Added ${added} members to recipient list`);
+            } else {
+                showToast('info', 'No new members selected');
+            }
+        }
+
+        // Group Members Function - FIXED to use Sms controller
+        async function loadGroupMembers() {
+            const groups = [];
+            if ($('#groupAllActive').is(':checked')) groups.push('allActive');
+            if ($('#groupNewMembers').is(':checked')) groups.push('newMembers');
+            if ($('#groupLoanHolders').is(':checked')) groups.push('loanHolders');
+            if ($('#groupNoLoans').is(':checked')) groups.push('noLoans');
+
+            if (groups.length === 0) {
+                showToast('warning', 'Please select at least one group');
+                return;
+            }
+
+            $('#groupResultsCount').text('Loading...');
+
+            try {
+                const response = await fetch('/Sms/GetMembersByGroups', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify({ groups: groups })
+                });
+
+                const data = await response.json();
+                if (data.success && data.members) {
+                    let added = 0;
+                    data.members.forEach(member => {
+                        if (member.phoneNo && isValidPhone(member.phoneNo)) {
+                            const exists = recipientsList.some(r => r.phoneNumber === member.phoneNo);
+                            if (!exists) {
+                                recipientsList.push({
+                                    phoneNumber: member.phoneNo,
+                                    recipientName: member.fullName || member.surname,
+                                    gigName: null,
+                                    message: null
+                                });
+                                added++;
+                            }
+                        }
+                    });
+                    $('#groupResultsCount').text(`${added} members added from selected groups`);
+                    updateRecipientsSummary();
+                    if (added > 0) {
+                        showToast('success', `Added ${added} members to recipient list`);
+                    } else {
+                        showToast('info', 'No new members found in selected groups');
+                    }
+                } else {
+                    showToast('error', data.message || 'Error loading group members');
+                    $('#groupResultsCount').text('Error');
+                }
+            } catch (error) {
+                console.error('Error loading group members:', error);
+                showToast('error', 'Error loading group members');
+                $('#groupResultsCount').text('Error');
+            }
+        }
+
+        function downloadSample() {
+            const sampleData = 'PhoneNumber,RecipientName\n0712345678,John Doe\n0712345679,Jane Smith\n0723456789,Peter Omondi';
+            const blob = new Blob([sampleData], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sample_recipients.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Form submission
+        $('#bulkSmsForm').on('submit', function(e) {
+            e.preventDefault();
+
+            const message = $('#bulkMessageContent').val();
+            const messageType = $('#bulkMessageType').val();
+            const reference = $('#bulkReference').val();
+            const agmDate = $('#bulkAgmDate').val();
+            const agmTime = $('#bulkAgmTime').val();
+            const agmVenue = $('#bulkAgmVenue').val();
+
+            if (!message) {
+                showToast('error', 'Please enter a message');
+                return;
+            }
+
+            if (recipientsList.length === 0) {
+                showToast('error', 'Please add at least one recipient');
+                return;
+            }
+
+            const messages = recipientsList
+                .filter(r => isValidPhone(r.phoneNumber))
+                .map(recipient => {
+                    let personalizedMessage = message;
+
+                    if (recipient.recipientName) {
+                        personalizedMessage = personalizedMessage.replace(/{{FullName}}/g, recipient.recipientName);
+                    }
+                    if (recipient.gigName) {
+                        personalizedMessage = personalizedMessage.replace(/{{GIGName}}/g, recipient.gigName);
+                    }
+
+                    personalizedMessage = personalizedMessage.replace(/{{PhoneNo}}/g, recipient.phoneNumber);
+                    personalizedMessage = personalizedMessage.replace(/{{CompanyName}}/g, companyName);
+
+                    const now = new Date();
+                    personalizedMessage = personalizedMessage.replace(/{{Date}}/g, now.toLocaleDateString('en-KE'));
+                    personalizedMessage = personalizedMessage.replace(/{{Time}}/g, now.toLocaleTimeString('en-KE'));
+
+                    if (agmDate) {
+                        personalizedMessage = personalizedMessage.replace(/{{AGMDate}}/g, formatDate(agmDate));
+                    }
+                    if (agmTime) {
+                        personalizedMessage = personalizedMessage.replace(/{{AGMTime}}/g, formatTime(agmTime));
+                    }
+                    if (agmVenue) {
+                        personalizedMessage = personalizedMessage.replace(/{{AGMVenue}}/g, agmVenue);
+                    }
+
+                    return {
+                        phoneNumber: recipient.phoneNumber,
+                        recipientName: recipient.recipientName,
+                        message: personalizedMessage,
+                        messageType: messageType,
+                        reference: reference
+                    };
+                });
+
+            if (messages.length === 0) {
+                showToast('error', 'No valid phone numbers found');
+                return;
+            }
+
+            const totalCost = (messages.length * Math.ceil(message.length / 160) * 0.50).toFixed(2);
+            const confirmMessage = `You are about to send ${messages.length} SMS messages.\n\nEstimated cost: KES ${totalCost}\n\nAre you sure you want to proceed?`;
+
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+
+            const submitBtn = $('#bulkSubmitBtn');
+            const originalText = submitBtn.html();
+            submitBtn.prop('disabled', true);
+            submitBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Sending...');
+
+            fetch('/Sms/BulkSend', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                body: JSON.stringify({ messages: messages })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('success', data.message || `Bulk SMS sent successfully!`);
+                    setTimeout(() => {
+                        window.location.href = '/Sms/Index';
+                    }, 2000);
+                } else {
+                    showToast('error', data.message || 'Failed to send bulk SMS');
+                    submitBtn.prop('disabled', false);
+                    submitBtn.html(originalText);
+                }
+            })
+            .catch(error => {
+                console.error('Error sending bulk SMS:', error);
+                showToast('error', 'Error sending bulk SMS. Please try again.');
+                submitBtn.prop('disabled', false);
+                submitBtn.html(originalText);
+            });
+        });
+
+        function showToast(type, message) {
+            const toastHtml = `
+                <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'danger'} border-0 position-fixed bottom-0 end-0 m-3" role="alert" style="z-index: 9999;">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'x-circle'} me-2"></i>
+                            ${escapeHtml(message)}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `;
+            $('body').append(toastHtml);
+            const toast = $('.toast').last();
+            const bsToast = new bootstrap.Toast(toast[0]);
+            bsToast.show();
+            toast.on('hidden.bs.toast', function() { $(this).remove(); });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+    </script>
+}

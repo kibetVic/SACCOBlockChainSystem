@@ -1,0 +1,134 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@model Wallet
+@{
+}
+
+<div class="container mt-4">
+    <div class="card shadow">
+        
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                Wallet Details
+            </h4>
+        </div>
+
+        <div class="card-body">
+
+            <!-- Member Information -->
+            <h5 class="border-bottom pb-2 mb-3">
+                Member Information
+            </h5>
+
+            <div class="row">
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Member Number</label>
+                    <div class="form-control bg-light">
+                        @Model.Member?.MemberNo
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Surname</label>
+                    <div class="form-control bg-light">
+                        @Model.Member?.Surname
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Full Names</label>
+                    <div class="form-control bg-light">
+                        @Model.Member?.OtherNames
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Phone Number</label>
+                    <div class="form-control bg-light">
+                        @Model.Member?.PhoneNo
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Email</label>
+                    <div class="form-control bg-light">
+                        @Model.Member?.Email
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Wallet Information -->
+            <h5 class="border-bottom pb-2 mb-3 mt-4">
+                Wallet Information
+            </h5>
+
+            <div class="row">
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Wallet Address</label>
+                    <div class="form-control bg-light">
+                        @Model.Address
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Balance</label>
+                    <div class="form-control bg-light">
+                        @Model.Balance.ToString("N2")
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Capital Balance</label>
+                    <div class="form-control bg-light">
+                        @Model.CapitalBalance.ToString("N2")
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Deposit Balance</label>
+                    <div class="form-control bg-light">
+                        @Model.DepositBalance.ToString("N2")
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Created At</label>
+                    <div class="form-control bg-light">
+                        @Model.CreatedAt.ToString("dd MMM yyyy HH:mm")
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold">Last Activity</label>
+                    <div class="form-control bg-light">
+                        @(Model.LastActivity?.ToString("dd MMM yyyy HH:mm") ?? "No activity")
+                    </div>
+                </div>
+
+                <div class="col-md-12 mb-3">
+                    <label class="fw-bold">Public Key</label>
+                    <textarea class="form-control" rows="3" readonly>@Model.PublicKey</textarea>
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="card-footer text-end">
+            <a asp-action="Index" class="btn btn-secondary">
+                Back
+            </a>
+
+            <a asp-action="Edit"
+               asp-route-id="@Model.Address"
+               class="btn btn-primary">
+                Edit
+            </a>
+        </div>
+
+    </div>
+</div>

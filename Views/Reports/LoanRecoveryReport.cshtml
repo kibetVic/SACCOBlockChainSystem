@@ -1,0 +1,250 @@
+@model SACCOBlockChainSystem.Models.ViewModels.LoanRecoveryIndexViewModel
+@{
+    ViewData["Title"] = "Loan Recovery Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    .loan-type-header {
+        background-color: #17a2b8;
+        color: white;
+        padding: 8px 12px;
+        margin-top: 15px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+        font-weight: bold;
+    }
+    .subtotal-row {
+        background-color: #e9ecef;
+        font-weight: bold;
+    }
+    .grand-total-row {
+        background-color: #343a40;
+        color: white;
+        font-weight: bold;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0"><i class="fas fa-hand-holding-usd me-2"></i>Loan Recovery Report</h4>
+        </div>
+        <div class="card-body">
+            <!-- Filter Form -->
+            <form method="post" class="mb-4">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Start Date</label>
+                        <input type="date" name="startDate" class="form-control" value="@Model.StartDate.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">End Date</label>
+                        <input type="date" name="endDate" class="form-control" value="@Model.EndDate.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i>Generate Report
+                            </button>
+                            <button type="button" id="exportPdfBtn" class="btn btn-danger">
+                                <i class="fas fa-file-pdf me-1"></i>Export to PDF
+                            </button>
+                            <button type="button" id="exportExcelBtn" class="btn btn-success">
+                                <i class="fas fa-file-excel me-1"></i>Export to Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            @if (Model.HasData)
+            {
+                <!-- Report Header -->
+                <div class="text-center mb-4">
+                    <h4>@Model.CompanyName.ToUpper()</h4>
+                    <h5>LOAN RECOVERY REPORT</h5>
+                    <p>Period: @Model.StartDate.ToString("dd/MM/yyyy") - @Model.EndDate.ToString("dd/MM/yyyy")</p>
+                    <p>Printed By: @Model.PrintedBy On: @Model.GeneratedOn.ToString("dd-MMM-yyyy HH:mm")</p>
+                </div>
+
+                <!-- Statistics Summary Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="fas fa-tags"></i> Loan Types</h5>
+                                <h3>@Model.TotalLoanTypes.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="fas fa-exchange-alt"></i> Transactions</h5>
+                                <h3>@Model.TotalTransactions.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="fas fa-money-bill-wave"></i> Total Recovered</h5>
+                                <h3>@Model.TotalAmount.ToString("N2")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-secondary text-white">
+                            <div class="card-body text-center">
+                                <h5><i class="fas fa-chart-line"></i> Total Principal</h5>
+                                <h3>@Model.TotalPrincipal.ToString("N2")</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loan Recovery Tables Grouped by Loan Type -->
+                @foreach (var group in Model.Groups)
+                {
+                    <div class="loan-type-header">
+                        @group.LoanType (@group.LoanCode)
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Transaction Date</th>
+                                    <th>MemberNo</th>
+                                    <th>LoanNo</th>
+                                    <th>Names</th>
+                                    <th class="text-end">Principal</th>
+                                    <th class="text-end">Interest</th>
+                                    <th class="text-end">Amount</th>
+                                    <th class="text-end">Loan Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var repayment in group.Repayments)
+                                {
+                                    <tr>
+                                        <td>@(repayment.TransactionDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                        <td>@repayment.MemberNo</td>
+                                        <td>@repayment.LoanNo</td>
+                                        <td>@repayment.Names</td>
+                                        <td class="text-end">@repayment.Principal.ToString("N2")</td>
+                                        <td class="text-end">@repayment.Interest.ToString("N2")</td>
+                                        <td class="text-end">@repayment.Amount.ToString("N2")</td>
+                                        <td class="text-end">@repayment.LoanBalance.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="subtotal-row">
+                                <tr>
+                                    <td colspan="4" class="text-end">Subtotal (@group.LoanType):</td>
+                                    <td class="text-end">@group.TotalPrincipal.ToString("N2")</td>
+                                    <td class="text-end">@group.TotalInterest.ToString("N2")</td>
+                                    <td class="text-end">@group.TotalAmount.ToString("N2")</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+
+                <!-- Grand Total -->
+                <div class="table-responsive mt-4">
+                    <table class="table table-bordered">
+                        <tfoot class="grand-total-row">
+                            <tr>
+                                <td colspan="4" class="text-end">GRAND TOTAL:</td>
+                                <td class="text-end">@Model.TotalPrincipal.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalInterest.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalAmount.ToString("N2")</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Footer -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="small text-muted">
+                            <i class="fas fa-calendar-alt"></i>
+                            Generated By: @User.Identity.Name on @DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle me-2"></i>
+                    @(ViewBag.Message ?? "No repayments found for the selected date range. Please select a date range and click 'Generate Report'.")
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
+
+    <script>
+        $(document).ready(function() {
+            // Export to Excel
+            $('#exportExcelBtn').click(function() {
+                var startDate = $('input[name="startDate"]').val();
+                var endDate = $('input[name="endDate"]').val();
+                if (!startDate || !endDate) {
+                    alert('Please select both start and end dates first');
+                    return;
+                }
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("ExportLoanRecoveryToExcel", "LoanReport")'
+                });
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'startDate',
+                    'value': startDate
+                }));
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'endDate',
+                    'value': endDate
+                }));
+                form.appendTo('body').submit();
+            });
+
+            // Export to PDF
+            $('#exportPdfBtn').click(function() {
+                var startDate = $('input[name="startDate"]').val();
+                var endDate = $('input[name="endDate"]').val();
+                if (!startDate || !endDate) {
+                    alert('Please select both start and end dates first');
+                    return;
+                }
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("ExportLoanRecoveryToPdf", "LoanReport")'
+                });
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'startDate',
+                    'value': startDate
+                }));
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'endDate',
+                    'value': endDate
+                }));
+                form.appendTo('body').submit();
+            });
+        });
+    </script>
+}

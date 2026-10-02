@@ -1,0 +1,278 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.ActiveLoansIndexViewModel
+@{
+    ViewData["Title"] = "Active Loans Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <a asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary me-3">
+                        <i class="bi bi-arrow-left"></i> Back to Dashboard
+                    </a>
+                    <h2 class="page-title mb-0">
+                        <i class="bi bi-clock-history me-2"></i>Active Loans Report
+                    </h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- Filter Form -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-funnel me-2"></i>Filter Report
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="post" id="reportForm" asp-action="ActiveLoansReport">
+                @Html.AntiForgeryToken()
+                <div class="row align-items-end">
+                    <div class="col-md-4 mb-3">
+                        <label for="asAtDate" class="form-label fw-bold">As At Date *</label>
+                        <input type="date" class="form-control" id="asAtDate" name="asAtDate"
+                               value="@Model.AsAtDate.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-4 mb-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search me-2"></i>Generate Report
+                        </button>
+                        @if (Model.HasData)
+                        {
+                            <button type="button" class="btn btn-success" onclick="exportExcel()">
+                                <i class="bi bi-file-earmark-excel me-2"></i>Excel
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="exportPdf()">
+                                <i class="bi bi-file-earmark-pdf me-2"></i>PDF
+                            </button>
+                        }
+                    </div>
+                    <div class="col-md-4 text-end">
+                        @if (Model.HasData)
+                        {
+                            <span class="badge bg-warning fs-6">
+                                <i class="bi bi-file-earmark-text me-1"></i>
+                                @Model.TotalLoans Active Loan(s)
+                            </span>
+                        }
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Report Results -->
+    @if (Model.HasData)
+    {
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Total Active Loans</h6>
+                        <h2 class="mb-0">@Model.TotalLoans</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Total Amount Issued</h6>
+                        <h2 class="mb-0">@Model.TotalAmountIssued.ToString("N0")</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Total Balance</h6>
+                        <h2 class="mb-0">@Model.TotalLoanBalance.ToString("N0")</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Overdue Loans</h6>
+                        <h2 class="mb-0">@Model.Loans.Count(l => l.DaysOverdue > 0)</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-table me-2"></i>Active Loans List
+                    </h5>
+                    <small class="text-muted">As at: @Model.AsAtDate.ToString("dd/MM/yyyy HH:mm")</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="activeLoansTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>MemberNo</th>
+                                <th>Names</th>
+                                <th>LoanNo</th>
+                                <th>Loan Type</th>
+                                <th>Gender</th>
+                                <th>Amount Issued</th>
+                                <th>Balance</th>
+                                <th>Unpaid Interest</th>
+                                <th>Days Overdue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var loan in Model.Loans)
+                            {
+                                var statusClass = loan.DaysOverdue == 0 ? "success" :
+                                loan.DaysOverdue <= 30 ? "info" :
+                                loan.DaysOverdue <= 60 ? "warning" :
+                                loan.DaysOverdue <= 90 ? "orange" :
+                                loan.DaysOverdue <= 180 ? "danger" : "dark";
+
+                                <tr>
+                                    <td><strong>@loan.MemberNo</strong></td>
+                                    <td>@loan.Names</td>
+                                    <td>@loan.LoanNo</td>
+                                    <td>@loan.LoanType</td>
+                                    <td>
+                                        <span class="badge @(loan.Gender == "FEMALE" ? "bg-pink" : loan.Gender == "MALE" ? "bg-blue" : "bg-secondary")">
+                                            @loan.Gender
+                                        </span>
+                                    </td>
+                                    <td>@loan.AmountIssued.ToString("N0")</td>
+                                    <td>@loan.CurrentBalance.ToString("N0")</td>
+                                    <td>@loan.UnpaidInterest.ToString("N0")</td>
+                                    <td>
+                                        <span class="badge bg-@statusClass">
+                                            @loan.DaysOverdue days
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else if (ViewBag.Message != null)
+    {
+        <div class="alert alert-info text-center py-5">
+            <i class="bi bi-info-circle fs-1"></i>
+            <h5 class="mt-3">@ViewBag.Message</h5>
+            <p class="mb-0">Select a date and click Generate Report to view active loans.</p>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info text-center py-5">
+            <i class="bi bi-calendar-date fs-1"></i>
+            <h5 class="mt-3">No Report Generated Yet</h5>
+            <p class="mb-0">Select a date and click Generate Report to view active loans.</p>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            if ($.fn.DataTable) {
+                $('#activeLoansTable').DataTable({
+                    pageLength: 25,
+                    ordering: true,
+                    responsive: true,
+                    language: {
+                        lengthMenu: "Show _MENU_ loans per page",
+                        info: "Showing _START_ to _END_ of _TOTAL_ loans",
+                        infoEmpty: "No loans found",
+                        zeroRecords: "No matching loans found"
+                    }
+                });
+            }
+        });
+
+        function exportExcel() {
+            var asAtDate = $('#asAtDate').val();
+            if (!asAtDate) {
+                showToast('error', 'Please select a date first.');
+                return;
+            }
+            window.location.href = '/LoanReport/ExportActiveLoansToExcel?asAtDate=' + asAtDate;
+        }
+
+        function exportPdf() {
+            var asAtDate = $('#asAtDate').val();
+            if (!asAtDate) {
+                showToast('error', 'Please select a date first.');
+                return;
+            }
+            window.location.href = '/LoanReport/ExportActiveLoansToPdf?asAtDate=' + asAtDate;
+        }
+
+        function showToast(type, message) {
+            var toastHtml = `
+                <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 position-fixed bottom-0 end-0 m-3" role="alert" style="z-index: 1100;">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `;
+            $('body').append(toastHtml);
+            var toast = $('.toast').last();
+            var bsToast = new bootstrap.Toast(toast[0], { autohide: true, delay: 5000 });
+            bsToast.show();
+        }
+    </script>
+}
+
+@section Styles {
+    <style>
+        .bg-pink {
+            background-color: #e83e8c;
+            color: white;
+        }
+
+        .bg-blue {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .bg-orange {
+            background-color: #fd7e14;
+            color: white;
+        }
+
+        .bg-dark {
+            background-color: #343a40;
+            color: white;
+        }
+
+        .card {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .table-hover tbody tr:hover {
+            background-color: rgba(0, 174, 239, 0.05);
+        }
+    </style>
+}

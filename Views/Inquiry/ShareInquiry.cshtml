@@ -1,0 +1,949 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.ShareInquiryResponseDTO
+
+@{
+    ViewData["Title"] = "Share Inquiry";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var hasResults = Model != null && Model.MemberNo != null;
+}
+
+<!-- Error Messages -->
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<!-- Search Form Card -->
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h3 class="card-title">
+            <i class="bi bi-pie-chart-fill"></i> Share Balance Inquiry
+        </h3>
+        <div class="card-tools">
+            <button type="button" class="btn btn-tool text-white" data-card-widget="collapse">
+                <i class="bi bi-dash"></i>
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- Member Search Section -->
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <label class="fw-bold">Search Member</label>
+                <div class="input-group">
+                    <input type="text" id="searchInput" class="form-control form-control-lg"
+                           placeholder="Search by Member Number, Name, ID Number, or Phone Number..." />
+                    <button type="button" class="btn btn-primary" onclick="searchMembers()">
+                        <i class="bi bi-search"></i> Search
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="clearSearch()">
+                        <i class="bi bi-x-lg"></i> Clear
+                    </button>
+                </div>
+                <small class="text-muted">Enter at least 3 characters to search</small>
+            </div>
+        </div>
+
+        <!-- Search Results -->
+        <div id="searchResults" style="display: none;" class="mb-3">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Select</th>
+                            <th>Member No</th>
+                            <th>Full Name</th>
+                            <th>ID Number</th>
+                            <th>Phone Number</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="searchResultsBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="searchLoading" style="display: none;" class="text-center p-3">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Searching for members...</p>
+        </div>
+
+        <!-- Selected Member Display -->
+        <div id="selectedMemberCard" style="display: @(hasResults ? "block" : "none");" class="mb-3">
+            <div class="alert alert-success">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-check-circle-fill"></i>
+                        <strong>Selected Member:</strong>
+                        <span id="selectedMemberName">@(hasResults? Model.MemberName: "")</span>
+                        <br />
+                        <small>
+                            <span id="selectedMemberNoDisplay">@(hasResults? Model.MemberNo: "")</span> |
+                            ID: <span id="selectedMemberIdNo">@(hasResults? Model.MemberIdNo: "N/A")</span> |
+                            Phone: <span id="selectedMemberPhone">@(hasResults? Model.MemberPhone: "N/A")</span>
+                        </small>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-primary me-1" onclick="inquireShares()">
+                            <i class="bi bi-search"></i> Inquire Shares
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearSelectedMember()">
+                            <i class="bi bi-arrow-left"></i> Change
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <input type="hidden" id="selectedMemberNo" name="memberNo" value="@(hasResults? Model.MemberNo: "")" />
+    </div>
+</div>
+
+<!-- Results Section -->
+<div id="shareResultsContainer">
+    @if (hasResults)
+    {
+        <div id="shareResults">
+            @await Html.PartialAsync("_ShareInquiryResults", Model)
+        </div>
+    }
+    else
+    {
+        <div id="shareResults" style="display: none;"></div>
+    }
+</div>
+
+@section Scripts {
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        let selectedMemberData = null;
+        let isMemberSelected = @(hasResults ? "true" : "false");
+        let isLoading = false;
+
+        $(document).ready(function() {
+            // Initialize DataTables for tables with many rows
+            @if (hasResults)
+            {
+                    <text>
+                    try {
+                        if ($.fn.DataTable.isDataTable('#allTransactionsTable')) {
+                            $('#allTransactionsTable').DataTable().destroy();
+                        }
+                        $('#allTransactionsTable').DataTable({
+                            "order": [[0, "desc"]],
+                            "pageLength": 25,
+                            "responsive": true,
+                            "language": {
+                                "search": "Search Transactions:"
+                            }
+                        });
+
+                        if ($.fn.DataTable.isDataTable('#summaryTable')) {
+                            $('#summaryTable').DataTable().destroy();
+                        }
+                        $('#summaryTable').DataTable({
+                            "pageLength": 10,
+                            "responsive": true,
+                            "ordering": true
+                        });
+                    } catch (e) {
+                        console.log('DataTable initialization error:', e);
+                    }
+                    </text>
+            }
+
+            // Auto-search when typing (debounced)
+            let searchTimeout;
+            $('#searchInput').on('input', function() {
+                clearTimeout(searchTimeout);
+                const searchTerm = $(this).val().trim();
+                if (searchTerm.length >= 3) {
+                    searchTimeout = setTimeout(function() {
+                        searchMembers();
+                    }, 500);
+                } else if (searchTerm.length === 0) {
+                    clearSearch();
+                }
+            });
+
+            // Search input enter key
+            $('#searchInput').on('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchMembers();
+                }
+            });
+
+            // If member is pre-selected (from URL or model), load data
+            @if (hasResults)
+            {
+                    <text>
+                    // Data is already loaded from server
+                    console.log('Pre-loaded member data available');
+                    </text>
+            }
+            else
+            {
+                    <text>
+                    // Check if memberNo is in URL query string
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const memberNoParam = urlParams.get('memberNo');
+                    if (memberNoParam) {
+                        $('#selectedMemberNo').val(memberNoParam);
+                        selectMember(memberNoParam);
+                    }
+                    </text>
+            }
+        });
+
+        async function searchMembers() {
+            const searchTerm = $('#searchInput').val().trim();
+            if (searchTerm.length < 3) {
+                Swal.fire('Warning', 'Please enter at least 3 characters to search', 'warning');
+                return;
+            }
+
+            $('#searchLoading').show();
+            $('#searchResults').hide();
+            $('#searchResultsBody').html('');
+
+            try {
+                const response = await fetch(`/api/Member/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    $('#searchResultsBody').html(`<tr><td colspan="7" class="text-center text-danger">Error: ${errorData.message || 'Error searching members'}</td></tr>`);
+                    $('#searchResults').show();
+                    $('#searchLoading').hide();
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Search results:', data);
+
+                if (data.success && data.data && data.data.length > 0) {
+                    displaySearchResults(data.data);
+                } else {
+                    $('#searchResultsBody').html('<tr><td colspan="7" class="text-center text-warning">No members found matching your search</td></tr>');
+                    $('#searchResults').show();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                $('#searchResultsBody').html(`<tr><td colspan="7" class="text-center text-danger">Error searching members: ${error.message}</td></tr>`);
+                $('#searchResults').show();
+            } finally {
+                $('#searchLoading').hide();
+            }
+        }
+
+        function displaySearchResults(members) {
+            const tbody = $('#searchResultsBody');
+            tbody.empty();
+
+            members.forEach(member => {
+                const statusBadge = member.status == 1 ?
+                    '<span class="badge bg-success">Active</span>' :
+                    '<span class="badge bg-danger">Inactive</span>';
+
+                const fullName = (member.surname || '') + ' ' + (member.otherNames || '');
+                const phone = member.phoneNo || 'N/A';
+
+                const row = `
+                    <tr>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-success" onclick="selectMember('${member.memberNo}')">
+                                <i class="bi bi-check-lg"></i> Select
+                            </button>
+                        </td>
+                        <td><strong>${escapeHtml(member.memberNo)}</strong></td>
+                        <td>${escapeHtml(fullName.trim() || member.memberNo)}</td>
+                        <td>${escapeHtml(member.idno || 'N/A')}</td>
+                        <td>${escapeHtml(phone)}</td>
+                        <td>${escapeHtml(member.email || 'N/A')}</td>
+                        <td>${statusBadge}</td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            $('#searchResults').show();
+        }
+
+        async function selectMember(memberNo) {
+            if (isLoading) return;
+            isLoading = true;
+
+            try {
+                // First, get member details
+                const response = await fetch(`/api/Member/${memberNo}`);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    Swal.fire('Error', `Failed to fetch member details: ${response.status}`, 'error');
+                    isLoading = false;
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Member data:', data);
+
+                if (data.success && data.data) {
+                    selectedMemberData = data.data;
+                    isMemberSelected = true;
+
+                    $('#selectedMemberNo').val(memberNo);
+
+                    const fullName = (selectedMemberData.surname || '') + ' ' + (selectedMemberData.otherNames || '');
+                    $('#selectedMemberName').html(`<strong>${escapeHtml(fullName.trim() || memberNo)}</strong>`);
+                    $('#selectedMemberNoDisplay').html(memberNo);
+                    $('#selectedMemberIdNo').html(selectedMemberData.idno || 'N/A');
+                    $('#selectedMemberPhone').html(selectedMemberData.phoneNo || 'N/A');
+
+                    $('#selectedMemberCard').show();
+                    $('#searchResults').hide();
+                    $('#searchInput').val('');
+
+                    Swal.fire('Success', 'Member selected successfully!', 'success');
+
+                    // LOAD SHARE DATA VIA AJAX
+                    await loadShareDataAjax(memberNo);
+                } else {
+                    Swal.fire('Error', data.message || 'Failed to load member details', 'error');
+                }
+            } catch (error) {
+                console.error('Error selecting member:', error);
+                Swal.fire('Error', 'Error selecting member: ' + error.message, 'error');
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        async function loadShareDataAjax(memberNo) {
+            if (!memberNo) {
+                Swal.fire('Error', 'Please select a member first', 'error');
+                return;
+            }
+
+            // Show loading
+            $('#shareResults').html(`
+                <div class="text-center p-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading share information...</p>
+                </div>
+            `).show();
+
+            try {
+                // Fetch share data via API
+                const response = await fetch(`/api/Inquiry/share/${encodeURIComponent(memberNo)}`);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    $('#shareResults').html(`
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            Failed to load share information: ${response.status}
+                        </div>
+                    `);
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Share data:', data);
+
+                if (data.success && data.data) {
+                    displayShareResults(data.data);
+                } else {
+                    $('#shareResults').html(`
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            ${data.message || 'No share information found for this member'}
+                        </div>
+                    `);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                $('#shareResults').html(`
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        Error loading share information: ${error.message}
+                    </div>
+                `);
+            }
+        }
+
+        function displayShareResults(data) {
+            // Build HTML for share results
+            let html = buildShareResultsHtml(data);
+            $('#shareResults').html(html).show();
+
+            // Initialize DataTables
+            try {
+                if ($.fn.DataTable.isDataTable('#allTransactionsTable')) {
+                    $('#allTransactionsTable').DataTable().destroy();
+                }
+                $('#allTransactionsTable').DataTable({
+                    "order": [[0, "desc"]],
+                    "pageLength": 25,
+                    "responsive": true,
+                    "language": {
+                        "search": "Search Transactions:"
+                    }
+                });
+
+                if ($.fn.DataTable.isDataTable('#summaryTable')) {
+                    $('#summaryTable').DataTable().destroy();
+                }
+                $('#summaryTable').DataTable({
+                    "pageLength": 10,
+                    "responsive": true,
+                    "ordering": true
+                });
+            } catch (e) {
+                console.log('DataTable initialization error:', e);
+            }
+        }
+
+        function buildShareResultsHtml(data) {
+            // Build the HTML for share results
+            let html = `
+                <!-- Member Information Card -->
+                <div class="card mt-3">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="card-title mb-0">
+                            <i class="bi bi-person-badge"></i> Member Information
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="info-box bg-light">
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Member Number</span>
+                                        <span class="info-box-number">${escapeHtml(data.memberNo || 'N/A')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-box bg-light">
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Member Name</span>
+                                        <span class="info-box-number">${escapeHtml(data.memberName || 'N/A')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-box bg-light">
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Inquiry Date</span>
+                                        <span class="info-box-number">${new Date().toLocaleString()}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-box bg-light">
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Inquired By</span>
+                                        <span class="info-box-number">${escapeHtml(data.inquiredBy || 'SYSTEM')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Statistics Cards -->
+                <div class="row mt-3">
+                    <div class="col-md-3">
+                        <div class="small-box bg-info">
+                            <div class="inner">
+                                <h3>${formatCurrency(data.totalShareBalance || 0)}</h3>
+                                <p>Total Share Balance</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-pie-chart-fill"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-success">
+                            <div class="inner">
+                                <h3>${formatCurrency(data.totalShareCapital || 0)}</h3>
+                                <p>Share Capital</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-building"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-warning">
+                            <div class="inner">
+                                <h3>${formatCurrency(data.totalDeposits || 0)}</h3>
+                                <p>Deposits</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-cash-stack"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small-box bg-danger">
+                            <div class="inner">
+                                <h3>${formatCurrency(data.lockedForGuarantees || 0)}</h3>
+                                <p>Locked for Guarantees</p>
+                            </div>
+                            <div class="icon">
+                                <i class="bi bi-lock-fill"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="info-box bg-secondary">
+                            <div class="info-box-content">
+                                <span class="info-box-text">Available Shares</span>
+                                <span class="info-box-number">${formatCurrency(data.availableShares || 0)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-box bg-info">
+                            <div class="info-box-content">
+                                <span class="info-box-text">Total Share Types</span>
+                                <span class="info-box-number">${data.shareTypeSummaries ? data.shareTypeSummaries.length : 0}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            // Share Summary by Type
+            if (data.shareTypeSummaries && data.shareTypeSummaries.length > 0) {
+                html += `
+                    <div class="card mt-3">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-table"></i> Share Summary by Type
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover" id="summaryTable">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Share Code</th>
+                                            <th>Share Type</th>
+                                            <th class="text-end">Share Capital</th>
+                                            <th class="text-end">Deposits</th>
+                                            <th class="text-end">Total Shares</th>
+                                            <th class="text-end">Reg Fees</th>
+                                            <th class="text-end">Donations</th>
+                                            <th class="text-end">Loan Alloc</th>
+                                            <th class="text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+
+                data.shareTypeSummaries.forEach(shareType => {
+                    html += `
+                        <tr>
+                            <td>${escapeHtml(shareType.sharesCode || '')}</td>
+                            <td>${escapeHtml(shareType.sharesType || '')}</td>
+                            <td class="text-end">${formatCurrency(shareType.shareCapital || 0)}</td>
+                            <td class="text-end">${formatCurrency(shareType.deposits || 0)}</td>
+                            <td class="text-end fw-bold">${formatCurrency(shareType.totalShares || 0)}</td>
+                            <td class="text-end">${formatCurrency(shareType.regFees || 0)}</td>
+                            <td class="text-end">${formatCurrency(shareType.donations || 0)}</td>
+                            <td class="text-end">${formatCurrency(shareType.loanAllocations || 0)}</td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-sm btn-info" onclick="toggleTransactions('${shareType.sharesCode}')">
+                                    <i class="bi bi-list-ul"></i> View Transactions
+                                </button>
+                            </td>
+                        </tr>`;
+                });
+
+                html += `
+                                    </tbody>
+                                    <tfoot class="table-dark">
+                                        <tr>
+                                            <th colspan="2" class="text-end">Total:</th>
+                                            <th class="text-end">${formatCurrency(data.shareTypeSummaries.reduce((sum, s) => sum + (s.shareCapital || 0), 0))}</th>
+                                            <th class="text-end">${formatCurrency(data.shareTypeSummaries.reduce((sum, s) => sum + (s.deposits || 0), 0))}</th>
+                                            <th class="text-end">${formatCurrency(data.shareTypeSummaries.reduce((sum, s) => sum + (s.totalShares || 0), 0))}</th>
+                                            <th class="text-end">${formatCurrency(data.shareTypeSummaries.reduce((sum, s) => sum + (s.regFees || 0), 0))}</th>
+                                            <th class="text-end">${formatCurrency(data.shareTypeSummaries.reduce((sum, s) => sum + (s.donations || 0), 0))}</th>
+                                            <th class="text-end">${formatCurrency(data.shareTypeSummaries.reduce((sum, s) => sum + (s.loanAllocations || 0), 0))}</th>
+                                            <th></th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+
+                // Transactions Details for each Share Type
+                data.shareTypeSummaries.forEach(shareType => {
+                    html += `
+                        <div id="transactions-${shareType.sharesCode}" class="card mt-2" style="display:none;">
+                            <div class="card-header bg-light">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-list-ul"></i> ${escapeHtml(shareType.sharesType)} Transactions (${escapeHtml(shareType.sharesCode)})
+                                    </h5>
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="hideTransactions('${shareType.sharesCode}')">
+                                        <i class="bi bi-x-lg"></i> Close
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">`;
+
+                    if (shareType.transactions && shareType.transactions.length > 0) {
+                        html += `
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Transaction Date</th>
+                                                <th>Type</th>
+                                                <th class="text-end">Amount</th>
+                                                <th class="text-end">Share Capital</th>
+                                                <th class="text-end">Deposits</th>
+                                                <th>Receipt No</th>
+                                                <th>Remarks</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>`;
+
+                        shareType.transactions.sort((a, b) => new Date(b.transactionDate) - new Date(a.transactionDate));
+                        shareType.transactions.forEach(trans => {
+                            html += `
+                                            <tr>
+                                                <td>${new Date(trans.transactionDate).toLocaleDateString()}</td>
+                                                <td>
+                                                    ${trans.transactionType === 'Contribution' ?
+                                                        '<span class="badge bg-success">Contribution</span>' :
+                                                        '<span class="badge bg-info">' + escapeHtml(trans.transactionType || '') + '</span>'}
+                                                </td>
+                                                <td class="text-end">${formatCurrency(trans.amount || 0)}</td>
+                                                <td class="text-end">${formatCurrency(trans.shareCapital || 0)}</td>
+                                                <td class="text-end">${formatCurrency(trans.deposits || 0)}</td>
+                                                <td>${escapeHtml(trans.receiptNo || '-')}</td>
+                                                <td>${escapeHtml(trans.remarks || '-')}</td>
+                                            </tr>`;
+                        });
+
+                        html += `
+                                        </tbody>
+                                        <tfoot class="bg-light">
+                                            <tr>
+                                                <th colspan="2" class="text-end">Total:</th>
+                                                <th class="text-end">${formatCurrency(shareType.transactions.reduce((sum, t) => sum + (t.amount || 0), 0))}</th>
+                                                <th class="text-end">${formatCurrency(shareType.transactions.reduce((sum, t) => sum + (t.shareCapital || 0), 0))}</th>
+                                                <th class="text-end">${formatCurrency(shareType.transactions.reduce((sum, t) => sum + (t.deposits || 0), 0))}</th>
+                                                <th colspan="3"></th>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>`;
+                    } else {
+                        html += `
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> No transactions found for this share type.
+                                </div>`;
+                    }
+
+                    html += `
+                            </div>
+                        </div>`;
+                });
+
+                // All Transactions Combined View
+                let allTransactions = [];
+                data.shareTypeSummaries.forEach(s => {
+                    if (s.transactions) {
+                        s.transactions.forEach(t => {
+                            allTransactions.push({
+                                sharesType: s.sharesType,
+                                transaction: t
+                            });
+                        });
+                    }
+                });
+                allTransactions.sort((a, b) => new Date(b.transaction.transactionDate) - new Date(a.transaction.transactionDate));
+
+                if (allTransactions.length > 0) {
+                    html += `
+                        <div class="card mt-3">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-receipt"></i> All Share Transactions (Combined)
+                                </h5>
+                                <div class="card-tools">
+                                    <button type="button" class="btn btn-tool text-white" data-card-widget="collapse">
+                                        <i class="bi bi-dash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover table-striped" id="allTransactionsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Transaction Date</th>
+                                                <th>Share Type</th>
+                                                <th>Transaction Type</th>
+                                                <th class="text-end">Amount</th>
+                                                <th class="text-end">Share Capital</th>
+                                                <th class="text-end">Deposits</th>
+                                                <th>Receipt No</th>
+                                                <th>Remarks</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>`;
+
+                    allTransactions.forEach(item => {
+                        html += `
+                                            <tr>
+                                                <td>${new Date(item.transaction.transactionDate).toLocaleDateString()}</td>
+                                                <td>${escapeHtml(item.sharesType)}</td>
+                                                <td>
+                                                    ${item.transaction.transactionType === 'Contribution' ?
+                                                        '<span class="badge bg-success">Contribution</span>' :
+                                                        '<span class="badge bg-info">' + escapeHtml(item.transaction.transactionType || '') + '</span>'}
+                                                </td>
+                                                <td class="text-end">${formatCurrency(item.transaction.amount || 0)}</td>
+                                                <td class="text-end">${formatCurrency(item.transaction.shareCapital || 0)}</td>
+                                                <td class="text-end">${formatCurrency(item.transaction.deposits || 0)}</td>
+                                                <td>${escapeHtml(item.transaction.receiptNo || '-')}</td>
+                                                <td>${escapeHtml(item.transaction.remarks || '-')}</td>
+                                            </tr>`;
+                    });
+
+                    html += `
+                                        </tbody>
+                                        <tfoot class="table-dark">
+                                            <tr>
+                                                <th colspan="3" class="text-end">Grand Total:</th>
+                                                <th class="text-end">${formatCurrency(allTransactions.reduce((sum, x) => sum + (x.transaction.amount || 0), 0))}</th>
+                                                <th class="text-end">${formatCurrency(allTransactions.reduce((sum, x) => sum + (x.transaction.shareCapital || 0), 0))}</th>
+                                                <th class="text-end">${formatCurrency(allTransactions.reduce((sum, x) => sum + (x.transaction.deposits || 0), 0))}</th>
+                                                <th colspan="2"></th>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>`;
+                }
+            } else {
+                html += `
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle"></i> No share types found for this member.
+                    </div>`;
+            }
+
+            html += `</div>`;
+            return html;
+        }
+
+        async function inquireShares() {
+            const memberNo = $('#selectedMemberNo').val();
+            if (!memberNo) {
+                Swal.fire('Error', 'Please select a member first', 'error');
+                return;
+            }
+
+            await loadShareDataAjax(memberNo);
+        }
+
+        function clearSelectedMember() {
+            selectedMemberData = null;
+            isMemberSelected = false;
+
+            $('#selectedMemberNo').val('');
+            $('#selectedMemberCard').hide();
+            $('#shareResults').hide();
+            $('#shareResults').html('');
+        }
+
+        function clearSearch() {
+            $('#searchInput').val('');
+            $('#searchResults').hide();
+            $('#searchResultsBody').empty();
+            clearSelectedMember();
+        }
+
+        function toggleTransactions(shareCode) {
+            var div = document.getElementById('transactions-' + shareCode);
+            if (div) {
+                if (div.style.display === 'none' || div.style.display === '') {
+                    // Hide all other transaction divs first
+                    $('[id^="transactions-"]').each(function() {
+                        if (this.id !== 'transactions-' + shareCode) {
+                            this.style.display = 'none';
+                        }
+                    });
+                    div.style.display = 'block';
+                    div.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } else {
+                    div.style.display = 'none';
+                }
+            }
+        }
+
+        function hideTransactions(shareCode) {
+            var div = document.getElementById('transactions-' + shareCode);
+            if (div) div.style.display = 'none';
+        }
+
+        function formatCurrency(amount) {
+            if (!amount) return '0.00';
+            return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+}
+
+<style>
+    .small-box {
+        border-radius: 0.25rem;
+        box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+        display: block;
+        margin-bottom: 20px;
+        position: relative;
+    }
+
+        .small-box .inner {
+            padding: 10px;
+        }
+
+        .small-box h3 {
+            font-size: 2.2rem;
+            font-weight: bold;
+            margin: 0 0 10px 0;
+            white-space: nowrap;
+            padding: 0;
+        }
+
+        .small-box .icon {
+            color: rgba(0,0,0,0.15);
+            position: absolute;
+            right: 10px;
+            top: 5px;
+            z-index: 0;
+            font-size: 5rem;
+        }
+
+    .info-box {
+        display: flex;
+        min-height: 90px;
+        background: #fff;
+        width: 100%;
+        box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+        border-radius: 0.25rem;
+        margin-bottom: 1rem;
+    }
+
+    .info-box-content {
+        padding: 1rem;
+        flex: 1;
+    }
+
+    .info-box-text {
+        display: block;
+        font-size: 0.875rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+
+    .info-box-number {
+        display: block;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    .bg-info {
+        background-color: #17a2b8 !important;
+        color: white;
+    }
+
+    .bg-success {
+        background-color: #28a745 !important;
+        color: white;
+    }
+
+    .bg-warning {
+        background-color: #ffc107 !important;
+        color: #1f2d3d;
+    }
+
+    .bg-danger {
+        background-color: #dc3545 !important;
+        color: white;
+    }
+
+    .bg-secondary {
+        background-color: #6c757d !important;
+        color: white;
+    }
+
+    .bg-light {
+        background-color: #f8f9fa !important;
+        color: #1f2d3d;
+    }
+
+    .bg-primary {
+        background-color: #007bff !important;
+        color: white;
+    }
+
+    .bg-dark {
+        background-color: #343a40 !important;
+        color: white;
+    }
+
+    .btn-tool {
+        background: transparent;
+        border: none;
+        padding: 0.25rem 0.5rem;
+        font-size: 1.25rem;
+        line-height: 1;
+        border-radius: 0.25rem;
+        opacity: 0.8;
+    }
+
+        .btn-tool:hover {
+            opacity: 1;
+        }
+</style>

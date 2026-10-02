@@ -1,0 +1,280 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.MemberLoansViewModel
+
+@{
+    ViewData["Title"] = "My Loans Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var companyName = ViewBag.CompanyName ?? "";
+}
+
+<style>
+    .status-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .status-active {
+        background-color: #28a745;
+        color: white;
+    }
+
+    .status-closed {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .status-defaulted {
+        background-color: #dc3545;
+        color: white;
+    }
+
+    .status-draft {
+        background-color: #ffc107;
+        color: black;
+    }
+
+    .summary-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 15px;
+    }
+
+        .summary-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .summary-card .label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .summary-card.green {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+        .summary-card.orange {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        }
+
+        .summary-card.blue {
+            background: linear-gradient(135deg, #17a2b8 0%, #0dcaf0 100%);
+        }
+
+        .summary-card.red {
+            background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+        }
+
+    .no-print {
+        display: block;
+    }
+
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-3 no-print">
+        <div class="col-md-8">
+            <h2 style="color: #3f2b96;">
+                <i class="bi bi-bank"></i> My Loans Report
+            </h2>
+            <p class="text-muted">
+                <strong>@Model.MemberName</strong> (@Model.MemberNo)
+                @if (!string.IsNullOrEmpty(Model.MemberPhone))
+                {
+                    <span>| Phone: @Model.MemberPhone</span>
+                }
+            </p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="@Url.Action("Index", "Home")" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+            @if (Model.HasData)
+            {
+                <button type="button" class="btn btn-danger ms-2" onclick="exportToPdf()">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Hidden form for PDF export -->
+    <form id="pdfExportForm" action="@Url.Action("ExportMemberLoansToPdf")" method="post" target="_blank">
+        @Html.AntiForgeryToken()
+    </form>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="number">@Model.TotalLoans</div>
+                <div class="label">Total Loans</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card green">
+                <div class="number">@Model.ActiveLoans</div>
+                <div class="label">Active Loans</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card blue">
+                <div class="number">@Model.TotalLoanAmount.ToString("N0")</div>
+                <div class="label">Total Loan Amount</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card red">
+                <div class="number">@Model.TotalOutstanding.ToString("N0")</div>
+                <div class="label">Total Outstanding</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loans Table -->
+    @if (Model.HasData)
+    {
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-ul"></i> All Loans
+                </h5>
+                <span class="badge bg-light text-dark float-end">@Model.TotalLoans loans</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="loansTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Loan No</th>
+                                <th>Loan Type</th>
+                                <th>Principal</th>
+                                <th>Approved</th>
+                                <th>Balance</th>
+                                <th>Unpaid Interest</th>
+                                <th>Penalty</th>
+                                <th>Total Outstanding</th>
+                                <th>App Date</th>
+                                <th>Disbursement</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var loan in Model.Loans.Select((l, i) => new { l, Index = i + 1 }))
+                            {
+                                var rowClass = !loan.l.IsActive && loan.l.IsFullyPaid ? "table-success" : (loan.l.IsActive ? "" : "table-secondary");
+                                <tr class="@rowClass">
+                                    <td>@loan.Index</td>
+                                    <td>
+                                        <strong>@loan.l.LoanNo</strong>
+                                    </td>
+                                    <td>@loan.l.LoanType</td>
+                                    <td class="text-end">@loan.l.PrincipalAmount.ToString("N2")</td>
+                                    <td class="text-end">@loan.l.ApprovedAmount.ToString("N2")</td>
+                                    <td class="text-end">@loan.l.OutstandingBalance.ToString("N2")</td>
+                                    <td class="text-end">@loan.l.UnpaidInterest.ToString("N2")</td>
+                                    <td class="text-end">@loan.l.Penalty.ToString("N2")</td>
+                                    <td class="text-end text-danger">@loan.l.TotalOutstanding.ToString("N2")</td>
+                                    <td>@loan.l.ApplicationDate?.ToString("dd/MM/yyyy")</td>
+                                    <td>@loan.l.DisbursementDate?.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        @if (loan.l.IsActive)
+                                        {
+                                            <span class="status-badge status-active">
+                                                <i class="bi bi-check-circle"></i> Active
+                                            </span>
+                                        }
+                                        else if (loan.l.IsFullyPaid)
+                                        {
+                                            <span class="status-badge status-closed">
+                                                <i class="bi bi-check-circle"></i> Closed
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="status-badge status-defaulted">@loan.l.Status</span>
+                                        }
+                                        @if (loan.l.RepaymentCount > 0)
+                                        {
+                                            <br />
+                                            <small class="text-muted">@loan.l.RepaymentCount payments</small>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-dark">
+                            <tr>
+                                <th colspan="3" class="text-end">Totals:</th>
+                                <th class="text-end">@Model.Loans.Sum(l => l.PrincipalAmount).ToString("N2")</th>
+                                <th class="text-end">@Model.Loans.Sum(l => l.ApprovedAmount).ToString("N2")</th>
+                                <th class="text-end">@Model.Loans.Sum(l => l.OutstandingBalance).ToString("N2")</th>
+                                <th class="text-end">@Model.Loans.Sum(l => l.UnpaidInterest).ToString("N2")</th>
+                                <th class="text-end">@Model.Loans.Sum(l => l.Penalty).ToString("N2")</th>
+                                <th class="text-end">@Model.Loans.Sum(l => l.TotalOutstanding).ToString("N2")</th>
+                                <th colspan="3"></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            You do not have any loans.
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            try {
+                if ($.fn.DataTable.isDataTable('#loansTable')) {
+                    $('#loansTable').DataTable().destroy();
+                }
+                $('#loansTable').DataTable({
+                    "order": [[9, "desc"]],
+                    "pageLength": 10,
+                    "responsive": true,
+                    "language": {
+                        "search": "Search:"
+                    },
+                    "columnDefs": [
+                        { "orderable": false, "targets": [0] }
+                    ]
+                });
+            } catch (e) {
+                console.log('DataTable initialization error:', e);
+            }
+        });
+
+        function exportToPdf() {
+            var btn = document.querySelector('.btn-danger');
+            if (btn) {
+                btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating PDF...';
+                btn.disabled = true;
+            }
+            document.getElementById('pdfExportForm').submit();
+            setTimeout(function() {
+                if (btn) {
+                    btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Export PDF';
+                    btn.disabled = false;
+                }
+            }, 5000);
+        }
+    </script>
+}

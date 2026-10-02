@@ -1,0 +1,282 @@
+﻿@model SACCOBlockChainSystem.Models.ViewModels.LoanRepaymentsViewModel
+
+@{
+    ViewData["Title"] = "Loan Repayments Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var companyName = ViewBag.CompanyName ?? "";
+}
+
+<style>
+    .summary-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 15px;
+    }
+
+        .summary-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .summary-card .label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .summary-card.green {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+        .summary-card.orange {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        }
+
+        .summary-card.blue {
+            background: linear-gradient(135deg, #17a2b8 0%, #0dcaf0 100%);
+        }
+
+        .summary-card.red {
+            background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+        }
+
+    .loan-group-header {
+        background-color: #e8f4f8;
+        cursor: pointer;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 5px;
+        border-left: 4px solid #17a2b8;
+    }
+
+        .loan-group-header:hover {
+            background-color: #d4edda;
+        }
+
+        .loan-group-header .badge {
+            font-size: 0.8rem;
+        }
+
+    .no-print {
+        display: block;
+    }
+
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-3 no-print">
+        <div class="col-md-8">
+            <h2 style="color: #3f2b96;">
+                <i class="bi bi-clock-history"></i> Loan Repayments Report
+            </h2>
+            <p class="text-muted">
+                <strong>@Model.MemberName</strong> (@Model.MemberNo)
+                @if (!string.IsNullOrEmpty(Model.MemberPhone))
+                {
+                    <span>| Phone: @Model.MemberPhone</span>
+                }
+            </p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="@Url.Action("Index", "Home")" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+            @if (Model.HasData)
+            {
+                <button type="button" class="btn btn-danger ms-2" onclick="exportToPdf()">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Hidden form for PDF export -->
+    <form id="pdfExportForm" action="@Url.Action("ExportLoanRepaymentsToPdf")" method="post" target="_blank">
+        @Html.AntiForgeryToken()
+    </form>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="number">@Model.TotalRepayments</div>
+                <div class="label">Total Repayments</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card green">
+                <div class="number">@Model.TotalAmountPaid.ToString("N0")</div>
+                <div class="label">Total Amount Paid</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card blue">
+                <div class="number">@Model.TotalPrincipalPaid.ToString("N0")</div>
+                <div class="label">Total Principal Paid</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card orange">
+                <div class="number">@Model.TotalInterestPaid.ToString("N0")</div>
+                <div class="label">Total Interest Paid</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Repayments by Loan -->
+    @if (Model.HasData)
+    {
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-ul"></i> Repayments by Loan
+                </h5>
+                <span class="badge bg-light text-dark float-end">@Model.TotalLoans loans</span>
+            </div>
+            <div class="card-body">
+                @foreach (var group in Model.LoanGroups)
+                {
+                    <div class="loan-group-header">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <strong>@group.LoanNo</strong>
+                            </div>
+                            <div class="col-md-3">
+                                <span class="text-muted">@group.LoanType</span>
+                            </div>
+                            <div class="col-md-2">
+                                <span class="badge bg-info">@group.RepaymentCount payments</span>
+                            </div>
+                            <div class="col-md-2">
+                                <span class="badge bg-success">@group.TotalAmountPaid.ToString("N0")</span>
+                            </div>
+                            <div class="col-md-2 text-end">
+                                <button class="btn btn-sm btn-outline-primary" onclick="toggleRepayments('@group.LoanNo')">
+                                    <i class="bi bi-chevron-down"></i> Show Details
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="repayments_@group.LoanNo" style="display: none;" class="mb-3">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                        <th>Principal</th>
+                                        <th>Interest</th>
+                                        <th>Penalty</th>
+                                        <th>Balance</th>
+                                        <th>Receipt No</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var repayment in group.Repayments.Select((r, i) => new { r, Index = i + 1 }))
+                                    {
+                                        <tr>
+                                            <td>@repayment.Index</td>
+                                            <td>@repayment.r.TransactionDate?.ToString("dd/MM/yyyy")</td>
+                                            <td class="text-end">@repayment.r.Amount.ToString("N2")</td>
+                                            <td class="text-end">@repayment.r.Principal.ToString("N2")</td>
+                                            <td class="text-end">@repayment.r.Interest.ToString("N2")</td>
+                                            <td class="text-end">@repayment.r.Penalty.ToString("N2")</td>
+                                            <td class="text-end">@repayment.r.LoanBalance.ToString("N2")</td>
+                                            <td>@(repayment.r.ReceiptNo ?? "-")</td>
+                                            <td>@(repayment.r.Description ?? "Repayment")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="table-secondary">
+                                    <tr>
+                                        <th colspan="2" class="text-end">Totals:</th>
+                                        <th class="text-end">@group.TotalAmountPaid.ToString("N2")</th>
+                                        <th class="text-end">@group.TotalPrincipalPaid.ToString("N2")</th>
+                                        <th class="text-end">@group.TotalInterestPaid.ToString("N2")</th>
+                                        <th class="text-end">@group.TotalPenaltyPaid.ToString("N2")</th>
+                                        <th colspan="3"></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            No loan repayments found.
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize all tables with DataTable
+            try {
+                $('.table').each(function() {
+                    if (!$.fn.DataTable.isDataTable(this)) {
+                        $(this).DataTable({
+                            "pageLength": 5,
+                            "responsive": true,
+                            "language": {
+                                "search": "Search:"
+                            },
+                            "ordering": true
+                        });
+                    }
+                });
+            } catch (e) {
+                console.log('DataTable initialization error:', e);
+            }
+
+            // Initially show first group
+            var firstGroup = $('.loan-group-header').first();
+            if (firstGroup.length > 0) {
+                var firstLoanNo = firstGroup.find('strong').text().trim();
+                toggleRepayments(firstLoanNo);
+            }
+        });
+
+        function toggleRepayments(loanNo) {
+            var div = $('#repayments_' + loanNo);
+            var btn = div.closest('.loan-group-header').find('.btn-outline-primary');
+            if (div.is(':visible')) {
+                div.slideUp('fast');
+                btn.html('<i class="bi bi-chevron-right"></i> Show Details');
+            } else {
+                div.slideDown('fast');
+                btn.html('<i class="bi bi-chevron-up"></i> Hide Details');
+            }
+        }
+
+        function exportToPdf() {
+            var btn = document.querySelector('.btn-danger');
+            if (btn) {
+                btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating PDF...';
+                btn.disabled = true;
+            }
+            document.getElementById('pdfExportForm').submit();
+            setTimeout(function() {
+                if (btn) {
+                    btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Export PDF';
+                    btn.disabled = false;
+                }
+            }, 5000);
+        }
+    </script>
+}

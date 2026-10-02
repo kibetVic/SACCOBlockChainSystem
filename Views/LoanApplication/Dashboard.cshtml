@@ -1,0 +1,254 @@
+﻿@model SACCOBlockChainSystem.Models.DTOs.MemberDashboardDTO
+@{
+    ViewData["Title"] = "Loan Dashboard";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Loan Dashboard</h4>
+            </div>
+        </div>
+    </div>
+
+    <!-- Welcome Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h4 class="mb-2">Welcome back, @Model.MemberName!</h4>
+                    <p class="mb-0">Member since: @Model.MemberSince.ToString("dd MMM yyyy")</p>
+                    <p class="mb-0">Email: @Model.Email | Phone: @Model.PhoneNumber</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Savings</h5>
+                    <h2 class="text-primary">@Model.TotalSavings.ToString("N0")</h2>
+                    <small>Deposits: @Model.TotalDeposits.ToString("N0") | Shares: @Model.TotalShares.ToString("N0")</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Active Loans</h5>
+                    <h2 class="text-warning">@Model.ActiveLoansCount</h2>
+                    <small>Outstanding: @Model.TotalOutstandingLoans.ToString("N0")</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Max Eligible</h5>
+                    <h2 class="text-success">@Model.MaxEligibleAmount.ToString("N0")</h2>
+                    <small>Based on your deposits</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Borrowed</h5>
+                    <h2 class="text-info">@Model.TotalLoanAmount.ToString("N0")</h2>
+                    <small>All time</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Actions</h5>
+                    <div class="row">
+                        <div class="col-md-4 mb-2">
+                            <a href="@Url.Action("MobileLoan")" class="btn btn-success btn-lg btn-block">
+                                <i class="fa fa-mobile-alt"></i> Apply Mobile Loan
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <a href="@Url.Action("Products")" class="btn btn-primary btn-lg btn-block">
+                                <i class="fa fa-hand-holding-usd"></i> Apply Other Loan
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <a href="@Url.Action("MyLoans")" class="btn btn-info btn-lg btn-block">
+                                <i class="fa fa-list"></i> View My Loans
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Available Loan Products -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Available Loan Products</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Min-Max</th>
+                                    <th>Interest</th>
+                                    <th>Eligible</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in Model.AvailableLoanProducts)
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@product.LoanName</strong>
+                                            @if (product.IsMobileLoan)
+                                            {
+                                                <span class="badge bg-success">Mobile Loan</span>
+                                            }
+                                            <br />
+                                            <small>@product.Description</small>
+                                        </td>
+                                        <td>@product.InterestRate% p.a</td>
+                                        <td>
+                                            @if (product.IsEligible)
+                                            {
+                                                <span class="text-success">✓ Eligible</span>
+                                                <br />
+                                                <small>Up to @product.EligibleAmount.ToString("N0")</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-danger">✗ Not Eligible</span>
+                                                <br />
+                                                <small>@product.EligibilityMessage</small>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (product.IsEligible)
+                                            {
+                                                <a href="@Url.Action("Apply", new { loanCode = product.LoanCode })" class="btn btn-sm btn-primary">Apply</a>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm btn-secondary" disabled>Unavailable</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Loans -->
+    @if (Model.ActiveLoans.Any())
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Active Loans</h5>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Loan No</th>
+                                        <th>Type</th>
+                                        <th>Amount</th>
+                                        <th>Outstanding</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var loan in Model.ActiveLoans)
+                                    {
+                                        <tr>
+                                            <td>@loan.LoanNo</td>
+                                            <td>@loan.LoanType</td>
+                                            <td>@loan.PrincipalAmount.ToString("N0")</td>
+                                            <td>@loan.OutstandingBalance.ToString("N0")</td>
+                                            <td>
+                                                @if (loan.Status == "Disbursed")
+                                                {
+                                                    <span class="badge bg-success">Active</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning">@loan.Status</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", new { loanNo = loan.LoanNo })" class="btn btn-sm btn-info">View</a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Pending Guarantor Requests -->
+    @if (Model.PendingGuarantorRequests.Any())
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Pending Guarantor Requests</h5>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Loan No</th>
+                                        <th>Applicant</th>
+                                        <th>Loan Amount</th>
+                                        <th>Invitation Date</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var request in Model.PendingGuarantorRequests)
+                                    {
+                                        <tr>
+                                            <td>@request.LoanNo</td>
+                                            <td>@request.ApplicantName</td>
+                                            <td>@request.LoanAmount.ToString("N0")</td>
+                                            <td>@request.InvitationDate.ToString("dd MMM yyyy")</td>
+                                            <td>
+                                                <a href="@Url.Action("RespondToGuarantor", "Loan", new { loanNo = request.LoanNo })" class="btn btn-sm btn-primary">Respond</a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>

@@ -1,0 +1,232 @@
+@model SACCOBlockChainSystem.Models.ViewModels.PortfolioAtRiskIndexViewModel
+@{
+    ViewData["Title"] = "Portfolio At Risk Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid">
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h4 class="mb-0"><i class="fas fa-chart-line me-2"></i>Portfolio At Risk Report</h4>
+        </div>
+        <div class="card-body">
+            <!-- Filter Form -->
+            <form method="post" class="mb-4">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">As At Date</label>
+                        <input type="date" name="asAtDate" class="form-control" value="@Model.AsAtDate.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i>Generate Report
+                            </button>
+                            <button type="button" id="exportPdfBtn" class="btn btn-danger">
+                                <i class="fas fa-file-pdf me-1"></i>Export to PDF
+                            </button>
+                            <button type="button" id="exportExcelBtn" class="btn btn-success">
+                                <i class="fas fa-file-excel me-1"></i>Export to Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            @if (Model.HasData)
+            {
+                <!-- Report Header -->
+                <div class="text-center mb-4">
+                    <h4>@Model.CompanyName.ToUpper()</h4>
+                    <h5>PORTFOLIO AT RISK REPORT</h5>
+                    <p>As At: @Model.AsAtDate.ToString("dd/MM/yyyy HH:mm:ss")</p>
+                    <p>Printed By: @Model.PrintedBy On: @Model.GeneratedOn.ToString("dd-MMM-yyyy HH:mm")</p>
+                </div>
+
+                <!-- Summary Table (Like the image) -->
+                <div class="table-responsive mb-4">
+                    <table class="table table-bordered">
+                        <thead class="bg-info text-white">
+                            <tr>
+                                <th></th>
+                                <th class="text-end">LOAN ISSUED</th>
+                                <th class="text-end">UNPAID INTEREST</th>
+                                <th class="text-end">LOAN BALANCE</th>
+                                <th class="text-end">ARREARS</th>
+                                <th class="text-end">PAR %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="fw-bold">TOTALS:</td>
+                                <td class="text-end">@Model.TotalLoanIssued.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalUnpaidInterest.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalLoanBalance.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalArrears.ToString("N2")</td>
+                                <td class="text-end fw-bold">@Model.ParPercentage.ToString("N2")%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h5>Total Loans</h5>
+                                <h3>@Model.TotalLoans.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h5>Active Loans</h5>
+                                <h3>@Model.ActiveLoans.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body text-center">
+                                <h5>Overdue Loans</h5>
+                                <h3>@Model.OverdueLoans.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body text-center">
+                                <h5>PAR Percentage</h5>
+                                <h3>@Model.ParPercentage.ToString("N2")%</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Data Table -->
+                <div class="table-responsive">
+                    <table id="parTable" class="table table-bordered table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>MemberNo</th>
+                                <th>Names</th>
+                                <th>LoanNo</th>
+                                <th>Loan Name</th>
+                                <th class="text-end">Loan Issued</th>
+                                <th class="text-end">Unpaid Interest</th>
+                                <th class="text-end">Loan Balance</th>
+                                <th class="text-end">Arrears</th>
+                                <th class="text-center">Days Overdue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Loans)
+                            {
+                                <tr class="@(item.DaysOverdue > 0 ? "table-danger" : "")">
+                                    <td>@item.MemberNo</td>
+                                    <td>@item.Names</td>
+                                    <td>@item.LoanNo</td>
+                                    <td>@item.LoanName</td>
+                                    <td class="text-end">@item.LoanIssued.ToString("N2")</td>
+                                    <td class="text-end">@item.UnpaidInterest.ToString("N2")</td>
+                                    <td class="text-end">@item.LoanBalance.ToString("N2")</td>
+                                    <td class="text-end">@item.Arrears.ToString("N2")</td>
+                                    <td class="text-center">@(item.DaysOverdue > 0 ? $"{item.DaysOverdue} days" : "-")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-secondary fw-bold">
+                            <tr>
+                                <td colspan="4" class="text-end">GRAND TOTAL:</td>
+                                <td class="text-end">@Model.TotalLoanIssued.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalUnpaidInterest.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalLoanBalance.ToString("N2")</td>
+                                <td class="text-end">@Model.TotalArrears.ToString("N2")</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Footer Information -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="small text-muted">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>PAR Calculation:</strong> Portfolio at Risk % = (Total Arrears / Total Loan Balance) × 100
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle me-2"></i>
+                    @(ViewBag.Message ?? "No active loans found for the selected date. Please select a date and click 'Generate Report'.")
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
+
+    <script>
+        $(document).ready(function() {
+            if ($('#parTable').length && $('#parTable tbody tr').length > 0) {
+                $('#parTable').DataTable({
+                    pageLength: 25,
+                    order: [[8, 'desc']], // Sort by Days Overdue
+                    language: {
+                        search: "Search:",
+                        lengthMenu: "Show _MENU_ entries per page",
+                        info: "Showing _START_ to _END_ of _TOTAL_ loans"
+                    }
+                });
+            }
+
+            // Export to Excel
+            $('#exportExcelBtn').click(function() {
+                var asAtDate = $('input[name="asAtDate"]').val();
+                if (!asAtDate) {
+                    alert('Please select a date first');
+                    return;
+                }
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("ExportPortfolioAtRiskToExcel", "LoanReport")'
+                });
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'asAtDate',
+                    'value': asAtDate
+                }));
+                form.appendTo('body').submit();
+            });
+
+            // Export to PDF
+            $('#exportPdfBtn').click(function() {
+                var asAtDate = $('input[name="asAtDate"]').val();
+                if (!asAtDate) {
+                    alert('Please select a date first');
+                    return;
+                }
+                var form = $('<form>', {
+                    'method': 'post',
+                    'action': '@Url.Action("ExportPortfolioAtRiskToPdf", "LoanReport")'
+                });
+                form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': 'asAtDate',
+                    'value': asAtDate
+                }));
+                form.appendTo('body').submit();
+            });
+        });
+    </script>
+}
