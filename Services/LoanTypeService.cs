@@ -75,23 +75,6 @@ namespace SACCOBlockChainSystem.Services
                     MaxAmount = loanTypeDto.MaxAmount,
                     Guarantor = loanTypeDto.Guarantor,
                     UseintRange = loanTypeDto.UseIntRange,
-<<<<<<< HEAD
-=======
-                    EarningRation = loanTypeDto.EarningRatio,
-                    Penalty = loanTypeDto.Penalty ? 1 : 0,
-                    Processingfee = loanTypeDto.ProcessingFee,
-                    GracePeriod = loanTypeDto.GracePeriod,
-                    Repaymethod = loanTypeDto.RepayMethod,
-                    Bridging = loanTypeDto.Bridging ? 1 : 0,
-                    SelfGuarantee = loanTypeDto.SelfGuarantee,
-                    MobileLoan = loanTypeDto.MobileLoan,
-                    InterestUpront = loanTypeDto.InterestUpront,
-                    IsProject = loanTypeDto.IsProject,
-                    IsTopUp = loanTypeDto.IsTopUp,
-                    MobileLoanApproval = loanTypeDto.MobileLoanApproval,
-                    Ppacc = loanTypeDto.Ppacc ?? string.Empty,
-                    ContraAccount = loanTypeDto.ContraAccount ?? string.Empty,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     Priority = loanTypeDto.Priority,
                     MaxLoans = loanTypeDto.MaxLoans,
                     CompanyCode = loanTypeDto.CompanyCode,
@@ -169,17 +152,6 @@ namespace SACCOBlockChainSystem.Services
                         loanType.LoanProduct,
                         loanType.MobileLoan,
                         loanType.InterestUpront,
-<<<<<<< HEAD
-=======
-                        loanType.IsProject,
-                        loanType.IsTopUp,
-                        loanType.Priority,
-                        loanType.Guarantor,
-                        loanType.SelfGuarantee,
-                        loanType.Processingfee,
-                        loanType.GracePeriod,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
-                        loanType.Repaymethod,
                         loanType.ApprovalStatus,
                         loanType.LoanAcc,
                         loanType.InterestAcc,
@@ -231,22 +203,6 @@ namespace SACCOBlockChainSystem.Services
                     maxAmount = loanType.MaxAmount,
                     repayPeriod = loanType.RepayPeriod,
                     loanproduct = loanType.LoanProduct,
-<<<<<<< HEAD
-=======
-                    interest = loanType.Interest,
-                    guarantor = loanType.Guarantor,
-                    selfGuarantee = loanType.SelfGuarantee,
-                    processingFee = loanType.Processingfee,
-                    gracePeriod = loanType.GracePeriod,
-                    repayMethod = loanType.Repaymethod,
-                    bridging = loanType.Bridging,
-                    mobileLoan = loanType.MobileLoan,
-                    interestUpront = loanType.InterestUpront,
-                    isProject = loanType.IsProject,
-                    IsTopUp = loanType.IsTopUp,
-                    priority = loanType.Priority,
-                    maxLoans = loanType.MaxLoans,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     loanAccount = loanType.LoanAcc,
                     interestAccount = loanType.InterestAcc,
                     penaltyAccount = loanType.PenaltyAcc,
@@ -432,25 +388,6 @@ namespace SACCOBlockChainSystem.Services
                     loanType.ValueChain,
                     loanType.LoanProduct,
                     loanType.LoanAcc,
-<<<<<<< HEAD
-=======
-                    loanType.InterestAcc,
-                    loanType.PenaltyAcc,
-                    loanType.RepayPeriod,
-                    loanType.Interest,
-                    loanType.MaxAmount,
-                    loanType.Guarantor,
-                    loanType.UseintRange,
-                    loanType.EarningRation,
-                    loanType.Penalty,
-                    loanType.Processingfee,
-                    loanType.GracePeriod,
-                    loanType.Repaymethod,
-                    loanType.Bridging,
-                    loanType.SelfGuarantee,
-                    loanType.MobileLoan,
-                    loanType.InterestUpront,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     loanType.IsProject,
                     loanType.IsTopUp,
                     loanType.Ppacc,
@@ -488,16 +425,6 @@ namespace SACCOBlockChainSystem.Services
                 bool attractsPenaltyFlag = loanTypeDto.AttractsPenalty || loanTypeDto.Penalty;
                 loanType.Penalty = attractsPenaltyFlag ? 1 : 0;
                 loanType.Processingfee = loanTypeDto.ProcessingFee;
-<<<<<<< HEAD
-=======
-                loanType.GracePeriod = loanTypeDto.GracePeriod;
-                loanType.Repaymethod = loanTypeDto.RepayMethod;
-                loanType.Bridging = loanTypeDto.Bridging ? 1 : 0;
-                loanType.SelfGuarantee = loanTypeDto.SelfGuarantee;
-                loanType.MobileLoan = loanTypeDto.MobileLoan;
-                loanType.InterestUpront = loanTypeDto.InterestUpront;
-                loanType.IsProject = loanTypeDto.IsProject;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                 loanType.IsTopUp = loanTypeDto.IsTopUp;
                 loanType.MobileLoanApproval = loanTypeDto.MobileLoanApproval;
                 loanType.Ppacc = loanTypeDto.Ppacc ?? string.Empty;
@@ -586,24 +513,6 @@ namespace SACCOBlockChainSystem.Services
                     loanType.InterestAcc,
                     loanType.PenaltyAcc,
                     loanType.RepayPeriod,
-<<<<<<< HEAD
-=======
-                    loanType.Interest,
-                    loanType.MaxAmount,
-                    loanType.Guarantor,
-                    loanType.UseintRange,
-                    loanType.EarningRation,
-                    loanType.Penalty,
-                    loanType.Processingfee,
-                    loanType.GracePeriod,
-                    loanType.Repaymethod,
-                    loanType.Bridging,
-                    loanType.SelfGuarantee,
-                    loanType.MobileLoan,
-                    loanType.InterestUpront,
-                    loanType.IsProject,
-                    loanType.IsTopUp,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     loanType.Ppacc,
                     loanType.ContraAccount,
                     loanType.Priority,

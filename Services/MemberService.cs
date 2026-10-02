@@ -213,25 +213,6 @@ namespace SACCOBlockChainSystem.Services
                     HomeTelNo = registration.LandLine,
                     Email = registration.Email,
                     EmailAddress = registration.Email,
-<<<<<<< HEAD
-=======
-                    Sex = registration.Gender,
-                    Dob = registration.DateOfBirth,
-                    Age = registration.Age ?? (registration.DateOfBirth.HasValue ? CalculateAge(registration.DateOfBirth.Value) : (int?)null),
-                    Station = registration.Station,
-                    Dept = registration.Department,
-                    PresentAddr = registration.PresentAddress,
-                    Employer = registration.Employer,
-                    CompanyCode = currentCompanyCode,
-                    Cigcode = registration.Cigcode ?? currentCompanyCode,
-                    MembershipType = registration.MembershipType,
-                    MemberDescription = registration.RegistrationType,
-                    ShareCap = registration.InitialShares,
-                    InitShares = registration.InitialShares,
-                    Photo = registration.Photo,
-                    IdFrontImage = registration.IdFrontImage,  
-                    IdBackImage = registration.IdBackImage, 
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     LoanBalance = 0,
                     InterestBalance = 0,
                     Status = 1,  // Active
@@ -334,19 +315,6 @@ namespace SACCOBlockChainSystem.Services
                         IDNo = registration.IdNo,
                         Phone = registration.PhoneNo,
                         LandLine = registration.LandLine,
-<<<<<<< HEAD
-=======
-                        Email = registration.Email,
-                        DateOfBirth = registration.DateOfBirth?.ToString("yyyy-MM-dd"),
-                        Age = registration.Age,
-                        Gender = registration.Gender,
-                        Employer = registration.Employer,
-                        Station = registration.Station,
-                        Department = registration.Department,
-                        PresentAddress = registration.PresentAddress,
-                        CompanyCode = currentCompanyCode,
-                        GroupCig = registration.Cigcode,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                         MembershipType = registration.MembershipType,
                         RegistrationType = registration.RegistrationType,
                         InitialShares = registration.InitialShares,

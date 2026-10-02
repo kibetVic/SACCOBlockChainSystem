@@ -167,27 +167,10 @@ namespace SACCOBlockChainSystem.Controllers
                         fullName = (m.Surname + " " + m.OtherNames).Trim(),
                         surname = m.Surname,
                         otherNames = m.OtherNames,
-<<<<<<< HEAD
-=======
                         idNo = m.Idno,
                         phoneNo = m.PhoneNo,
                         email = m.Email,
                         landLine = m.HomeTelNo,
-                        gender = m.Sex,
-                        dateOfBirth = m.Dob.HasValue ? m.Dob.Value.ToString("yyyy-MM-dd") : "",
-                        age = m.Age,
-                        maritalStatus = m.Mstatus == true ? "Married" : m.Mstatus == false ? "Single" : "",
-                        station = m.Station,
-                        department = m.Dept,
-                        presentAddress = m.PresentAddr,
-                        cigcode = m.Cigcode,
-                        membershipType = m.MembershipType,
-                        registrationType = m.MemberDescription,
-                        status = m.Status,
-                        statusText = m.Status == 1 ? "Active" : "Inactive",
-                        registrationDate = m.ApplicDate.HasValue ? m.ApplicDate.Value.ToString("yyyy-MM-dd") : "",
-                        initialShares = m.InitShares,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                         photo = m.Photo,
                         idFrontImage = m.IdFrontImage,
                         idBackImage = m.IdBackImage
@@ -362,43 +345,7 @@ namespace SACCOBlockChainSystem.Controllers
                         OtherNames = member.OtherNames ?? "",
                         FullName = fullName,
                         IdNo = member.Idno ?? "",
-
-                        // Contact Info
-                        PhoneNo = member.PhoneNo ?? member.MobileNo ?? "",
-                        LandLine = member.HomeTelNo ?? member.OfficeTelNo ?? "",
-                        Email = member.Email ?? member.EmailAddress ?? "",
-
-                        // Personal Info
-                        Gender = member.Sex ?? "",
-                        DateOfBirth = member.Dob?.ToString("yyyy-MM-dd") ?? "",
-                        Age = member.Age?.ToString() ?? "",
-                        MaritalStatus = member.Mstatus == true ? "Married" : member.Mstatus == false ? "Single" : "",
-
-                        // Employment & Location
-                        Employer = member.Employer ?? "",
-                        Department = member.Dept ?? "",
-                        Station = member.Station ?? "",
-                        PresentAddress = member.PresentAddr ?? "",
-                        HomeAddress = member.HomeAddr ?? "",
-
-<<<<<<< HEAD
-=======
                         // Membership Settings
-                        Cigcode = member.Cigcode ?? "",
-                        GroupCig = member.Cigcode ?? "",
-                        MembershipType = member.MembershipType ?? "Individual",
-                        RegistrationType = member.MemberDescription ?? "Ordinary Member",
-                        Status = statusText,
-                        RegistrationDate = member.ApplicDate?.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"),
-
-                        // Financial
-                        InitialShares = member.InitShares ?? 0,
-                        ShareBalance = member.ShareCap ?? 0,
-                        CurrentBalance = 0,
-                        LoanBalance = member.LoanBalance ?? 0,
-                        TotalBalance = (member.ShareCap ?? 0) - (member.LoanBalance ?? 0),
-
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                         // Company
                         CompanyCode = member.CompanyCode ?? "",
 

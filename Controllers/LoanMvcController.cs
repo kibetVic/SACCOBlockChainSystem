@@ -104,13 +104,6 @@ namespace SACCOBlockChainSystem.Controllers
             try
             {
                 var companyCode = _companyContextService.GetCurrentCompanyCode();
-
-<<<<<<< HEAD
-=======
-                // Use the existing method (signature unchanged)
-                var eligibility = await _loanService.CheckMemberEligibilityWithContributionsAsync(memberNo, companyCode);
-
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                 // Get member details
                 var member = await _contributionService.GetMemberByMemberNoAsync(memberNo);
 
@@ -176,11 +169,6 @@ namespace SACCOBlockChainSystem.Controllers
 
                 return Json(new
                 {
-<<<<<<< HEAD
-=======
-                    success = eligibility.IsEligible,
-                    message = eligibility.Message,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     hasExistingLoan = hasExistingLoan,
                     canApplyForTopUp = canApplyForTopUp,
                     topUpLoanTypeCodes = topUpLoanTypes,
@@ -195,16 +183,6 @@ namespace SACCOBlockChainSystem.Controllers
                         phone = member?.PhoneNo,
                         email = member?.Email,
                         shareCapital = member?.ShareCap ?? 0,
-<<<<<<< HEAD
-=======
-                        eligibleShares = eligibility.TotalEligibleShares,
-                        totalEligibleShares = eligibility.TotalEligibleShares,
-                        maxLoanAmount = eligibility.MaxLoanAmount,
-                        hasValidShares = eligibility.HasValidShares,
-                        availableShares = eligibility.TotalEligibleShares,
-                        totalContributions = eligibility.TotalEligibleShares,
-                        maxLoanAmountFromShares = eligibility.MaxLoanAmount
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     }
                 });
             }
@@ -623,55 +601,6 @@ namespace SACCOBlockChainSystem.Controllers
 
 
         #region All Loans View
-
-        [HttpGet]
-<<<<<<< HEAD
-=======
-        public async Task<IActionResult> AllLoans(int page = 1, int pageSize = 10, bool loadFull = false)
-        {
-            try
-            {
-                var companyCode = GetUserCompanyCode();
-                var searchDto = new LoanSearchDTO
-                {
-                    CompanyCode = companyCode
-                };
-
-                // Load loan types for filter dropdown (lightweight query)
-                ViewBag.LoanTypes = await _loanTypeService.GetLoanTypesByCompanyAsync(companyCode);
-
-                // Get loans with basic data first (lightweight)
-                var allLoans = await _loanService.SearchLoansAsync(searchDto);
-
-                // Calculate pagination
-                var totalItems = allLoans.Count;
-                var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
-
-                var loans = allLoans
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToList();
-
-                ViewBag.CurrentPage = page;
-                ViewBag.TotalPages = totalPages;
-                ViewBag.PageSize = pageSize;
-                ViewBag.TotalItems = totalItems;
-                ViewBag.TotalPrincipal = allLoans.Sum(l => l.PrincipalAmount);
-                ViewBag.TotalApproved = allLoans.Sum(l => l.ApprovedAmount);
-                ViewBag.TotalOutstanding = allLoans.Sum(l => l.OutstandingBalance);
-
-                return View(loans);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading all loans");
-                ViewBag.ErrorMessage = "Error loading loans";
-                return View(new List<LoanSummaryDTO>());
-            }
-        }
-
-        [HttpGet]
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
         public async Task<IActionResult> GetLoanSummaryData(string loanNo)
         {
             try
@@ -755,22 +684,10 @@ namespace SACCOBlockChainSystem.Controllers
             try
             {
                 searchDto.CompanyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-=======
-                var loans = await _loanService.SearchLoansAsync(searchDto);
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
 
                 // Build CSV content
                 var csv = new StringBuilder();
                 csv.AppendLine("Loan No,Member No,Member Name,Loan Type,Principal Amount,Approved Amount,Disbursed Amount,Outstanding Balance,Application Date,Status");
-
-<<<<<<< HEAD
-=======
-                foreach (var loan in loans)
-                {
-                    csv.AppendLine($"\"{loan.LoanNo}\",\"{loan.MemberNo}\",\"{loan.MemberName}\",\"{loan.LoanType}\",{loan.PrincipalAmount},{loan.ApprovedAmount},{loan.DisbursedAmount},{loan.OutstandingBalance},\"{loan.ApplicationDate:dd/MM/yyyy}\",\"{loan.LoanStatus}\"");
-                }
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
 
                 var bytes = Encoding.UTF8.GetBytes(csv.ToString());
                 return File(bytes, "text/csv", $"AllLoans_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
@@ -895,37 +812,6 @@ namespace SACCOBlockChainSystem.Controllers
                     }
                 }
 
-<<<<<<< HEAD
-=======
-                // Eligibility check
-                var eligibility = await _loanService.CheckMemberEligibilityWithContributionsAsync(
-                    application.MemberNo,
-                    application.CompanyCode);
-
-                if (!eligibility.IsEligible)
-                {
-                    ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
-                    ModelState.AddModelError("MemberNo", eligibility.Message);
-                    return View(application);
-                }
-
-                // Loan type specific eligibility
-                var loanTypeEligibility = await _loanService.CheckMemberEligibilityAsync(
-                    application.MemberNo,
-                    application.LoanCode,
-                    application.CompanyCode);
-
-                if (!loanTypeEligibility.IsEligible)
-                {
-                    ViewBag.LoanTypes = await _loanTypeService.GetActiveLoanTypesAsync(application.CompanyCode);
-                    ModelState.AddModelError("", loanTypeEligibility.Message);
-                    return View(application);
-                }
-
-                // Submit the application
-                var loan = await _loanService.ApplyForLoanAsync(application);
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
-
                 var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(
                     application.LoanCode,
                     application.CompanyCode);
@@ -933,26 +819,6 @@ namespace SACCOBlockChainSystem.Controllers
                 var requiresGuarantor = !string.IsNullOrEmpty(loanType.Guarantor) &&
                                         loanType.Guarantor != "No" &&
                                         loanType.Guarantor != "N";
-
-<<<<<<< HEAD
-=======
-                if (requiresGuarantor &&
-                    (loan.Guaranteed != "0" && !string.IsNullOrEmpty(loan.Guaranteed)))
-                {
-                    TempData["SuccessMessage"] = "Loan application created! Please assign the required guarantor(s).";
-                    return RedirectToAction("AssignGuarantor", new { loanNo = loan.LoanNo });
-                }
-
-                if (existingLoansCheck.HasExistingLoan)
-                {
-                    TempData["SuccessMessage"] = $"Top-Up loan application {loan.LoanNo} submitted successfully!";
-                }
-                else
-                {
-                    TempData["SuccessMessage"] = $"Loan application {loan.LoanNo} submitted successfully!";
-                }
-
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                 return RedirectToAction("AllLoans");
             }
             catch (Exception ex)
@@ -2043,278 +1909,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-<<<<<<< HEAD
-=======
-        [HttpGet]
-        public async Task<IActionResult> Appraise(string loanNo)
-        {
-            try
-            {
-                var companyCode = GetUserCompanyCode();
-
-                var loan = await _loanService.GetLoanByNoForDisplayAsync(loanNo, companyCode);
-                if (loan == null)
-                {
-                    TempData["ErrorMessage"] = "Loan not found";
-                    return RedirectToAction("Index");
-                }
-
-                if (loan.Status != (int)Status.Submitted)
-                {
-                    TempData["ErrorMessage"] = $"Loan cannot be appraised in status '{loan.Status}'. Loan must be in Submitted status.";
-                    return RedirectToAction("AllLoans");
-                }
-
-                var existingAppraisal = await _loanService.GetLoanAppraisalAsync(loanNo);
-                if (existingAppraisal != null)
-                {
-                    TempData["ErrorMessage"] = "This loan has already been appraised.";
-                    return RedirectToAction("AllLoans");
-                }
-
-                var member = await _contributionService.GetMemberByMemberNoAsync(loan.MemberNo);
-                if (member == null)
-                {
-                    TempData["ErrorMessage"] = "Member not found";
-                    return RedirectToAction("Index");
-                }
-
-                var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, companyCode);
-
-                var requiresGuarantor = !string.IsNullOrEmpty(loanType.Guarantor) &&
-                                        loanType.Guarantor != "No" &&
-                                        loanType.Guarantor != "N";
-
-                // GET TOTAL GUARANTEE
-                var totalGuarantee = await _loanService.GetTotalGuaranteeForLoanAsync(loanNo, companyCode);
-
-                // Also get individual breakdown for display
-                var memberGuarantors = await _loanService.GetLoanGuarantorsAsync(loanNo);
-                var totalMemberGuarantee = memberGuarantors.Sum(g => g.GuaranteeAmount);
-
-                var collateralGuarantees = await _loanService.GetLoanCollateralGuaranteesAsync(loanNo);
-                var totalCollateralGuarantee = collateralGuarantees.Sum(g => g.GuaranteeAmount);
-
-                var loanAmount = loan.LoanAmt ?? 0;
-                var isSelfGuarantee = loanType?.SelfGuarantee ?? false;
-                var isApplicantGuarantor = memberGuarantors.Any(g => g.GuarantorMemberNo == loan.MemberNo);
-
-                _logger.LogInformation($"Loan {loanNo}: Member Guarantee: {totalMemberGuarantee:C}, Collateral Guarantee: {totalCollateralGuarantee:C}, Total: {totalGuarantee:C}");
-
-                // ✅ FIX: Amount to appraise = MIN(loanAmount, totalGuarantee)
-                // If guarantee is less than loan amount, only appraise the guaranteed amount
-                decimal amountToAppraise;
-                string amountSource;
-
-                if (requiresGuarantor)
-                {
-                    // Cap the appraisal amount by the total guarantee
-                    amountToAppraise = Math.Min(loanAmount, totalGuarantee);
-
-                    if (totalGuarantee <= 0)
-                    {
-                        TempData["ErrorMessage"] = "This loan requires guarantors but no guarantees found. Please add member guarantors or collateral guarantees first.";
-                        return RedirectToAction("AssignGuarantor", new { loanNo });
-                    }
-
-                    if (amountToAppraise <= 0)
-                    {
-                        TempData["ErrorMessage"] = $"Cannot appraise loan. Total guarantee amount is {totalGuarantee:C} which is less than minimum appraisal amount.";
-                        return RedirectToAction("AssignGuarantor", new { loanNo });
-                    }
-
-                    if (isSelfGuarantee && isApplicantGuarantor)
-                    {
-                        amountSource = $"Appraisal Amount Limited to Guarantee: KES {amountToAppraise:N0} (Loan Applied: {loanAmount:C}, Total Guarantee: {totalGuarantee:C}) - Self Guarantee Enabled";
-                    }
-                    else
-                    {
-                        amountSource = $"Appraisal Amount Limited to Guarantee: KES {amountToAppraise:N0} (Loan Applied: {loanAmount:C}, Total Guarantee: {totalGuarantee:C})";
-                    }
-
-                    _logger.LogInformation($"Appraisal amount capped at guarantee: {amountToAppraise:C} (Loan: {loanAmount:C}, Guarantee: {totalGuarantee:C})");
-                }
-                else
-                {
-                    amountToAppraise = loanAmount;
-                    amountSource = "Applied Principal Amount (No Guarantor Required)";
-                }
-
-                decimal interestRate = 0;
-                if (!string.IsNullOrEmpty(loanType.Interest) && decimal.TryParse(loanType.Interest, out interestRate))
-                {
-                    if (interestRate > 1 && interestRate <= 100)
-                    {
-                        interestRate = interestRate / 100;
-                    }
-                }
-
-                var appraisalDto = new LoanAppraisalDTO
-                {
-                    LoanNo = loanNo,
-                    CompanyCode = companyCode,
-                    AppraisedBy = User.Identity?.Name ?? "SYSTEM",
-                    AppliedAmount = loanAmount,
-                    RecommendedAmount = amountToAppraise,
-                    RecommendedInterestRate = interestRate * 100,
-                    RecommendedPeriod = loan.RepayPeriod ?? 12,
-                    AppraisalNotes = $"Loan Type: {loanType.LoanType}\n" +
-                                    $"Loan Applied: KES {loanAmount:N0}\n" +
-                                    $"Total Guarantee Available: KES {totalGuarantee:N0}\n" +
-                                    $"Amount to Appraise: KES {amountToAppraise:N0}\n" +
-                                    $"Member Guarantee: KES {totalMemberGuarantee:N0}\n" +
-                                    $"Collateral Guarantee: KES {totalCollateralGuarantee:N0}\n"
-                };
-
-                ViewBag.Loan = loan;
-                ViewBag.Member = member;
-                ViewBag.LoanType = loanType;
-                ViewBag.RequiresGuarantor = requiresGuarantor;
-                ViewBag.TotalMemberGuarantee = totalMemberGuarantee;
-                ViewBag.TotalCollateralGuarantee = totalCollateralGuarantee;
-                ViewBag.TotalGuarantee = totalGuarantee;
-                ViewBag.AmountToAppraise = amountToAppraise;
-                ViewBag.AmountSource = amountSource;
-                ViewBag.MemberGuarantors = memberGuarantors;
-                ViewBag.CollateralGuarantees = collateralGuarantees;
-                ViewBag.IsSelfGuarantee = isSelfGuarantee;
-                ViewBag.IsApplicantGuarantor = isApplicantGuarantor;
-
-                return View(appraisalDto);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error loading appraisal form for {loanNo}");
-                TempData["ErrorMessage"] = $"Error loading appraisal: {ex.Message}";
-                return RedirectToAction("AllLoans");
-            }
-        }
-
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Appraise(LoanAppraisalDTO appraisalDto, bool printReport = true)
-        {
-            try
-            {
-                _logger.LogInformation($"=== APPRAISE POST CALLED ===");
-                _logger.LogInformation($"LoanNo: {appraisalDto.LoanNo}");
-                _logger.LogInformation($"AppraisalDecision: {appraisalDto.AppraisalDecision}");
-                _logger.LogInformation($"RecommendedAmount: {appraisalDto.RecommendedAmount}");
-                _logger.LogInformation($"PrintReport: {printReport}");
-
-                if (string.IsNullOrEmpty(appraisalDto.AppraisalDecision))
-                {
-                    TempData["ErrorMessage"] = "Please select an appraisal decision.";
-                    return RedirectToAction("Appraise", new { loanNo = appraisalDto.LoanNo });
-                }
-
-                if (string.IsNullOrEmpty(appraisalDto.AppraisalNotes))
-                {
-                    TempData["ErrorMessage"] = "Please enter appraisal notes.";
-                    return RedirectToAction("Appraise", new { loanNo = appraisalDto.LoanNo });
-                }
-
-                if (!ModelState.IsValid)
-                {
-                    var errors = string.Join(", ", ModelState.Values
-                        .SelectMany(v => v.Errors)
-                        .Select(e => e.ErrorMessage));
-                    _logger.LogWarning($"ModelState invalid: {errors}");
-
-                    TempData["ErrorMessage"] = $"Validation error: {errors}";
-                    return RedirectToAction("Appraise", new { loanNo = appraisalDto.LoanNo });
-                }
-
-                appraisalDto.CompanyCode = GetUserCompanyCode();
-                appraisalDto.AppraisedBy = User.Identity?.Name ?? "SYSTEM";
-
-                // VERIFY GUARANTEES STILL EXIST BEFORE APPRAISAL
-                var memberGuarantees = await _context.Loanguar
-                    .Where(g => g.LoanNo == appraisalDto.LoanNo && g.Transfered == false)
-                    .SumAsync(g => g.Amount ?? 0);
-
-                var collateralGuarantees = await _context.ColloanGuars
-                    .Where(cg => cg.LoanNo == appraisalDto.LoanNo && cg.Balance > 0)
-                    .SumAsync(cg => cg.Balance);
-
-                var totalGuarantee = memberGuarantees + collateralGuarantees;
-
-                var loan = await _loanService.GetLoanByNoForDisplayAsync(appraisalDto.LoanNo, appraisalDto.CompanyCode);
-                var loanType = await _loanTypeService.GetLoanTypeByCodeAsync(loan.LoanCode, appraisalDto.CompanyCode);
-                var requiresGuarantor = !string.IsNullOrEmpty(loanType.Guarantor) &&
-                                        loanType.Guarantor != "No" &&
-                                        loanType.Guarantor != "N";
-                var isSelfGuarantee = loanType?.SelfGuarantee ?? false;
-                var isApplicantGuarantor = await _context.Loanguar
-                    .AnyAsync(g => g.LoanNo == appraisalDto.LoanNo && g.MemberNo == loan.MemberNo && g.Transfered == false);
-
-                var loanAmount = loan.LoanAmt ?? 0;
-                var maxAppraisalAmount = requiresGuarantor ? Math.Min(loanAmount, totalGuarantee) : loanAmount;
-
-                _logger.LogInformation($"Pre-appraisal verification - Member: {memberGuarantees:C}, Collateral: {collateralGuarantees:C}, Total: {totalGuarantee:C}");
-                _logger.LogInformation($"Self Guarantee: {isSelfGuarantee}, Applicant Guarantor: {isApplicantGuarantor}");
-                _logger.LogInformation($"Max Appraisal Amount: {maxAppraisalAmount:C} (Loan: {loanAmount:C}, Guarantee: {totalGuarantee:C})");
-
-                if (requiresGuarantor)
-                {
-                    if (totalGuarantee <= 0)
-                    {
-                        TempData["ErrorMessage"] = "This loan requires guarantees but no guarantees found. Cannot proceed with appraisal.";
-                        return RedirectToAction("AssignGuarantor", new { loanNo = appraisalDto.LoanNo });
-                    }
-
-                    if (appraisalDto.RecommendedAmount > maxAppraisalAmount)
-                    {
-                        TempData["ErrorMessage"] = $"Recommended amount KES {appraisalDto.RecommendedAmount:N0} exceeds the maximum allowed based on guarantees KES {maxAppraisalAmount:N0}.";
-                        return RedirectToAction("Appraise", new { loanNo = appraisalDto.LoanNo });
-                    }
-                }
-
-                _logger.LogInformation($"Calling AppraiseLoanAsync for loan {appraisalDto.LoanNo}");
-
-                var appraisal = await _loanService.AppraiseLoanAsync(appraisalDto);
-
-                if (appraisal != null)
-                {
-                    _logger.LogInformation($"Appraisal completed successfully for loan {appraisalDto.LoanNo}");
-
-                    if (appraisalDto.AppraisalDecision == "Recommend")
-                    {
-                        TempData["SuccessMessage"] = $"Loan appraisal completed successfully. Loan has been moved to Approved status for endorsement.";
-                    }
-                    else if (appraisalDto.AppraisalDecision == "NotRecommend")
-                    {
-                        TempData["SuccessMessage"] = $"Loan has been rejected and will be closed.";
-                    }
-                    else
-                    {
-                        TempData["SuccessMessage"] = $"Loan appraisal completed with decision: {appraisalDto.AppraisalDecision}";
-                    }
-
-                    if (printReport)
-                    {
-                        return RedirectToAction("PrintAppraisalReport", new { loanNo = appraisalDto.LoanNo });
-                    }
-
-                    return RedirectToAction("Endorse", new { loanNo = appraisalDto.LoanNo });                    
-                    //return RedirectToAction("AllLoans");
-                }
-                else
-                {
-                    TempData["ErrorMessage"] = "Appraisal returned null. Please check logs.";
-                    return RedirectToAction("Appraise", new { loanNo = appraisalDto.LoanNo });
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error submitting loan appraisal: {ex.Message}");
-                TempData["ErrorMessage"] = $"Error submitting appraisal: {ex.Message}";
-                return RedirectToAction("Appraise", new { loanNo = appraisalDto.LoanNo });
-            }
-        }
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
-
         [HttpGet]
         public async Task<IActionResult> PrintAppraisalReport(string loanNo)
         {
@@ -2668,18 +2262,6 @@ namespace SACCOBlockChainSystem.Controllers
 
                 endorsementDto.CompanyCode = GetUserCompanyCode();
                 endorsementDto.EndorsedBy = User.Identity?.Name ?? "SYSTEM";
-
-                var endorsement = await _loanService.CreateEndorsementAsync(endorsementDto);
-
-                if (endorsementDto.IsAccepted)
-                {
-                    TempData["SuccessMessage"] = $"✅ Endorsement {endorsement.MinuteNo} completed successfully! The loan is now endorsed and waiting for Finance Officer to disburse the loan.";
-                }
-                else
-                {
-                    TempData["SuccessMessage"] = $"Endorsement has been rejected. Loan {endorsementDto.LoanNo} has been marked as Rejected.";
-                }
-
                 return RedirectToAction("PendingEndorsement");
             }
             catch (Exception ex)
@@ -4090,19 +3672,6 @@ namespace SACCOBlockChainSystem.Controllers
 
                 repaymentDto.CompanyCode = GetUserCompanyCode();
                 repaymentDto.ReceivedBy = User.Identity?.Name ?? "SYSTEM";
-
-<<<<<<< HEAD
-=======
-                var repayment = await _loanService.ProcessRepaymentAsync(repaymentDto);
-
-                TempData["SuccessMessage"] = $"Repayment of KES {repaymentDto.AmountPaid:N0} processed successfully. Receipt: {repayment.ReceiptNo}";
-
-                if (printReceipt)
-                {
-                    return RedirectToAction("PrintRepaymentReceipt", new { receiptNo = repayment.ReceiptNo });
-                }
-
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                 return RedirectToAction("Repay");
             }
             catch (DbUpdateException ex)
@@ -4219,16 +3788,6 @@ namespace SACCOBlockChainSystem.Controllers
                             interestRate = loan.Interest ?? 0,
                             outstandingPrincipal = currentInstallmentPrincipal,
                             outstandingInterest = currentInstallmentInterest,
-<<<<<<< HEAD
-=======
-                            outstandingPenalty = totalPenaltyBalance, // <-- USE TOTAL PENALTY FROM LOANBAL
-                            totalOutstanding = totalOutstanding, // <-- USE TOTAL FROM LOANBAL
-                            nextDueDate = dueDate,
-                            nextInstallmentAmount = nextInstallmentAmount,
-                            dueDate = dueDate,
-                            daysSinceLastPayment = calculatedDaysOverdue,
-                            disbursementDate = loan.AuditDateTime ?? loan.ApplicDate,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                             installmentNo = currentSchedule?.InstallmentNo ?? 1,
                             totalPrincipalBalance = totalPrincipalBalance,
                             totalInterestBalance = totalInterestBalance,
@@ -4309,21 +3868,6 @@ namespace SACCOBlockChainSystem.Controllers
                             loanNo = loan.LoanNo,
                             loanType = "NORMAL LOAN",
                             repayMethod = loan.RepayMethod ?? "AMT",
-                            interestRate = loan.Interest ?? 0,
-<<<<<<< HEAD
-=======
-                            outstandingPrincipal = currentInstallmentPrincipal,
-                            outstandingInterest = currentInstallmentInterest,
-                            outstandingPenalty = totalPenaltyBalance,
-                            totalOutstanding = totalOutstanding,
-                            nextDueDate = dueDate,
-                            nextInstallmentAmount = nextInstallmentAmount,
-                            dueDate = dueDate,
-                            daysSinceLastPayment = calculatedDaysOverdue,
-                            disbursementDate = loan.AuditDateTime ?? loan.ApplicDate,
-                            installmentNo = currentSchedule?.InstallmentNo ?? 1,
-                            totalPrincipalBalance = totalPrincipalBalance,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                             totalInterestBalance = totalInterestBalance,
                             currentInstallmentDue = currentInstallmentTotal + totalPenaltyBalance,
                             isOverdue = calculatedDaysOverdue > 0,

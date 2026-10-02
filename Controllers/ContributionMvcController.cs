@@ -50,18 +50,10 @@ namespace SACCOBlockChainSystem.Controllers
                     .Where(c => c.CompanyCode == companyCode)
                     .ToList();
 
-<<<<<<< HEAD
-=======
-                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
 
                 var viewModel = new
                 {
                     RecentContributions = recentContributions,
-<<<<<<< HEAD
-=======
-                    ShareTypes = shareTypes,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     TotalAmount = recentContributions.Sum(c => c.Amount),
                     TodayAmount = recentContributions
                         .Where(c => c.TransactionDate.Date == DateTime.Today)
@@ -120,12 +112,6 @@ namespace SACCOBlockChainSystem.Controllers
                     }
 
                     var companyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-=======
-                    var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-                    ViewBag.ShareTypes = shareTypes;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
-                    return View(contributionDto);
                 }
 
                 contributionDto.CompanyCode = GetUserCompanyCode();
@@ -199,97 +185,12 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 var companyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-=======
-                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-                ViewBag.ShareTypes = shareTypes;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
 
                 return View(contributionDto);
             }
         }
 
 
-<<<<<<< HEAD
-=======
-        // Add this endpoint to ContributionMvcController.cs
-        [HttpGet("GetMemberShareTypeTotals")]
-        public async Task<IActionResult> GetMemberShareTypeTotals(string memberNo, string sharesCode = null)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(memberNo))
-                {
-                    return Json(new { success = false, message = "Member number is required" });
-                }
-
-                var companyCode = GetUserCompanyCode();
-
-                if (string.IsNullOrEmpty(companyCode))
-                {
-                    return Json(new { success = false, message = "Company code not found" });
-                }
-
-                _logger.LogInformation($"Getting share type totals for member: {memberNo}, company: {companyCode}");
-
-                // Get all share type totals for this member
-                var totals = await _contributionService.GetMemberShareTypeTotalsAsync(memberNo, companyCode);
-
-                if (totals == null || totals.ShareTypeTotals == null || !totals.ShareTypeTotals.Any())
-                {
-                    return Json(new
-                    {
-                        success = true,
-                        data = new { ShareTypeTotals = new List<object>() },
-                        allTotals = new List<object>(),
-                        message = "No contributions found for this member"
-                    });
-                }
-
-                // If specific share type requested, filter
-                if (!string.IsNullOrEmpty(sharesCode))
-                {
-                    var specificTotal = totals.ShareTypeTotals.FirstOrDefault(s => s.SharesCode == sharesCode);
-
-                    if (specificTotal == null)
-                    {
-                        return Json(new
-                        {
-                            success = false,
-                            message = $"Share type {sharesCode} not found for this member"
-                        });
-                    }
-
-                    return Json(new
-                    {
-                        success = true,
-                        data = specificTotal,
-                        allTotals = totals.ShareTypeTotals,
-                        memberNo = memberNo
-                    });
-                }
-
-                return Json(new
-                {
-                    success = true,
-                    data = totals,
-                    allTotals = totals.ShareTypeTotals,
-                    memberNo = memberNo,
-                    count = totals.ShareTypeTotals.Count
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error getting member share type totals for member {memberNo}");
-                return Json(new
-                {
-                    success = false,
-                    message = "An error occurred while fetching share type totals: " + ex.Message
-                });
-            }
-        }
-
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
 
 
         // GET: /ContributionMvc/PrintReceipt/{receiptNo}
@@ -624,13 +525,6 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 var companyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-
-=======
-                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-
-                ViewBag.ShareTypes = shareTypes;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                 ViewBag.CompanyCode = companyCode;
                 ViewBag.ContributionId = id;
 
@@ -670,11 +564,6 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     _logger.LogWarning("Model state is invalid for contribution edit");
                     var companyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-=======
-                    var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-                    ViewBag.ShareTypes = shareTypes;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     ViewBag.ContributionId = id;
                     return View(contributionDto);
                 }
@@ -683,11 +572,6 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     ModelState.AddModelError("", "Reason for edit is required");
                     var companyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-=======
-                    var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-                    ViewBag.ShareTypes = shareTypes;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     ViewBag.ContributionId = id;
                     return View(contributionDto);
                 }
@@ -739,11 +623,6 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 var companyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-=======
-                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-                ViewBag.ShareTypes = shareTypes;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                 ViewBag.ContributionId = id;
                 return View(contributionDto);
             }
@@ -793,12 +672,6 @@ namespace SACCOBlockChainSystem.Controllers
             try
             {
                 var companyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-=======
-                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-
-                ViewBag.ShareTypes = shareTypes;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                 return View();
             }
             catch (Exception ex)
@@ -828,72 +701,6 @@ namespace SACCOBlockChainSystem.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error searching contributions");
-                return View("Error");
-            }
-        }
-
-        // GET: /ContributionMvc/Report
-        public async Task<IActionResult> Report()
-        {
-            try
-            {
-                var companyCode = GetUserCompanyCode();
-
-                var today = DateTime.Today;
-                var monthStart = new DateTime(today.Year, today.Month, 1);
-                var yearStart = new DateTime(today.Year, 1, 1);
-
-                var todayContributions = await _contributionService.SearchContributionsAsync(today, today, null, null);
-                var monthContributions = await _contributionService.SearchContributionsAsync(monthStart, today, null, null);
-                var yearContributions = await _contributionService.SearchContributionsAsync(yearStart, today, null, null);
-
-<<<<<<< HEAD
-                var shareTypeSummary = new List<object>();
-
-=======
-                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-                var shareTypeSummary = new List<object>();
-
-                foreach (var shareType in shareTypes)
-                {
-                    var contributions = await _contributionService.SearchContributionsAsync(
-                        yearStart, today, null, shareType.SharesCode);
-
-                    shareTypeSummary.Add(new
-                    {
-                        ShareType = shareType.SharesType,
-                        Code = shareType.SharesCode,
-                        Count = contributions.Count,
-                        Total = contributions.Sum(c => c.Amount)
-                    });
-                }
-
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
-                var viewModel = new
-                {
-                    Today = new
-                    {
-                        Count = todayContributions.Count,
-                        Total = todayContributions.Sum(c => c.Amount)
-                    },
-                    ThisMonth = new
-                    {
-                        Count = monthContributions.Count,
-                        Total = monthContributions.Sum(c => c.Amount)
-                    },
-                    ThisYear = new
-                    {
-                        Count = yearContributions.Count,
-                        Total = yearContributions.Sum(c => c.Amount)
-                    },
-                    ShareTypeSummary = shareTypeSummary
-                };
-
-                return View(viewModel);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading contribution report");
                 return View("Error");
             }
         }
@@ -1092,58 +899,6 @@ namespace SACCOBlockChainSystem.Controllers
             }
         }
 
-<<<<<<< HEAD
-=======
-        // POST: /ContributionMvc/Reverse
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Super Admin, Book Keeper, System Administrator, Finance Officer, Loan Officer")]
-        public async Task<IActionResult> Reverse(ContributionReverseDTO reverseDto)
-        {
-            try
-            {
-                _logger.LogInformation($"Reverse contribution POST action for ID: {reverseDto.ContributionId}");
-
-                if (!ModelState.IsValid)
-                {
-                    return View("Reverse", reverseDto);
-                }
-
-                // Verify Super Admin role again
-                if (!UserHasReversalPermission())
-                {
-                    TempData["ErrorMessage"] = "You don't have permission to reverse contributions.";
-                    return RedirectToAction("Index");
-                }
-
-                var reversedBy = User.Identity?.Name ?? "SYSTEM";
-
-                var result = await _contributionService.ReverseContributionAsync(
-                    reverseDto.ContributionId,
-                    reverseDto.ReverseReason,
-                    reversedBy);
-
-                if (result.Success)
-                {
-                    TempData["SuccessMessage"] = result.Message;
-                    return RedirectToAction("ReverseSearch");
-                }
-                else
-                {
-                    TempData["ErrorMessage"] = result.Message;
-                    return View("Reverse", reverseDto);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error reversing contribution {reverseDto.ContributionId}");
-                TempData["ErrorMessage"] = $"Error reversing contribution: {ex.Message}";
-                return View("Reverse", reverseDto);
-            }
-        }
-
-
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
         private bool UserHasReversalPermission()
         {
             return User.IsInRole("Super Admin") ||
@@ -1204,21 +959,9 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 var companyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-                var memberContributions = await _contributionService.GetMemberContributionsAsync(memberNo);
-                var currentShareBalance = await _contributionService.GetMemberShareBalanceAsync(memberNo);
-
-=======
-                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-                var memberContributions = await _contributionService.GetMemberContributionsAsync(memberNo);
-                var currentShareBalance = await _contributionService.GetMemberShareBalanceAsync(memberNo);
-
-                ViewBag.ShareTypes = shareTypes;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                 ViewBag.CompanyCode = companyCode;
                 ViewBag.MemberName = $"{member.Surname} {member.OtherNames}";
                 ViewBag.MemberNo = memberNo;
-                ViewBag.CurrentShareBalance = currentShareBalance;
 
                 // Create DTO with member already pre-filled
                 var contributionDto = new ContributionDTO
@@ -1236,13 +979,8 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     ContributionDto = contributionDto,
                     RecentContributions = recentContributions,
-<<<<<<< HEAD
-=======
-                    ShareTypes = shareTypes,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     MemberName = $"{member.Surname} {member.OtherNames}",
                     MemberNo = memberNo,
-                    ShareBalance = currentShareBalance
                 };
 
                 return View(viewModel);
@@ -1294,11 +1032,6 @@ namespace SACCOBlockChainSystem.Controllers
                     }
 
                     var companyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-=======
-                    var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-                    ViewBag.ShareTypes = shareTypes;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     return View(contributionDto);
                 }
 
@@ -1373,11 +1106,6 @@ namespace SACCOBlockChainSystem.Controllers
                 }
 
                 var companyCode = GetUserCompanyCode();
-<<<<<<< HEAD
-=======
-                var shareTypes = await _contributionService.GetShareTypesAsync(companyCode);
-                ViewBag.ShareTypes = shareTypes;
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
 
                 // Reload member contributions - use loggedInMemberNo if available, otherwise try to get it again
                 var memberNoForReload = loggedInMemberNo ?? GetLoggedInMemberNumber();
@@ -1400,10 +1128,6 @@ namespace SACCOBlockChainSystem.Controllers
                 {
                     ContributionDto = contributionDto,
                     RecentContributions = recentContributions,
-<<<<<<< HEAD
-=======
-                    ShareTypes = shareTypes,
->>>>>>> 228f1dd1ce4146f7ac2838c79d5cba3d9aada7ff
                     MemberName = memberName,
                     MemberNo = memberNoForReload,
                     ShareBalance = currentShareBalance
